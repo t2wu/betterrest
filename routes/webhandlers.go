@@ -1,20 +1,22 @@
 package routes
 
 import (
-	"betterrest/datamapper"
-	"betterrest/db"
-	"betterrest/libs/security"
-	"betterrest/models"
-	"betterrest/models/tools"
 	"encoding/json"
-	"errors"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/t2wu/betterrest/datamapper"
+	"github.com/t2wu/betterrest/db"
+	"github.com/t2wu/betterrest/libs/security"
+	"github.com/t2wu/betterrest/models"
+	"github.com/t2wu/betterrest/models/tools"
+
+	"github.com/gin-gonic/gin"
 	"github.com/go-chi/render"
 	"github.com/jinzhu/gorm"
 )
@@ -40,7 +42,7 @@ func createdTimeRangeFromQueryString(w http.ResponseWriter, r *http.Request) (in
 	cstart, cstop := r.URL.Query().Get("cstart"), r.URL.Query().Get("cstop")
 
 	if cstart == "" && cstop == "" { // not specified at all
-		return 0, 0, errors.New("NoTimeSpecified")
+		return 0, 0, nil
 	}
 
 	var err error
@@ -83,8 +85,8 @@ func renderModel(w http.ResponseWriter, r *http.Request, typeString string, mode
 	// render.JSON(w, r, modelObj) // cannot use this since no picking the field we need
 	jsonBytes, err := tools.ToJSON(typeString, modelObj, models.Admin)
 	if err != nil {
-		log.Println("ERRRR:", err)
-		render.Render(w, r, ErrGenJSON)
+		log.Println("Error in renderModel:", err)
+		render.Render(w, r, NewErrGenJSON(err))
 		return
 	}
 
@@ -97,7 +99,8 @@ func renderModel(w http.ResponseWriter, r *http.Request, typeString string, mode
 func renderModelSlice(w http.ResponseWriter, r *http.Request, typeString string, modelObjs []models.IModel) {
 	jsonString, err := modelObjsToJSON(typeString, modelObjs)
 	if err != nil {
-		render.Render(w, r, ErrGenJSON)
+		log.Println("Error in renderModelSlice:", err)
+		render.Render(w, r, NewErrGenJSON(err))
 		return
 	}
 
@@ -109,8 +112,8 @@ func renderModelSlice(w http.ResponseWriter, r *http.Request, typeString string,
 
 // ---------------------------------------------
 
-// authUser authenticates the user
-func getAuthUser(userModel models.User) (*models.User, bool) {
+// getVerifiedAuthUser authenticates the user
+func getVerifiedAuthUser(userModel models.User) (*models.User, bool) {
 	// Query database
 	// This is a value type
 	userModel2 := &models.User{}
@@ -133,8 +136,9 @@ func getAuthUser(userModel models.User) (*models.User, bool) {
 // ---------------------------------------------
 
 // UserLoginHandler logs in the user. Effectively creates a JWT token for the user
-func UserLoginHandler() func(http.ResponseWriter, *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
+func UserLoginHandler() func(c *gin.Context) {
+	return func(c *gin.Context) {
+		w, r := c.Writer, c.Request
 		log.Println("UserLoginHandler")
 
 		m, httperr := ModelFromJSONBody(r, "users")
@@ -144,33 +148,25 @@ func UserLoginHandler() func(http.ResponseWriter, *http.Request) {
 		}
 
 		m2, _ := m.(*models.User)
-		authUser, authorized := getAuthUser(*m2)
+		authUser, authorized := getVerifiedAuthUser(*m2)
 		if !authorized {
 			// unable to login user. maybe doesn't exist?
 			// or username, password wrong
-			render.Render(w, r, ErrLoginUser)
+			render.Render(w, r, NewErrLoginUser(nil))
 			return
 		}
 
-		// login success, return jwt token2
-		// If oauth
-		//{ acceess_token: acces_token, token_type: "Bearer", refresh_token: refresh_token, scope: ""}
-		token, err := security.CreateJWTToken(authUser.ID)
-
+		// login success, return access token
+		scope := "owner"
+		payload, err := createTokenPayloadForScope(authUser.ID, &scope)
 		if err != nil {
-			render.Render(w, r, ErrGeneratingToken)
+			render.Render(w, r, NewErrGeneratingToken(err))
 			return
-		}
-
-		retval := map[string]string{
-			"access_token": token,
-			"token_type":   "Bearer",
-			// "refresh_token": "None", // TODO: to be done, need another key
 		}
 
 		var jsn []byte
-		if jsn, err = json.Marshal(retval); err != nil {
-			render.Render(w, r, ErrGenJSON)
+		if jsn, err = json.Marshal(payload); err != nil {
+			render.Render(w, r, NewErrGenJSON(err))
 			return
 		}
 
@@ -183,29 +179,41 @@ func UserLoginHandler() func(http.ResponseWriter, *http.Request) {
 // https://stackoverflow.com/questions/7850140/how-do-you-create-a-new-instance-of-a-struct-from-its-type-at-run-time-in-go
 // https://stackoverflow.com/questions/23030884/is-there-a-way-to-create-an-instance-of-a-struct-from-a-string
 
-// ReadAllHandler returns a http handler which fetch multiple records of a resource
-func ReadAllHandler(typeString string, mapper datamapper.IGetAllMapper) func(http.ResponseWriter, *http.Request) { // e.g. GET /classes
-	return func(w http.ResponseWriter, r *http.Request) {
-		options := make(map[string]int)
+// ReadAllHandler returns a Gin handler which fetch multiple records of a resource
+func ReadAllHandler(typeString string, mapper datamapper.IGetAllMapper) func(c *gin.Context) {
+	return func(c *gin.Context) {
+		w, r := c.Writer, c.Request
+
+		options := make(map[string]interface{})
 		var err error
 		var modelObjs []models.IModel
 
 		if o, l, err := limitAndOffsetFromQueryString(w, r); err == nil {
 			options["offset"], options["limit"] = o, l
+		} else if err != nil {
+			render.Render(w, r, NewErrQueryParameter(err))
+			return
 		}
 
 		if cstart, cstop, err := createdTimeRangeFromQueryString(w, r); err == nil {
 			options["cstart"], options["cstop"] = cstart, cstop
+		} else if err != nil {
+			render.Render(w, r, NewErrQueryParameter(err))
+			return
 		}
 
+		options["fieldName"], options["fieldValue"] = r.URL.Query().Get("fieldName"), r.URL.Query().Get("fieldValue")
+
 		tx := db.Shared().Begin()
-		if modelObjs, err = mapper.GetAll(tx, OwnerIDFromContext(r), typeString, options); err != nil {
+		if modelObjs, err = mapper.ReadAll(tx, OwnerIDFromContext(r), typeString, options); err != nil {
 			tx.Rollback()
-			render.Render(w, r, ErrNotFound)
+			log.Println("Error in ReadAllHandler ErrNotFound:", typeString, err)
+			render.Render(w, r, NewErrNotFound(err))
 			return
 		}
 		if tx.Commit().Error != nil {
-			render.Render(w, r, ErrDBError)
+			log.Println("Error in ReadAllHandler ErrDBError:", typeString, tx.Commit().Error)
+			render.Render(w, r, NewErrDBError(tx.Commit().Error))
 			return
 		}
 
@@ -215,8 +223,10 @@ func ReadAllHandler(typeString string, mapper datamapper.IGetAllMapper) func(htt
 }
 
 // CreateOneHandler creates a resource
-func CreateOneHandler(typeString string, mapper datamapper.ICreateOneMapper) func(http.ResponseWriter, *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
+func CreateOneHandler(typeString string, mapper datamapper.ICreateOneMapper) func(c *gin.Context) {
+	return func(c *gin.Context) {
+		w, r := c.Writer, c.Request
+
 		ownerID := OwnerIDFromContext(r)
 
 		var err error
@@ -232,11 +242,13 @@ func CreateOneHandler(typeString string, mapper datamapper.ICreateOneMapper) fun
 			// FIXME, there is more than one type of error here
 			// How do I output more detailed messages by inspecting error?
 			tx.Rollback()
-			render.Render(w, r, ErrCreate)
+			log.Println("Error in CreateOne ErrCreate:", typeString, err)
+			render.Render(w, r, NewErrCreate(err))
 			return
 		}
 		if tx.Commit().Error != nil {
-			render.Render(w, r, ErrDBError)
+			log.Println("Error in CreateOne ErrDBError:", typeString, tx.Commit().Error)
+			render.Render(w, r, NewErrDBError(tx.Commit().Error))
 			return
 		}
 
@@ -246,29 +258,30 @@ func CreateOneHandler(typeString string, mapper datamapper.ICreateOneMapper) fun
 }
 
 // ReadOneHandler returns a http.Handler which read one resource
-func ReadOneHandler(typeString string, mapper datamapper.IGetOneWithIDMapper) func(http.ResponseWriter, *http.Request) {
+func ReadOneHandler(typeString string, mapper datamapper.IGetOneWithIDMapper) func(c *gin.Context) {
 	// return func(next http.Handler) http.Handler {
-	return func(w http.ResponseWriter, r *http.Request) {
+	return func(c *gin.Context) {
+		w, r := c.Writer, c.Request
 		log.Println("ReadOneHandler")
 
-		id, httperr := IDFromURLQueryString(r)
+		id, httperr := IDFromURLQueryString(c)
 		if httperr != nil {
 			render.Render(w, r, httperr)
 			return
 		}
 
 		tx := db.Shared().Begin()
-		modelObj, err := mapper.GetOneWithID(tx, OwnerIDFromContext(r), typeString, id)
-
-		log.Println("modleObj:", modelObj)
+		modelObj, err := mapper.GetOneWithID(tx, OwnerIDFromContext(r), typeString, *id)
 
 		if err != nil {
 			tx.Rollback()
-			render.Render(w, r, ErrNotFound)
+			log.Println("Error in ReadOneHandler ErrNotFound:", typeString, err)
+			render.Render(w, r, NewErrNotFound(err))
 			return
 		}
 		if tx.Commit().Error != nil {
-			render.Render(w, r, ErrDBError)
+			log.Println("Error in ReadOneHandler ErrDBError:", typeString, tx.Commit().Error)
+			render.Render(w, r, NewErrDBError(tx.Commit().Error))
 			return
 		}
 
@@ -278,14 +291,18 @@ func ReadOneHandler(typeString string, mapper datamapper.IGetOneWithIDMapper) fu
 }
 
 // UpdateOneHandler returns a http.Handler which updates a resource
-func UpdateOneHandler(typeString string, mapper datamapper.IUpdateOneWithIDMapper) func(http.ResponseWriter, *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
+func UpdateOneHandler(typeString string, mapper datamapper.IUpdateOneWithIDMapper) func(c *gin.Context) {
+	return func(c *gin.Context) {
+		w, r := c.Writer, c.Request
 		// var err error
 		// var model models.DomainModel
 
 		log.Println("UpdateOneHandler called")
 
-		id, httperr := IDFromURLQueryString(r)
+		test := c.Param("test")
+		log.Println("test:", test == "")
+
+		id, httperr := IDFromURLQueryString(c)
 		if httperr != nil {
 			render.Render(w, r, httperr)
 			return
@@ -298,14 +315,16 @@ func UpdateOneHandler(typeString string, mapper datamapper.IUpdateOneWithIDMappe
 		}
 
 		tx := db.Shared().Begin()
-		modelObj, err := mapper.UpdateOneWithID(tx, OwnerIDFromContext(r), typeString, modelObj, id)
+		modelObj, err := mapper.UpdateOneWithID(tx, OwnerIDFromContext(r), typeString, modelObj, *id)
 		if err != nil {
 			tx.Rollback()
-			render.Render(w, r, ErrUpdate) // FIXEME could be more specific
+			log.Println("Error in UpdateOneHandler ErrUpdate:", typeString, err)
+			render.Render(w, r, NewErrUpdate(err))
 			return
 		}
 		if tx.Commit().Error != nil {
-			render.Render(w, r, ErrDBError)
+			log.Println("Error in UpdateOneHandler ErrDBError:", typeString, tx.Commit().Error)
+			render.Render(w, r, NewErrDBError(tx.Commit().Error))
 			return
 		}
 
@@ -314,10 +333,11 @@ func UpdateOneHandler(typeString string, mapper datamapper.IUpdateOneWithIDMappe
 	}
 }
 
-// UpdateManyHandler returns a http handler which updates many records
-func UpdateManyHandler(typeString string, mapper datamapper.IUpdateManyMapper) func(http.ResponseWriter, *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
+// UpdateManyHandler returns a Gin handler which updates many records
+func UpdateManyHandler(typeString string, mapper datamapper.IUpdateManyMapper) func(c *gin.Context) {
+	return func(c *gin.Context) {
 		log.Println("UpdateManyHandler called")
+		w, r := c.Writer, c.Request
 
 		modelObjs, httperr := ModelsFromJSONBody(r, typeString)
 		if httperr != nil {
@@ -329,11 +349,13 @@ func UpdateManyHandler(typeString string, mapper datamapper.IUpdateManyMapper) f
 		modelObjs, err := mapper.UpdateMany(tx, OwnerIDFromContext(r), typeString, modelObjs)
 		if err != nil {
 			tx.Rollback()
-			render.Render(w, r, ErrUpdate) // FIXEME could be more specific
+			log.Println("Error in UpdateManyHandler ErrUpdate:", typeString, err)
+			render.Render(w, r, NewErrUpdate(err))
 			return
 		}
 		if tx.Commit().Error != nil {
-			render.Render(w, r, ErrDBError)
+			log.Println("Error in UpdateManyHandler ErrDBError:", typeString, tx.Commit().Error)
+			render.Render(w, r, NewErrDBError(tx.Commit().Error))
 			return
 		}
 
@@ -342,27 +364,73 @@ func UpdateManyHandler(typeString string, mapper datamapper.IUpdateManyMapper) f
 	}
 }
 
-// DeleteOneHandler returns a http handler which delete one record
-func DeleteOneHandler(typeString string, mapper datamapper.IDeleteOneWithID) func(http.ResponseWriter, *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
-		log.Println("DeleteOneHandler")
+// PatchOneHandler returns a Gin handler which patch (partial update) one record
+func PatchOneHandler(typeString string, mapper datamapper.IPatchOneWithIDMapper) func(c *gin.Context) {
+	return func(c *gin.Context) {
+		log.Println("PatchOneHandler")
+		w, r := c.Writer, c.Request
 
-		id, httperr := IDFromURLQueryString(r)
+		id, httperr := IDFromURLQueryString(c)
+		if httperr != nil {
+			render.Render(w, r, httperr)
+			return
+		}
+
+		var jsonPatch []byte
+		var err error
+		if jsonPatch, err = ioutil.ReadAll(r.Body); err != nil {
+			render.Render(w, r, NewErrReadingBody(err))
+			return
+		}
+
+		tx := db.Shared().Begin()
+		modelObj, err := mapper.PatchOneWithID(tx, OwnerIDFromContext(r), typeString, jsonPatch, *id)
+		if err != nil {
+			tx.Rollback()
+			log.Println("Error in UpdateOneHandler ErrUpdate:", typeString, err)
+			render.Render(w, r, NewErrPatch(err))
+			return
+		}
+		if tx.Commit().Error != nil {
+			log.Println("Error in UpdateOneHandler ErrDBError:", typeString, tx.Commit().Error)
+			render.Render(w, r, NewErrDBError(tx.Commit().Error))
+			return
+		}
+
+		renderModel(w, r, typeString, modelObj)
+		return
+
+		// type JSONPatch struct {
+		// 	Op    string
+		// 	Path  string
+		// 	Value interface{}
+		// }
+	}
+}
+
+// DeleteOneHandler returns a Gin handler which delete one record
+func DeleteOneHandler(typeString string, mapper datamapper.IDeleteOneWithID) func(c *gin.Context) {
+	return func(c *gin.Context) {
+		log.Println("DeleteOneHandler")
+		w, r := c.Writer, c.Request
+
+		id, httperr := IDFromURLQueryString(c)
 		if httperr != nil {
 			render.Render(w, r, httperr)
 			return
 		}
 
 		tx := db.Shared().Begin()
-		modelObj, err := mapper.DeleteOneWithID(tx, OwnerIDFromContext(r), typeString, id)
+		modelObj, err := mapper.DeleteOneWithID(tx, OwnerIDFromContext(r), typeString, *id)
 		if err != nil {
 			tx.Rollback()
-			log.Println("error:", err)
-			render.Render(w, r, ErrDelete) // FIXME: some other error
+			log.Println("Error in DeleteOneHandler ErrDelete:", typeString, err)
+			render.Render(w, r, NewErrDelete(err))
 			return
 		}
 		if tx.Commit().Error != nil {
-			render.Render(w, r, ErrDBError)
+			log.Println("Error in DeleteOneHandler ErrDBError:", typeString, tx.Commit().Error)
+			render.Render(w, r, NewErrDBError(tx.Commit().Error))
 			return
 		}
 
@@ -371,12 +439,10 @@ func DeleteOneHandler(typeString string, mapper datamapper.IDeleteOneWithID) fun
 	}
 }
 
-// DeleteManyHandler returns a http handler which delete many records
-func DeleteManyHandler(typeString string, mapper datamapper.IDeleteMany) func(http.ResponseWriter, *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
-		// var err error
-		// var model models.DomainModel
-
+// DeleteManyHandler returns a Gin handler which delete many records
+func DeleteManyHandler(typeString string, mapper datamapper.IDeleteMany) func(c *gin.Context) {
+	return func(c *gin.Context) {
+		w, r := c.Writer, c.Request
 		log.Println("DeleteManyHandler called")
 		var err error
 
@@ -390,11 +456,13 @@ func DeleteManyHandler(typeString string, mapper datamapper.IDeleteMany) func(ht
 		modelObjs, err = mapper.DeleteMany(tx, OwnerIDFromContext(r), typeString, modelObjs)
 		if err != nil {
 			tx.Rollback()
-			render.Render(w, r, ErrDelete) // FIXEME could be more specific
+			log.Println("Error in DeleteOneHandler ErrDelete:", typeString, err)
+			render.Render(w, r, NewErrDelete(err))
 			return
 		}
 		if tx.Commit().Error != nil {
-			render.Render(w, r, ErrDBError)
+			log.Println("Error in DeleteOneHandler ErrDBError:", typeString, tx.Commit().Error)
+			render.Render(w, r, NewErrDBError(tx.Commit().Error))
 			return
 		}
 

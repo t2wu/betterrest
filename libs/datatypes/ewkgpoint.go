@@ -1,4 +1,4 @@
-package spatialdata
+package datatypes
 
 import (
 	"database/sql/driver"
@@ -70,6 +70,14 @@ func (m *EWKBPoint) UnmarshalJSON(b []byte) (err error) {
 	}
 	if err := json.Unmarshal(b, &loc); err != nil {
 		return err
+	}
+
+	// I want to avoid having to use custom New() before unmarshalling
+	// because that makes generic handling across all models impossible
+	// And this is what I come up with. (Weird with pointer to struct
+	// embedding)
+	m.Point = wkb.Point{
+		geom.NewPoint(geom.XY).MustSetCoords([]float64{0, 0}).SetSRID(0),
 	}
 
 	pt := m.Point

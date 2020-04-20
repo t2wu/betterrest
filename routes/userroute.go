@@ -1,28 +1,29 @@
 package routes
 
 import (
-	"betterrest/datamapper"
+	"github.com/t2wu/betterrest/datamapper"
 
-	"github.com/go-chi/chi"
+	"github.com/gin-gonic/gin"
 )
 
-// UserRoute gets routing for user
-func UserRoute() func(r chi.Router) {
-	return func(r chi.Router) {
-		typeString := "users"
-		dm := datamapper.SharedUserMapper()
+// UserRoutes gets routing for user
+func UserRoutes(endpoint string, r *gin.Engine) {
+	g := r.Group(endpoint)
+	typeString := "users"
+	dm := datamapper.SharedUserMapper()
 
-		r.Post("/", CreateOneHandler(typeString, dm))
-		r.Post("/login", UserLoginHandler()) // no crud on this one...access db itself
+	// r.Get("/", ReadAllHandler("users"))
+	// r.With(paginate).Get("/", ListArticles)
+	g.POST("/", CreateOneHandler(typeString, dm))
+	g.POST("/login", UserLoginHandler()) // no crud on this one...access db itself
 
-		g := r.Group(nil)
-		g.Use(BearerAuthMiddleware)
+	// g := r.Group(nil)
+	g.Use(BearerAuthMiddleware()) // The following one needs authentication
 
-		g.Route("/{id}", func(r chi.Router) {
-			// r.Use(OneMiddleWare(typeString))
-			// r.Get("/", ReadOneHandler(typeString))
-			// r.Put("/", UpdateOneHandler(typeString))
-			// r.Delete("/", DeleteOneHandler(typeString))
-		})
+	n := g.Group("/:id")
+	{
+		n.GET("/", ReadOneHandler(typeString, dm))
+		n.PUT("/", UpdateOneHandler(typeString, dm))
+		n.DELETE("/", DeleteOneHandler(typeString, dm))
 	}
 }

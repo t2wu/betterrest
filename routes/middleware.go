@@ -1,15 +1,21 @@
 package routes
 
 import (
-	"betterrest/db"
-	"betterrest/libs/security"
-	"betterrest/libs/utils"
-	"betterrest/models"
 	"context"
+	"encoding/base64"
+	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 
+	"github.com/t2wu/betterrest/db"
+	"github.com/t2wu/betterrest/libs/datatypes"
+	"github.com/t2wu/betterrest/libs/security"
+	"github.com/t2wu/betterrest/models"
+
+	"github.com/gin-gonic/gin"
 	"github.com/go-chi/render"
 	"github.com/jinzhu/gorm"
 )
@@ -28,19 +34,20 @@ const (
 
 // func NotFoundHandler() Handler { return HandlerFunc(NotFound) }
 
-// ClientBasicAuthMiddleware make users that the software access this API has
+// ClientAuthMiddleware make users that the software access this API has
 // basic client ID
 // Insert a test one:
 // Insert into client (secret) values ("123");
-func ClientBasicAuthMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func ClientAuthMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		w, r := c.Writer, c.Request
 		var clientID, secret string
 		var ok bool
 
-		clientID, secret, ok = utils.BasicAuth(r)
+		clientID, secret, ok = apiKeyAuth(r)
 		if !ok {
-			// could not get basic authentication credentials
-			render.Render(w, r, ErrClientNotAuthorized)
+			render.Render(w, r, NewErrClientNotAuthorized(errors.New("missing client credentials")))
+			c.Abort()
 			return
 		}
 
@@ -48,50 +55,119 @@ func ClientBasicAuthMiddleware(next http.Handler) http.Handler {
 		client := new(models.Client)
 		id, err := strconv.Atoi(clientID)
 		if err != nil {
-			render.Render(w, r, ErrClientNotAuthorized)
+			render.Render(w, r, NewErrClientNotAuthorized(errors.New("incorrect client credentials")))
+			c.Abort()
 			return
 		}
 
 		if err := db.Shared().First(&client, id).Error; gorm.IsRecordNotFoundError(err) {
 			// Record not found here.
-			render.Render(w, r, ErrClientNotAuthorized)
+			render.Render(w, r, NewErrClientNotAuthorized(errors.New("incorrect client credentials")))
+			c.Abort()
 			return
 		} else if err != nil { // Other type of error
-			render.Render(w, r, ErrClientNotAuthorized)
+			render.Render(w, r, NewErrClientNotAuthorized(err))
+			c.Abort()
 			return
 		}
 
 		if client.Secret != secret {
 			// Unauthorzed
-			render.Render(w, r, ErrClientNotAuthorized)
+			render.Render(w, r, NewErrClientNotAuthorized(errors.New("incorrect client credentials")))
+			c.Abort()
 			return
 		}
 
-		ctx := context.WithValue(r.Context(), contextKeyClient, client)
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
+		ctx := context.WithValue(c.Request.Context(), contextKeyClient, client)
+		c.Request = c.Request.WithContext(ctx)
+		c.Next()
+	}
 }
 
 // BearerAuthMiddleware make sure the Bearer token exits and validate it
 // And also get the user ID into the context
-func BearerAuthMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func BearerAuthMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		w, r := c.Writer, c.Request
 		var token string
 		var ok bool
 
-		if token, ok = utils.BearerToken(r); !ok {
-			render.Render(w, r, ErrTokenInvalid) // Not pass, no token
+		if token, ok = bearerToken(r); !ok {
+			render.Render(w, r, NewErrTokenInvalid(errors.New("missing token"))) // Not pass, no token
+			c.Abort()
 			return
 		}
 
-		ownerID, err := security.GetISSIfTokenIsValid(token)
+		claims, err := security.GetClaimsIfAccessTokenIsValid(token)
 		if err != nil {
 			log.Println(err)
-			render.Render(w, r, ErrTokenInvalid) // Token invalid (either expired or just wrong)
+			render.Render(w, r, NewErrTokenInvalid(errors.New("invalid token"))) // Token invalid (either expired or just wrong)
+			c.Abort()
 			return
 		}
 
-		ctx := context.WithValue(r.Context(), contextKeyOwnerID, ownerID)
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
+		var ownerID *datatypes.UUID
+		if ident, ok := (*claims)["iss"]; ok {
+			if ident, ok := ident.(string); ok {
+				ownerID, err = datatypes.NewUUIDFromString(ident)
+				if err != nil {
+					render.Render(w, r, NewErrTokenInvalid(err))
+					c.Abort()
+					return
+				}
+			} else {
+				render.Render(w, r, NewErrTokenInvalid(errors.New("getting ISS from token error")))
+				c.Abort()
+				return
+			}
+		} else {
+			render.Render(w, r, NewErrTokenInvalid(errors.New("getting ISS from token error")))
+			c.Abort()
+			return
+		}
+
+		ctx := context.WithValue(c.Request.Context(), contextKeyOwnerID, ownerID)
+		c.Request = c.Request.WithContext(ctx)
+		c.Next()
+	}
+}
+
+// BearerToken returns bearer token
+func bearerToken(r *http.Request) (token string, ok bool) {
+	ok = false
+
+	authstring := r.Header.Get("Authorization")
+	fields := strings.Split(authstring, ",")
+
+	for _, v := range fields {
+		if ok = strings.HasPrefix(v, "Bearer"); ok {
+			fmt.Sscanf(v, "Bearer %s", &token)
+			return token, ok
+		}
+	}
+
+	return "", false
+}
+
+// apiKeyAuth gets client id and secret via HTTP header X-API-KEY
+func apiKeyAuth(r *http.Request) (username, secret string, ok bool) {
+	apiKey := r.Header.Get("X-API-KEY")
+
+	if apiKey == "" {
+		return
+	}
+
+	c, err := base64.StdEncoding.DecodeString(apiKey)
+	if err != nil {
+		return
+	}
+
+	cs := string(c)
+	s := strings.IndexByte(cs, ':')
+
+	if s < 0 {
+		return
+	}
+
+	return cs[:s], cs[s+1:], true
 }

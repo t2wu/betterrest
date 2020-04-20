@@ -1,37 +1,53 @@
 package routes
 
 import (
-	"betterrest/datamapper"
-	"betterrest/typeregistry"
+	"strings"
 
-	"github.com/go-chi/chi"
+	"github.com/t2wu/betterrest/datamapper"
+	"github.com/t2wu/betterrest/models"
+
+	"github.com/gin-gonic/gin"
 )
 
-func addRoute(r chi.Router, typeString string, mapper interface{}) {
-	endpoint := typeString
-	r.Route("/"+endpoint, func(r chi.Router) {
-		r.Get("/", ReadAllHandler(typeString, mapper.(datamapper.IGetAllMapper))) // e.g. GET /classes
+func addRoute(r *gin.Engine, typeString string, mapper interface{}) {
+	endpoint := strings.ToLower(typeString)
+	g := r.Group("/" + endpoint)
+	{
+		g.GET("/", ReadAllHandler(typeString, mapper.(datamapper.IGetAllMapper))) // e.g. GET /devices
 		// r.With(paginate).Get("/", ListArticles)
-		r.Post("/", CreateOneHandler(typeString, mapper.(datamapper.ICreateOneMapper)))
-		r.Put("/", UpdateManyHandler(typeString, mapper.(datamapper.IUpdateManyMapper)))
-		r.Delete("/", DeleteManyHandler(typeString, mapper.(datamapper.IDeleteMany)))
+		g.POST("/", CreateOneHandler(typeString, mapper.(datamapper.ICreateOneMapper)))
+		g.PUT("/", UpdateManyHandler(typeString, mapper.(datamapper.IUpdateManyMapper)))
+		g.DELETE("/", DeleteManyHandler(typeString, mapper.(datamapper.IDeleteMany)))
 
-		r.Route("/{id}", func(r chi.Router) {
+		n := g.Group("/:id")
+		{
 			// r.Use(OneMiddleWare(typeString))
-			r.Get("/", ReadOneHandler(typeString, mapper.(datamapper.IGetOneWithIDMapper)))      // e.g. GET /classes/123
-			r.Put("/", UpdateOneHandler(typeString, mapper.(datamapper.IUpdateOneWithIDMapper))) // e.g. PUT /classes/123
-			r.Delete("/", DeleteOneHandler(typeString, mapper.(datamapper.IDeleteOneWithID)))    // e.g. DELETE /classes/123
-		})
-	})
+			n.GET("/", ReadOneHandler(typeString, mapper.(datamapper.IGetOneWithIDMapper)))      // e.g. GET /model/123
+			n.PUT("/", UpdateOneHandler(typeString, mapper.(datamapper.IUpdateOneWithIDMapper))) // e.g. PUT /model/123
+			n.PATCH("/", PatchOneHandler(typeString, mapper.(datamapper.IPatchOneWithIDMapper))) // e.g. PATCH /model/123
+			n.DELETE("/", DeleteOneHandler(typeString, mapper.(datamapper.IDeleteOneWithID)))    // e.g. DELETE /model/123
+		}
+	}
 }
 
-// AddAllRoutes adds all routes
-func AddAllRoutes(r chi.Router) {
-	for typestring := range typeregistry.NewRegistry {
+// AddRESTRoutes adds all routes
+func AddRESTRoutes(r *gin.Engine) {
+	for typestring := range models.ModelRegistry {
 		if typestring != "users" {
 			// db.Shared().AutoMigrate(model) // how to make it work?
 			dm := datamapper.SharedBasicMapper()
 			addRoute(r, typestring, dm)
 		}
+	}
+}
+
+// AddRPCRoutes adds routes related to RPC calls (non-REST style)
+func AddRPCRoutes(r *gin.Engine) {
+	g := r.Group("/rpc")
+	{
+		g.POST("/assistant/lighton", LightOnHandler)
+		g.POST("/assistant/lightoff", LightOffHandler)
+		g.POST("/assistant/execute", SceneHandler)
+		g.POST("/register-gw", RegisterGWhandler)
 	}
 }

@@ -1,4 +1,4 @@
-package spatialdata
+package datatypes
 
 import (
 	"database/sql/driver"

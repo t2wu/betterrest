@@ -15,7 +15,7 @@
 # vendor/
 
 
-betterrest
+github.com/t2wu/betterrest
 *.pub
 *.pem
 # sqlite
