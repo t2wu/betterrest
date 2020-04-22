@@ -136,3 +136,29 @@ type IAfterDelete interface {
 type IValidate interface {
 	Validate() error
 }
+
+// ------------------------------------
+
+// IRole is what IRole tables should satisfy.
+type IRole interface {
+	GetRole() UserRole
+	SetRole(UserRole)
+}
+
+// OwnershipModelBase has a role
+type OwnershipModelBase struct {
+	gorm.Model          // uses standard int id (cuz I started with it and it works)
+	Role       UserRole // an int
+}
+
+// GetRole gets the role field of the model, comforms to IRole
+func (o *OwnershipModelBase) GetRole() UserRole {
+	return o.Role
+}
+
+// SetRole sets the role field of the model, comforms to IRole
+func (o *OwnershipModelBase) SetRole(r UserRole) {
+	o.Role = r
+}
+
+// ------------------------------------

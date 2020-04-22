@@ -33,16 +33,10 @@ func SharedBasicMapper() *BasicMapper {
 
 // CreateOne creates an instance of this model based on json and store it in db
 func (mapper *BasicMapper) CreateOne(db *gorm.DB, oid *datatypes.UUID, typeString string, modelObj models.IModel) (models.IModel, error) {
-
-	// Get owner id's admin ownership id
-	// u := models.User{}
-	// u.ID = oid
-	// // db.Model(&u).Association("Ownerships")
-	g := models.Ownership{}
-	// var result gorm.Result
-
+	// db.Model(&u).Association("Ownerships")
+	g := reflect.New(models.OwnershipTyp).Interface().(models.IRole)
 	firstJoin := "INNER JOIN `user_ownerships` ON `ownership`.id = `user_ownerships`.ownership_id AND user_id=UUID_TO_BIN(?) AND role=?"
-	err := db.Table("ownership").Joins(firstJoin, oid.String(), models.Admin).Find(&g).Error
+	err := db.Table("ownership").Joins(firstJoin, oid.String(), models.Admin).Find(g).Error
 	if err != nil {
 		log.Println("Error in finding ownership", err)
 		return nil, err
@@ -50,11 +44,8 @@ func (mapper *BasicMapper) CreateOne(db *gorm.DB, oid *datatypes.UUID, typeStrin
 
 	// Associate a ownership group with this model
 	o := reflect.ValueOf(modelObj).Elem().FieldByName("Ownerships")
-	ownerships, ok := o.Interface().([]models.Ownership)
-	if ok {
-		ownerships = append(ownerships, g)
-		o.Set(reflect.ValueOf(ownerships)) // wonder why we need to set again
-	}
+	// log.Println("LENGTH BEFORE APPEND:", o.Len())
+	o.Set(reflect.Append(o, reflect.ValueOf(g).Elem()))
 
 	return CreateWithHooks(db, oid, typeString, modelObj)
 }

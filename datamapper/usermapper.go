@@ -1,9 +1,9 @@
 package datamapper
 
 import (
-	"errors"
 	"fmt"
 	"log"
+	"reflect"
 	"sync"
 
 	"github.com/t2wu/betterrest/libs/datatypes"
@@ -39,33 +39,37 @@ func SharedUserMapper() *UserMapper {
 func (mapper *UserMapper) CreateOne(db *gorm.DB, oid *datatypes.UUID, typeString string, modelObj models.IModel) (models.IModel, error) {
 	// Special case, there is really no oid in this case, user doesn't exist yet
 
-	if userObj, ok := modelObj.(*models.User); ok { // it has to be OK...
-		userObj.Ownerships = make([]models.Ownership, 1)
-		g := models.Ownership{}
-		g.Role = models.Admin
-		userObj.Ownerships[0] = g
+	// modelObj is a a User struct, but we cannot do type assertion because library user
+	// should define it. If we make an interface with user.Ownership setter and getter,
+	// we need to ask library user to define a user.Ownership setter and getter, it's too
+	// much hassle
+	password := reflect.ValueOf(modelObj).Elem().FieldByName(("Password")).Interface().(string)
 
-		// Need to encrypt the password
-		if userObj.Password != "" {
-			hash, err := security.HashAndSalt(userObj.Password)
-			if err != nil {
-				return nil, err
-			}
-
-			userObj.PasswordHash = hash
-		}
-
-		if dbc := db.Create(modelObj); dbc.Error != nil {
-			// create failed: UNIQUE constraint failed: user.email
-			// It looks like this error may be dependent on the type of database we use
-			log.Println("create failed:", dbc.Error)
-			return nil, dbc.Error
-		}
-
-		return userObj, nil
+	// Additional checking because password should not be blank with create
+	if password == "" {
+		log.Println("password should not be blank!!!")
+		return nil, fmt.Errorf("password should not be blank")
 	}
 
-	return nil, errors.New("User model expected when creating a user")
+	ownership := reflect.ValueOf(modelObj).Elem().FieldByName("Ownerships")
+	ownership.Set(reflect.MakeSlice(reflect.SliceOf(models.OwnershipTyp), 1, 1))
+	ownership.Index(0).Set(reflect.New(models.OwnershipTyp).Elem())
+
+	hash, err := security.HashAndSalt(password)
+	if err != nil {
+		return nil, err
+	}
+
+	reflect.ValueOf(modelObj).Elem().FieldByName("PasswordHash").Set(reflect.ValueOf(hash))
+
+	if dbc := db.Create(modelObj); dbc.Error != nil {
+		// create failed: UNIQUE constraint failed: user.email
+		// It looks like this error may be dependent on the type of database we use
+		log.Println("create failed:", dbc.Error)
+		return nil, dbc.Error
+	}
+
+	return modelObj, nil
 }
 
 // GetOneWithID get one model object based on its type and its id string
@@ -94,19 +98,19 @@ func (mapper *UserMapper) UpdateOneWithID(db *gorm.DB, oid *datatypes.UUID, type
 		return nil, err
 	}
 
-	userObj := modelObj.(*models.User) // has to be OK otherwise a programming errr
+	password := reflect.ValueOf(modelObj).Elem().FieldByName(("Password")).Interface().(string)
 
 	// Additional checking because password should not be blank with update
-	if userObj.Password == "" {
+	if password == "" {
 		log.Println("password should not be blank!!!")
 		return nil, fmt.Errorf("password should not be blank")
 	}
 
-	hash, err := security.HashAndSalt(userObj.Password)
+	hash, err := security.HashAndSalt(password)
 	if err != nil {
 		return nil, err
 	}
-	userObj.PasswordHash = hash
+	reflect.ValueOf(modelObj).Elem().FieldByName("PasswordHash").Set(reflect.ValueOf(hash))
 
 	cargo := models.ModelCargo{}
 

@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -113,11 +114,15 @@ func renderModelSlice(w http.ResponseWriter, r *http.Request, typeString string,
 // ---------------------------------------------
 
 // getVerifiedAuthUser authenticates the user
-func getVerifiedAuthUser(userModel models.User) (*models.User, bool) {
-	// Query database
-	// This is a value type
-	userModel2 := &models.User{}
-	err := db.Shared().Where("email = ?", userModel.Email).First(userModel2).Error
+// getVerifiedAuthUser authenticates the user
+func getVerifiedAuthUser(userModel models.IModel) (models.IModel, bool) {
+	userModel2 := reflect.New(models.UserTyp).Interface().(models.IModel)
+
+	// TODO: maybe email is not the login, make it more flexible?
+	email := reflect.ValueOf(userModel).Elem().FieldByName(("Email")).Interface().(string)
+	password := reflect.ValueOf(userModel).Elem().FieldByName(("Password")).Interface().(string)
+
+	err := db.Shared().Where("email = ?", email).First(userModel2).Error
 	if gorm.IsRecordNotFoundError(err) {
 		return nil, false // User doesn't exists with this email
 	} else if err != nil {
@@ -125,7 +130,8 @@ func getVerifiedAuthUser(userModel models.User) (*models.User, bool) {
 		return nil, false
 	}
 
-	if !security.IsSamePassword(userModel.Password, userModel2.PasswordHash) {
+	passwordHash := reflect.ValueOf(userModel2).Elem().FieldByName("PasswordHash").Interface().(string)
+	if !security.IsSamePassword(password, passwordHash) {
 		// Password doesn't match
 		return nil, false
 	}
@@ -141,14 +147,13 @@ func UserLoginHandler() func(c *gin.Context) {
 		w, r := c.Writer, c.Request
 		log.Println("UserLoginHandler")
 
-		m, httperr := ModelFromJSONBody(r, "users")
+		m, httperr := ModelFromJSONBody(r, "users") // m is models.IModel
 		if httperr != nil {
 			render.Render(w, r, httperr)
 			return
 		}
 
-		m2, _ := m.(*models.User)
-		authUser, authorized := getVerifiedAuthUser(*m2)
+		authUser, authorized := getVerifiedAuthUser(m)
 		if !authorized {
 			// unable to login user. maybe doesn't exist?
 			// or username, password wrong
@@ -158,7 +163,7 @@ func UserLoginHandler() func(c *gin.Context) {
 
 		// login success, return access token
 		scope := "owner"
-		payload, err := createTokenPayloadForScope(authUser.ID, &scope)
+		payload, err := createTokenPayloadForScope(authUser.GetID(), &scope)
 		if err != nil {
 			render.Render(w, r, NewErrGeneratingToken(err))
 			return

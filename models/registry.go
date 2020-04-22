@@ -17,6 +17,12 @@ type BatchHookCargo struct {
 // ModelRegistry is model registry
 var ModelRegistry = make(map[string]*Reg)
 
+// OwnershipTyp is the model of ownership table, the table that has many to many links users with other models
+var OwnershipTyp reflect.Type
+
+// UserTyp is the model of the User table
+var UserTyp reflect.Type
+
 // Reg is a registry item
 type Reg struct {
 	Typ          reflect.Type
@@ -29,6 +35,17 @@ type Reg struct {
 /*
  * Registration
  */
+
+// RegisterOwnershipModel register the ownership table so the library can init base on it
+func RegisterOwnershipModel(ownership reflect.Type) {
+	OwnershipTyp = ownership
+}
+
+// AddUserToModelRegistry adds a New function for an IModel
+func AddUserToModelRegistry(typeString string, typ reflect.Type) {
+	AddModelRegistry(typeString, typ)
+	UserTyp = typ
+}
 
 // AddModelRegistry adds a New function for an IModel
 func AddModelRegistry(typeString string, typ reflect.Type) {

@@ -1,18 +1,10 @@
 package routes
 
-package utils
-
 import (
+	"time"
+
 	"github.com/t2wu/betterrest/libs/datatypes"
 	"github.com/t2wu/betterrest/libs/security"
-	"encoding/base64"
-	"fmt"
-	"net/http"
-	"reflect"
-	"strings"
-	"time"
-	"unicode"
-	"unicode/utf8"
 )
 
 // createTokenPayloadForScope creates token JSON payload

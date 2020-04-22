@@ -40,14 +40,3 @@ func AddRESTRoutes(r *gin.Engine) {
 		}
 	}
 }
-
-// AddRPCRoutes adds routes related to RPC calls (non-REST style)
-func AddRPCRoutes(r *gin.Engine) {
-	g := r.Group("/rpc")
-	{
-		g.POST("/assistant/lighton", LightOnHandler)
-		g.POST("/assistant/lightoff", LightOffHandler)
-		g.POST("/assistant/execute", SceneHandler)
-		g.POST("/register-gw", RegisterGWhandler)
-	}
-}
