@@ -136,15 +136,3 @@ type IAfterDelete interface {
 type IValidate interface {
 	Validate() error
 }
-
-/*
- * Every OwnershipModel subclasses BaseModel so it has a Ownership field.
- * Every OwnershipModel comforms to the interface DomainModel and therefor has a ToJSON()
- * so it is able to be serialized to JSON according to some permissions
- */
-
-// OwnershipModel has a ownership association
-type OwnershipModel struct {
-	BaseModel
-	Ownerships []Ownership `json:"-"` // store ownership id
-}
