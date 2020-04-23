@@ -62,14 +62,8 @@ func (mapper *UserMapper) CreateOne(db *gorm.DB, oid *datatypes.UUID, typeString
 
 	reflect.ValueOf(modelObj).Elem().FieldByName("PasswordHash").Set(reflect.ValueOf(hash))
 
-	if dbc := db.Create(modelObj); dbc.Error != nil {
-		// create failed: UNIQUE constraint failed: user.email
-		// It looks like this error may be dependent on the type of database we use
-		log.Println("create failed:", dbc.Error)
-		return nil, dbc.Error
-	}
-
-	return modelObj, nil
+	// there isn't really an oid at this point
+	return CreateWithHooks(db, oid, "users", modelObj)
 }
 
 // GetOneWithID get one model object based on its type and its id string
