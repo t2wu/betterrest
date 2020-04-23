@@ -39,6 +39,16 @@ func limitAndOffsetFromQueryString(w http.ResponseWriter, r *http.Request) (int,
 	return 0, 0, nil // It's ok to pass 0 limit, it'll be interpreted as an all.
 }
 
+func orderFromQueryString(c *gin.Context) string {
+	order := c.Query("order")
+
+	// Prevent sql injection
+	if order != "desc" && order != "asc" {
+		return ""
+	}
+	return order
+}
+
 func createdTimeRangeFromQueryString(w http.ResponseWriter, r *http.Request) (int, int, error) {
 	cstart, cstop := r.URL.Query().Get("cstart"), r.URL.Query().Get("cstop")
 
@@ -199,6 +209,8 @@ func ReadAllHandler(typeString string, mapper datamapper.IGetAllMapper) func(c *
 			render.Render(w, r, NewErrQueryParameter(err))
 			return
 		}
+
+		options["order"] = orderFromQueryString(c)
 
 		if cstart, cstop, err := createdTimeRangeFromQueryString(w, r); err == nil {
 			options["cstart"], options["cstop"] = cstart, cstop

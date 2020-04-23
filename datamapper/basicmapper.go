@@ -157,11 +157,11 @@ func (mapper *BasicMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, typeString 
 
 			whereStmt = whereStmt + letters.PascalCaseToSnakeCase(fieldName) + " = ?"
 			if strings.HasSuffix(fieldName, "ID") {
-				uuid_, err := datatypes.NewUUIDFromString(fieldValue)
+				uuid2, err := datatypes.NewUUIDFromString(fieldValue)
 				if err != nil {
 					return nil, err
 				}
-				whereArgs = append(whereArgs, uuid_)
+				whereArgs = append(whereArgs, uuid2)
 			} else {
 				whereArgs = append(whereArgs, fieldValue)
 			}
@@ -175,7 +175,11 @@ func (mapper *BasicMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, typeString 
 	}
 
 	if limit != 0 {
-		f = db.Offset(offset).Limit(limit).Find
+		order := options["order"].(string)
+		if order == "" {
+			order = "ASC"
+		}
+		f = db.Order("created_at " + order).Offset(offset).Limit(limit).Find
 	} else {
 		f = db.Find
 	}
