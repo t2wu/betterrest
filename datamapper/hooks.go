@@ -1,8 +1,6 @@
 package datamapper
 
 import (
-	"log"
-
 	"github.com/t2wu/betterrest/libs/datatypes"
 	"github.com/t2wu/betterrest/models"
 
@@ -45,8 +43,6 @@ func CreateWithHooks(db *gorm.DB, oid *datatypes.UUID, typeString string, modelO
 			return nil, err
 		}
 	}
-
-	log.Println("modelObj:", modelObj)
 
 	return modelObj, nil
 }

@@ -23,7 +23,7 @@ const (
 // BaseModel is the base class domain model which has standard ID
 type BaseModel struct {
 	ID        *datatypes.UUID `gorm:"type:binary(16);primary_key;" json:"id"`
-	CreatedAt time.Time       `json:"createdAt"`
+	CreatedAt time.Time       `sql:"index" json:"createdAt"`
 	UpdatedAt time.Time
 	DeletedAt *time.Time `sql:"index"`
 
@@ -114,18 +114,6 @@ type IAfterUpdate interface {
 type IAfterPatch interface {
 	AfterPatchDB(db *gorm.DB, oid *datatypes.UUID, typeString string, cargo *ModelCargo) error
 }
-
-// This is hard to implement at the moment
-// because currently we process one by one
-// IBeforeBatchUpdate supports method to be called after data is updated in the database
-// type IBeforeBatchUpdate interface {
-// 	BeforeBatchUpdateDB(db *gorm.DB, typeString string) error
-// }
-
-// IAfterBatchUpdate supports method to be called after data is updated in the database
-// type IAfterBatchUpdate interface {
-// 	AfterBatchUpdateDB(db *gorm.DB, typeString string) error
-// }
 
 // IAfterDelete supports method to be called after data is deleted from the database
 type IAfterDelete interface {
