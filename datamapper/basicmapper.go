@@ -57,8 +57,9 @@ func (mapper *BasicMapper) GetOneWithID(db *gorm.DB, oid *datatypes.UUID, typeSt
 	// Is this a global setting?
 	db = db.Set("gorm:auto_preload", true)
 
-	columnName := letters.PascalCaseToSnakeCase(typeString[0 : len(typeString)-1]) // resource table e.g. TagLocations -> tag_location
-	rtable := strings.ToLower(typeString[0 : len(typeString)-1])                   // resource table e.g. gateway
+	structName := reflect.TypeOf(modelObj).Elem().Name()
+	columnName := letters.PascalCaseToSnakeCase(structName) // column name
+	rtable := strings.ToLower(structName)                   // table name
 	firstJoin := fmt.Sprintf("INNER JOIN `%s_ownerships` ON `%s`.id = `%s_ownerships`.%s_id AND `%s`.id = UUID_TO_BIN(?) ",
 		rtable, rtable, rtable, columnName, rtable)
 	secondJoin := fmt.Sprintf("INNER JOIN `ownership` ON `ownership`.id = `%s_ownerships`.ownership_id AND `ownership`.role = ? ",
@@ -110,8 +111,9 @@ func (mapper *BasicMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, typeString 
 
 	db = db.Set("gorm:auto_preload", true)
 
-	columnName := letters.PascalCaseToSnakeCase(typeString[0 : len(typeString)-1]) // resource table e.g. TagLocations -> tag_location
-	rtable := strings.ToLower(typeString[0 : len(typeString)-1])
+	structName := reflect.TypeOf(models.NewFromTypeString(typeString)).Elem().Name()
+	columnName := letters.PascalCaseToSnakeCase(structName) // column name
+	rtable := strings.ToLower(structName)                   // table name
 	firstJoin := fmt.Sprintf("INNER JOIN `%s_ownerships` ON `%s`.id = `%s_ownerships`.%s_id ",
 		rtable, rtable, rtable, columnName)
 	secondJoin := fmt.Sprintf("INNER JOIN `ownership` ON `ownership`.id = `%s_ownerships`.ownership_id AND `ownership`.role = ? ",
