@@ -329,11 +329,20 @@ func (mapper *BasicMapper) DeleteOneWithID(db *gorm.DB, oid *datatypes.UUID, typ
 		}
 	}
 
-	// Unscoped() for REAL delete!
-	// Otherwise my constraint won't work...
-	// Soft delete will take more work, have to verify myself manually
-	// db.Unscoped().Delete(modelObj).Error
-	err = db.Delete(modelObj).Error
+	realDelete := true
+	if modelObj2, ok := modelObj.(models.IDoRealDelete); ok {
+		realDelete = modelObj2.DoRealDelete()
+	}
+
+	if realDelete {
+		// Unscoped() for REAL delete!
+		// Foreign key constraint works only on real delete
+		// Soft delete will take more work, have to verify myself manually
+		err = db.Unscoped().Delete(modelObj).Error
+	} else {
+		err = db.Delete(modelObj).Error
+	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -384,11 +393,20 @@ func (mapper *BasicMapper) DeleteMany(db *gorm.DB, oid *datatypes.UUID, typeStri
 			return nil, err
 		}
 
-		// Unscoped() for REAL delete!
-		// Otherwise my constraint won't work...
-		// Soft delete will take more work, have to verify myself manually
-		// db.Unscoped().Delete(modelObj).Error
-		err = db.Delete(modelObj).Error
+		realDelete := true
+		if modelObj2, ok := modelObj.(models.IDoRealDelete); ok {
+			realDelete = modelObj2.DoRealDelete()
+		}
+
+		if realDelete {
+			// Unscoped() for REAL delete!
+			// Foreign key constraint works only on real delete
+			// Soft delete will take more work, have to verify myself manually
+			err = db.Unscoped().Delete(modelObj).Error
+		} else {
+			err = db.Delete(modelObj).Error
+		}
+
 		if err != nil {
 			return nil, err
 		}

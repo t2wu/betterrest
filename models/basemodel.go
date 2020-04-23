@@ -75,6 +75,11 @@ type IModel interface {
 	SetID(id *datatypes.UUID)
 }
 
+// DoRealDelete is an interface to customize specification for real db delete
+type IDoRealDelete interface {
+	DoRealDelete() bool
+}
+
 // ModelCargo is payload between hookpoints
 type ModelCargo struct {
 	Payload interface{}
