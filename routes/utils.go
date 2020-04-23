@@ -29,6 +29,7 @@ func createTokenPayloadForScope(id *datatypes.UUID, scope *string) (map[string]i
 			"accessToken":  accessToken,
 			"tokenType":    "Bearer",
 			"refreshToken": refreshToken,
+			"id":           id,
 		},
 	}
 
