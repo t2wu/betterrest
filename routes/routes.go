@@ -13,11 +13,11 @@ func addRoute(r *gin.Engine, typeString string, mapper interface{}) {
 	endpoint := strings.ToLower(typeString)
 	g := r.Group("/" + endpoint)
 	{
-		g.GET("/", ReadAllHandler(typeString, mapper.(datamapper.IGetAllMapper))) // e.g. GET /devices
+		g.GET("", ReadAllHandler(typeString, mapper.(datamapper.IGetAllMapper))) // e.g. GET /devices
 		// r.With(paginate).Get("/", ListArticles)
-		g.POST("/", CreateOneHandler(typeString, mapper.(datamapper.ICreateOneMapper)))
-		g.PUT("/", UpdateManyHandler(typeString, mapper.(datamapper.IUpdateManyMapper)))
-		g.DELETE("/", DeleteManyHandler(typeString, mapper.(datamapper.IDeleteMany)))
+		g.POST("", CreateOneHandler(typeString, mapper.(datamapper.ICreateOneMapper)))
+		g.PUT("", UpdateManyHandler(typeString, mapper.(datamapper.IUpdateManyMapper)))
+		g.DELETE("", DeleteManyHandler(typeString, mapper.(datamapper.IDeleteMany)))
 
 		n := g.Group("/:id")
 		{

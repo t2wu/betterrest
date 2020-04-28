@@ -14,7 +14,7 @@ func UserRoutes(endpoint string, r *gin.Engine) {
 
 	// r.Get("/", ReadAllHandler("users"))
 	// r.With(paginate).Get("/", ListArticles)
-	g.POST("/", CreateOneHandler(typeString, dm))
+	g.POST("", CreateOneHandler(typeString, dm))
 	g.POST("/login", UserLoginHandler()) // no crud on this one...access db itself
 
 	// g := r.Group(nil)
