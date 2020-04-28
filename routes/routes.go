@@ -22,10 +22,10 @@ func addRoute(r *gin.Engine, typeString string, mapper interface{}) {
 		n := g.Group("/:id")
 		{
 			// r.Use(OneMiddleWare(typeString))
-			n.GET("/", ReadOneHandler(typeString, mapper.(datamapper.IGetOneWithIDMapper)))      // e.g. GET /model/123
-			n.PUT("/", UpdateOneHandler(typeString, mapper.(datamapper.IUpdateOneWithIDMapper))) // e.g. PUT /model/123
-			n.PATCH("/", PatchOneHandler(typeString, mapper.(datamapper.IPatchOneWithIDMapper))) // e.g. PATCH /model/123
-			n.DELETE("/", DeleteOneHandler(typeString, mapper.(datamapper.IDeleteOneWithID)))    // e.g. DELETE /model/123
+			n.GET("", ReadOneHandler(typeString, mapper.(datamapper.IGetOneWithIDMapper)))      // e.g. GET /model/123
+			n.PUT("", UpdateOneHandler(typeString, mapper.(datamapper.IUpdateOneWithIDMapper))) // e.g. PUT /model/123
+			n.PATCH("", PatchOneHandler(typeString, mapper.(datamapper.IPatchOneWithIDMapper))) // e.g. PATCH /model/123
+			n.DELETE("", DeleteOneHandler(typeString, mapper.(datamapper.IDeleteOneWithID)))    // e.g. DELETE /model/123
 		}
 	}
 }

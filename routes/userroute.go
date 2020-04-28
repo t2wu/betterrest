@@ -22,8 +22,8 @@ func UserRoutes(endpoint string, r *gin.Engine) {
 
 	n := g.Group("/:id")
 	{
-		n.GET("/", ReadOneHandler(typeString, dm))
-		n.PUT("/", UpdateOneHandler(typeString, dm))
-		n.DELETE("/", DeleteOneHandler(typeString, dm))
+		n.GET("", ReadOneHandler(typeString, dm))
+		n.PUT("", UpdateOneHandler(typeString, dm))
+		n.DELETE("", DeleteOneHandler(typeString, dm))
 	}
 }
