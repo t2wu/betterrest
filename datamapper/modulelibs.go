@@ -3,6 +3,7 @@ package datamapper
 import (
 	"encoding/json"
 	"log"
+	"reflect"
 
 	"github.com/t2wu/betterrest/libs/datatypes"
 	"github.com/t2wu/betterrest/models"
@@ -80,4 +81,33 @@ func patchOneCore(typeString string, modelObj models.IModel, jsonPatch []byte) (
 	}
 
 	return modelObj, nil
+}
+
+// removePeggedField remove nested field if it has tag `betterrest="peg"`
+// Only support one-level
+func removePeggedField(db *gorm.DB, modelObj models.IModel) (err error) {
+	// Delete nested field
+	// Not yet support two-level of nested field
+	v := reflect.Indirect(reflect.ValueOf(modelObj))
+
+	for i := 0; i < v.NumField(); i++ {
+		tag := v.Type().Field(i).Tag.Get("betterrest")
+		if tag == "peg" {
+			fieldVal := v.Field(i)
+			switch fieldVal.Kind() {
+			case reflect.Slice:
+				for j := 0; j < fieldVal.Len(); j++ {
+					x := fieldVal.Index(j).Interface()
+					err = db.Delete(x).Error
+
+					if err != nil {
+						return err
+					}
+				}
+			default:
+				log.Println("it's something else")
+			}
+		}
+	}
+	return nil
 }
