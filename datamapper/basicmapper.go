@@ -3,6 +3,7 @@ package datamapper
 import (
 	"fmt"
 	"log"
+	"net/url"
 	"reflect"
 	"strings"
 	"sync"
@@ -95,17 +96,17 @@ func (mapper *BasicMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, typeString 
 		cstop, _ = options["cstop"].(int)
 	}
 
-	// This is GetAllByField
-	fieldName, fieldValue, fieldNamePascal := "", "", ""
-	_, ok := options["fieldName"]
-	_, ok2 := options["fieldValue"]
-	if ok && ok2 {
-		// FIXME this should return NewErrQueryParameter when you can't conver it
-		// But we should hanlde it at the caller
-		fieldName, _ = options["fieldName"].(string)
-		fieldNamePascal = letters.CamelCaseToPascalCase(fieldName)
-		fieldValue, _ = options["fieldValue"].(string)
-	}
+	// // This is GetAllByField
+	// fieldName, fieldValue, fieldNamePascal := "", "", ""
+	// _, ok := options["fieldName"]
+	// _, ok2 := options["fieldValue"]
+	// if ok && ok2 {
+	// 	// FIXME this should return NewErrQueryParameter when you can't conver it
+	// 	// But we should hanlde it at the caller
+	// 	fieldName, _ = options["fieldName"].(string)
+	// 	fieldNamePascal = letters.CamelCaseToPascalCase(fieldName)
+	// 	fieldValue, _ = options["fieldValue"].(string)
+	// }
 
 	var f func(interface{}, ...interface{}) *gorm.DB
 
@@ -120,66 +121,56 @@ func (mapper *BasicMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, typeString 
 		rtable)
 	thirdJoin := "INNER JOIN `user_ownerships` ON `user_ownerships`.ownership_id = `ownership`.id "
 	fourthJoin := "INNER JOIN user ON `user_ownerships`.user_id = user.id AND user.id = UUID_TO_BIN(?)"
-	db = db.Table(rtable).Joins(firstJoin).Joins(secondJoin, models.Admin).Joins(thirdJoin).Joins(fourthJoin, oid.String())
 
-	whereStmt := ""
-	hasDateRange := false
-	whereArgs := make([]interface{}, 0)
+	// whereStmt := ""
+	// hasDateRange := false
+	// whereArgs := make([]interface{}, 0)
 	if cstart != 0 && cstop != 0 {
-		// db = db.Where(rtable+".created_at BETWEEN ? AND ?", time.Unix(int64(cstart), 0), time.Unix(int64(cstop), 0))
-		whereStmt = rtable + ".created_at BETWEEN ? AND ?"
-		hasDateRange = true
-		whereArgs = append(whereArgs, time.Unix(int64(cstart), 0))
-		whereArgs = append(whereArgs, time.Unix(int64(cstop), 0))
+		db = db.Where(rtable+".created_at BETWEEN ? AND ?", time.Unix(int64(cstart), 0), time.Unix(int64(cstop), 0))
 	}
 
-	if fieldName != "" && fieldValue != "" {
+	// any other fields?
+	if values, ok := options["better_otherqueries"].(url.Values); ok {
 		// Important!! Check if fieldName is actually part of the schema, otherwise risk of sequal injection
+
 		obj := models.NewFromTypeString(typeString)
-		found := false
+		v := reflect.Indirect(reflect.ValueOf(obj))
+		typeOfS := v.Type()
+		fieldMap := make(map[string]bool)
 
 		// https://stackoverflow.com/questions/18926303/iterate-through-the-fields-of-a-struct-in-go
-		v := reflect.ValueOf(obj).Elem()
-		typeOfS := v.Type()
-
-		// Loop, cuz FieldByName will return zero value if not found, maybe not helpful
 		for i := 0; i < v.NumField(); i++ {
-			if typeOfS.Field(i).Name == fieldNamePascal {
-				found = true
-				break
-			}
+			fieldMap[typeOfS.Field(i).Name] = true
 		}
 
-		if found {
-			if hasDateRange {
-				whereStmt = whereStmt + " AND"
+		for fieldName, fieldValues := range values {
+			fieldValue2 := fieldValues[0]
+
+			if fieldMap[letters.CamelCaseToPascalCase(fieldName)] == false {
+				return nil, fmt.Errorf("fieldname %s does not exist", fieldName)
 			}
 
-			whereStmt = whereStmt + letters.PascalCaseToSnakeCase(fieldName) + " = ?"
+			whereStmt := rtable + "." + letters.PascalCaseToSnakeCase(fieldName) + " = ?"
 			if strings.HasSuffix(fieldName, "ID") {
-				uuid2, err := datatypes.NewUUIDFromString(fieldValue)
+				uuid2, err := datatypes.NewUUIDFromString(fieldValue2)
 				if err != nil {
 					return nil, err
 				}
-				whereArgs = append(whereArgs, uuid2)
+				db = db.Where(whereStmt, uuid2)
 			} else {
-				whereArgs = append(whereArgs, fieldValue)
+				db = db.Where(whereStmt, fieldValue2)
 			}
-		} else {
-			return nil, fmt.Errorf("fieldname %s does not exist", fieldName)
 		}
 	}
 
-	if whereStmt != "" {
-		db = db.Where(whereStmt, whereArgs)
+	db = db.Table(rtable).Joins(firstJoin).Joins(secondJoin, models.Admin).Joins(thirdJoin).Joins(fourthJoin, oid.String())
+
+	if order := options["order"].(string); order != "" {
+		db = db.Order("created_at " + order)
 	}
 
 	if limit != 0 {
-		order := options["order"].(string)
-		if order == "" {
-			order = "ASC"
-		}
-		f = db.Order("created_at " + order).Offset(offset).Limit(limit).Find
+		f = db.Offset(offset).Limit(limit).Find
 	} else {
 		f = db.Find
 	}

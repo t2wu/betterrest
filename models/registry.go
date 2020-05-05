@@ -20,6 +20,9 @@ var ModelRegistry = make(map[string]*Reg)
 // OwnershipTyp is the model of ownership table, the table that has many to many links users with other models
 var OwnershipTyp reflect.Type
 
+// OwnerTyp is the model of the Owner table
+var OwnerTyp reflect.Type
+
 // UserTyp is the model of the User table
 var UserTyp reflect.Type
 
@@ -41,7 +44,13 @@ func RegisterOwnershipModel(ownership reflect.Type) {
 	OwnershipTyp = ownership
 }
 
-// AddUserToModelRegistry adds a New function for an IModel
+// AddOwnerToModelRegistry adds a New function for an owner
+func AddOwnerToModelRegistry(typeString string, typ reflect.Type) {
+	AddModelRegistry(typeString, typ)
+	OwnerTyp = typ
+}
+
+// AddUserToModelRegistry adds a New function for a user
 func AddUserToModelRegistry(typeString string, typ reflect.Type) {
 	AddModelRegistry(typeString, typ)
 	UserTyp = typ

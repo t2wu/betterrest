@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"net/url"
 	"reflect"
 	"strconv"
 	"strings"
@@ -23,9 +24,12 @@ import (
 )
 
 // ---------------------------------------------
-func limitAndOffsetFromQueryString(w http.ResponseWriter, r *http.Request) (int, int, error) {
+func limitAndOffsetFromQueryString(values *url.Values) (int, int, error) {
+	defer delete(*values, "offset")
+	defer delete(*values, "limit")
+
 	// Can I do the following in one statement?
-	if offset, limit := r.URL.Query().Get("offset"), r.URL.Query().Get("limit"); offset != "" && limit != "" {
+	if offset, limit := values.Get("offset"), values.Get("limit"); offset != "" && limit != "" {
 		var o, l int
 		var err error
 		if o, err = strconv.Atoi(offset); err != nil {
@@ -39,42 +43,45 @@ func limitAndOffsetFromQueryString(w http.ResponseWriter, r *http.Request) (int,
 	return 0, 0, nil // It's ok to pass 0 limit, it'll be interpreted as an all.
 }
 
-func orderFromQueryString(c *gin.Context) string {
-	order := c.Query("order")
+func orderFromQueryString(values *url.Values) string {
+	defer delete(*values, "order")
 
-	// Prevent sql injection
-	if order != "desc" && order != "asc" {
-		return ""
+	if order := values.Get("order"); order != "" {
+		// Prevent sql injection
+		if order != "desc" && order != "asc" {
+			return ""
+		}
+		return order
 	}
-	return order
+	return ""
 }
 
-func createdTimeRangeFromQueryString(w http.ResponseWriter, r *http.Request) (int, int, error) {
-	cstart, cstop := r.URL.Query().Get("cstart"), r.URL.Query().Get("cstop")
+func createdTimeRangeFromQueryString(values *url.Values) (int, int, error) {
+	defer delete(*values, "cstart")
+	defer delete(*values, "cstop")
 
-	if cstart == "" && cstop == "" { // not specified at all
-		return 0, 0, nil
-	}
-
-	var err error
-	cStartInt, cStopInt := 0, 0
-	if cstart != "" {
-		if cStartInt, err = strconv.Atoi(cstart); err != nil {
-			return 0, 0, err
+	if cstart, cstop := values.Get("cstart"), values.Get("cstop"); cstart != "" && cstop != "" {
+		var err error
+		cStartInt, cStopInt := 0, 0
+		if cstart != "" {
+			if cStartInt, err = strconv.Atoi(cstart); err != nil {
+				return 0, 0, err
+			}
+		} else {
+			cStartInt = 0
 		}
-	} else {
-		cStartInt = 0
-	}
 
-	if cstop != "" {
-		if cStopInt, err = strconv.Atoi(cstop); err != nil {
-			return 0, 0, err
+		if cstop != "" {
+			if cStopInt, err = strconv.Atoi(cstop); err != nil {
+				return 0, 0, err
+			}
+		} else {
+			cStopInt = int(time.Now().Unix()) // now
 		}
-	} else {
-		cStopInt = int(time.Now().Unix()) // now
-	}
 
-	return cStartInt, cStopInt, nil
+		return cStartInt, cStopInt, nil
+	}
+	return 0, 0, nil
 }
 
 func modelObjsToJSON(typeString string, modelObjs []models.IModel) (string, error) {
@@ -203,23 +210,25 @@ func ReadAllHandler(typeString string, mapper datamapper.IGetAllMapper) func(c *
 		var err error
 		var modelObjs []models.IModel
 
-		if o, l, err := limitAndOffsetFromQueryString(w, r); err == nil {
+		values := r.URL.Query()
+		if o, l, err := limitAndOffsetFromQueryString(&values); err == nil {
 			options["offset"], options["limit"] = o, l
 		} else if err != nil {
 			render.Render(w, r, NewErrQueryParameter(err))
 			return
 		}
 
-		options["order"] = orderFromQueryString(c)
+		options["order"] = orderFromQueryString(&values)
+		options["better_otherqueries"] = values
 
-		if cstart, cstop, err := createdTimeRangeFromQueryString(w, r); err == nil {
+		if cstart, cstop, err := createdTimeRangeFromQueryString(&values); err == nil {
 			options["cstart"], options["cstop"] = cstart, cstop
 		} else if err != nil {
 			render.Render(w, r, NewErrQueryParameter(err))
 			return
 		}
 
-		options["fieldName"], options["fieldValue"] = r.URL.Query().Get("fieldName"), r.URL.Query().Get("fieldValue")
+		// options["fieldName"], options["fieldValue"] = r.URL.Query().Get("fieldName"), r.URL.Query().Get("fieldValue")
 
 		tx := db.Shared().Begin()
 		if modelObjs, err = mapper.ReadAll(tx, OwnerIDFromContext(r), typeString, options); err != nil {

@@ -59,15 +59,11 @@ func patchOneCore(typeString string, modelObj models.IModel, jsonPatch []byte) (
 		return nil, errPatch // the errors often not that helpful anyway
 	}
 
-	log.Println("hello===================0")
-
 	var patch jsonpatch.Patch
 	patch, err = jsonpatch.DecodePatch(jsonPatch)
 	if err != nil {
 		return nil, err
 	}
-
-	log.Println("hello===================1")
 
 	var modified []byte
 	modified, err = patch.Apply(modelInBytes)
@@ -75,7 +71,6 @@ func patchOneCore(typeString string, modelObj models.IModel, jsonPatch []byte) (
 		return nil, err
 	}
 
-	log.Println("hello===================")
 	// Now turn it back to modelObj
 	modelObj = models.NewFromTypeString(typeString)
 	err = json.Unmarshal(modified, modelObj)
