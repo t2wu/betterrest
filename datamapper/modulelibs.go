@@ -35,6 +35,18 @@ func checkErrorBeforeUpdate(mapper IGetOneWithIDMapper, db *gorm.DB, oid *dataty
 }
 
 func updateOneCore(mapper IGetOneWithIDMapper, db *gorm.DB, oid *datatypes.UUID, typeString string, modelObj models.IModel, id datatypes.UUID) (modelObj2 models.IModel, err error) {
+	oldModelObj, err2 := mapper.GetOneWithID(db, oid, typeString, id)
+	if err2 != nil {
+		return nil, err2
+	}
+	if modelNeedsRealDelete(oldModelObj) { // parent model
+		db = db.Unscoped()
+	}
+	err2 = updatePeggedFieldsWhichAreDeleted(db, oldModelObj, modelObj)
+	if err2 != nil {
+		return nil, err2
+	}
+
 	if err = db.Save(modelObj).Error; err != nil { // save updates all fields (FIXME: need to check for required)
 		log.Println("Error updating:", err)
 		return nil, err
@@ -105,9 +117,85 @@ func removePeggedField(db *gorm.DB, modelObj models.IModel) (err error) {
 					}
 				}
 			default:
-				log.Println("it's something else")
+				// it's something else, delete it directly
+				x := fieldVal.Interface()
+				err = db.Delete(x).Error
+				if err != nil {
+					return err
+				}
 			}
 		}
 	}
 	return nil
+}
+
+// updatePeggedFieldsWhichAreDeleted check if stuff in the pegged array
+// is actually
+func updatePeggedFieldsWhichAreDeleted(db *gorm.DB, oldModelObj models.IModel, newModelObj models.IModel) (err error) {
+
+	// Delete nested field
+	// Not yet support two-level of nested field
+	v1 := reflect.Indirect(reflect.ValueOf(oldModelObj))
+	v2 := reflect.Indirect(reflect.ValueOf(newModelObj))
+
+	for i := 0; i < v1.NumField(); i++ {
+		tag := v1.Type().Field(i).Tag.Get("betterrest")
+		if tag == "peg" {
+			fieldVal1 := v1.Field(i)
+			fieldVal2 := v2.Field(i)
+
+			set1 := datatypes.NewSetString()
+			set2 := datatypes.NewSetString()
+			m := make(map[string]interface{})
+
+			switch fieldVal1.Kind() {
+			case reflect.Slice:
+				for j := 0; j < fieldVal1.Len(); j++ {
+					id := fieldVal1.Index(j).FieldByName("ID").Interface().(*datatypes.UUID)
+					set1.Add(id.String())
+					m[id.String()] = fieldVal1.Index(j).Interface()
+				}
+
+				for j := 0; j < fieldVal2.Len(); j++ {
+					idinter := fieldVal2.Index(j).FieldByName("ID").Interface()
+					if idinter.(*datatypes.UUID) != nil {
+						// ID doesn't exist? ignore, it's a new entry without ID
+						set2.Add(idinter.(*datatypes.UUID).String())
+					}
+				}
+			default:
+				// if not a slice
+				id1 := fieldVal1.FieldByName("ID").Interface().(*datatypes.UUID)
+				id2 := fieldVal2.FieldByName("ID").Interface().(*datatypes.UUID)
+				if id1 != nil {
+					if id2 == nil || id2.String() != id1.String() {
+						// old one is to be removed
+						set1.Add(id1.String())
+					}
+				}
+			}
+
+			// remove when stuff in the old set that's not in the new set
+			setdiff := set1.Difference(set2)
+			for uuid := range setdiff.List {
+				modelToDel := m[uuid]
+
+				err = db.Delete(modelToDel).Error
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+func modelNeedsRealDelete(modelObj models.IModel) bool {
+	// real delete by default
+	realDelete := true
+	if modelObj2, ok := modelObj.(models.IDoRealDelete); ok {
+		realDelete = modelObj2.DoRealDelete()
+	}
+	return realDelete
 }
