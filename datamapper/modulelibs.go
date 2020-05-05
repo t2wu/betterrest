@@ -164,15 +164,7 @@ func updatePeggedFieldsWhichAreDeleted(db *gorm.DB, oldModelObj models.IModel, n
 					}
 				}
 			default:
-				// if not a slice
-				id1 := fieldVal1.FieldByName("ID").Interface().(*datatypes.UUID)
-				id2 := fieldVal2.FieldByName("ID").Interface().(*datatypes.UUID)
-				if id1 != nil {
-					if id2 == nil || id2.String() != id1.String() {
-						// old one is to be removed
-						set1.Add(id1.String())
-					}
-				}
+				// embedded object is considered part of the structure, so no removal
 			}
 
 			// remove when stuff in the old set that's not in the new set
