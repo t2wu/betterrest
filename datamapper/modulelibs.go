@@ -140,7 +140,8 @@ func updatePeggedFieldsWhichAreDeleted(db *gorm.DB, oldModelObj models.IModel, n
 
 	for i := 0; i < v1.NumField(); i++ {
 		tag := v1.Type().Field(i).Tag.Get("betterrest")
-		if tag == "peg" {
+		log.Println("tag!!!!!!!!!!!!", tag)
+		if tag == "peg" || tag == "pegassoc" {
 			fieldVal1 := v1.Field(i)
 			fieldVal2 := v2.Field(i)
 
@@ -172,9 +173,20 @@ func updatePeggedFieldsWhichAreDeleted(db *gorm.DB, oldModelObj models.IModel, n
 			for uuid := range setdiff.List {
 				modelToDel := m[uuid]
 
-				err = db.Delete(modelToDel).Error
-				if err != nil {
-					return err
+				if tag == "peg" {
+					err = db.Delete(modelToDel).Error
+					if err != nil {
+						return err
+					}
+				} else if tag == "pegassoc" {
+					columnName := v1.Type().Field(i).Name
+					// assocModel := reflect.Indirect(reflect.ValueOf(modelToDel)).Type().Name()
+					// fieldName := v1.Type().Field(i).Name
+					// fieldName = fieldName[0 : len(fieldName)-1] // get rid of s
+					// tableName := letters.CamelCaseToPascalCase(fieldName)
+					if err = db.Model(oldModelObj).Association(columnName).Delete(modelToDel).Error; err != nil {
+						return err
+					}
 				}
 			}
 		}
