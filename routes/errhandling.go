@@ -339,57 +339,25 @@ type ErrDelete struct {
 }
 
 /*
- * Assistant errors
+ * Internal server error
  */
 
-// NewErrAssistantSemantic creates an ErrAssistantSemantic error
-func NewErrAssistantSemantic(err error) render.Renderer {
-	return &ErrAssistantSemantic{
+// NewErrInternalServerError presents error when refreshing
+// a token
+func NewErrInternalServerError(err error) render.Renderer {
+	return &ErrInternalServerError{
 		ErrResponse{
-			HTTPStatusCode: http.StatusBadRequest,
-			Code:           201,
-			StatusText:     "error in understanding message",
-			ErrorText:      errorToSensibleString(err),
+			HTTPStatusCode: http.StatusInternalServerError,
+			Code:           500,
+
+			// This one is special.. we use error at the end
+			StatusText: errorToSensibleString(err),
 		},
 	}
 }
 
-// ErrAssistantSemantic is an error for not understanding the message
-type ErrAssistantSemantic struct {
-	ErrResponse
-}
-
-// NewErrRoomNotFound creates an device error
-func NewErrRoomNotFound(err error) render.Renderer {
-	return &ErrRoomNotFound{
-		ErrResponse{
-			HTTPStatusCode: http.StatusBadRequest,
-			Code:           202,
-			StatusText:     "room not found",
-			ErrorText:      errorToSensibleString(err),
-		},
-	}
-}
-
-// ErrRoomNotFound is an error for room not found
-type ErrRoomNotFound struct {
-	ErrResponse
-}
-
-// NewErrDeviceNotFound creates an device error
-func NewErrDeviceNotFound(err error) render.Renderer {
-	return &ErrDeviceNotFound{
-		ErrResponse{
-			HTTPStatusCode: http.StatusBadRequest,
-			Code:           203,
-			StatusText:     "device not found",
-			ErrorText:      errorToSensibleString(err),
-		},
-	}
-}
-
-// ErrDeviceNotFound is an error for device not found
-type ErrDeviceNotFound struct {
+// ErrInternalServerError some problem refreshing the token (maybe missing)
+type ErrInternalServerError struct {
 	ErrResponse
 }
 
