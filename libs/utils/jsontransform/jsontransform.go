@@ -85,6 +85,9 @@ func cherryPickCore(dat map[string]interface{}, f *JSONFields, datPicked map[str
 			} else if v2, ok := v.(int); ok {
 				// if nil, change to this int
 				datPicked[k] = v2
+			} else if v == nil {
+				// if nil, change to this int
+				datPicked[k] = nil
 			} else if _, ok := v.(JSONFieldEmptyList); ok {
 				datPicked[k] = make([]interface{}, 0)
 			} else if _, ok := v.(JSONFieldIgnoreIfEmpty); ok {

@@ -325,9 +325,6 @@ func UpdateOneHandler(typeString string, mapper datamapper.IUpdateOneWithIDMappe
 
 		log.Println("UpdateOneHandler called")
 
-		test := c.Param("test")
-		log.Println("test:", test == "")
-
 		id, httperr := IDFromURLQueryString(c)
 		if httperr != nil {
 			render.Render(w, r, httperr)
