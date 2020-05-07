@@ -1,6 +1,7 @@
 package datamapper
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"reflect"
@@ -67,22 +68,23 @@ func (mapper *UserMapper) CreateOne(db *gorm.DB, oid *datatypes.UUID, typeString
 }
 
 // GetOneWithID get one model object based on its type and its id string
-func (mapper *UserMapper) GetOneWithID(db *gorm.DB, oid *datatypes.UUID, typeString string, id datatypes.UUID) (models.IModel, error) {
+func (mapper *UserMapper) GetOneWithID(db *gorm.DB, oid *datatypes.UUID, typeString string, id datatypes.UUID) (models.IModel, models.UserRole, error) {
 	// TODO: Currently can only read ID from your own (not others in the admin group either)
 	db = db.Set("gorm:auto_preload", true)
 
+	// Todo: maybe guest shoud be able to read some fields
 	if id.String() != oid.String() {
-		return nil, errPermission
+		return nil, 0, errPermission
 	}
 
 	modelObj := models.NewFromTypeString(typeString)
 	modelObj.SetID(oid)
 
 	if err := db.First(modelObj).Error; err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
-	return modelObj, nil
+	return modelObj, models.Admin, nil
 }
 
 // UpdateOneWithID updates model based on this json
@@ -90,6 +92,10 @@ func (mapper *UserMapper) UpdateOneWithID(db *gorm.DB, oid *datatypes.UUID, type
 	log.Println("userMapper's UpdateOneWithID called")
 	if err := checkErrorBeforeUpdate(mapper, db, oid, typeString, modelObj, id); err != nil {
 		return nil, err
+	}
+
+	if *oid != id {
+		return nil, errPermission
 	}
 
 	password := reflect.ValueOf(modelObj).Elem().FieldByName(("Password")).Interface().(string)
@@ -137,9 +143,14 @@ func (mapper *UserMapper) DeleteOneWithID(db *gorm.DB, oid *datatypes.UUID, type
 	}
 
 	// Pull out entire modelObj
-	modelObj, err := mapper.GetOneWithID(db, oid, typeString, id)
+	modelObj, role, err := mapper.GetOneWithID(db, oid, typeString, id)
 	if err != nil { // Error is "record not found" when not found
 		return nil, err
+	}
+	if role != models.Admin {
+		// even if found, not authorized, so return a not found
+		// but how do I do that here?
+		return nil, errors.New("not found")
 	}
 
 	cargo := models.ModelCargo{}

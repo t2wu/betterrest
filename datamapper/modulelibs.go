@@ -18,7 +18,7 @@ func checkErrorBeforeUpdate(mapper IGetOneWithIDMapper, db *gorm.DB, oid *dataty
 	}
 
 	// TODO: Is there a more efficient way?
-	_, err := mapper.GetOneWithID(db, oid, typeString, id)
+	_, _, err := mapper.GetOneWithID(db, oid, typeString, id)
 	if err != nil { // Error is "record not found" when not found
 		return err
 	}
@@ -35,10 +35,14 @@ func checkErrorBeforeUpdate(mapper IGetOneWithIDMapper, db *gorm.DB, oid *dataty
 }
 
 func updateOneCore(mapper IGetOneWithIDMapper, db *gorm.DB, oid *datatypes.UUID, typeString string, modelObj models.IModel, id datatypes.UUID) (modelObj2 models.IModel, err error) {
-	oldModelObj, err2 := mapper.GetOneWithID(db, oid, typeString, id)
+	oldModelObj, role, err2 := mapper.GetOneWithID(db, oid, typeString, id)
 	if err2 != nil {
 		return nil, err2
 	}
+	if role != models.Admin {
+		return nil, errPermission
+	}
+
 	if modelNeedsRealDelete(oldModelObj) { // parent model
 		db = db.Unscoped()
 	}
@@ -53,7 +57,7 @@ func updateOneCore(mapper IGetOneWithIDMapper, db *gorm.DB, oid *datatypes.UUID,
 	}
 
 	// This so we have the preloading.
-	modelObj2, err = mapper.GetOneWithID(db, oid, typeString, id)
+	modelObj2, _, err = mapper.GetOneWithID(db, oid, typeString, id)
 	if err != nil { // Error is "record not found" when not found
 		log.Println("Error:", err)
 		return nil, err
@@ -140,7 +144,6 @@ func updatePeggedFieldsWhichAreDeleted(db *gorm.DB, oldModelObj models.IModel, n
 
 	for i := 0; i < v1.NumField(); i++ {
 		tag := v1.Type().Field(i).Tag.Get("betterrest")
-		log.Println("tag!!!!!!!!!!!!", tag)
 		if tag == "peg" || tag == "pegassoc" {
 			fieldVal1 := v1.Field(i)
 			fieldVal2 := v2.Field(i)

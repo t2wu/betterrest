@@ -1,6 +1,7 @@
 package datamapper
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"net/url"
@@ -45,14 +46,13 @@ func (mapper *BasicMapper) CreateOne(db *gorm.DB, oid *datatypes.UUID, typeStrin
 
 	// Associate a ownership group with this model
 	o := reflect.ValueOf(modelObj).Elem().FieldByName("Ownerships")
-	// log.Println("LENGTH BEFORE APPEND:", o.Len())
 	o.Set(reflect.Append(o, reflect.ValueOf(g).Elem()))
 
 	return CreateWithHooks(db, oid, typeString, modelObj)
 }
 
 // GetOneWithID get one model object based on its type and its id string
-func (mapper *BasicMapper) GetOneWithID(db *gorm.DB, oid *datatypes.UUID, typeString string, id datatypes.UUID) (models.IModel, error) {
+func (mapper *BasicMapper) GetOneWithID(db *gorm.DB, oid *datatypes.UUID, typeString string, id datatypes.UUID) (models.IModel, models.UserRole, error) {
 	modelObj := models.NewFromTypeString(typeString)
 
 	// Is this a global setting?
@@ -63,13 +63,24 @@ func (mapper *BasicMapper) GetOneWithID(db *gorm.DB, oid *datatypes.UUID, typeSt
 	rtable := strings.ToLower(structName)                   // table name
 	firstJoin := fmt.Sprintf("INNER JOIN `%s_ownerships` ON `%s`.id = `%s_ownerships`.%s_id AND `%s`.id = UUID_TO_BIN(?) ",
 		rtable, rtable, rtable, columnName, rtable)
-	secondJoin := fmt.Sprintf("INNER JOIN `ownership` ON `ownership`.id = `%s_ownerships`.ownership_id AND `ownership`.role = ? ",
+	// secondJoin := fmt.Sprintf("INNER JOIN `ownership` ON `ownership`.id = `%s_ownerships`.ownership_id AND `ownership`.role = ? ",
+	// 	rtable)
+	secondJoin := fmt.Sprintf("INNER JOIN `ownership` ON `ownership`.id = `%s_ownerships`.ownership_id",
 		rtable)
 	thirdJoin := "INNER JOIN `user_ownerships` ON `user_ownerships`.ownership_id = `ownership`.id "
 	fourthJoin := "INNER JOIN user ON `user_ownerships`.user_id = user.id AND user.id = UUID_TO_BIN(?)"
-	err := db.Table(rtable).Joins(firstJoin, id.String()).Joins(secondJoin, models.Admin).Joins(thirdJoin).Joins(fourthJoin, oid.String()).Find(modelObj).Error
 
-	return modelObj, err
+	// hack
+	db2 := db
+	err := db.Table(rtable).Joins(firstJoin, id.String()).Joins(secondJoin).Joins(thirdJoin).Joins(fourthJoin, oid.String()).Find(modelObj).Error
+	if err != nil {
+		return nil, 0, err
+	}
+
+	roles := make([]models.UserRole, 0)
+	err = db2.Table(rtable).Joins(firstJoin, id.String()).Joins(secondJoin).Joins(thirdJoin).Joins(fourthJoin, oid.String()).Select("ownership.role").Find(&roles).Error
+
+	return modelObj, roles[0], err
 }
 
 // ReadAll obtains a slice of models.DomainModel
@@ -79,7 +90,7 @@ func (mapper *BasicMapper) GetOneWithID(db *gorm.DB, oid *datatypes.UUID, typeSt
 // How does Gorm do the following? Might want to check out its source code.
 // Cancel offset condition with -1
 //  db.Offset(10).Find(&users1).Offset(-1).Find(&users2)
-func (mapper *BasicMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, typeString string, options map[string]interface{}) ([]models.IModel, error) {
+func (mapper *BasicMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, typeString string, options map[string]interface{}) ([]models.IModel, []models.UserRole, error) {
 	offset, limit := 0, 0
 	if _, ok := options["offset"]; ok {
 		offset, _ = options["offset"].(int)
@@ -96,19 +107,8 @@ func (mapper *BasicMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, typeString 
 		cstop, _ = options["cstop"].(int)
 	}
 
-	// // This is GetAllByField
-	// fieldName, fieldValue, fieldNamePascal := "", "", ""
-	// _, ok := options["fieldName"]
-	// _, ok2 := options["fieldValue"]
-	// if ok && ok2 {
-	// 	// FIXME this should return NewErrQueryParameter when you can't conver it
-	// 	// But we should hanlde it at the caller
-	// 	fieldName, _ = options["fieldName"].(string)
-	// 	fieldNamePascal = letters.CamelCaseToPascalCase(fieldName)
-	// 	fieldValue, _ = options["fieldValue"].(string)
-	// }
-
-	var f func(interface{}, ...interface{}) *gorm.DB
+	// var f func(interface{}, ...interface{}) *gorm.DB
+	// var f func(dest interface{}) *gorm.DB
 
 	db = db.Set("gorm:auto_preload", true)
 
@@ -117,8 +117,11 @@ func (mapper *BasicMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, typeString 
 	rtable := strings.ToLower(structName)                   // table name
 	firstJoin := fmt.Sprintf("INNER JOIN `%s_ownerships` ON `%s`.id = `%s_ownerships`.%s_id ",
 		rtable, rtable, rtable, columnName)
-	secondJoin := fmt.Sprintf("INNER JOIN `ownership` ON `ownership`.id = `%s_ownerships`.ownership_id AND `ownership`.role = ? ",
-		rtable)
+
+	// secondJoin := fmt.Sprintf("INNER JOIN `ownership` ON `ownership`.id = `%s_ownerships`.ownership_id AND `ownership`.role = ? ",
+	// 	rtable)
+	// Admin or guest doesn't mattter
+	secondJoin := fmt.Sprintf("INNER JOIN `ownership` ON `ownership`.id = `%s_ownerships`.ownership_id", rtable)
 	thirdJoin := "INNER JOIN `user_ownerships` ON `user_ownerships`.ownership_id = `ownership`.id "
 	fourthJoin := "INNER JOIN user ON `user_ownerships`.user_id = user.id AND user.id = UUID_TO_BIN(?)"
 
@@ -147,14 +150,14 @@ func (mapper *BasicMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, typeString 
 			fieldValue2 := fieldValues[0]
 
 			if fieldMap[letters.CamelCaseToPascalCase(fieldName)] == false {
-				return nil, fmt.Errorf("fieldname %s does not exist", fieldName)
+				return nil, nil, fmt.Errorf("fieldname %s does not exist", fieldName)
 			}
 
 			whereStmt := rtable + "." + letters.PascalCaseToSnakeCase(fieldName) + " = ?"
 			if strings.HasSuffix(fieldName, "ID") {
 				uuid2, err := datatypes.NewUUIDFromString(fieldValue2)
 				if err != nil {
-					return nil, err
+					return nil, nil, err
 				}
 				db = db.Where(whereStmt, uuid2)
 			} else {
@@ -163,19 +166,39 @@ func (mapper *BasicMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, typeString 
 		}
 	}
 
-	db = db.Table(rtable).Joins(firstJoin).Joins(secondJoin, models.Admin).Joins(thirdJoin).Joins(fourthJoin, oid.String())
+	// Admin or guest..doesn't matter
+	// db = db.Table(rtable).Joins(firstJoin).Joins(secondJoin, models.Admin).Joins(thirdJoin).Joins(fourthJoin, oid.String())
+	// Hackish!
+	db2 := db
+	db = db.Table(rtable).Joins(firstJoin).Joins(secondJoin).Joins(thirdJoin).Joins(fourthJoin, oid.String())
+
+	// TODO: this makes unnecessary query, but then then if I only want ONE query I gotta
+	db2 = db2.Table(rtable).Joins(firstJoin).Joins(secondJoin).Joins(thirdJoin).Select("ownership.role").Joins(fourthJoin, oid.String())
 
 	if order := options["order"].(string); order != "" {
 		db = db.Order("created_at " + order)
+		db2 = db2.Order("created_at " + order)
 	}
 
 	if limit != 0 {
-		f = db.Offset(offset).Limit(limit).Find
-	} else {
-		f = db.Find
+		// rows.Scan()
+		db = db.Offset(offset).Limit(limit)
+		db2 = db2.Offset(offset).Limit(limit)
 	}
 
-	return models.NewSliceFromDB(typeString, f) // error from db is returned from here
+	roles := make([]models.UserRole, 0)
+	if err := db2.Find(&roles).Error; err != nil {
+		return nil, nil, err
+	}
+
+	outmodels, err := models.NewSliceFromDB(typeString, db.Find) // error from db is returned from here
+
+	// safeguard, Must be coded wrongly
+	if len(outmodels) != len(roles) {
+		return nil, nil, errors.New("unknown query error")
+	}
+
+	return outmodels, roles, err
 }
 
 // UpdateOneWithID updates model based on this json
@@ -260,8 +283,13 @@ func (mapper *BasicMapper) PatchOneWithID(db *gorm.DB, oid *datatypes.UUID, type
 		return nil, errIDEmpty
 	}
 
-	if modelObj, err = mapper.GetOneWithID(db, oid, typeString, id); err != nil {
+	var role models.UserRole
+	if modelObj, role, err = mapper.GetOneWithID(db, oid, typeString, id); err != nil {
 		return nil, err
+	}
+
+	if role != models.Admin {
+		return nil, errPermission
 	}
 
 	// Before hook
@@ -309,9 +337,12 @@ func (mapper *BasicMapper) DeleteOneWithID(db *gorm.DB, oid *datatypes.UUID, typ
 	*/
 
 	// Pull out entire modelObj
-	modelObj, err := mapper.GetOneWithID(db, oid, typeString, id)
+	modelObj, role, err := mapper.GetOneWithID(db, oid, typeString, id)
 	if err != nil { // Error is "record not found" when not found
 		return nil, err
+	}
+	if role != models.Admin {
+		return nil, errPermission
 	}
 
 	cargo := models.ModelCargo{}
@@ -382,9 +413,12 @@ func (mapper *BasicMapper) DeleteMany(db *gorm.DB, oid *datatypes.UUID, typeStri
 		}
 
 		// Pull out entire modelObj
-		modelObj, err := mapper.GetOneWithID(db, oid, typeString, id)
+		modelObj, role, err := mapper.GetOneWithID(db, oid, typeString, id)
 		if err != nil { // Error is "record not found" when not found
 			return nil, err
+		}
+		if role != models.Admin {
+			return nil, errPermission
 		}
 
 		// Unscoped() for REAL delete!

@@ -84,11 +84,11 @@ func createdTimeRangeFromQueryString(values *url.Values) (int, int, error) {
 	return 0, 0, nil
 }
 
-func modelObjsToJSON(typeString string, modelObjs []models.IModel) (string, error) {
+func modelObjsToJSON(typeString string, modelObjs []models.IModel, roles []models.UserRole) (string, error) {
 
 	arr := make([]string, len(modelObjs))
 	for i, v := range modelObjs {
-		if j, err := tools.ToJSON(typeString, v, models.Admin); err != nil {
+		if j, err := tools.ToJSON(typeString, v, roles[i]); err != nil {
 			return "", err
 		} else {
 			arr[i] = string(j)
@@ -99,9 +99,9 @@ func modelObjsToJSON(typeString string, modelObjs []models.IModel) (string, erro
 	return content, nil
 }
 
-func renderModel(w http.ResponseWriter, r *http.Request, typeString string, modelObj models.IModel) {
+func renderModel(w http.ResponseWriter, r *http.Request, typeString string, modelObj models.IModel, role models.UserRole) {
 	// render.JSON(w, r, modelObj) // cannot use this since no picking the field we need
-	jsonBytes, err := tools.ToJSON(typeString, modelObj, models.Admin)
+	jsonBytes, err := tools.ToJSON(typeString, modelObj, role)
 	if err != nil {
 		log.Println("Error in renderModel:", err)
 		render.Render(w, r, NewErrGenJSON(err))
@@ -114,8 +114,8 @@ func renderModel(w http.ResponseWriter, r *http.Request, typeString string, mode
 	w.Write([]byte(content))
 }
 
-func renderModelSlice(w http.ResponseWriter, r *http.Request, typeString string, modelObjs []models.IModel) {
-	jsonString, err := modelObjsToJSON(typeString, modelObjs)
+func renderModelSlice(w http.ResponseWriter, r *http.Request, typeString string, modelObjs []models.IModel, roles []models.UserRole) {
+	jsonString, err := modelObjsToJSON(typeString, modelObjs, roles)
 	if err != nil {
 		log.Println("Error in renderModelSlice:", err)
 		render.Render(w, r, NewErrGenJSON(err))
@@ -230,8 +230,9 @@ func ReadAllHandler(typeString string, mapper datamapper.IGetAllMapper) func(c *
 
 		// options["fieldName"], options["fieldValue"] = r.URL.Query().Get("fieldName"), r.URL.Query().Get("fieldValue")
 
+		var roles []models.UserRole
 		tx := db.Shared().Begin()
-		if modelObjs, err = mapper.ReadAll(tx, OwnerIDFromContext(r), typeString, options); err != nil {
+		if modelObjs, roles, err = mapper.ReadAll(tx, OwnerIDFromContext(r), typeString, options); err != nil {
 			tx.Rollback()
 			log.Println("Error in ReadAllHandler ErrNotFound:", typeString, err)
 			render.Render(w, r, NewErrNotFound(err))
@@ -243,7 +244,7 @@ func ReadAllHandler(typeString string, mapper datamapper.IGetAllMapper) func(c *
 			return
 		}
 
-		renderModelSlice(w, r, typeString, modelObjs)
+		renderModelSlice(w, r, typeString, modelObjs, roles)
 		return
 	}
 }
@@ -278,7 +279,7 @@ func CreateOneHandler(typeString string, mapper datamapper.ICreateOneMapper) fun
 			return
 		}
 
-		renderModel(w, r, typeString, modelObj)
+		renderModel(w, r, typeString, modelObj, models.Admin)
 		return
 	}
 }
@@ -297,7 +298,7 @@ func ReadOneHandler(typeString string, mapper datamapper.IGetOneWithIDMapper) fu
 		}
 
 		tx := db.Shared().Begin()
-		modelObj, err := mapper.GetOneWithID(tx, OwnerIDFromContext(r), typeString, *id)
+		modelObj, role, err := mapper.GetOneWithID(tx, OwnerIDFromContext(r), typeString, *id)
 
 		if err != nil {
 			tx.Rollback()
@@ -311,7 +312,7 @@ func ReadOneHandler(typeString string, mapper datamapper.IGetOneWithIDMapper) fu
 			return
 		}
 
-		renderModel(w, r, typeString, modelObj)
+		renderModel(w, r, typeString, modelObj, role)
 		return
 	}
 }
@@ -351,7 +352,7 @@ func UpdateOneHandler(typeString string, mapper datamapper.IUpdateOneWithIDMappe
 			return
 		}
 
-		renderModel(w, r, typeString, modelObj)
+		renderModel(w, r, typeString, modelObj, models.Admin)
 		return
 	}
 }
@@ -382,7 +383,12 @@ func UpdateManyHandler(typeString string, mapper datamapper.IUpdateManyMapper) f
 			return
 		}
 
-		renderModelSlice(w, r, typeString, modelObjs)
+		roles := make([]models.UserRole, len(modelObjs), len(modelObjs))
+		for i := 0; i < len(roles); i++ {
+			roles[i] = models.Admin
+		}
+
+		renderModelSlice(w, r, typeString, modelObjs, roles)
 		return
 	}
 }
@@ -420,7 +426,7 @@ func PatchOneHandler(typeString string, mapper datamapper.IPatchOneWithIDMapper)
 			return
 		}
 
-		renderModel(w, r, typeString, modelObj)
+		renderModel(w, r, typeString, modelObj, models.Admin)
 		return
 
 		// type JSONPatch struct {
@@ -457,7 +463,7 @@ func DeleteOneHandler(typeString string, mapper datamapper.IDeleteOneWithID) fun
 			return
 		}
 
-		renderModel(w, r, typeString, modelObj)
+		renderModel(w, r, typeString, modelObj, models.Admin)
 		return
 	}
 }
@@ -489,7 +495,12 @@ func DeleteManyHandler(typeString string, mapper datamapper.IDeleteMany) func(c 
 			return
 		}
 
-		renderModelSlice(w, r, typeString, modelObjs)
+		roles := make([]models.UserRole, len(modelObjs), len(modelObjs))
+		for i := 0; i < len(roles); i++ {
+			roles[i] = models.Admin
+		}
+
+		renderModelSlice(w, r, typeString, modelObjs, roles)
 		return
 	}
 }

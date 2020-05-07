@@ -22,12 +22,12 @@ type ICreateOneMapper interface {
 
 // IGetOneWithIDMapper gets a record with ID
 type IGetOneWithIDMapper interface {
-	GetOneWithID(db *gorm.DB, oid *datatypes.UUID, typeString string, id datatypes.UUID) (models.IModel, error)
+	GetOneWithID(db *gorm.DB, oid *datatypes.UUID, typeString string, id datatypes.UUID) (models.IModel, models.UserRole, error)
 }
 
 // IGetAllMapper gets all record
 type IGetAllMapper interface {
-	ReadAll(db *gorm.DB, oid *datatypes.UUID, typeString string, options map[string]interface{}) ([]models.IModel, error)
+	ReadAll(db *gorm.DB, oid *datatypes.UUID, typeString string, options map[string]interface{}) ([]models.IModel, []models.UserRole, error)
 }
 
 // IUpdateOneWithIDMapper updates a record with the ID

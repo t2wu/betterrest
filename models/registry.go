@@ -171,7 +171,9 @@ func NewSliceStructFromTypeStringAndJSON(typeString string, jsn []byte) ([]IMode
 }
 
 // NewSliceFromDB queries the database for an array of models
+// func(dest interface{}) *gorm.DB
 func NewSliceFromDB(typeString string, f func(interface{}, ...interface{}) *gorm.DB) ([]IModel, error) {
+	// func NewSliceFromDB(typeString string, f func(dest interface{}) *gorm.DB) ([]IModel, []models.Role, error) {
 	modelType := ModelRegistry[typeString].Typ
 	modelObjs := reflect.New(reflect.SliceOf(modelType))
 
@@ -190,3 +192,24 @@ func NewSliceFromDB(typeString string, f func(interface{}, ...interface{}) *gorm
 
 	return y, nil
 }
+
+// NewSliceFromDB2 queries the database for an array of models
+// func NewSliceFromDB2(typeString string, f func(dest interface{}) *gorm.DB) ([]IModel, []models.Role, error) {
+// 	modelType := ModelRegistry[typeString].Typ
+// 	modelObjs := reflect.New(reflect.SliceOf(modelType))
+
+// 	if err := f(modelObjs.Interface()).Error; err != nil {
+// 		return nil, err
+// 	}
+
+// 	modelObjs = modelObjs.Elem()
+
+// 	y := make([]IModel, modelObjs.Len())
+// 	for i := 0; i < modelObjs.Len(); i++ {
+// 		ptr2 := reflect.New(modelType)
+// 		ptr2.Elem().Set(modelObjs.Index(i))
+// 		y[i] = ptr2.Interface().(IModel)
+// 	}
+
+// 	return y, nil
+// }
