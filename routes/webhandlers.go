@@ -95,7 +95,7 @@ func modelObjsToJSON(typeString string, modelObjs []models.IModel, roles []model
 		}
 	}
 
-	content := "[" + strings.Join(arr, ",\n") + "]"
+	content := "[" + strings.Join(arr, ",") + "]"
 	return content, nil
 }
 
