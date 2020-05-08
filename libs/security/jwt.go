@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"os"
 	"time"
 
 	"github.com/t2wu/betterrest/libs/datatypes"
@@ -17,23 +18,21 @@ import (
 // https://stackoverflow.com/questions/44816003/jwt-key-is-invalid
 // https://www.sohamkamani.com/blog/golang/2019-01-01-jwt-authentication/
 
-const (
-	// For simplicity these files are in the same folder as the app binary.
-	// You shouldn't do this in production.
+// For simplicity these files are in the same folder as the app binary.
+// You shouldn't do this in production.
 
-	// Generate key using
-	// https://byparker.com/blog/2019/generating-a-golang-compatible-ssh-rsa-key-pair/
-	// openssl genrsa -des3 -out private.pem 4096
-	// openssl rsa -in private.pem -outform PEM -pubout -out public.pem
-	// and that's it, not the third command
-	// (Somedays I gotta figure out what this is all about. And ssh-keygen too.)
+// Generate key using
+// https://byparker.com/blog/2019/generating-a-golang-compatible-ssh-rsa-key-pair/
+// openssl genrsa -des3 -out private.pem 4096
+// openssl rsa -in private.pem -outform PEM -pubout -out public.pem
+// and that's it, not the third command
+// (Somedays I gotta figure out what this is all about. And ssh-keygen too.)
 
-	accessTokenPrivKeyPath = "accesstoken-private.pem"
-	accessTokenPubKeyPath  = "accesstoken-public.pem"
+var accessTokenPrivKeyPath = os.Getenv("ACCESS_TOKEN_PRIKEY")
+var accessTokenPubKeyPath = os.Getenv("ACCESS_TOKEN_PUBKEY")
 
-	refreshTokenPrivKeyPath = "refreshtoken-private.pem"
-	refreshTokenPubKeyPath  = "refreshtoken-public.pem"
-)
+var refreshTokenPrivKeyPath = os.Getenv("REFRESH_TOKEN_PRIKEY")
+var refreshTokenPubKeyPath = os.Getenv("REFRESH_TOKEN_PUBKEY")
 
 var (
 	accessTokenVerifyKey *rsa.PublicKey
