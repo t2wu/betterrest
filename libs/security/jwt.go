@@ -33,6 +33,8 @@ var accessTokenPubKeyPath = os.Getenv("ACCESS_TOKEN_PUBKEY")
 
 var refreshTokenPrivKeyPath = os.Getenv("REFRESH_TOKEN_PRIKEY")
 var refreshTokenPubKeyPath = os.Getenv("REFRESH_TOKEN_PUBKEY")
+var accessTokenPemPasswd = os.Getenv("ACCESS_TOKEN_PEM_PASSWD")
+var refreshTokenPemPasswd = os.Getenv("REFRESH_TOKEN_PEM_PASSWD")
 
 var (
 	accessTokenVerifyKey *rsa.PublicKey
@@ -61,7 +63,7 @@ func init() {
 
 	// If I use the API that doesn't have the password option it will say
 	// asn1: structure error: tags don't match (16 vs {class:0 tag:20 length:105 isCompound:true}) ... blah
-	accessTokenSignKey, err = jwt.ParseRSAPrivateKeyFromPEMWithPassword(signBytes, "123456")
+	accessTokenSignKey, err = jwt.ParseRSAPrivateKeyFromPEMWithPassword(signBytes, accessTokenPemPasswd)
 	fatal(err)
 
 	verifyBytes, err := ioutil.ReadFile(accessTokenPubKeyPath)
@@ -73,7 +75,7 @@ func init() {
 	// Refresh token
 	signBytes, err = ioutil.ReadFile(refreshTokenPrivKeyPath)
 	fatal(err)
-	refreshTokenSignKey, err = jwt.ParseRSAPrivateKeyFromPEMWithPassword(signBytes, "123456")
+	refreshTokenSignKey, err = jwt.ParseRSAPrivateKeyFromPEMWithPassword(signBytes, refreshTokenPemPasswd)
 	fatal(err)
 	verifyBytes, err = ioutil.ReadFile(refreshTokenPubKeyPath)
 	fatal(err)
