@@ -21,10 +21,12 @@ func Shared() *gorm.DB {
 	once.Do(func() {
 		username := os.Getenv("BETTER_REST_DB_USER")
 		passwd := os.Getenv("BETTER_REST_DB_PASSWD")
+		host := os.Getenv("BETTER_REST_DB_HOST")
+		port := os.Getenv("BETTER_REST_DB_PORT")
 
 		// Somehow I have to set _db first, otherwise return db will have nil
 		// _db, err := gorm.Open("sqlite3", "./test.db")
-		_db, err := gorm.Open("mysql", username+":"+passwd+"@/"+sqlDbName+"?charset=utf8mb4&parseTime=True&loc=Local")
+		_db, err := gorm.Open("mysql", username+":"+passwd+"@tcp("+host+":"+port+")/"+sqlDbName+"?charset=utf8mb4&parseTime=True&loc=Local")
 		_db.LogMode(true)
 
 		if err != nil {
