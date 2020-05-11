@@ -292,17 +292,19 @@ func (mapper *BasicMapper) PatchOneWithID(db *gorm.DB, oid *datatypes.UUID, type
 		return nil, errPermission
 	}
 
-	// Before hook
-	if v, ok := modelObj.(models.IBeforePatch); ok {
-		if err := v.BeforePatchDB(db, oid, typeString, &cargo); err != nil {
-			return nil, err
-		}
-	}
-
 	// Apply patch operations
 	modelObj, err = patchOneCore(typeString, modelObj, jsonPatch)
 	if err != nil {
 		return nil, err
+	}
+
+	// Before hook
+	// It is now expected that the hookpoint for before expect that the patch
+	// gets applied to the JSON, but not before actually updating to DB.
+	if v, ok := modelObj.(models.IBeforePatch); ok {
+		if err := v.BeforePatchDB(db, oid, typeString, &cargo); err != nil {
+			return nil, err
+		}
 	}
 
 	// Now save it
