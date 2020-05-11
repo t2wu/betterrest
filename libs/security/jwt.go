@@ -157,7 +157,6 @@ func GetClaimsIfAccessTokenIsValid(tokenString string) (*jwt.MapClaims, error) {
 	}
 
 	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
-		log.Println("return claims here:", claims)
 		return &claims, nil
 		// if ident, ok := claims["iss"]; ok {
 		// 	if ident, ok := ident.(string); ok {

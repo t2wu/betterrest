@@ -28,11 +28,13 @@ var UserTyp reflect.Type
 
 // Reg is a registry item
 type Reg struct {
-	Typ          reflect.Type
-	BeforeUpdate func(ms []IModel, db *gorm.DB, oid *datatypes.UUID, typeString string, cargo *BatchHookCargo) error
-	AfterUpdate  func(ms []IModel, db *gorm.DB, oid *datatypes.UUID, typeString string, cargo *BatchHookCargo) error
-	BeforeDelete func(ms []IModel, db *gorm.DB, oid *datatypes.UUID, typeString string, cargo *BatchHookCargo) error
-	AfterDelete  func(ms []IModel, db *gorm.DB, oid *datatypes.UUID, typeString string, cargo *BatchHookCargo) error
+	Typ            reflect.Type
+	BatchEndpoints string // Batch endpoints, "CRUD" for create, batch read, batch update, batch delete
+	IDEndPoints    string //  ID end points, "RUD" for read one, update one, and delete one
+	BeforeUpdate   func(ms []IModel, db *gorm.DB, oid *datatypes.UUID, typeString string, cargo *BatchHookCargo) error
+	AfterUpdate    func(ms []IModel, db *gorm.DB, oid *datatypes.UUID, typeString string, cargo *BatchHookCargo) error
+	BeforeDelete   func(ms []IModel, db *gorm.DB, oid *datatypes.UUID, typeString string, cargo *BatchHookCargo) error
+	AfterDelete    func(ms []IModel, db *gorm.DB, oid *datatypes.UUID, typeString string, cargo *BatchHookCargo) error
 }
 
 /*
@@ -58,11 +60,18 @@ func AddUserToModelRegistry(typeString string, typ reflect.Type) {
 
 // AddModelRegistry adds a New function for an IModel
 func AddModelRegistry(typeString string, typ reflect.Type) {
+	AddModelRegistryWithOptions(typeString, typ, "CRUD", "RUD")
+}
+
+// AddModelRegistryWithOptions adds a New function for an IModel
+func AddModelRegistryWithOptions(typeString string, typ reflect.Type, batchEndpoints string, idEndPoints string) {
 	if _, ok := ModelRegistry[typeString]; !ok {
 		ModelRegistry[typeString] = &Reg{}
 	}
 
 	ModelRegistry[typeString].Typ = typ
+	ModelRegistry[typeString].BatchEndpoints = batchEndpoints
+	ModelRegistry[typeString].IDEndPoints = idEndPoints
 }
 
 // AddBatchUpdateBeforeAndAfterHookPoints adds hookpoints which are called before
