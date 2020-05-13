@@ -60,7 +60,7 @@ func AddUserToModelRegistry(typeString string, typ reflect.Type) {
 
 // AddModelRegistry adds a New function for an IModel
 func AddModelRegistry(typeString string, typ reflect.Type) {
-	AddModelRegistryWithOptions(typeString, typ, "CRUD", "RUD")
+	AddModelRegistryWithOptions(typeString, typ, "CRUD", "RUPD")
 }
 
 // AddModelRegistryWithOptions adds a New function for an IModel
