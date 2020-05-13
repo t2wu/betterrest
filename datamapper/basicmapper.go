@@ -80,6 +80,30 @@ func (mapper *BasicMapper) GetOneWithID(db *gorm.DB, oid *datatypes.UUID, typeSt
 	roles := make([]models.UserRole, 0)
 	err = db2.Table(rtable).Joins(firstJoin, id.String()).Joins(secondJoin).Joins(thirdJoin).Joins(fourthJoin, oid.String()).Select("ownership.role").Find(&roles).Error
 
+	// // TODO: Probably just get tag and do a delete with raw SQL should be faster
+	// // Remove association first
+	// log.Println("=================== begin")
+	// arr := reflect.Indirect(reflect.ValueOf(modelObj)).FieldByName("Ownerships")
+	// log.Println("arr:", arr)
+	// for i := 0; i < arr.Len(); i++ {
+	// 	log.Println("arr.Index(i).Interface():", arr.Index(i).Interface())
+	// 	// if err := db.Model(modelObj).Association("Ownerships").Delete(arr.Index(i).Interface()).Error; err != nil {
+	// 	// 	return nil, err
+	// 	// }
+	// }
+
+	// v1 := reflect.Indirect(reflect.ValueOf(modelObj))
+	// for i := 0; i < v1.NumField(); i++ {
+
+	// 	log.Println("--->", v1.Type().Field(i).Name, v1.Field(i).Interface())
+	// 	// tag := v1.Type().Field(i).Tag.Get("betterrest")
+	// 	// if tag == "peg" || tag == "pegassoc" {
+	// 	// 	fieldVal1 := v1.Field(i)
+	// 	// 	fieldVal2 := v2.Field(i)
+	// 	// }
+	// }
+	// log.Println("=================== end")
+
 	return modelObj, roles[0], err
 }
 
@@ -364,10 +388,25 @@ func (mapper *BasicMapper) DeleteOneWithID(db *gorm.DB, oid *datatypes.UUID, typ
 		db = db.Unscoped()
 	}
 
+	// // TODO: Probably just get tag and do a delete with raw SQL should be faster
+	// // Remove association first
+	// arr := reflect.Indirect(reflect.ValueOf(modelObj)).FieldByName("Ownerships")
+	// for i := 0; i < arr.Len(); i++ {
+	// 	log.Println("arr.Index(i).Interface():", arr.Index(i).Interface())
+	// 	// if err := db.Model(modelObj).Association("Ownerships").Delete(arr.Index(i).Interface()).Error; err != nil {
+	// 	// 	return nil, err
+	// 	// }
+	// }
+
 	err = db.Delete(modelObj).Error
 	if err != nil {
 		return nil, err
 	}
+
+	// Remove ownership
+	// modelObj.
+	// db.Model(modelObj).Association("Ownerships").Delete(modelObj.)
+	// c.DB.Model(&user).Association("Roles").Delete(&role)
 
 	err = removePeggedField(db, modelObj)
 	if err != nil {

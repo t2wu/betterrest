@@ -46,7 +46,7 @@ func updateOneCore(mapper IGetOneWithIDMapper, db *gorm.DB, oid *datatypes.UUID,
 	if modelNeedsRealDelete(oldModelObj) { // parent model
 		db = db.Unscoped()
 	}
-	err2 = updatePeggedFieldsWhichAreDeleted(db, oldModelObj, modelObj)
+	err2 = updatePeggedFields(db, oldModelObj, modelObj)
 	if err2 != nil {
 		return nil, err2
 	}
@@ -133,9 +133,9 @@ func removePeggedField(db *gorm.DB, modelObj models.IModel) (err error) {
 	return nil
 }
 
-// updatePeggedFieldsWhichAreDeleted check if stuff in the pegged array
+// updatePeggedFields check if stuff in the pegged array
 // is actually
-func updatePeggedFieldsWhichAreDeleted(db *gorm.DB, oldModelObj models.IModel, newModelObj models.IModel) (err error) {
+func updatePeggedFields(db *gorm.DB, oldModelObj models.IModel, newModelObj models.IModel) (err error) {
 
 	// Delete nested field
 	// Not yet support two-level of nested field
@@ -161,10 +161,11 @@ func updatePeggedFieldsWhichAreDeleted(db *gorm.DB, oldModelObj models.IModel, n
 				}
 
 				for j := 0; j < fieldVal2.Len(); j++ {
-					idinter := fieldVal2.Index(j).FieldByName("ID").Interface()
-					if idinter.(*datatypes.UUID) != nil {
+					id := fieldVal2.Index(j).FieldByName("ID").Interface().(*datatypes.UUID)
+					if id != nil {
 						// ID doesn't exist? ignore, it's a new entry without ID
-						set2.Add(idinter.(*datatypes.UUID).String())
+						set2.Add(id.String())
+						m[id.String()] = fieldVal2.Index(j).Interface()
 					}
 				}
 			default:
@@ -172,8 +173,8 @@ func updatePeggedFieldsWhichAreDeleted(db *gorm.DB, oldModelObj models.IModel, n
 			}
 
 			// remove when stuff in the old set that's not in the new set
-			setdiff := set1.Difference(set2)
-			for uuid := range setdiff.List {
+			setIsGone := set1.Difference(set2)
+			for uuid := range setIsGone.List {
 				modelToDel := m[uuid]
 
 				if tag == "peg" {
@@ -188,6 +189,30 @@ func updatePeggedFieldsWhichAreDeleted(db *gorm.DB, oldModelObj models.IModel, n
 					// fieldName = fieldName[0 : len(fieldName)-1] // get rid of s
 					// tableName := letters.CamelCaseToPascalCase(fieldName)
 					if err = db.Model(oldModelObj).Association(columnName).Delete(modelToDel).Error; err != nil {
+						return err
+					}
+				}
+			}
+
+			setIsNew := set2.Difference(set1)
+			for uuid := range setIsNew.List {
+				modelToAdd := m[uuid]
+
+				if tag == "peg" {
+					// Don't need peg, because gorm already does auto-create by default
+					// for truly nested data without endpoint
+					// err = db.Save(modelToAdd).Error
+					// if err != nil {
+					// 	return err
+					// }
+				} else if tag == "pegassoc" {
+					// for data with its own endpoint, need to associate it
+					columnName := v1.Type().Field(i).Name
+					// assocModel := reflect.Indirect(reflect.ValueOf(modelToAdd)).Type().Name()
+					// fieldName := v1.Type().Field(i).Name
+					// fieldName = fieldName[0 : len(fieldName)-1] // get rid of s
+					// tableName := letters.CamelCaseToPascalCase(fieldName)
+					if err = db.Set("gorm:association_autoupdate", true).Model(oldModelObj).Association(columnName).Append(modelToAdd).Error; err != nil {
 						return err
 					}
 				}
