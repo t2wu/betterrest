@@ -195,8 +195,9 @@ func (mapper *OwnershipMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, typeStr
 	// db2 = db2.Table(rtable).Joins(firstJoin).Joins(secondJoin).Joins(thirdJoin).Select("ownership.role").Joins(fourthJoin, oid.String())
 
 	if order := options["order"].(string); order != "" {
-		db = db.Order("created_at " + order)
-		db2 = db2.Order("created_at " + order)
+		stmt := fmt.Sprintf("`%s`.created_at %s", rtable, order)
+		db = db.Order(stmt)
+		db2 = db2.Order(stmt)
 	}
 
 	if limit != 0 {
