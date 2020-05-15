@@ -23,10 +23,8 @@ type ICreateOneMapper interface {
 // IGetOneWithIDMapper gets a record with ID
 type IGetOneWithIDMapper interface {
 	GetOneWithID(db *gorm.DB, oid *datatypes.UUID, typeString string, id datatypes.UUID) (models.IModel, models.UserRole, error)
-}
 
-// IGetOneWithIDCoreMapper gets a record with ID without invoking read hookpoint (internal use only)
-type IGetOneWithIDCoreMapper interface {
+	// getOneWithIDCore gets a record with ID without invoking read hookpoint (internal use only)
 	getOneWithIDCore(db *gorm.DB, oid *datatypes.UUID, typeString string, id datatypes.UUID) (models.IModel, models.UserRole, error)
 }
 

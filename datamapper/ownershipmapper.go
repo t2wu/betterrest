@@ -76,7 +76,7 @@ func (mapper *OwnershipMapper) GetOneWithID(db *gorm.DB, oid *datatypes.UUID, ty
 	}
 
 	if m, ok := modelObj.(models.IAfterRead); ok {
-		if err := m.AfterReadDB(db, oid, typeString); err != nil {
+		if err := m.AfterReadDB(db, oid, typeString, &role); err != nil {
 			return nil, 0, err
 		}
 	}
@@ -105,21 +105,25 @@ func (mapper *OwnershipMapper) getOneWithIDCore(db *gorm.DB, oid *datatypes.UUID
 
 	firstJoin := fmt.Sprintf("INNER JOIN `%s` ON `%s`.id = `%s`.model_id AND `%s`.id = UUID_TO_BIN(?)", joinTableName, rtable, joinTableName, rtable)
 	secondJoin := fmt.Sprintf("INNER JOIN `user` ON `user`.id = `%s`.user_id AND `%s`.user_id = UUID_TO_BIN(?)", joinTableName, joinTableName)
-	db2 := db
+	// db2 := db
 
 	err := db.Table(rtable).Joins(firstJoin, id.String()).Joins(secondJoin, oid.String()).Find(modelObj).Error
 	if err != nil {
 		return nil, 0, err
 	}
 
-	roles := make([]models.UserRole, 0)
-	roleField := fmt.Sprintf("%s.role", joinTableName)
-	err = db2.Table(rtable).Joins(firstJoin, id.String()).Joins(secondJoin, oid.String()).Select(roleField).Find(&roles).Error
-	if err != nil {
-		return nil, 0, err
+	joinTable := reflect.New(modelObj.OwnershipType()).Interface()
+	role := models.Guest // just some default
+	stmt := fmt.Sprintf("SELECT * FROM %s WHERE user_id = UUID_TO_BIN(?) AND model_id = UUID_TO_BIN(?)", joinTableName)
+	if err2 := db.Raw(stmt, oid.String(), id.String()).Scan(joinTable).Error; err2 != nil {
+		return nil, 0, err2
 	}
 
-	return modelObj, roles[0], err
+	if m, ok := joinTable.(models.IOwnership); ok {
+		role = m.GetRole()
+	}
+
+	return modelObj, role, err
 }
 
 // ReadAll obtains a slice of models.DomainModel
@@ -130,6 +134,7 @@ func (mapper *OwnershipMapper) getOneWithIDCore(db *gorm.DB, oid *datatypes.UUID
 // Cancel offset condition with -1
 //  db.Offset(10).Find(&users1).Offset(-1).Find(&users2)
 func (mapper *OwnershipMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, typeString string, options map[string]interface{}) ([]models.IModel, []models.UserRole, error) {
+	db2 := db
 	offset, limit := 0, 0
 	if _, ok := options["offset"]; ok {
 		offset, _ = options["offset"].(int)
@@ -199,12 +204,12 @@ func (mapper *OwnershipMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, typeStr
 	// Admin or guest..doesn't matter
 	// db = db.Table(rtable).Joins(firstJoin).Joins(secondJoin, models.Admin).Joins(thirdJoin).Joins(fourthJoin, oid.String())
 	// Hackish!
-	db2 := db
+	// db2 := db
 
 	db = db.Table(rtable).Joins(firstJoin).Joins(secondJoin, oid.String())
 
-	roleField := fmt.Sprintf("%s.role", joinTableName)
-	db2 = db2.Table(rtable).Joins(firstJoin).Joins(secondJoin, oid.String()).Select(roleField)
+	// roleField := fmt.Sprintf("%s.role", joinTableName)
+	// db2 = db2.Table(rtable).Joins(firstJoin).Joins(secondJoin, oid.String()).Select(roleField)
 
 	// db = db.Table(rtable).Joins(firstJoin).Joins(secondJoin).Joins(thirdJoin).Joins(fourthJoin, oid.String())
 
@@ -214,21 +219,36 @@ func (mapper *OwnershipMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, typeStr
 	if order := options["order"].(string); order != "" {
 		stmt := fmt.Sprintf("`%s`.created_at %s", rtable, order)
 		db = db.Order(stmt)
-		db2 = db2.Order(stmt)
+		// db2 = db2.Order(stmt)
 	}
 
 	if limit != 0 {
 		// rows.Scan()
 		db = db.Offset(offset).Limit(limit)
-		db2 = db2.Offset(offset).Limit(limit)
+		// db2 = db2.Offset(offset).Limit(limit)
 	}
 
+	// Don't know why this doesn't work
 	roles := make([]models.UserRole, 0)
-	if err := db2.Find(&roles).Error; err != nil {
-		return nil, nil, err
-	}
-
+	// if err := db2.Find(&roles).Error; err != nil {
+	// 	return nil, nil, err
+	// }
 	outmodels, err := models.NewSliceFromDB(typeString, db.Find) // error from db is returned from here
+
+	for _, outmodel := range outmodels {
+		joinTable := reflect.New(outmodel.OwnershipType()).Interface()
+		role := models.Admin // just some default
+		mid := outmodel.GetID()
+		stmt := fmt.Sprintf("SELECT * FROM %s WHERE user_id = UUID_TO_BIN(?) AND model_id = UUID_TO_BIN(?)", joinTableName)
+		if err2 := db2.Raw(stmt, oid.String(), mid.String()).Scan(joinTable).Error; err2 != nil {
+			return nil, nil, err2
+		}
+
+		if m, ok := joinTable.(models.IOwnership); ok {
+			role = m.GetRole()
+			roles = append(roles, role)
+		}
+	}
 
 	// safeguard, Must be coded wrongly
 	if len(outmodels) != len(roles) {
@@ -236,7 +256,7 @@ func (mapper *OwnershipMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, typeStr
 	}
 
 	if after := models.ModelRegistry[typeString].AfterRead; after != nil {
-		if err = after(outmodels, db, oid, typeString); err != nil {
+		if err = after(outmodels, db, oid, typeString, roles); err != nil {
 			return nil, nil, err
 		}
 	}

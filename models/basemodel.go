@@ -109,7 +109,7 @@ type IBeforeDelete interface {
 
 // IAfterRead supports method to be called after data is read from the database
 type IAfterRead interface {
-	AfterReadDB(db *gorm.DB, oid *datatypes.UUID, typeString string) error
+	AfterReadDB(db *gorm.DB, oid *datatypes.UUID, typeString string, role *UserRole) error
 }
 
 // IAfterInsert supports method to be called after data is inserted (created) into the database

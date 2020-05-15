@@ -78,7 +78,7 @@ func (mapper *UserMapper) GetOneWithID(db *gorm.DB, oid *datatypes.UUID, typeStr
 	}
 
 	if m, ok := modelObj.(models.IAfterRead); ok {
-		if err := m.AfterReadDB(db, oid, typeString); err != nil {
+		if err := m.AfterReadDB(db, oid, typeString, &role); err != nil {
 			return nil, 0, err
 		}
 	}
