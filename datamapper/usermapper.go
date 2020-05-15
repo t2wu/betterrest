@@ -52,9 +52,12 @@ func (mapper *UserMapper) CreateOne(db *gorm.DB, oid *datatypes.UUID, typeString
 		return nil, fmt.Errorf("password should not be blank")
 	}
 
-	ownership := reflect.ValueOf(modelObj).Elem().FieldByName("Ownerships")
-	ownership.Set(reflect.MakeSlice(reflect.SliceOf(models.OwnershipTyp), 1, 1))
-	ownership.Index(0).Set(reflect.New(models.OwnershipTyp).Elem())
+	// field, _ := reflect.TypeOf(modelObj).Elem().FieldByName("Ownerships")
+	// ownershipType := field.Type
+
+	// ownership := reflect.ValueOf(modelObj).Elem().FieldByName("Ownerships")
+	// ownership.Set(reflect.MakeSlice(reflect.SliceOf(ownershipType), 1, 1))
+	// ownership.Index(0).Set(reflect.New(ownershipType).Elem())
 
 	hash, err := security.HashAndSalt(password)
 	if err != nil {
@@ -64,7 +67,7 @@ func (mapper *UserMapper) CreateOne(db *gorm.DB, oid *datatypes.UUID, typeString
 	reflect.ValueOf(modelObj).Elem().FieldByName("PasswordHash").Set(reflect.ValueOf(hash))
 
 	// there isn't really an oid at this point
-	return CreateWithHooks(db, oid, "users", modelObj)
+	return CreateWithHooksUser(db, oid, "users", modelObj)
 }
 
 // GetOneWithID get one model object based on its type and its id string

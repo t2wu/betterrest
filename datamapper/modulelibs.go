@@ -6,6 +6,7 @@ import (
 	"reflect"
 
 	"github.com/t2wu/betterrest/libs/datatypes"
+	"github.com/t2wu/betterrest/libs/utils/letters"
 	"github.com/t2wu/betterrest/models"
 
 	jsonpatch "github.com/evanphx/json-patch"
@@ -230,4 +231,13 @@ func modelNeedsRealDelete(modelObj models.IModel) bool {
 		realDelete = modelObj2.DoRealDelete()
 	}
 	return realDelete
+}
+
+func getJoinTableName(modelObj models.IModel) string {
+	if m, ok := reflect.New(modelObj.OwnershipType()).Interface().(models.IHasTableName); ok {
+		return m.TableName()
+	}
+
+	typeName := modelObj.OwnershipType().Name()
+	return letters.PascalCaseToSnakeCase(typeName)
 }

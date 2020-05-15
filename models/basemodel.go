@@ -1,6 +1,7 @@
 package models
 
 import (
+	"reflect"
 	"time"
 
 	"github.com/t2wu/betterrest/libs/datatypes"
@@ -73,6 +74,7 @@ type IModel interface {
 	// The following two avoids having to use reflection to access ID
 	GetID() *datatypes.UUID
 	SetID(id *datatypes.UUID)
+	OwnershipType() reflect.Type
 }
 
 // DoRealDelete is an interface to customize specification for real db delete
@@ -132,26 +134,61 @@ type IValidate interface {
 
 // ------------------------------------
 
-// IRole is what IRole tables should satisfy.
-type IRole interface {
+// IOwnership is what OwnershipModelBase tables should satisfy.
+type IOwnership interface {
 	GetRole() UserRole
 	SetRole(UserRole)
+
+	GetUserID() *datatypes.UUID
+	SetUserID(*datatypes.UUID)
+
+	GetModelID() *datatypes.UUID
+	SetModelID(*datatypes.UUID)
 }
 
 // OwnershipModelBase has a role
 type OwnershipModelBase struct {
-	gorm.Model          // uses standard int id (cuz I started with it and it works)
-	Role       UserRole // an int
+	gorm.Model // uses standard int id (cuz I started with it and it works)
+
+	UserID  *datatypes.UUID
+	ModelID *datatypes.UUID
+
+	Role UserRole // an int
 }
 
-// GetRole gets the role field of the model, comforms to IRole
+// GetUserID gets the user id of the model, comforms to IOwnership
+func (o *OwnershipModelBase) GetUserID() *datatypes.UUID {
+	return o.UserID
+	// v := reflect.ValueOf(o)
+	// return reflect.Indirect(v).FieldByName("ID").Interface().(*datatypes.UUID)
+}
+
+// SetUserID sets the user id of the model, comforms to IOwnership
+func (o *OwnershipModelBase) SetUserID(id *datatypes.UUID) {
+	o.UserID = id
+}
+
+// SetModelID sets the id of the model, comforms to IOwnership
+func (o *OwnershipModelBase) SetModelID(id *datatypes.UUID) {
+	o.ModelID = id
+}
+
+// GetModelID gets the id of the model, comforms to IOwnership
+func (o *OwnershipModelBase) GetModelID() *datatypes.UUID {
+	return o.ModelID
+}
+
+// GetRole gets the role field of the model, comforms to IOwnership
 func (o *OwnershipModelBase) GetRole() UserRole {
 	return o.Role
 }
 
-// SetRole sets the role field of the model, comforms to IRole
+// SetRole sets the role field of the model, comforms to IOwnership
 func (o *OwnershipModelBase) SetRole(r UserRole) {
 	o.Role = r
 }
 
 // ------------------------------------
+type IHasTableName interface {
+	TableName() string
+}

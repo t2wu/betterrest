@@ -18,7 +18,7 @@ type BatchHookCargo struct {
 var ModelRegistry = make(map[string]*Reg)
 
 // OwnershipTyp is the model of ownership table, the table that has many to many links users with other models
-var OwnershipTyp reflect.Type
+// var OwnershipTyp reflect.Type
 
 // OwnerTyp is the model of the Owner table
 var OwnerTyp reflect.Type
@@ -31,10 +31,20 @@ type Reg struct {
 	Typ            reflect.Type
 	BatchEndpoints string // Batch endpoints, "CRUD" for create, batch read, batch update, batch delete
 	IDEndPoints    string //  ID end points, "RUD" for read one, update one, and delete one
-	BeforeUpdate   func(ms []IModel, db *gorm.DB, oid *datatypes.UUID, typeString string, cargo *BatchHookCargo) error
-	AfterUpdate    func(ms []IModel, db *gorm.DB, oid *datatypes.UUID, typeString string, cargo *BatchHookCargo) error
-	BeforeDelete   func(ms []IModel, db *gorm.DB, oid *datatypes.UUID, typeString string, cargo *BatchHookCargo) error
-	AfterDelete    func(ms []IModel, db *gorm.DB, oid *datatypes.UUID, typeString string, cargo *BatchHookCargo) error
+
+	// There is no batch insert yet
+	// BeforeInsert func(ms []IModel, db *gorm.DB, oid *datatypes.UUID, typeString string, cargo *BatchHookCargo) error
+	// AfterInsert  func(ms []IModel, db *gorm.DB, oid *datatypes.UUID, typeString string, cargo *BatchHookCargo) error
+
+	BeforeUpdate func(ms []IModel, db *gorm.DB, oid *datatypes.UUID, typeString string, cargo *BatchHookCargo) error
+	AfterUpdate  func(ms []IModel, db *gorm.DB, oid *datatypes.UUID, typeString string, cargo *BatchHookCargo) error
+
+	// There is no batch patch yet
+	// BeforePatch  func(ms []IModel, db *gorm.DB, oid *datatypes.UUID, typeString string, cargo *BatchHookCargo) error
+	// AfterPatch   func(ms []IModel, db *gorm.DB, oid *datatypes.UUID, typeString string, cargo *BatchHookCargo) error
+
+	BeforeDelete func(ms []IModel, db *gorm.DB, oid *datatypes.UUID, typeString string, cargo *BatchHookCargo) error
+	AfterDelete  func(ms []IModel, db *gorm.DB, oid *datatypes.UUID, typeString string, cargo *BatchHookCargo) error
 }
 
 /*
@@ -42,9 +52,9 @@ type Reg struct {
  */
 
 // RegisterOwnershipModel register the ownership table so the library can init base on it
-func RegisterOwnershipModel(ownership reflect.Type) {
-	OwnershipTyp = ownership
-}
+// func RegisterOwnershipModel(ownership reflect.Type) {
+// 	OwnershipTyp = ownership
+// }
 
 // AddOwnerToModelRegistry adds a New function for an owner
 func AddOwnerToModelRegistry(typeString string, typ reflect.Type) {
@@ -73,6 +83,20 @@ func AddModelRegistryWithOptions(typeString string, typ reflect.Type, batchEndpo
 	ModelRegistry[typeString].BatchEndpoints = batchEndpoints
 	ModelRegistry[typeString].IDEndPoints = idEndPoints
 }
+
+// AddBatchInsertBeforeAndAfterHookPoints adds hookpoints which are called before
+// and after batch update. Either one can be left as nil
+// func AddBatchInsertBeforeAndAfterHookPoints(typeString string,
+// 	before func(ms []IModel, db *gorm.DB, oid *datatypes.UUID, typeString string, cargo *BatchHookCargo) error,
+// 	after func(ms []IModel, db *gorm.DB, oid *datatypes.UUID, typeString string, cargo *BatchHookCargo) error) {
+
+// 	if _, ok := ModelRegistry[typeString]; !ok {
+// 		ModelRegistry[typeString] = &Reg{}
+// 	}
+
+// 	ModelRegistry[typeString].BeforeInsert = before
+// 	ModelRegistry[typeString].AfterInsert = after
+// }
 
 // AddBatchUpdateBeforeAndAfterHookPoints adds hookpoints which are called before
 // and after batch update. Either one can be left as nil
