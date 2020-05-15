@@ -72,6 +72,22 @@ func (mapper *UserMapper) CreateOne(db *gorm.DB, oid *datatypes.UUID, typeString
 
 // GetOneWithID get one model object based on its type and its id string
 func (mapper *UserMapper) GetOneWithID(db *gorm.DB, oid *datatypes.UUID, typeString string, id datatypes.UUID) (models.IModel, models.UserRole, error) {
+	modelObj, role, err := mapper.getOneWithIDCore(db, oid, typeString, id)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	if m, ok := modelObj.(models.IAfterRead); ok {
+		if err := m.AfterReadDB(db, oid, typeString); err != nil {
+			return nil, 0, err
+		}
+	}
+
+	return modelObj, role, nil
+}
+
+// getOneWithID get one model object based on its type and its id string without invoking read hookpoing
+func (mapper *UserMapper) getOneWithIDCore(db *gorm.DB, oid *datatypes.UUID, typeString string, id datatypes.UUID) (models.IModel, models.UserRole, error) {
 	// TODO: Currently can only read ID from your own (not others in the admin group either)
 	db = db.Set("gorm:auto_preload", true)
 

@@ -69,6 +69,23 @@ func (mapper *OwnershipMapper) CreateOne(db *gorm.DB, oid *datatypes.UUID, typeS
 
 // GetOneWithID get one model object based on its type and its id string
 func (mapper *OwnershipMapper) GetOneWithID(db *gorm.DB, oid *datatypes.UUID, typeString string, id datatypes.UUID) (models.IModel, models.UserRole, error) {
+
+	modelObj, role, err := mapper.getOneWithIDCore(db, oid, typeString, id)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	if m, ok := modelObj.(models.IAfterRead); ok {
+		if err := m.AfterReadDB(db, oid, typeString); err != nil {
+			return nil, 0, err
+		}
+	}
+
+	return modelObj, role, err
+}
+
+// getOneWithIDCore get one model object based on its type and its id string
+func (mapper *OwnershipMapper) getOneWithIDCore(db *gorm.DB, oid *datatypes.UUID, typeString string, id datatypes.UUID) (models.IModel, models.UserRole, error) {
 	modelObj := models.NewFromTypeString(typeString)
 
 	db = db.Set("gorm:auto_preload", true)
@@ -218,6 +235,12 @@ func (mapper *OwnershipMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, typeStr
 		return nil, nil, errors.New("unknown query error")
 	}
 
+	if after := models.ModelRegistry[typeString].AfterRead; after != nil {
+		if err = after(outmodels, db, oid, typeString); err != nil {
+			return nil, nil, err
+		}
+	}
+
 	return outmodels, roles, err
 }
 
@@ -304,7 +327,7 @@ func (mapper *OwnershipMapper) PatchOneWithID(db *gorm.DB, oid *datatypes.UUID, 
 	}
 
 	var role models.UserRole
-	if modelObj, role, err = mapper.GetOneWithID(db, oid, typeString, id); err != nil {
+	if modelObj, role, err = mapper.getOneWithIDCore(db, oid, typeString, id); err != nil {
 		return nil, err
 	}
 
@@ -359,7 +382,7 @@ func (mapper *OwnershipMapper) DeleteOneWithID(db *gorm.DB, oid *datatypes.UUID,
 	*/
 
 	// Pull out entire modelObj
-	modelObj, role, err := mapper.GetOneWithID(db, oid, typeString, id)
+	modelObj, role, err := mapper.getOneWithIDCore(db, oid, typeString, id)
 	if err != nil { // Error is "record not found" when not found
 		return nil, err
 	}
@@ -463,7 +486,7 @@ func (mapper *OwnershipMapper) DeleteMany(db *gorm.DB, oid *datatypes.UUID, type
 		}
 
 		// Pull out entire modelObj
-		modelObj, role, err := mapper.GetOneWithID(db, oid, typeString, id)
+		modelObj, role, err := mapper.getOneWithIDCore(db, oid, typeString, id)
 		if err != nil { // Error is "record not found" when not found
 			return nil, err
 		}

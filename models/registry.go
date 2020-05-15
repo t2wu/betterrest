@@ -36,6 +36,8 @@ type Reg struct {
 	// BeforeInsert func(ms []IModel, db *gorm.DB, oid *datatypes.UUID, typeString string, cargo *BatchHookCargo) error
 	// AfterInsert  func(ms []IModel, db *gorm.DB, oid *datatypes.UUID, typeString string, cargo *BatchHookCargo) error
 
+	AfterRead func(ms []IModel, db *gorm.DB, oid *datatypes.UUID, typeString string) error
+
 	BeforeUpdate func(ms []IModel, db *gorm.DB, oid *datatypes.UUID, typeString string, cargo *BatchHookCargo) error
 	AfterUpdate  func(ms []IModel, db *gorm.DB, oid *datatypes.UUID, typeString string, cargo *BatchHookCargo) error
 
@@ -97,6 +99,18 @@ func AddModelRegistryWithOptions(typeString string, typ reflect.Type, batchEndpo
 // 	ModelRegistry[typeString].BeforeInsert = before
 // 	ModelRegistry[typeString].AfterInsert = after
 // }
+
+// AddBatchReadAfterHookPoints adds hookpoints which are called after
+// and read, can be left as nil
+func AddBatchReadAfterHookPoints(typeString string,
+	after func(ms []IModel, db *gorm.DB, oid *datatypes.UUID, typeString string) error) {
+
+	if _, ok := ModelRegistry[typeString]; !ok {
+		ModelRegistry[typeString] = &Reg{}
+	}
+
+	ModelRegistry[typeString].AfterRead = after
+}
 
 // AddBatchUpdateBeforeAndAfterHookPoints adds hookpoints which are called before
 // and after batch update. Either one can be left as nil

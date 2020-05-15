@@ -77,7 +77,7 @@ type IModel interface {
 	OwnershipType() reflect.Type
 }
 
-// DoRealDelete is an interface to customize specification for real db delete
+// IDoRealDelete is an interface to customize specification for real db delete
 type IDoRealDelete interface {
 	DoRealDelete() bool
 }
@@ -105,6 +105,11 @@ type IBeforePatch interface {
 // IBeforeDelete supports method to be called before data is deleted from the database
 type IBeforeDelete interface {
 	BeforeDeleteDB(db *gorm.DB, oid *datatypes.UUID, typeString string, cargo *ModelCargo) error
+}
+
+// IAfterRead supports method to be called after data is read from the database
+type IAfterRead interface {
+	AfterReadDB(db *gorm.DB, oid *datatypes.UUID, typeString string) error
 }
 
 // IAfterInsert supports method to be called after data is inserted (created) into the database

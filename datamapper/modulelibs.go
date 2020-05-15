@@ -19,7 +19,7 @@ func checkErrorBeforeUpdate(mapper IGetOneWithIDMapper, db *gorm.DB, oid *dataty
 	}
 
 	// TODO: Is there a more efficient way?
-	_, _, err := mapper.GetOneWithID(db, oid, typeString, id)
+	_, _, err := mapper.GetOneWithIDCore(db, oid, typeString, id)
 	if err != nil { // Error is "record not found" when not found
 		return err
 	}
@@ -36,7 +36,7 @@ func checkErrorBeforeUpdate(mapper IGetOneWithIDMapper, db *gorm.DB, oid *dataty
 }
 
 func updateOneCore(mapper IGetOneWithIDMapper, db *gorm.DB, oid *datatypes.UUID, typeString string, modelObj models.IModel, id datatypes.UUID) (modelObj2 models.IModel, err error) {
-	oldModelObj, role, err2 := mapper.GetOneWithID(db, oid, typeString, id)
+	oldModelObj, role, err2 := mapper.GetOneWithIDCore(db, oid, typeString, id)
 	if err2 != nil {
 		return nil, err2
 	}
