@@ -18,15 +18,20 @@ func checkErrorBeforeUpdate(mapper IGetOneWithIDMapper, db *gorm.DB, oid *dataty
 		return errIDEmpty
 	}
 
+	// If you're able to read, you hvea the permission to update...
+	// Not really now you have to check role
 	// TODO: Is there a more efficient way?
-	_, _, err := mapper.getOneWithIDCore(db, oid, typeString, id)
+	_, role, err := mapper.getOneWithIDCore(db, oid, typeString, id)
 	if err != nil { // Error is "record not found" when not found
 		return err
+	}
+	if role != models.Admin {
+		return errPermission
 	}
 
 	uuidVal := modelObj.GetID()
 	if uuidVal == nil || uuidVal.String() == "" {
-		// in case it's empty string
+		// in case it's an empty string
 		return errIDEmpty
 	} else if uuidVal.String() != id.UUID.String() {
 		return errIDNotMatch

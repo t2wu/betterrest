@@ -334,9 +334,10 @@ func (mapper *OwnershipMapper) UpdateMany(db *gorm.DB, oid *datatypes.UUID, type
 
 // PatchOneWithID updates model based on this json
 func (mapper *OwnershipMapper) PatchOneWithID(db *gorm.DB, oid *datatypes.UUID, typeString string, jsonPatch []byte, id datatypes.UUID) (models.IModel, error) {
-	// if err := checkErrorBeforeUpdate(mapper, db, oid, typeString, modelObj, id); err != nil {
-	// 	return nil, err
-	// }
+	if err := checkErrorBeforeUpdate(mapper, db, oid, typeString, modelObj, id); err != nil {
+		return nil, err
+	}
+
 	var modelObj models.IModel
 	var err error
 	cargo := models.ModelCargo{}
@@ -346,13 +347,9 @@ func (mapper *OwnershipMapper) PatchOneWithID(db *gorm.DB, oid *datatypes.UUID, 
 		return nil, errIDEmpty
 	}
 
-	var role models.UserRole
-	if modelObj, role, err = mapper.getOneWithIDCore(db, oid, typeString, id); err != nil {
+	// role already chcked in checkErrorBeforeUpdate
+	if modelObj, _, err = mapper.getOneWithIDCore(db, oid, typeString, id); err != nil {
 		return nil, err
-	}
-
-	if role != models.Admin {
-		return nil, errPermission
 	}
 
 	// Apply patch operations
