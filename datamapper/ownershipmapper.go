@@ -334,13 +334,10 @@ func (mapper *OwnershipMapper) UpdateMany(db *gorm.DB, oid *datatypes.UUID, type
 
 // PatchOneWithID updates model based on this json
 func (mapper *OwnershipMapper) PatchOneWithID(db *gorm.DB, oid *datatypes.UUID, typeString string, jsonPatch []byte, id datatypes.UUID) (models.IModel, error) {
-	if err := checkErrorBeforeUpdate(mapper, db, oid, typeString, modelObj, id); err != nil {
-		return nil, err
-	}
-
 	var modelObj models.IModel
 	var err error
 	cargo := models.ModelCargo{}
+	var role models.UserRole
 
 	// Check id error
 	if id.UUID.String() == "" {
@@ -348,8 +345,14 @@ func (mapper *OwnershipMapper) PatchOneWithID(db *gorm.DB, oid *datatypes.UUID, 
 	}
 
 	// role already chcked in checkErrorBeforeUpdate
-	if modelObj, _, err = mapper.getOneWithIDCore(db, oid, typeString, id); err != nil {
+	if modelObj, role, err = mapper.getOneWithIDCore(db, oid, typeString, id); err != nil {
 		return nil, err
+	}
+
+	// calling checkErrorBeforeUpdate is redundant in this case since we need to fetch it out first in order to patch it
+	// Just check if role matches models.Admin
+	if role != models.Admin {
+		return nil, errPermission
 	}
 
 	// Apply patch operations
