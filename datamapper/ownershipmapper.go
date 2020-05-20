@@ -3,6 +3,7 @@ package datamapper
 import (
 	"errors"
 	"fmt"
+	"log"
 	"net/url"
 	"reflect"
 	"strings"
@@ -478,6 +479,8 @@ func (mapper *OwnershipMapper) DeleteOneWithID(db *gorm.DB, oid *datatypes.UUID,
 
 // DeleteMany deletes multiple models
 func (mapper *OwnershipMapper) DeleteMany(db *gorm.DB, oid *datatypes.UUID, typeString string, modelObjs []models.IModel) ([]models.IModel, error) {
+
+	log.Println("DeleteMany called 1")
 	ids := make([]datatypes.UUID, len(modelObjs), len(modelObjs))
 	var err error
 	cargo := models.BatchHookCargo{}
@@ -499,6 +502,7 @@ func (mapper *OwnershipMapper) DeleteMany(db *gorm.DB, oid *datatypes.UUID, type
 		}
 	}
 
+	log.Println("DeleteMany called 2")
 	for _, id := range ids {
 
 		if id.UUID.String() == "" {
@@ -517,10 +521,12 @@ func (mapper *OwnershipMapper) DeleteMany(db *gorm.DB, oid *datatypes.UUID, type
 		// Unscoped() for REAL delete!
 		// Foreign key constraint works only on real delete
 		// Soft delete will take more work, have to verify myself manually
+		log.Println("DeleteMany called 3")
 		if modelNeedsRealDelete(modelObj) {
 			db = db.Unscoped()
 		}
 
+		log.Println("DeleteMany called 4")
 		// Also remove entries from ownership table
 		stmt := fmt.Sprintf("DELETE FROM %s WHERE user_id = UUID_TO_BIN(?) AND model_id = UUID_TO_BIN(?) AND role = ?", getJoinTableName(modelObj))
 		db2 := db.Exec(stmt, oid.String(), modelObj.GetID().String(), models.Admin)
@@ -528,17 +534,20 @@ func (mapper *OwnershipMapper) DeleteMany(db *gorm.DB, oid *datatypes.UUID, type
 			return nil, err
 		}
 
+		log.Println("DeleteMany called 5")
 		if db2.RowsAffected == 0 {
 			// If guest, goes here, so no delete the actual model
 			return nil, errPermission
 		}
 
+		log.Println("DeleteMany called 6")
 		err = db.Delete(modelObj).Error
 		// err = db.Delete(modelObj).Error
 		if err != nil {
 			return nil, err
 		}
 
+		log.Println("DeleteMany called 7")
 		err = removePeggedField(db, modelObj)
 		if err != nil {
 			return nil, err

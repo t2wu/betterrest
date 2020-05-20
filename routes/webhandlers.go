@@ -2,6 +2,7 @@ package routes
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -28,19 +29,33 @@ func limitAndOffsetFromQueryString(values *url.Values) (int, int, error) {
 	defer delete(*values, "offset")
 	defer delete(*values, "limit")
 
-	// Can I do the following in one statement?
-	if offset, limit := values.Get("offset"), values.Get("limit"); offset != "" && limit != "" {
-		var o, l int
-		var err error
+	var o, l int
+	var err error
+
+	offset := values.Get("offset")
+	limit := values.Get("limit")
+
+	if offset == "" && limit == "" {
+		return 0, 0, nil
+	}
+
+	if offset == "" {
+		return 0, 0, errors.New("limit should be used with offset")
+	} else {
 		if o, err = strconv.Atoi(offset); err != nil {
 			return 0, 0, err
 		}
+	}
+
+	if limit == "" {
+		return 0, 0, errors.New("offset should be used with limit")
+	} else {
 		if l, err = strconv.Atoi(limit); err != nil {
 			return 0, 0, err
 		}
-		return o, l, nil
 	}
-	return 0, 0, nil // It's ok to pass 0 limit, it'll be interpreted as an all.
+
+	return o, l, nil // It's ok to pass 0 limit, it'll be interpreted as an all.
 }
 
 func orderFromQueryString(values *url.Values) string {
@@ -365,6 +380,7 @@ func UpdateManyHandler(typeString string, mapper datamapper.IUpdateManyMapper) f
 
 		modelObjs, httperr := ModelsFromJSONBody(r, typeString)
 		if httperr != nil {
+			log.Println("Error in ModelsFromJSONBody:", typeString, httperr)
 			render.Render(w, r, httperr)
 			return
 		}
@@ -416,12 +432,12 @@ func PatchOneHandler(typeString string, mapper datamapper.IPatchOneWithIDMapper)
 		modelObj, err := mapper.PatchOneWithID(tx, OwnerIDFromContext(r), typeString, jsonPatch, *id)
 		if err != nil {
 			tx.Rollback()
-			log.Println("Error in UpdateOneHandler ErrUpdate:", typeString, err)
+			log.Println("Error in PatchOneHandler ErrUpdate:", typeString, err)
 			render.Render(w, r, NewErrPatch(err))
 			return
 		}
 		if tx.Commit().Error != nil {
-			log.Println("Error in UpdateOneHandler ErrDBError:", typeString, tx.Commit().Error)
+			log.Println("Error in PatchOneHandler ErrDBError:", typeString, tx.Commit().Error)
 			render.Render(w, r, NewErrDBError(tx.Commit().Error))
 			return
 		}
@@ -477,6 +493,7 @@ func DeleteManyHandler(typeString string, mapper datamapper.IDeleteMany) func(c 
 
 		modelObjs, httperr := ModelsFromJSONBody(r, typeString)
 		if httperr != nil {
+			log.Println("Error in ModelsFromJSONBody:", typeString, httperr)
 			render.Render(w, r, httperr)
 			return
 		}
