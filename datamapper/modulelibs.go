@@ -63,7 +63,7 @@ func updateOneCore(mapper IGetOneWithIDMapper, db *gorm.DB, oid *datatypes.UUID,
 	}
 
 	// This so we have the preloading.
-	modelObj2, _, err = mapper.GetOneWithID(db, oid, typeString, id)
+	modelObj2, _, err = mapper.getOneWithIDCore(db, oid, typeString, id)
 	if err != nil { // Error is "record not found" when not found
 		log.Println("Error:", err)
 		return nil, err
