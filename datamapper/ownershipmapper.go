@@ -124,6 +124,52 @@ func (mapper *OwnershipMapper) getOneWithIDCore(db *gorm.DB, oid *datatypes.UUID
 		role = m.GetRole()
 	}
 
+	err = loadManyToManyBecauseGormFailsWithID(db, modelObj)
+	if err != nil {
+		return nil, 0, err
+	}
+	// Now, many-to-many won't load (probably because I'm using uuid), do it manually
+	// by checking for tag betterrest:"pegassoc-manytomany"
+	// v1 := reflect.Indirect(reflect.ValueOf(modelObj))
+
+	// for i := 0; i < v1.NumField(); i++ {
+	// 	tag := v1.Type().Field(i).Tag.Get("betterrest")
+
+	// 	// log.Println("tag:", tag)
+	// 	if strings.HasPrefix(tag, "pegassoc-manytomany") && reloadManyToMany {
+	// 		tableName := models.GetTableNameFromIModel(reflect.ValueOf(modelObj).Interface().(models.IModel))
+
+	// 		linkTableName := strings.Split(tag, ":")[1]
+
+	// 		// Get the base type of this field
+	// 		inter := v1.Field(i).Interface()
+	// 		typ := reflect.TypeOf(inter).Elem() // Get the type of the element of slice
+
+	// 		m2, _ := reflect.New(typ).Interface().(models.IModel)
+	// 		fieldTableName := models.GetTableNameFromIModel(m2)
+
+	// 		sliceOfField := reflect.New(reflect.TypeOf(inter))
+
+	// 		join1 := fmt.Sprintf("INNER JOIN `%s` ON `%s`.`%s` = UUID_TO_BIN(?)", linkTableName, linkTableName, tableName+"_id")
+	// 		select1 := fmt.Sprintf("DISTINCT `%s`.*", fieldTableName)
+
+	// 		err := db.Table(fieldTableName).Joins(join1, modelObj.GetID().String()).Select(select1).Find(sliceOfField.Interface()).Error
+	// 		if err != nil {
+	// 			return nil, 0, err
+	// 		}
+
+	// 		// 1. This just set it
+	// 		v1.Field(i).Set(sliceOfField.Elem())
+
+	// 		// 2. This is append
+	// 		// o := v1.Field(i)
+	// 		// s := sliceOfField.Elem()
+	// 		// for j := 0; j < s.Len(); j++ {
+	// 		// 	o.Set(reflect.Append(o, s.Index(j)))
+	// 		// }
+	// 	}
+	// }
+
 	return modelObj, role, err
 }
 
@@ -256,6 +302,14 @@ func (mapper *OwnershipMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, typeStr
 		return nil, nil, errors.New("unknown query error")
 	}
 
+	// make many to many tag works
+	for _, m := range outmodels {
+		err = loadManyToManyBecauseGormFailsWithID(db2, m)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
 	// use db2 cuz it's not chained
 	if after := models.ModelRegistry[typeString].AfterRead; after != nil {
 		if err = after(outmodels, db2, oid, typeString, roles); err != nil {
@@ -268,6 +322,7 @@ func (mapper *OwnershipMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, typeStr
 
 // UpdateOneWithID updates model based on this json
 func (mapper *OwnershipMapper) UpdateOneWithID(db *gorm.DB, oid *datatypes.UUID, typeString string, modelObj models.IModel, id datatypes.UUID) (models.IModel, error) {
+	log.Println(">>>>>>>>>>>>>>>>modelObj:", modelObj)
 	if err := checkErrorBeforeUpdate(mapper, db, oid, typeString, modelObj, id); err != nil {
 		return nil, err
 	}

@@ -2,10 +2,12 @@ package models
 
 import (
 	"reflect"
+	"strings"
 	"time"
 
 	"github.com/t2wu/betterrest/libs/datatypes"
 	"github.com/t2wu/betterrest/libs/utils/jsontransform"
+	"github.com/t2wu/betterrest/libs/utils/letters"
 
 	"github.com/asaskevich/govalidator"
 	"github.com/jinzhu/gorm"
@@ -193,7 +195,30 @@ func (o *OwnershipModelBase) SetRole(r UserRole) {
 	o.Role = r
 }
 
-// ------------------------------------
+// ---------------
+
+// IHasTableName we know if there is Gorm's defined custom TableName
 type IHasTableName interface {
 	TableName() string
+}
+
+// GetTableNameFromIModel gets table name from an IModel
+func GetTableNameFromIModel(model IModel) string {
+	var tableName string
+	if m, ok := model.(IHasTableName); ok {
+		tableName = m.TableName()
+	} else {
+		tableName = letters.PascalCaseToSnakeCase(reflect.TypeOf(model).String())
+	}
+
+	// If it's a pointer, get rid of "*"
+	if strings.HasPrefix(tableName, "*") {
+		tableName = tableName[1:]
+	}
+
+	// If it is something like "models.XXX", we only want the stuff ater "."
+	if strings.Contains(tableName, ".") {
+		return strings.Split(tableName, ".")[1]
+	}
+	return tableName
 }
