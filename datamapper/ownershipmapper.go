@@ -256,8 +256,9 @@ func (mapper *OwnershipMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, typeStr
 		return nil, nil, errors.New("unknown query error")
 	}
 
+	// use db2 cuz it's not chained
 	if after := models.ModelRegistry[typeString].AfterRead; after != nil {
-		if err = after(outmodels, db, oid, typeString, roles); err != nil {
+		if err = after(outmodels, db2, oid, typeString, roles); err != nil {
 			return nil, nil, err
 		}
 	}
