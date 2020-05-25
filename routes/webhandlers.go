@@ -253,9 +253,11 @@ func ReadAllHandler(typeString string, mapper datamapper.IGetAllMapper) func(c *
 			render.Render(w, r, NewErrNotFound(err))
 			return
 		}
-		if tx.Commit().Error != nil {
-			log.Println("Error in ReadAllHandler ErrDBError:", typeString, tx.Commit().Error)
-			render.Render(w, r, NewErrDBError(tx.Commit().Error))
+		err = tx.Commit().Error
+		if err != nil {
+			log.Println("Error in ReadAllHandler ErrDBError:", typeString, err)
+			tx.Rollback() // what if roll back fails??
+			render.Render(w, r, NewErrDBError(err))
 			return
 		}
 
@@ -288,9 +290,12 @@ func CreateOneHandler(typeString string, mapper datamapper.ICreateOneMapper) fun
 			render.Render(w, r, NewErrCreate(err))
 			return
 		}
-		if tx.Commit().Error != nil {
-			log.Println("Error in CreateOne ErrDBError:", typeString, tx.Commit().Error)
-			render.Render(w, r, NewErrDBError(tx.Commit().Error))
+
+		err = tx.Commit().Error
+		if err != nil {
+			log.Println("Error in CreateOne ErrDBError:", typeString, err)
+			tx.Rollback() // what if roll back fails??
+			render.Render(w, r, NewErrDBError(err))
 			return
 		}
 
@@ -321,9 +326,11 @@ func ReadOneHandler(typeString string, mapper datamapper.IGetOneWithIDMapper) fu
 			render.Render(w, r, NewErrNotFound(err))
 			return
 		}
-		if tx.Commit().Error != nil {
-			log.Println("Error in ReadOneHandler ErrDBError:", typeString, tx.Commit().Error)
-			render.Render(w, r, NewErrDBError(tx.Commit().Error))
+		err = tx.Commit().Error
+		if err != nil {
+			log.Println("Error in ReadOneHandler ErrDBError:", typeString, err)
+			tx.Rollback() // what if roll back fails??
+			render.Render(w, r, NewErrDBError(err))
 			return
 		}
 
@@ -361,9 +368,12 @@ func UpdateOneHandler(typeString string, mapper datamapper.IUpdateOneWithIDMappe
 			render.Render(w, r, NewErrUpdate(err))
 			return
 		}
-		if tx.Commit().Error != nil {
-			log.Println("Error in UpdateOneHandler ErrDBError:", typeString, tx.Commit().Error)
-			render.Render(w, r, NewErrDBError(tx.Commit().Error))
+
+		err = tx.Commit().Error
+		if err != nil {
+			log.Println("Error in UpdateOneHandler ErrDBError:", typeString, err)
+			tx.Rollback() // what if roll back fails??
+			render.Render(w, r, NewErrDBError(err))
 			return
 		}
 
@@ -393,9 +403,12 @@ func UpdateManyHandler(typeString string, mapper datamapper.IUpdateManyMapper) f
 			render.Render(w, r, NewErrUpdate(err))
 			return
 		}
-		if tx.Commit().Error != nil {
-			log.Println("Error in UpdateManyHandler ErrDBError:", typeString, tx.Commit().Error)
-			render.Render(w, r, NewErrDBError(tx.Commit().Error))
+
+		err = tx.Commit().Error
+		if err != nil {
+			log.Println("Error in UpdateManyHandler ErrDBError:", typeString, err)
+			tx.Rollback() // what if roll back fails??
+			render.Render(w, r, NewErrDBError(err))
 			return
 		}
 
@@ -436,9 +449,12 @@ func PatchOneHandler(typeString string, mapper datamapper.IPatchOneWithIDMapper)
 			render.Render(w, r, NewErrPatch(err))
 			return
 		}
-		if tx.Commit().Error != nil {
-			log.Println("Error in PatchOneHandler ErrDBError:", typeString, tx.Commit().Error)
-			render.Render(w, r, NewErrDBError(tx.Commit().Error))
+
+		err = tx.Commit().Error
+		if err != nil {
+			log.Println("Error in PatchOneHandler ErrDBError:", typeString, err)
+			tx.Rollback() // what if roll back fails??
+			render.Render(w, r, NewErrDBError(err))
 			return
 		}
 
@@ -473,9 +489,12 @@ func DeleteOneHandler(typeString string, mapper datamapper.IDeleteOneWithID) fun
 			render.Render(w, r, NewErrDelete(err))
 			return
 		}
-		if tx.Commit().Error != nil {
-			log.Println("Error in DeleteOneHandler ErrDBError:", typeString, tx.Commit().Error)
-			render.Render(w, r, NewErrDBError(tx.Commit().Error))
+
+		err = tx.Commit().Error
+		if err != nil {
+			log.Println("Error in DeleteOneHandler ErrDBError:", typeString, err)
+			tx.Rollback() // what if roll back fails??
+			render.Render(w, r, NewErrDBError(err))
 			return
 		}
 
@@ -506,9 +525,12 @@ func DeleteManyHandler(typeString string, mapper datamapper.IDeleteMany) func(c 
 			render.Render(w, r, NewErrDelete(err))
 			return
 		}
-		if tx.Commit().Error != nil {
-			log.Println("Error in DeleteOneHandler ErrDBError:", typeString, tx.Commit().Error)
-			render.Render(w, r, NewErrDBError(tx.Commit().Error))
+
+		err = tx.Commit().Error
+		if err != nil {
+			log.Println("Error in DeleteOneHandler ErrDBError:", typeString, err)
+			tx.Rollback() // what if roll back fails??
+			render.Render(w, r, NewErrDBError(err))
 			return
 		}
 
