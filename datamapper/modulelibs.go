@@ -169,29 +169,32 @@ func removePeggedField(db *gorm.DB, modelObj models.IModel) (err error) {
 			// fieldTableName := models.GetTableNameFromIModel(m2)
 			fieldVal := v.Field(i)
 
-			uuidStmts := strings.Repeat("UUID_TO_BIN(?),", fieldVal.Len())
-			uuidStmts = uuidStmts[:len(uuidStmts)-1]
+			if fieldVal.Len() >= 1 {
+				uuidStmts := strings.Repeat("UUID_TO_BIN(?),", fieldVal.Len())
 
-			allIds := make([]interface{}, 0, 10)
-			allIds = append(allIds, modelObj.GetID().String())
-			for j := 0; j < fieldVal.Len(); j++ {
-				idToDel := fieldVal.Index(j).FieldByName("ID").Interface().(*datatypes.UUID)
-				allIds = append(allIds, idToDel.String())
-				// idToDel := reflect.Indirect(reflect.ValueOf(modelToDel)).FieldByName("ID").Interface()
+				uuidStmts = uuidStmts[:len(uuidStmts)-1]
 
-				// stmt := fmt.Sprintf("DELETE FROM `%s` WHERE `%s` = UUID_TO_BIN(?) AND `%s` = UUID_TO_BIN(?)",
-				// 	linkTableName, selfTableName+"_id", fieldTableName+"_id")
-				// err := db.Exec(stmt, modelObj.GetID().String(), idToDel.String()).Error
-				// if err != nil {
-				// 	return err
-				// }
-			}
+				allIds := make([]interface{}, 0, 10)
+				allIds = append(allIds, modelObj.GetID().String())
+				for j := 0; j < fieldVal.Len(); j++ {
+					idToDel := fieldVal.Index(j).FieldByName("ID").Interface().(*datatypes.UUID)
+					allIds = append(allIds, idToDel.String())
+					// idToDel := reflect.Indirect(reflect.ValueOf(modelToDel)).FieldByName("ID").Interface()
 
-			stmt := fmt.Sprintf("DELETE FROM `%s` WHERE `%s` = UUID_TO_BIN(?) AND `%s` IN (%s)",
-				linkTableName, selfTableName+"_id", fieldTableName+"_id", uuidStmts)
-			err := db.Exec(stmt, allIds...).Error
-			if err != nil {
-				return err
+					// stmt := fmt.Sprintf("DELETE FROM `%s` WHERE `%s` = UUID_TO_BIN(?) AND `%s` = UUID_TO_BIN(?)",
+					// 	linkTableName, selfTableName+"_id", fieldTableName+"_id")
+					// err := db.Exec(stmt, modelObj.GetID().String(), idToDel.String()).Error
+					// if err != nil {
+					// 	return err
+					// }
+				}
+
+				stmt := fmt.Sprintf("DELETE FROM `%s` WHERE `%s` = UUID_TO_BIN(?) AND `%s` IN (%s)",
+					linkTableName, selfTableName+"_id", fieldTableName+"_id", uuidStmts)
+				err := db.Exec(stmt, allIds...).Error
+				if err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -304,7 +307,6 @@ func updatePeggedFields(db *gorm.DB, oldModelObj models.IModel, newModelObj mode
 			}
 
 			setIsNew := set2.Difference(set1)
-			log.Println("setIsNew????", len(setIsNew.List))
 			for uuid := range setIsNew.List {
 				modelToAdd := m[uuid]
 
