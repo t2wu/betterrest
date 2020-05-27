@@ -395,10 +395,12 @@ func loadManyToManyBecauseGormFailsWithID(db *gorm.DB, modelObj models.IModel) e
 
 			sliceOfField := reflect.New(reflect.TypeOf(inter))
 
-			join1 := fmt.Sprintf("INNER JOIN `%s` ON `%s`.`%s` = UUID_TO_BIN(?)", linkTableName, linkTableName, tableName+"_id")
-			select1 := fmt.Sprintf("DISTINCT `%s`.*", fieldTableName)
+			join1 := fmt.Sprintf("INNER JOIN `%s` ON `%s`.`id` = `%s`.`%s`", linkTableName, fieldTableName,
+				linkTableName, fieldTableName+"_id")
+			select1 := fmt.Sprintf("`%s`.*", fieldTableName)
+			where1 := fmt.Sprintf("`%s`.`%s` = UUID_TO_BIN(?)", linkTableName, tableName+"_id")
 
-			err := db.Table(fieldTableName).Joins(join1, modelObj.GetID().String()).Select(select1).Find(sliceOfField.Interface()).Error
+			err := db.Table(fieldTableName).Joins(join1).Where(where1, modelObj.GetID().String()).Select(select1).Find(sliceOfField.Interface()).Error
 			if err != nil {
 				return err
 			}
