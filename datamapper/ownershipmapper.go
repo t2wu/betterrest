@@ -229,22 +229,27 @@ func (mapper *OwnershipMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, typeStr
 		}
 
 		for fieldName, fieldValues := range values {
-			fieldValue2 := fieldValues[0]
-
 			if fieldMap[letters.CamelCaseToPascalCase(fieldName)] == false {
 				return nil, nil, fmt.Errorf("fieldname %s does not exist", fieldName)
 			}
 
-			whereStmt := rtable + "." + letters.PascalCaseToSnakeCase(fieldName) + " = ?"
+			blanks := strings.Repeat("?,", len(fieldValues))
+			blanks = blanks[:len(blanks)-1]
+			whereStmt := fmt.Sprintf(rtable+"."+letters.PascalCaseToSnakeCase(fieldName)+" IN (%s)", blanks)
+
+			fieldValues2 := make([]interface{}, len(fieldValues), len(fieldValues))
 			if strings.HasSuffix(fieldName, "ID") {
-				uuid2, err := datatypes.NewUUIDFromString(fieldValue2)
-				if err != nil {
-					return nil, nil, err
+				for i, fieldValue := range fieldValues {
+					data, _ := datatypes.NewUUIDFromString(fieldValue)
+					fieldValues2[i] = data
 				}
-				db = db.Where(whereStmt, uuid2)
 			} else {
-				db = db.Where(whereStmt, fieldValue2)
+				for i, fieldValue := range fieldValues {
+					fieldValues2[i] = fieldValue
+				}
 			}
+
+			db = db.Where(whereStmt, fieldValues2...)
 		}
 	}
 
@@ -322,7 +327,6 @@ func (mapper *OwnershipMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, typeStr
 
 // UpdateOneWithID updates model based on this json
 func (mapper *OwnershipMapper) UpdateOneWithID(db *gorm.DB, oid *datatypes.UUID, typeString string, modelObj models.IModel, id datatypes.UUID) (models.IModel, error) {
-	log.Println(">>>>>>>>>>>>>>>>modelObj:", modelObj)
 	if err := checkErrorBeforeUpdate(mapper, db, oid, typeString, modelObj, id); err != nil {
 		return nil, err
 	}
