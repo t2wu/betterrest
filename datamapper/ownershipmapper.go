@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/url"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -222,14 +223,17 @@ func (mapper *OwnershipMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, typeStr
 		v := reflect.Indirect(reflect.ValueOf(obj))
 		typeOfS := v.Type()
 		fieldMap := make(map[string]bool)
+		fieldTypeMap := make(map[string]string)
 
 		// https://stackoverflow.com/questions/18926303/iterate-through-the-fields-of-a-struct-in-go
 		for i := 0; i < v.NumField(); i++ {
 			fieldMap[typeOfS.Field(i).Name] = true
+			fieldTypeMap[typeOfS.Field(i).Name] = typeOfS.Field(i).Type.String()
 		}
 
 		for fieldName, fieldValues := range values {
-			if fieldMap[letters.CamelCaseToPascalCase(fieldName)] == false {
+			fieldNamePascal := letters.CamelCaseToPascalCase(fieldName)
+			if fieldMap[fieldNamePascal] == false {
 				return nil, nil, fmt.Errorf("fieldname %s does not exist", fieldName)
 			}
 
@@ -238,12 +242,32 @@ func (mapper *OwnershipMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, typeStr
 			whereStmt := fmt.Sprintf(rtable+"."+letters.PascalCaseToSnakeCase(fieldName)+" IN (%s)", blanks)
 
 			fieldValues2 := make([]interface{}, len(fieldValues), len(fieldValues))
-			if strings.HasSuffix(fieldName, "ID") {
+
+			log.Println(" fieldTypeMap[fieldNamePascal]:", fieldTypeMap[fieldNamePascal])
+			switch fieldTypeMap[fieldNamePascal] {
+			case "*datatypes.UUID":
+				fallthrough
+			case "datatypes.UUID":
 				for i, fieldValue := range fieldValues {
-					data, _ := datatypes.NewUUIDFromString(fieldValue)
+					data, err := datatypes.NewUUIDFromString(fieldValue)
+					if err != nil {
+						return nil, nil, err
+					}
 					fieldValues2[i] = data
 				}
-			} else {
+				break
+			case "*bool":
+				fallthrough
+			case "bool":
+				for i, fieldValue := range fieldValues {
+					data, err := strconv.ParseBool(fieldValue)
+					if err != nil {
+						return nil, nil, err
+					}
+					fieldValues2[i] = data
+				}
+				break
+			default:
 				for i, fieldValue := range fieldValues {
 					fieldValues2[i] = fieldValue
 				}
