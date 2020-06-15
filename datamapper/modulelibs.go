@@ -211,7 +211,7 @@ func updatePeggedFields(db *gorm.DB, oldModelObj models.IModel, newModelObj mode
 
 	for i := 0; i < v1.NumField(); i++ {
 		tag := v1.Type().Field(i).Tag.Get("betterrest")
-		log.Println("tag:", tag)
+		// log.Println("tag:", tag)
 		if tag == "peg" || tag == "pegassoc" || strings.HasPrefix(tag, "pegassoc-manytomany") {
 			fieldVal1 := v1.Field(i)
 			fieldVal2 := v2.Field(i)

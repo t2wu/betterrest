@@ -3,6 +3,7 @@ package routes
 import (
 	"time"
 
+	jsonpatch "github.com/evanphx/json-patch"
 	"github.com/t2wu/betterrest/libs/datatypes"
 	"github.com/t2wu/betterrest/libs/security"
 )
@@ -34,4 +35,14 @@ func createTokenPayloadForScope(id *datatypes.UUID, scope *string) (map[string]i
 	}
 
 	return retval, nil
+}
+
+func removeCreatedAtFromModel(original []byte) ([]byte, error) {
+	jsonPatch := []byte("[{ \"op\": \"remove\", \"path\": \"/createdAt\" }]")
+	patch, err := jsonpatch.DecodePatch(jsonPatch)
+	if err != nil {
+		return nil, err
+	}
+
+	return patch.Apply(original)
 }

@@ -1,7 +1,6 @@
 package models
 
 import (
-	"encoding/json"
 	"reflect"
 
 	"github.com/t2wu/betterrest/libs/datatypes"
@@ -181,42 +180,6 @@ func NewSliceStructFromTypeString(typeString string) []IModel {
 	return modelObjs
 }
 
-// NewSliceStructFromTypeStringAndJSON unmarshals a JSON collection
-func NewSliceStructFromTypeStringAndJSON(typeString string, jsn []byte) ([]IModel, error) {
-	modelType := ModelRegistry[typeString].Typ
-	mapType := reflect.MapOf(reflect.TypeOf(""), reflect.SliceOf(modelType)) // string -> model
-
-	obj := reflect.MakeMap(mapType)
-	obj.SetMapIndex(reflect.ValueOf("content"), reflect.New(reflect.SliceOf(modelType)).Elem())
-
-	ptr := reflect.New(mapType)
-	ptr.Elem().Set(obj)
-
-	// obj.(map[string]interface{})
-	err := json.Unmarshal(jsn, ptr.Interface())
-	if err != nil {
-		return nil, err
-	}
-
-	// this is reflect.Value, and I cannot map it to map[string]interface{}, no Obj.Map()
-	// panic: interface conversion: interface {} is map[string][]Device, not map[string][]IModel
-	// return obj.Interface().(map[string][]IModel)
-
-	// v.SetMapIndex(reflect.ValueOf(mKey), elemV)
-	modelObjs := make([]IModel, obj.MapIndex(reflect.ValueOf("content")).Len(),
-		obj.MapIndex(reflect.ValueOf("content")).Len())
-
-	arr := obj.MapIndex(reflect.ValueOf("content"))
-	for i := 0; i < arr.Len(); i++ {
-
-		ptr2 := reflect.New(modelType)
-		ptr2.Elem().Set(arr.Index(i))
-		modelObjs[i] = ptr2.Interface().(IModel)
-	}
-
-	return modelObjs, nil
-}
-
 // NewSliceFromDB queries the database for an array of models
 // func(dest interface{}) *gorm.DB
 func NewSliceFromDB(typeString string, f func(interface{}, ...interface{}) *gorm.DB) ([]IModel, error) {
@@ -239,24 +202,3 @@ func NewSliceFromDB(typeString string, f func(interface{}, ...interface{}) *gorm
 
 	return y, nil
 }
-
-// NewSliceFromDB2 queries the database for an array of models
-// func NewSliceFromDB2(typeString string, f func(dest interface{}) *gorm.DB) ([]IModel, []models.Role, error) {
-// 	modelType := ModelRegistry[typeString].Typ
-// 	modelObjs := reflect.New(reflect.SliceOf(modelType))
-
-// 	if err := f(modelObjs.Interface()).Error; err != nil {
-// 		return nil, err
-// 	}
-
-// 	modelObjs = modelObjs.Elem()
-
-// 	y := make([]IModel, modelObjs.Len())
-// 	for i := 0; i < modelObjs.Len(); i++ {
-// 		ptr2 := reflect.New(modelType)
-// 		ptr2.Elem().Set(modelObjs.Index(i))
-// 		y[i] = ptr2.Interface().(IModel)
-// 	}
-
-// 	return y, nil
-// }

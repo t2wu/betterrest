@@ -23,6 +23,11 @@ func OwnerIDFromContext(r *http.Request) *datatypes.UUID {
 	return ownerID
 }
 
+// JSONBodyWithContent for partial unmarshalling
+type JSONBodyWithContent struct {
+	Content []json.RawMessage
+}
+
 // ModelsFromJSONBody parses JSON body into array of models
 func ModelsFromJSONBody(r *http.Request, typeString string) ([]models.IModel, render.Renderer) {
 	defer r.Body.Close()
@@ -33,13 +38,43 @@ func ModelsFromJSONBody(r *http.Request, typeString string) ([]models.IModel, re
 		return nil, NewErrReadingBody(err)
 	}
 
-	modelObjs, err = models.NewSliceStructFromTypeStringAndJSON(typeString, jsn)
+	var jcmodel JSONBodyWithContent
+
+	err = json.Unmarshal(jsn, &jcmodel)
 	if err != nil {
 		return nil, NewErrParsingJSON(err)
 	}
 
-	if err != nil {
-		return nil, NewErrParsingJSON(err)
+	modelTest := models.NewFromTypeString(typeString)
+	removeCreated := false
+	if _, ok := modelTest.Permissions(models.Admin)["createdAt"]; ok {
+		// there is created_at field, so we remove it because it's suppose to be
+		// time object and I have int which is not unmarshable
+		removeCreated = true
+	}
+
+	for _, jsnModel := range jcmodel.Content {
+		if removeCreated {
+			jsnModel2, err := removeCreatedAtFromModel(jsnModel)
+			// ignore error, so if there is no createdAt in the field it will be fine, too
+			if err == nil {
+				jsnModel = jsnModel2
+			}
+		}
+
+		modelObj := models.NewFromTypeString(typeString)
+		err = json.Unmarshal(jsnModel, modelObj)
+		if err != nil {
+			return nil, NewErrParsingJSON(err)
+		}
+
+		if v, ok := modelObj.(models.IValidate); ok {
+			if err := v.Validate(); err != nil {
+				return nil, NewErrValidation(err)
+			}
+		}
+
+		modelObjs = append(modelObjs, modelObj)
 	}
 
 	return modelObjs, nil
@@ -59,6 +94,17 @@ func ModelFromJSONBody(r *http.Request, typeString string) (models.IModel, rende
 	}
 
 	modelObj := models.NewFromTypeString(typeString)
+
+	if _, ok := modelObj.Permissions(models.Admin)["createdAt"]; ok {
+		// there is created_at field, so we remove it because it's suppose to be
+		// time object and I have int which is not unmarshable
+		jsn2, err := removeCreatedAtFromModel(jsn)
+		// ignore error, so if there is no createdAt in the field it will be fine, too
+		if err == nil {
+			jsn = jsn2
+		}
+	}
+
 	err = json.Unmarshal(jsn, modelObj)
 	if err != nil {
 		return nil, NewErrParsingJSON(err)
