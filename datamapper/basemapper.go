@@ -18,6 +18,7 @@ var errPatch = errors.New("patch syntax error") // json: cannot unmarshal object
 // ICreateOneMapper has a create one interface
 type ICreateOneMapper interface {
 	CreateOne(db *gorm.DB, oid *datatypes.UUID, typeString string, modelObj models.IModel) (models.IModel, error)
+	CreateMany(db *gorm.DB, oid *datatypes.UUID, typeString string, modelObj []models.IModel) ([]models.IModel, error)
 }
 
 // IGetOneWithIDMapper gets a record with ID

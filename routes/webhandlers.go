@@ -100,7 +100,6 @@ func createdTimeRangeFromQueryString(values *url.Values) (int, int, error) {
 }
 
 func modelObjsToJSON(typeString string, modelObjs []models.IModel, roles []models.UserRole) (string, error) {
-
 	arr := make([]string, len(modelObjs))
 	for i, v := range modelObjs {
 		if j, err := tools.ToJSON(typeString, v, roles[i]); err != nil {
@@ -271,35 +270,63 @@ func CreateOneHandler(typeString string, mapper datamapper.ICreateOneMapper) fun
 	return func(c *gin.Context) {
 		w, r := c.Writer, c.Request
 
+		var err error
+		var modelObj models.IModel
+
 		ownerID := OwnerIDFromContext(r)
 
-		var err error
-
-		modelObj, httperr := ModelFromJSONBody(r, typeString)
+		modelObjs, isBatch, httperr := ModelOrModelsFromJSONBody(r, typeString)
 		if httperr != nil {
 			render.Render(w, r, httperr)
 			return
 		}
 
 		tx := db.Shared().Begin()
-		if modelObj, err = mapper.CreateOne(tx, ownerID, typeString, modelObj); err != nil {
-			// FIXME, there is more than one type of error here
-			// How do I output more detailed messages by inspecting error?
-			tx.Rollback()
-			log.Println("Error in CreateOne ErrCreate:", typeString, err)
-			render.Render(w, r, NewErrCreate(err))
-			return
+		if *isBatch {
+			if modelObjs, err = mapper.CreateMany(tx, ownerID, typeString, modelObjs); err != nil {
+				// FIXME, there is more than one type of error here
+				// How do I output more detailed messages by inspecting error?
+				tx.Rollback()
+				log.Println("Error in CreateMany ErrCreate:", typeString, err)
+				render.Render(w, r, NewErrCreate(err))
+				return
+			}
+
+			err = tx.Commit().Error
+			if err != nil {
+				log.Println("Error in CreateMany ErrDBError:", typeString, err)
+				tx.Rollback() // what if roll back fails??
+				render.Render(w, r, NewErrDBError(err))
+				return
+			}
+
+			// admin is 0 so it's ok
+			roles := make([]models.UserRole, 0, 20)
+			for i := 0; i < len(modelObjs); i++ {
+				roles = append(roles, models.Admin)
+			}
+			renderModelSlice(w, r, typeString, modelObjs, roles)
+		} else {
+			if modelObj, err = mapper.CreateOne(tx, ownerID, typeString, modelObjs[0]); err != nil {
+				// FIXME, there is more than one type of error here
+				// How do I output more detailed messages by inspecting error?
+				tx.Rollback()
+				log.Println("Error in CreateOne ErrCreate:", typeString, err)
+				render.Render(w, r, NewErrCreate(err))
+				return
+			}
+
+			err = tx.Commit().Error
+			if err != nil {
+				log.Println("Error in CreateOne ErrDBError:", typeString, err)
+				tx.Rollback() // what if roll back fails??
+				render.Render(w, r, NewErrDBError(err))
+				return
+			}
+
+			renderModel(w, r, typeString, modelObj, models.Admin)
 		}
 
-		err = tx.Commit().Error
-		if err != nil {
-			log.Println("Error in CreateOne ErrDBError:", typeString, err)
-			tx.Rollback() // what if roll back fails??
-			render.Render(w, r, NewErrDBError(err))
-			return
-		}
-
-		renderModel(w, r, typeString, modelObj, models.Admin)
 		return
 	}
 }

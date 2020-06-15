@@ -12,8 +12,8 @@ import (
 // How about AOP?
 // https://github.com/gogap/aop
 
-// CreateWithHooksUser handles before and after DB hookpoints for creating a user
-func CreateWithHooksUser(db *gorm.DB, oid *datatypes.UUID, typeString string, modelObj models.IModel) (models.IModel, error) {
+// CreateOneWithHooksUser handles before and after DB hookpoints for creating a user
+func CreateOneWithHooksUser(db *gorm.DB, oid *datatypes.UUID, typeString string, modelObj models.IModel) (models.IModel, error) {
 	var err error
 	var cargo models.ModelCargo
 
@@ -50,8 +50,8 @@ func CreateWithHooksUser(db *gorm.DB, oid *datatypes.UUID, typeString string, mo
 	return modelObj, nil
 }
 
-// CreateWithHooks handles before and after DB hookpoints for create
-func CreateWithHooks(db *gorm.DB, oid *datatypes.UUID, typeString string, modelObj models.IModel) (models.IModel, error) {
+// CreateOneWithHooks handles before and after DB hookpoints for create
+func CreateOneWithHooks(db *gorm.DB, oid *datatypes.UUID, typeString string, modelObj models.IModel) (models.IModel, error) {
 	var err error
 	var cargo models.ModelCargo
 
@@ -62,6 +62,23 @@ func CreateWithHooks(db *gorm.DB, oid *datatypes.UUID, typeString string, modelO
 		}
 	}
 
+	modelObj, err = CreateOneCore(db, oid, typeString, modelObj)
+	if err != nil {
+		return nil, err
+	}
+
+	if v, ok := modelObj.(models.IAfterInsert); ok {
+		err = v.AfterInsertDB(db, oid, typeString, &cargo)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return modelObj, nil
+}
+
+// CreateOneCore creates a model
+func CreateOneCore(db *gorm.DB, oid *datatypes.UUID, typeString string, modelObj models.IModel) (models.IModel, error) {
 	// It looks like I need to explicitly call create here
 	o := reflect.ValueOf(modelObj).Elem().FieldByName("Ownerships")
 	g, _ := o.Index(0).Addr().Interface().(models.IOwnership)
@@ -77,16 +94,9 @@ func CreateWithHooks(db *gorm.DB, oid *datatypes.UUID, typeString string, modelO
 	}
 
 	// For table with trigger which update before insert, we need to load it again
-	if err = db.First(modelObj).Error; err != nil {
+	if err := db.First(modelObj).Error; err != nil {
 		// That's weird. we just inserted it.
 		return nil, err
-	}
-
-	if v, ok := modelObj.(models.IAfterInsert); ok {
-		err = v.AfterInsertDB(db, oid, typeString, &cargo)
-		if err != nil {
-			return nil, err
-		}
 	}
 
 	return modelObj, nil

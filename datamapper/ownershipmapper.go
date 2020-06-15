@@ -66,7 +66,69 @@ func (mapper *OwnershipMapper) CreateOne(db *gorm.DB, oid *datatypes.UUID, typeS
 	o := reflect.ValueOf(modelObj).Elem().FieldByName("Ownerships")
 	o.Set(reflect.Append(o, reflect.ValueOf(g).Elem()))
 
-	return CreateWithHooks(db, oid, typeString, modelObj)
+	return CreateOneWithHooks(db, oid, typeString, modelObj)
+}
+
+// CreateMany creates an instance of this model based on json and store it in db
+func (mapper *OwnershipMapper) CreateMany(db *gorm.DB, oid *datatypes.UUID, typeString string, modelObjs []models.IModel) ([]models.IModel, error) {
+	// db.Model(&u).Association("Ownerships")
+
+	// Get ownership type and creates it
+	// field, _ := reflect.TypeOf(modelObj).Elem().FieldByName("Ownerships")
+	// ownershipType := field.Type
+
+	ownershipType := modelObjs[0].OwnershipType()
+	retModels := make([]models.IModel, 0, 20)
+
+	cargo := models.BatchHookCargo{}
+	// Before batch inert hookpoint
+	if before := models.ModelRegistry[typeString].BeforeInsert; before != nil {
+		if err := before(modelObjs, db, oid, typeString, &cargo); err != nil {
+			return nil, err
+		}
+	}
+
+	for _, modelObj := range modelObjs {
+		// reflect.SliceOf
+		g := reflect.New(ownershipType).Interface().(models.IOwnership)
+
+		modelID := modelObj.GetID()
+		if modelID == nil {
+			modelID = datatypes.NewUUID()
+			modelObj.SetID(modelID)
+		}
+
+		g.SetUserID(oid)
+		g.SetModelID(modelID)
+		g.SetRole(models.Admin)
+
+		// ownerships := reflect.New(reflect.SliceOf(ownershipType))
+		// o.Set(reflect.Append(ownerships, reflect.ValueOf(g)))
+
+		// Associate a ownership group with this model
+		// This is not strictly really necessary as actual SQL table has no such field. I could have
+		// just save the "g", But it's for hooks
+		o := reflect.ValueOf(modelObj).Elem().FieldByName("Ownerships")
+		o.Set(reflect.Append(o, reflect.ValueOf(g).Elem()))
+
+		m, err := CreateOneCore(db, oid, typeString, modelObj)
+		if err != nil {
+			return nil, err
+		}
+
+		retModels = append(retModels, m)
+	}
+
+	// After batch inert hookpoint
+	if after := models.ModelRegistry[typeString].AfterInsert; after != nil {
+		if err := after(modelObjs, db, oid, typeString, &cargo); err != nil {
+			return nil, err
+		}
+	}
+
+	log.Println("retModels===>:", retModels)
+
+	return retModels, nil
 }
 
 // GetOneWithID get one model object based on its type and its id string
@@ -390,7 +452,7 @@ func (mapper *OwnershipMapper) UpdateMany(db *gorm.DB, oid *datatypes.UUID, type
 	var err error
 	cargo := models.BatchHookCargo{}
 
-	// Before batch update hookopint
+	// Before batch update hookpoint
 	if before := models.ModelRegistry[typeString].BeforeUpdate; before != nil {
 		if err = before(modelObjs, db, oid, typeString, &cargo); err != nil {
 			return nil, err
@@ -412,7 +474,7 @@ func (mapper *OwnershipMapper) UpdateMany(db *gorm.DB, oid *datatypes.UUID, type
 		ms = append(ms, m)
 	}
 
-	// After batch update hookopint
+	// After batch update hookpoint
 	if after := models.ModelRegistry[typeString].AfterUpdate; after != nil {
 		if err = after(modelObjs, db, oid, typeString, &cargo); err != nil {
 			return nil, err
@@ -584,7 +646,7 @@ func (mapper *OwnershipMapper) DeleteMany(db *gorm.DB, oid *datatypes.UUID, type
 
 	ms := make([]models.IModel, 0, 0)
 
-	// Before batch delete hookopint
+	// Before batch delete hookpoint
 	if before := models.ModelRegistry[typeString].BeforeDelete; before != nil {
 		if err = before(modelObjs, db, oid, typeString, &cargo); err != nil {
 			return nil, err
@@ -645,7 +707,7 @@ func (mapper *OwnershipMapper) DeleteMany(db *gorm.DB, oid *datatypes.UUID, type
 		ms = append(ms, modelObj)
 	}
 
-	// After batch delete hookopint
+	// After batch delete hookpoint
 	if after := models.ModelRegistry[typeString].AfterDelete; after != nil {
 		if err = after(modelObjs, db, oid, typeString, &cargo); err != nil {
 			return nil, err

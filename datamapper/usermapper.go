@@ -67,7 +67,12 @@ func (mapper *UserMapper) CreateOne(db *gorm.DB, oid *datatypes.UUID, typeString
 	reflect.ValueOf(modelObj).Elem().FieldByName("PasswordHash").Set(reflect.ValueOf(hash))
 
 	// there isn't really an oid at this point
-	return CreateWithHooksUser(db, oid, "users", modelObj)
+	return CreateOneWithHooksUser(db, oid, "users", modelObj)
+}
+
+func (mapper *UserMapper) CreateMany(db *gorm.DB, oid *datatypes.UUID, typeString string, modelObjs []models.IModel) ([]models.IModel, error) {
+	// not really implemented
+	return nil, errors.New("not implemented")
 }
 
 // GetOneWithID get one model object based on its type and its id string

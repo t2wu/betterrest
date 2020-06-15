@@ -28,6 +28,80 @@ type JSONBodyWithContent struct {
 	Content []json.RawMessage
 }
 
+// ModelOrModelsFromJSONBody parses JSON body into array of models
+// It take care where the case when it is not even an array and there is a "content" in there
+func ModelOrModelsFromJSONBody(r *http.Request, typeString string) ([]models.IModel, *bool, render.Renderer) {
+	defer r.Body.Close()
+	var jsn []byte
+	var modelObjs []models.IModel
+	var err error
+	if jsn, err = ioutil.ReadAll(r.Body); err != nil {
+		return nil, nil, NewErrReadingBody(err)
+	}
+
+	var jcmodel JSONBodyWithContent
+
+	canHaveCreatedAt := false
+	modelObj := models.NewFromTypeString(typeString)
+	if _, ok := modelObj.Permissions(models.Admin)["createdAt"]; ok {
+		canHaveCreatedAt = true
+	}
+
+	err = json.Unmarshal(jsn, &jcmodel)
+	if err != nil {
+		return nil, nil, NewErrParsingJSON(err)
+	}
+
+	if len(jcmodel.Content) == 0 {
+		// then it's not a batch insert
+
+		// parsing error...try again with one body
+		if canHaveCreatedAt {
+			jsnModel2, err := removeCreatedAtFromModel(jsn)
+			// ignore error, so if there is no createdAt in the field it will be fine, too
+			if err == nil {
+				jsn = jsnModel2
+			}
+		}
+
+		err = json.Unmarshal(jsn, modelObj)
+		if err != nil {
+			return nil, nil, NewErrParsingJSON(err)
+		}
+
+		modelObjs = append(modelObjs, modelObj)
+		isBatch := false
+		return modelObjs, &isBatch, nil
+	}
+
+	for _, jsnModel := range jcmodel.Content {
+		if canHaveCreatedAt {
+			jsnModel2, err := removeCreatedAtFromModel(jsnModel)
+			// ignore error, so if there is no createdAt in the field it will be fine, too
+			if err == nil {
+				jsnModel = jsnModel2
+			}
+		}
+
+		modelObj := models.NewFromTypeString(typeString)
+		err = json.Unmarshal(jsnModel, modelObj)
+		if err != nil {
+			return nil, nil, NewErrParsingJSON(err)
+		}
+
+		if v, ok := modelObj.(models.IValidate); ok {
+			if err := v.Validate(); err != nil {
+				return nil, nil, NewErrValidation(err)
+			}
+		}
+
+		modelObjs = append(modelObjs, modelObj)
+	}
+
+	isBatch := true
+	return modelObjs, &isBatch, nil
+}
+
 // ModelsFromJSONBody parses JSON body into array of models
 func ModelsFromJSONBody(r *http.Request, typeString string) ([]models.IModel, render.Renderer) {
 	defer r.Body.Close()
