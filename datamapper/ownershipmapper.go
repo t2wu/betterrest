@@ -230,10 +230,15 @@ func (mapper *OwnershipMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, typeStr
 			fieldMap[typeOfS.Field(i).Name] = true
 			fieldTypeMap[typeOfS.Field(i).Name] = typeOfS.Field(i).Type.String()
 		}
+		// "id" is an exception because it's in struct embedding and isn't found this way
+		// so we hard code it.
+		fieldMap["Id"] = true
+		fieldTypeMap["Id"] = "*datatypes.UUID"
 
 		for fieldName, fieldValues := range values {
 			fieldNamePascal := letters.CamelCaseToPascalCase(fieldName)
-			if fieldMap[fieldNamePascal] == false {
+
+			if fieldMap[fieldNamePascal] == false && fieldNamePascal != "Id" {
 				return nil, nil, fmt.Errorf("fieldname %s does not exist", fieldName)
 			}
 
