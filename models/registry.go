@@ -90,17 +90,17 @@ func AddModelRegistryWithOptions(typeString string, typ reflect.Type, batchEndpo
 
 // AddBatchInsertBeforeAndAfterHookPoints adds hookpoints which are called before
 // and after batch update. Either one can be left as nil
-// func AddBatchInsertBeforeAndAfterHookPoints(typeString string,
-// 	before func(ms []IModel, db *gorm.DB, oid *datatypes.UUID, typeString string, cargo *BatchHookCargo) error,
-// 	after func(ms []IModel, db *gorm.DB, oid *datatypes.UUID, typeString string, cargo *BatchHookCargo) error) {
+func AddBatchInsertBeforeAndAfterHookPoints(typeString string,
+	before func(ms []IModel, db *gorm.DB, oid *datatypes.UUID, typeString string, cargo *BatchHookCargo) error,
+	after func(ms []IModel, db *gorm.DB, oid *datatypes.UUID, typeString string, cargo *BatchHookCargo) error) {
 
-// 	if _, ok := ModelRegistry[typeString]; !ok {
-// 		ModelRegistry[typeString] = &Reg{}
-// 	}
+	if _, ok := ModelRegistry[typeString]; !ok {
+		ModelRegistry[typeString] = &Reg{}
+	}
 
-// 	ModelRegistry[typeString].BeforeInsert = before
-// 	ModelRegistry[typeString].AfterInsert = after
-// }
+	ModelRegistry[typeString].BeforeInsert = before
+	ModelRegistry[typeString].AfterInsert = after
+}
 
 // AddBatchReadAfterHookPoint adds hookpoints which are called after
 // and read, can be left as nil

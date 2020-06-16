@@ -126,8 +126,6 @@ func (mapper *OwnershipMapper) CreateMany(db *gorm.DB, oid *datatypes.UUID, type
 		}
 	}
 
-	log.Println("retModels===>:", retModels)
-
 	return retModels, nil
 }
 
