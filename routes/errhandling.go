@@ -260,6 +260,23 @@ func NewErrInvalidRefreshToken(err error) render.Renderer {
 	}
 }
 
+// ErrPermissionDeniedForAPIEndpoint is permission denied for this endpoint
+type ErrPermissionDeniedForAPIEndpoint struct {
+	ErrResponse
+}
+
+// NewErrPermissionDeniedForAPIEndpoint creates a new ErrClientNotAuthorized
+func NewErrPermissionDeniedForAPIEndpoint(err error) render.Renderer {
+	return &ErrPermissionDeniedForAPIEndpoint{
+		ErrResponse{
+			HTTPStatusCode: http.StatusUnauthorized,
+			Code:           15,
+			StatusText:     "permission denied for this endpoint",
+			ErrorText:      errorToSensibleString(err),
+		},
+	}
+}
+
 // ErrInvalidRefreshToken some problem refreshing the token (maybe missing)
 type ErrInvalidRefreshToken struct {
 	ErrResponse

@@ -4,8 +4,11 @@ import (
 	"time"
 
 	jsonpatch "github.com/evanphx/json-patch"
+	"github.com/gin-gonic/gin"
+	"github.com/go-chi/render"
 	"github.com/t2wu/betterrest/libs/datatypes"
 	"github.com/t2wu/betterrest/libs/security"
+	"github.com/t2wu/betterrest/models"
 )
 
 // createTokenPayloadForScope creates token JSON payload
@@ -45,4 +48,23 @@ func removeCreatedAtFromModel(original []byte) ([]byte, error) {
 	}
 
 	return patch.Apply(original)
+}
+
+func guardMiddleWare(typeString string) func(c *gin.Context) {
+	return func(c *gin.Context) {
+		w, r := c.Writer, c.Request
+
+		modelObj := models.NewFromTypeString(typeString)
+		if m, ok := modelObj.(models.IGuardAPIEntry); ok {
+			scope := ScopeFromContext(r)
+			if !m.GuardAPIEntry(&scope, r.Method, r.URL.Path) {
+				render.Render(w, r, NewErrPermissionDeniedForAPIEndpoint(nil))
+				c.Abort() // abort
+				return
+			}
+		}
+
+		// continues
+		return
+	}
 }

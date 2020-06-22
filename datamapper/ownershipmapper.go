@@ -35,7 +35,7 @@ func SharedOwnershipMapper() *OwnershipMapper {
 }
 
 // CreateOne creates an instance of this model based on json and store it in db
-func (mapper *OwnershipMapper) CreateOne(db *gorm.DB, oid *datatypes.UUID, typeString string, modelObj models.IModel) (models.IModel, error) {
+func (mapper *OwnershipMapper) CreateOne(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel) (models.IModel, error) {
 	// db.Model(&u).Association("Ownerships")
 
 	// Get ownership type and creates it
@@ -66,11 +66,11 @@ func (mapper *OwnershipMapper) CreateOne(db *gorm.DB, oid *datatypes.UUID, typeS
 	o := reflect.ValueOf(modelObj).Elem().FieldByName("Ownerships")
 	o.Set(reflect.Append(o, reflect.ValueOf(g).Elem()))
 
-	return CreateOneWithHooks(db, oid, typeString, modelObj)
+	return CreateOneWithHooks(db, oid, scope, typeString, modelObj)
 }
 
 // CreateMany creates an instance of this model based on json and store it in db
-func (mapper *OwnershipMapper) CreateMany(db *gorm.DB, oid *datatypes.UUID, typeString string, modelObjs []models.IModel) ([]models.IModel, error) {
+func (mapper *OwnershipMapper) CreateMany(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObjs []models.IModel) ([]models.IModel, error) {
 	// db.Model(&u).Association("Ownerships")
 
 	// Get ownership type and creates it
@@ -83,7 +83,7 @@ func (mapper *OwnershipMapper) CreateMany(db *gorm.DB, oid *datatypes.UUID, type
 	cargo := models.BatchHookCargo{}
 	// Before batch inert hookpoint
 	if before := models.ModelRegistry[typeString].BeforeInsert; before != nil {
-		if err := before(modelObjs, db, oid, typeString, &cargo); err != nil {
+		if err := before(modelObjs, db, oid, scope, typeString, &cargo); err != nil {
 			return nil, err
 		}
 	}
@@ -121,7 +121,7 @@ func (mapper *OwnershipMapper) CreateMany(db *gorm.DB, oid *datatypes.UUID, type
 
 	// After batch inert hookpoint
 	if after := models.ModelRegistry[typeString].AfterInsert; after != nil {
-		if err := after(modelObjs, db, oid, typeString, &cargo); err != nil {
+		if err := after(modelObjs, db, oid, scope, typeString, &cargo); err != nil {
 			return nil, err
 		}
 	}
@@ -130,15 +130,15 @@ func (mapper *OwnershipMapper) CreateMany(db *gorm.DB, oid *datatypes.UUID, type
 }
 
 // GetOneWithID get one model object based on its type and its id string
-func (mapper *OwnershipMapper) GetOneWithID(db *gorm.DB, oid *datatypes.UUID, typeString string, id datatypes.UUID) (models.IModel, models.UserRole, error) {
+func (mapper *OwnershipMapper) GetOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, id datatypes.UUID) (models.IModel, models.UserRole, error) {
 
-	modelObj, role, err := mapper.getOneWithIDCore(db, oid, typeString, id)
+	modelObj, role, err := mapper.getOneWithIDCore(db, oid, scope, typeString, id)
 	if err != nil {
 		return nil, 0, err
 	}
 
 	if m, ok := modelObj.(models.IAfterRead); ok {
-		if err := m.AfterReadDB(db, oid, typeString, &role); err != nil {
+		if err := m.AfterReadDB(db, oid, scope, typeString, &role); err != nil {
 			return nil, 0, err
 		}
 	}
@@ -147,7 +147,7 @@ func (mapper *OwnershipMapper) GetOneWithID(db *gorm.DB, oid *datatypes.UUID, ty
 }
 
 // getOneWithIDCore get one model object based on its type and its id string
-func (mapper *OwnershipMapper) getOneWithIDCore(db *gorm.DB, oid *datatypes.UUID, typeString string, id datatypes.UUID) (models.IModel, models.UserRole, error) {
+func (mapper *OwnershipMapper) getOneWithIDCore(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, id datatypes.UUID) (models.IModel, models.UserRole, error) {
 	modelObj := models.NewFromTypeString(typeString)
 
 	db = db.Set("gorm:auto_preload", true)
@@ -241,7 +241,7 @@ func (mapper *OwnershipMapper) getOneWithIDCore(db *gorm.DB, oid *datatypes.UUID
 // How does Gorm do the following? Might want to check out its source code.
 // Cancel offset condition with -1
 //  db.Offset(10).Find(&users1).Offset(-1).Find(&users2)
-func (mapper *OwnershipMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, typeString string, options map[string]interface{}) ([]models.IModel, []models.UserRole, error) {
+func (mapper *OwnershipMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, options map[string]interface{}) ([]models.IModel, []models.UserRole, error) {
 	db2 := db
 	offset, limit := 0, 0
 	if _, ok := options["offset"]; ok {
@@ -406,7 +406,7 @@ func (mapper *OwnershipMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, typeStr
 
 	// use db2 cuz it's not chained
 	if after := models.ModelRegistry[typeString].AfterRead; after != nil {
-		if err = after(outmodels, db2, oid, typeString, roles); err != nil {
+		if err = after(outmodels, db2, oid, scope, typeString, roles); err != nil {
 			return nil, nil, err
 		}
 	}
@@ -415,8 +415,8 @@ func (mapper *OwnershipMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, typeStr
 }
 
 // UpdateOneWithID updates model based on this json
-func (mapper *OwnershipMapper) UpdateOneWithID(db *gorm.DB, oid *datatypes.UUID, typeString string, modelObj models.IModel, id datatypes.UUID) (models.IModel, error) {
-	if err := checkErrorBeforeUpdate(mapper, db, oid, typeString, modelObj, id); err != nil {
+func (mapper *OwnershipMapper) UpdateOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id datatypes.UUID) (models.IModel, error) {
+	if err := checkErrorBeforeUpdate(mapper, db, oid, scope, typeString, modelObj, id); err != nil {
 		return nil, err
 	}
 
@@ -424,19 +424,19 @@ func (mapper *OwnershipMapper) UpdateOneWithID(db *gorm.DB, oid *datatypes.UUID,
 
 	// Before hook
 	if v, ok := modelObj.(models.IBeforeUpdate); ok {
-		if err := v.BeforeUpdateDB(db, oid, typeString, &cargo); err != nil {
+		if err := v.BeforeUpdateDB(db, oid, scope, typeString, &cargo); err != nil {
 			return nil, err
 		}
 	}
 
-	modelObj2, err := updateOneCore(mapper, db, oid, typeString, modelObj, id)
+	modelObj2, err := updateOneCore(mapper, db, oid, scope, typeString, modelObj, id)
 	if err != nil {
 		return nil, err
 	}
 
 	// After hook
 	if v, ok := modelObj2.(models.IAfterUpdate); ok {
-		if err = v.AfterUpdateDB(db, oid, typeString, &cargo); err != nil {
+		if err = v.AfterUpdateDB(db, oid, scope, typeString, &cargo); err != nil {
 			return nil, err
 		}
 	}
@@ -445,14 +445,14 @@ func (mapper *OwnershipMapper) UpdateOneWithID(db *gorm.DB, oid *datatypes.UUID,
 }
 
 // UpdateMany updates multiple models
-func (mapper *OwnershipMapper) UpdateMany(db *gorm.DB, oid *datatypes.UUID, typeString string, modelObjs []models.IModel) ([]models.IModel, error) {
+func (mapper *OwnershipMapper) UpdateMany(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObjs []models.IModel) ([]models.IModel, error) {
 	ms := make([]models.IModel, 0, 0)
 	var err error
 	cargo := models.BatchHookCargo{}
 
 	// Before batch update hookpoint
 	if before := models.ModelRegistry[typeString].BeforeUpdate; before != nil {
-		if err = before(modelObjs, db, oid, typeString, &cargo); err != nil {
+		if err = before(modelObjs, db, oid, scope, typeString, &cargo); err != nil {
 			return nil, err
 		}
 	}
@@ -460,11 +460,11 @@ func (mapper *OwnershipMapper) UpdateMany(db *gorm.DB, oid *datatypes.UUID, type
 	for _, modelObj := range modelObjs {
 		id := modelObj.GetID()
 
-		if err = checkErrorBeforeUpdate(mapper, db, oid, typeString, modelObj, *id); err != nil {
+		if err = checkErrorBeforeUpdate(mapper, db, oid, scope, typeString, modelObj, *id); err != nil {
 			return nil, err
 		}
 
-		m, err := updateOneCore(mapper, db, oid, typeString, modelObj, *id)
+		m, err := updateOneCore(mapper, db, oid, scope, typeString, modelObj, *id)
 		if err != nil { // Error is "record not found" when not found
 			return nil, err
 		}
@@ -474,7 +474,7 @@ func (mapper *OwnershipMapper) UpdateMany(db *gorm.DB, oid *datatypes.UUID, type
 
 	// After batch update hookpoint
 	if after := models.ModelRegistry[typeString].AfterUpdate; after != nil {
-		if err = after(modelObjs, db, oid, typeString, &cargo); err != nil {
+		if err = after(modelObjs, db, oid, scope, typeString, &cargo); err != nil {
 			return nil, err
 		}
 	}
@@ -483,7 +483,7 @@ func (mapper *OwnershipMapper) UpdateMany(db *gorm.DB, oid *datatypes.UUID, type
 }
 
 // PatchOneWithID updates model based on this json
-func (mapper *OwnershipMapper) PatchOneWithID(db *gorm.DB, oid *datatypes.UUID, typeString string, jsonPatch []byte, id datatypes.UUID) (models.IModel, error) {
+func (mapper *OwnershipMapper) PatchOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, jsonPatch []byte, id datatypes.UUID) (models.IModel, error) {
 	var modelObj models.IModel
 	var err error
 	cargo := models.ModelCargo{}
@@ -495,7 +495,7 @@ func (mapper *OwnershipMapper) PatchOneWithID(db *gorm.DB, oid *datatypes.UUID, 
 	}
 
 	// role already chcked in checkErrorBeforeUpdate
-	if modelObj, role, err = mapper.getOneWithIDCore(db, oid, typeString, id); err != nil {
+	if modelObj, role, err = mapper.getOneWithIDCore(db, oid, scope, typeString, id); err != nil {
 		return nil, err
 	}
 
@@ -515,20 +515,20 @@ func (mapper *OwnershipMapper) PatchOneWithID(db *gorm.DB, oid *datatypes.UUID, 
 	// It is now expected that the hookpoint for before expect that the patch
 	// gets applied to the JSON, but not before actually updating to DB.
 	if v, ok := modelObj.(models.IBeforePatch); ok {
-		if err := v.BeforePatchDB(db, oid, typeString, &cargo); err != nil {
+		if err := v.BeforePatchDB(db, oid, scope, typeString, &cargo); err != nil {
 			return nil, err
 		}
 	}
 
 	// Now save it
-	modelObj2, err := updateOneCore(mapper, db, oid, typeString, modelObj, id)
+	modelObj2, err := updateOneCore(mapper, db, oid, scope, typeString, modelObj, id)
 	if err != nil {
 		return nil, err
 	}
 
 	// After hook
 	if v, ok := modelObj2.(models.IAfterPatch); ok {
-		if err = v.AfterPatchDB(db, oid, typeString, &cargo); err != nil {
+		if err = v.AfterPatchDB(db, oid, scope, typeString, &cargo); err != nil {
 			return nil, err
 		}
 	}
@@ -538,7 +538,7 @@ func (mapper *OwnershipMapper) PatchOneWithID(db *gorm.DB, oid *datatypes.UUID, 
 
 // DeleteOneWithID delete the model
 // TODO: delete the groups associated with this record?
-func (mapper *OwnershipMapper) DeleteOneWithID(db *gorm.DB, oid *datatypes.UUID, typeString string, id datatypes.UUID) (models.IModel, error) {
+func (mapper *OwnershipMapper) DeleteOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, id datatypes.UUID) (models.IModel, error) {
 	if id.UUID.String() == "" {
 		return nil, errIDEmpty
 	}
@@ -552,7 +552,7 @@ func (mapper *OwnershipMapper) DeleteOneWithID(db *gorm.DB, oid *datatypes.UUID,
 	*/
 
 	// Pull out entire modelObj
-	modelObj, role, err := mapper.getOneWithIDCore(db, oid, typeString, id)
+	modelObj, role, err := mapper.getOneWithIDCore(db, oid, scope, typeString, id)
 	if err != nil { // Error is "record not found" when not found
 		return nil, err
 	}
@@ -564,7 +564,7 @@ func (mapper *OwnershipMapper) DeleteOneWithID(db *gorm.DB, oid *datatypes.UUID,
 
 	// Before delete hookpoint
 	if v, ok := modelObj.(models.IBeforeDelete); ok {
-		err = v.BeforeDeleteDB(db, oid, typeString, &cargo)
+		err = v.BeforeDeleteDB(db, oid, scope, typeString, &cargo)
 		if err != nil {
 			return nil, err
 		}
@@ -617,7 +617,7 @@ func (mapper *OwnershipMapper) DeleteOneWithID(db *gorm.DB, oid *datatypes.UUID,
 
 	// After delete hookpoint
 	if v, ok := modelObj.(models.IAfterDelete); ok {
-		err = v.AfterDeleteDB(db, oid, typeString, &cargo)
+		err = v.AfterDeleteDB(db, oid, scope, typeString, &cargo)
 		if err != nil {
 			return nil, err
 		}
@@ -627,7 +627,7 @@ func (mapper *OwnershipMapper) DeleteOneWithID(db *gorm.DB, oid *datatypes.UUID,
 }
 
 // DeleteMany deletes multiple models
-func (mapper *OwnershipMapper) DeleteMany(db *gorm.DB, oid *datatypes.UUID, typeString string, modelObjs []models.IModel) ([]models.IModel, error) {
+func (mapper *OwnershipMapper) DeleteMany(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObjs []models.IModel) ([]models.IModel, error) {
 
 	log.Println("DeleteMany called 1")
 	ids := make([]datatypes.UUID, len(modelObjs), len(modelObjs))
@@ -646,7 +646,7 @@ func (mapper *OwnershipMapper) DeleteMany(db *gorm.DB, oid *datatypes.UUID, type
 
 	// Before batch delete hookpoint
 	if before := models.ModelRegistry[typeString].BeforeDelete; before != nil {
-		if err = before(modelObjs, db, oid, typeString, &cargo); err != nil {
+		if err = before(modelObjs, db, oid, scope, typeString, &cargo); err != nil {
 			return nil, err
 		}
 	}
@@ -659,7 +659,7 @@ func (mapper *OwnershipMapper) DeleteMany(db *gorm.DB, oid *datatypes.UUID, type
 		}
 
 		// Pull out entire modelObj
-		modelObj, role, err := mapper.getOneWithIDCore(db, oid, typeString, id)
+		modelObj, role, err := mapper.getOneWithIDCore(db, oid, scope, typeString, id)
 		if err != nil { // Error is "record not found" when not found
 			return nil, err
 		}
@@ -707,7 +707,7 @@ func (mapper *OwnershipMapper) DeleteMany(db *gorm.DB, oid *datatypes.UUID, type
 
 	// After batch delete hookpoint
 	if after := models.ModelRegistry[typeString].AfterDelete; after != nil {
-		if err = after(modelObjs, db, oid, typeString, &cargo); err != nil {
+		if err = after(modelObjs, db, oid, scope, typeString, &cargo); err != nil {
 			return nil, err
 		}
 	}

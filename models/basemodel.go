@@ -72,6 +72,7 @@ func (b *BaseModel) Validate() error {
 // IModel is the interface for all domain models
 type IModel interface {
 	Permissions(r UserRole) jsontransform.JSONFields
+	// CherryPickFields(r UserRole) jsontransform.JSONFields
 
 	// The following two avoids having to use reflection to access ID
 	GetID() *datatypes.UUID
@@ -84,6 +85,11 @@ type IDoRealDelete interface {
 	DoRealDelete() bool
 }
 
+// IGuardAPIEntry supports method which guard access to API based on scope
+type IGuardAPIEntry interface {
+	GuardAPIEntry(scope *string, endpoint string, method string) bool
+}
+
 // ModelCargo is payload between hookpoints
 type ModelCargo struct {
 	Payload interface{}
@@ -91,47 +97,47 @@ type ModelCargo struct {
 
 // IBeforeInsert supports method to be called before data is inserted (created) into the database
 type IBeforeInsert interface {
-	BeforeInsertDB(db *gorm.DB, oid *datatypes.UUID, typeString string, cargo *ModelCargo) error
+	BeforeInsertDB(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, cargo *ModelCargo) error
 }
 
 // IBeforeUpdate supports method to be called before data is updated in the database
 type IBeforeUpdate interface {
-	BeforeUpdateDB(db *gorm.DB, oid *datatypes.UUID, typeString string, cargo *ModelCargo) error
+	BeforeUpdateDB(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, cargo *ModelCargo) error
 }
 
 // IBeforePatch supports method to be called before data is patched in the database
 type IBeforePatch interface {
-	BeforePatchDB(db *gorm.DB, oid *datatypes.UUID, typeString string, cargo *ModelCargo) error
+	BeforePatchDB(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, cargo *ModelCargo) error
 }
 
 // IBeforeDelete supports method to be called before data is deleted from the database
 type IBeforeDelete interface {
-	BeforeDeleteDB(db *gorm.DB, oid *datatypes.UUID, typeString string, cargo *ModelCargo) error
+	BeforeDeleteDB(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, cargo *ModelCargo) error
 }
 
 // IAfterRead supports method to be called after data is read from the database
 type IAfterRead interface {
-	AfterReadDB(db *gorm.DB, oid *datatypes.UUID, typeString string, role *UserRole) error
+	AfterReadDB(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, role *UserRole) error
 }
 
 // IAfterInsert supports method to be called after data is inserted (created) into the database
 type IAfterInsert interface {
-	AfterInsertDB(db *gorm.DB, oid *datatypes.UUID, typeString string, cargo *ModelCargo) error
+	AfterInsertDB(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, cargo *ModelCargo) error
 }
 
 // IAfterUpdate supports method to be called after data is updated in the database
 type IAfterUpdate interface {
-	AfterUpdateDB(db *gorm.DB, oid *datatypes.UUID, typeString string, cargo *ModelCargo) error
+	AfterUpdateDB(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, cargo *ModelCargo) error
 }
 
 // IAfterPatch supports method to be called before data is patched in the database
 type IAfterPatch interface {
-	AfterPatchDB(db *gorm.DB, oid *datatypes.UUID, typeString string, cargo *ModelCargo) error
+	AfterPatchDB(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, cargo *ModelCargo) error
 }
 
 // IAfterDelete supports method to be called after data is deleted from the database
 type IAfterDelete interface {
-	AfterDeleteDB(db *gorm.DB, oid *datatypes.UUID, typeString string, cargo *ModelCargo) error
+	AfterDeleteDB(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, cargo *ModelCargo) error
 }
 
 // IValidate supports validation with govalidator

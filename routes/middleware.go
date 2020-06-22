@@ -26,6 +26,7 @@ const (
 	// contextKeyOwnerID is the id that's given in jwt's iss field
 	contextKeyOwnerID contextKey = iota
 	contextKeyClient  contextKey = iota
+	contextKeyScope   contextKey = iota
 )
 
 // http.NotFound
@@ -106,28 +107,38 @@ func BearerAuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		var ownerID *datatypes.UUID
-		if ident, ok := (*claims)["iss"]; ok {
-			if ident, ok := ident.(string); ok {
-				ownerID, err = datatypes.NewUUIDFromString(ident)
-				if err != nil {
-					render.Render(w, r, NewErrTokenInvalid(err))
-					c.Abort()
-					return
-				}
-			} else {
-				render.Render(w, r, NewErrTokenInvalid(errors.New("getting ISS from token error")))
+		if ident, ok := (*claims)["iss"].(string); ok {
+			ownerID, err := datatypes.NewUUIDFromString(ident)
+			if err != nil {
+				render.Render(w, r, NewErrTokenInvalid(err))
 				c.Abort()
 				return
 			}
+
+			ctx := context.WithValue(c.Request.Context(), contextKeyOwnerID, ownerID)
+			c.Request = c.Request.WithContext(ctx)
 		} else {
 			render.Render(w, r, NewErrTokenInvalid(errors.New("getting ISS from token error")))
 			c.Abort()
 			return
 		}
 
-		ctx := context.WithValue(c.Request.Context(), contextKeyOwnerID, ownerID)
-		c.Request = c.Request.WithContext(ctx)
+		// var scope string
+		if scope, ok := (*claims)["scope"].(string); ok {
+			if err != nil {
+				render.Render(w, r, NewErrTokenInvalid(err))
+				c.Abort()
+				return
+			}
+
+			ctx := context.WithValue(c.Request.Context(), contextKeyScope, scope)
+			c.Request = c.Request.WithContext(ctx)
+		} else {
+			render.Render(w, r, NewErrTokenInvalid(errors.New("getting ISS from token error")))
+			c.Abort()
+			return
+		}
+
 		c.Next()
 	}
 }

@@ -13,12 +13,12 @@ import (
 // https://github.com/gogap/aop
 
 // CreateOneWithHooksUser handles before and after DB hookpoints for creating a user
-func CreateOneWithHooksUser(db *gorm.DB, oid *datatypes.UUID, typeString string, modelObj models.IModel) (models.IModel, error) {
+func CreateOneWithHooksUser(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel) (models.IModel, error) {
 	var err error
 	var cargo models.ModelCargo
 
 	if v, ok := modelObj.(models.IBeforeInsert); ok {
-		err = v.BeforeInsertDB(db, oid, typeString, &cargo)
+		err = v.BeforeInsertDB(db, oid, scope, typeString, &cargo)
 		if err != nil {
 			return nil, err
 		}
@@ -41,7 +41,7 @@ func CreateOneWithHooksUser(db *gorm.DB, oid *datatypes.UUID, typeString string,
 	}
 
 	if v, ok := modelObj.(models.IAfterInsert); ok {
-		err = v.AfterInsertDB(db, oid, typeString, &cargo)
+		err = v.AfterInsertDB(db, oid, scope, typeString, &cargo)
 		if err != nil {
 			return nil, err
 		}
@@ -51,12 +51,12 @@ func CreateOneWithHooksUser(db *gorm.DB, oid *datatypes.UUID, typeString string,
 }
 
 // CreateOneWithHooks handles before and after DB hookpoints for create
-func CreateOneWithHooks(db *gorm.DB, oid *datatypes.UUID, typeString string, modelObj models.IModel) (models.IModel, error) {
+func CreateOneWithHooks(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel) (models.IModel, error) {
 	var err error
 	var cargo models.ModelCargo
 
 	if v, ok := modelObj.(models.IBeforeInsert); ok {
-		err = v.BeforeInsertDB(db, oid, typeString, &cargo)
+		err = v.BeforeInsertDB(db, oid, scope, typeString, &cargo)
 		if err != nil {
 			return nil, err
 		}
@@ -68,7 +68,7 @@ func CreateOneWithHooks(db *gorm.DB, oid *datatypes.UUID, typeString string, mod
 	}
 
 	if v, ok := modelObj.(models.IAfterInsert); ok {
-		err = v.AfterInsertDB(db, oid, typeString, &cargo)
+		err = v.AfterInsertDB(db, oid, scope, typeString, &cargo)
 		if err != nil {
 			return nil, err
 		}

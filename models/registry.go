@@ -35,20 +35,20 @@ type Reg struct {
 	// BeforeInsert func(ms []IModel, db *gorm.DB, oid *datatypes.UUID, typeString string, cargo *BatchHookCargo) error
 	// AfterInsert  func(ms []IModel, db *gorm.DB, oid *datatypes.UUID, typeString string, cargo *BatchHookCargo) error
 
-	AfterRead func(ms []IModel, db *gorm.DB, oid *datatypes.UUID, typeString string, roles []UserRole) error
+	AfterRead func(ms []IModel, db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, roles []UserRole) error
 
-	BeforeInsert func(ms []IModel, db *gorm.DB, oid *datatypes.UUID, typeString string, cargo *BatchHookCargo) error
-	AfterInsert  func(ms []IModel, db *gorm.DB, oid *datatypes.UUID, typeString string, cargo *BatchHookCargo) error
+	BeforeInsert func(ms []IModel, db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, cargo *BatchHookCargo) error
+	AfterInsert  func(ms []IModel, db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, cargo *BatchHookCargo) error
 
-	BeforeUpdate func(ms []IModel, db *gorm.DB, oid *datatypes.UUID, typeString string, cargo *BatchHookCargo) error
-	AfterUpdate  func(ms []IModel, db *gorm.DB, oid *datatypes.UUID, typeString string, cargo *BatchHookCargo) error
+	BeforeUpdate func(ms []IModel, db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, cargo *BatchHookCargo) error
+	AfterUpdate  func(ms []IModel, db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, cargo *BatchHookCargo) error
 
 	// There is no batch patch yet
 	// BeforePatch  func(ms []IModel, db *gorm.DB, oid *datatypes.UUID, typeString string, cargo *BatchHookCargo) error
 	// AfterPatch   func(ms []IModel, db *gorm.DB, oid *datatypes.UUID, typeString string, cargo *BatchHookCargo) error
 
-	BeforeDelete func(ms []IModel, db *gorm.DB, oid *datatypes.UUID, typeString string, cargo *BatchHookCargo) error
-	AfterDelete  func(ms []IModel, db *gorm.DB, oid *datatypes.UUID, typeString string, cargo *BatchHookCargo) error
+	BeforeDelete func(ms []IModel, db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, cargo *BatchHookCargo) error
+	AfterDelete  func(ms []IModel, db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, cargo *BatchHookCargo) error
 }
 
 /*
@@ -91,8 +91,8 @@ func AddModelRegistryWithOptions(typeString string, typ reflect.Type, batchEndpo
 // AddBatchInsertBeforeAndAfterHookPoints adds hookpoints which are called before
 // and after batch update. Either one can be left as nil
 func AddBatchInsertBeforeAndAfterHookPoints(typeString string,
-	before func(ms []IModel, db *gorm.DB, oid *datatypes.UUID, typeString string, cargo *BatchHookCargo) error,
-	after func(ms []IModel, db *gorm.DB, oid *datatypes.UUID, typeString string, cargo *BatchHookCargo) error) {
+	before func(ms []IModel, db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, cargo *BatchHookCargo) error,
+	after func(ms []IModel, db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, cargo *BatchHookCargo) error) {
 
 	if _, ok := ModelRegistry[typeString]; !ok {
 		ModelRegistry[typeString] = &Reg{}
@@ -105,7 +105,7 @@ func AddBatchInsertBeforeAndAfterHookPoints(typeString string,
 // AddBatchReadAfterHookPoint adds hookpoints which are called after
 // and read, can be left as nil
 func AddBatchReadAfterHookPoint(typeString string,
-	after func(ms []IModel, db *gorm.DB, oid *datatypes.UUID, typeString string, roles []UserRole) error) {
+	after func(ms []IModel, db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, roles []UserRole) error) {
 
 	if _, ok := ModelRegistry[typeString]; !ok {
 		ModelRegistry[typeString] = &Reg{}
@@ -117,8 +117,8 @@ func AddBatchReadAfterHookPoint(typeString string,
 // AddBatchUpdateBeforeAndAfterHookPoints adds hookpoints which are called before
 // and after batch update. Either one can be left as nil
 func AddBatchUpdateBeforeAndAfterHookPoints(typeString string,
-	before func(ms []IModel, db *gorm.DB, oid *datatypes.UUID, typeString string, cargo *BatchHookCargo) error,
-	after func(ms []IModel, db *gorm.DB, oid *datatypes.UUID, typeString string, cargo *BatchHookCargo) error) {
+	before func(ms []IModel, db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, cargo *BatchHookCargo) error,
+	after func(ms []IModel, db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, cargo *BatchHookCargo) error) {
 
 	if _, ok := ModelRegistry[typeString]; !ok {
 		ModelRegistry[typeString] = &Reg{}
@@ -131,8 +131,8 @@ func AddBatchUpdateBeforeAndAfterHookPoints(typeString string,
 // AddBatchDeleteBeforeAndAfterHookPoints adds hookpoints which are called before
 // and after batch delete. Either one can be left as nil
 func AddBatchDeleteBeforeAndAfterHookPoints(typeString string,
-	before func(ms []IModel, db *gorm.DB, oid *datatypes.UUID, typeString string, cargo *BatchHookCargo) error,
-	after func(ms []IModel, db *gorm.DB, oid *datatypes.UUID, typeString string, cargo *BatchHookCargo) error) {
+	before func(ms []IModel, db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, cargo *BatchHookCargo) error,
+	after func(ms []IModel, db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, cargo *BatchHookCargo) error) {
 
 	if _, ok := ModelRegistry[typeString]; !ok {
 		ModelRegistry[typeString] = &Reg{}

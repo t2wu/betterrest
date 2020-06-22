@@ -210,6 +210,28 @@ func UserLoginHandler() func(c *gin.Context) {
 	}
 }
 
+func getOptionByParsingURL(r *http.Request) (map[string]interface{}, error) {
+	options := make(map[string]interface{})
+
+	values := r.URL.Query()
+	if o, l, err := limitAndOffsetFromQueryString(&values); err == nil {
+		options["offset"], options["limit"] = o, l
+	} else if err != nil {
+		return nil, err
+	}
+
+	options["order"] = orderFromQueryString(&values)
+	options["better_otherqueries"] = values
+
+	if cstart, cstop, err := createdTimeRangeFromQueryString(&values); err == nil {
+		options["cstart"], options["cstop"] = cstart, cstop
+	} else if err != nil {
+		return nil, err
+	}
+
+	return options, nil
+}
+
 // ---------------------------------------------
 // reflection stuff
 // https://stackoverflow.com/questions/7850140/how-do-you-create-a-new-instance-of-a-struct-from-its-type-at-run-time-in-go
@@ -219,34 +241,22 @@ func UserLoginHandler() func(c *gin.Context) {
 func ReadAllHandler(typeString string, mapper datamapper.IGetAllMapper) func(c *gin.Context) {
 	return func(c *gin.Context) {
 		w, r := c.Writer, c.Request
-
-		options := make(map[string]interface{})
 		var err error
+
+		ownerID, scope := OwnerIDFromContext(r), ScopeFromContext(r)
+
 		var modelObjs []models.IModel
+		options := make(map[string]interface{})
 
-		values := r.URL.Query()
-		if o, l, err := limitAndOffsetFromQueryString(&values); err == nil {
-			options["offset"], options["limit"] = o, l
-		} else if err != nil {
+		if options, err = getOptionByParsingURL(r); err != nil {
 			render.Render(w, r, NewErrQueryParameter(err))
 			return
 		}
-
-		options["order"] = orderFromQueryString(&values)
-		options["better_otherqueries"] = values
-
-		if cstart, cstop, err := createdTimeRangeFromQueryString(&values); err == nil {
-			options["cstart"], options["cstop"] = cstart, cstop
-		} else if err != nil {
-			render.Render(w, r, NewErrQueryParameter(err))
-			return
-		}
-
-		// options["fieldName"], options["fieldValue"] = r.URL.Query().Get("fieldName"), r.URL.Query().Get("fieldValue")
 
 		var roles []models.UserRole
 		tx := db.Shared().Begin()
-		if modelObjs, roles, err = mapper.ReadAll(tx, OwnerIDFromContext(r), typeString, options); err != nil {
+
+		if modelObjs, roles, err = mapper.ReadAll(tx, ownerID, &scope, typeString, options); err != nil {
 			tx.Rollback()
 			log.Println("Error in ReadAllHandler ErrNotFound:", typeString, err)
 			render.Render(w, r, NewErrNotFound(err))
@@ -265,15 +275,15 @@ func ReadAllHandler(typeString string, mapper datamapper.IGetAllMapper) func(c *
 	}
 }
 
-// CreateOneHandler creates a resource
-func CreateOneHandler(typeString string, mapper datamapper.ICreateOneMapper) func(c *gin.Context) {
+// CreateHandler creates a resource
+func CreateHandler(typeString string, mapper datamapper.ICreateMapper) func(c *gin.Context) {
 	return func(c *gin.Context) {
 		w, r := c.Writer, c.Request
 
 		var err error
 		var modelObj models.IModel
 
-		ownerID := OwnerIDFromContext(r)
+		ownerID, scope := OwnerIDFromContext(r), ScopeFromContext(r)
 
 		modelObjs, isBatch, httperr := ModelOrModelsFromJSONBody(r, typeString)
 		if httperr != nil {
@@ -283,7 +293,7 @@ func CreateOneHandler(typeString string, mapper datamapper.ICreateOneMapper) fun
 
 		tx := db.Shared().Begin()
 		if *isBatch {
-			if modelObjs, err = mapper.CreateMany(tx, ownerID, typeString, modelObjs); err != nil {
+			if modelObjs, err = mapper.CreateMany(tx, ownerID, &scope, typeString, modelObjs); err != nil {
 				// FIXME, there is more than one type of error here
 				// How do I output more detailed messages by inspecting error?
 				tx.Rollback()
@@ -307,7 +317,7 @@ func CreateOneHandler(typeString string, mapper datamapper.ICreateOneMapper) fun
 			}
 			renderModelSlice(w, r, typeString, modelObjs, roles)
 		} else {
-			if modelObj, err = mapper.CreateOne(tx, ownerID, typeString, modelObjs[0]); err != nil {
+			if modelObj, err = mapper.CreateOne(tx, ownerID, &scope, typeString, modelObjs[0]); err != nil {
 				// FIXME, there is more than one type of error here
 				// How do I output more detailed messages by inspecting error?
 				tx.Rollback()
@@ -336,7 +346,6 @@ func ReadOneHandler(typeString string, mapper datamapper.IGetOneWithIDMapper) fu
 	// return func(next http.Handler) http.Handler {
 	return func(c *gin.Context) {
 		w, r := c.Writer, c.Request
-		log.Println("ReadOneHandler")
 
 		id, httperr := IDFromURLQueryString(c)
 		if httperr != nil {
@@ -344,8 +353,10 @@ func ReadOneHandler(typeString string, mapper datamapper.IGetOneWithIDMapper) fu
 			return
 		}
 
+		ownerID, scope := OwnerIDFromContext(r), ScopeFromContext(r)
+
 		tx := db.Shared().Begin()
-		modelObj, role, err := mapper.GetOneWithID(tx, OwnerIDFromContext(r), typeString, *id)
+		modelObj, role, err := mapper.GetOneWithID(tx, ownerID, &scope, typeString, *id)
 
 		if err != nil {
 			tx.Rollback()
@@ -381,6 +392,8 @@ func UpdateOneHandler(typeString string, mapper datamapper.IUpdateOneWithIDMappe
 			return
 		}
 
+		ownerID, scope := OwnerIDFromContext(r), ScopeFromContext(r)
+
 		modelObj, httperr := ModelFromJSONBody(r, typeString)
 		if httperr != nil {
 			render.Render(w, r, httperr)
@@ -388,7 +401,7 @@ func UpdateOneHandler(typeString string, mapper datamapper.IUpdateOneWithIDMappe
 		}
 
 		tx := db.Shared().Begin()
-		modelObj, err := mapper.UpdateOneWithID(tx, OwnerIDFromContext(r), typeString, modelObj, *id)
+		modelObj, err := mapper.UpdateOneWithID(tx, ownerID, &scope, typeString, modelObj, *id)
 		if err != nil {
 			tx.Rollback()
 			log.Println("Error in UpdateOneHandler ErrUpdate:", typeString, err)
@@ -422,8 +435,10 @@ func UpdateManyHandler(typeString string, mapper datamapper.IUpdateManyMapper) f
 			return
 		}
 
+		ownerID, scope := OwnerIDFromContext(r), ScopeFromContext(r)
+
 		tx := db.Shared().Begin()
-		modelObjs, err := mapper.UpdateMany(tx, OwnerIDFromContext(r), typeString, modelObjs)
+		modelObjs, err := mapper.UpdateMany(tx, ownerID, &scope, typeString, modelObjs)
 		if err != nil {
 			tx.Rollback()
 			log.Println("Error in UpdateManyHandler ErrUpdate:", typeString, err)
@@ -468,8 +483,10 @@ func PatchOneHandler(typeString string, mapper datamapper.IPatchOneWithIDMapper)
 			return
 		}
 
+		ownerID, scope := OwnerIDFromContext(r), ScopeFromContext(r)
+
 		tx := db.Shared().Begin()
-		modelObj, err := mapper.PatchOneWithID(tx, OwnerIDFromContext(r), typeString, jsonPatch, *id)
+		modelObj, err := mapper.PatchOneWithID(tx, ownerID, &scope, typeString, jsonPatch, *id)
 		if err != nil {
 			tx.Rollback()
 			log.Println("Error in PatchOneHandler ErrUpdate:", typeString, err)
@@ -508,8 +525,10 @@ func DeleteOneHandler(typeString string, mapper datamapper.IDeleteOneWithID) fun
 			return
 		}
 
+		ownerID, scope := OwnerIDFromContext(r), ScopeFromContext(r)
+
 		tx := db.Shared().Begin()
-		modelObj, err := mapper.DeleteOneWithID(tx, OwnerIDFromContext(r), typeString, *id)
+		modelObj, err := mapper.DeleteOneWithID(tx, ownerID, &scope, typeString, *id)
 		if err != nil {
 			tx.Rollback()
 			log.Println("Error in DeleteOneHandler ErrDelete:", typeString, err)
@@ -544,8 +563,10 @@ func DeleteManyHandler(typeString string, mapper datamapper.IDeleteMany) func(c 
 			return
 		}
 
+		ownerID, scope := OwnerIDFromContext(r), ScopeFromContext(r)
+
 		tx := db.Shared().Begin() // transaction
-		modelObjs, err = mapper.DeleteMany(tx, OwnerIDFromContext(r), typeString, modelObjs)
+		modelObjs, err = mapper.DeleteMany(tx, ownerID, &scope, typeString, modelObjs)
 		if err != nil {
 			tx.Rollback()
 			log.Println("Error in DeleteOneHandler ErrDelete:", typeString, err)

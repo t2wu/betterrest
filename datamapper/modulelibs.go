@@ -15,7 +15,7 @@ import (
 	"github.com/jinzhu/gorm"
 )
 
-func checkErrorBeforeUpdate(mapper IGetOneWithIDMapper, db *gorm.DB, oid *datatypes.UUID, typeString string, modelObj models.IModel, id datatypes.UUID) error {
+func checkErrorBeforeUpdate(mapper IGetOneWithIDMapper, db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id datatypes.UUID) error {
 	if id.UUID.String() == "" {
 		return errIDEmpty
 	}
@@ -23,7 +23,7 @@ func checkErrorBeforeUpdate(mapper IGetOneWithIDMapper, db *gorm.DB, oid *dataty
 	// If you're able to read, you hvea the permission to update...
 	// Not really now you have to check role
 	// TODO: Is there a more efficient way?
-	_, role, err := mapper.getOneWithIDCore(db, oid, typeString, id)
+	_, role, err := mapper.getOneWithIDCore(db, oid, scope, typeString, id)
 	if err != nil { // Error is "record not found" when not found
 		return err
 	}
@@ -42,8 +42,8 @@ func checkErrorBeforeUpdate(mapper IGetOneWithIDMapper, db *gorm.DB, oid *dataty
 	return nil
 }
 
-func updateOneCore(mapper IGetOneWithIDMapper, db *gorm.DB, oid *datatypes.UUID, typeString string, modelObj models.IModel, id datatypes.UUID) (modelObj2 models.IModel, err error) {
-	oldModelObj, role, err2 := mapper.getOneWithIDCore(db, oid, typeString, id)
+func updateOneCore(mapper IGetOneWithIDMapper, db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id datatypes.UUID) (modelObj2 models.IModel, err error) {
+	oldModelObj, role, err2 := mapper.getOneWithIDCore(db, oid, scope, typeString, id)
 	if err2 != nil {
 		return nil, err2
 	}
@@ -77,7 +77,7 @@ func updateOneCore(mapper IGetOneWithIDMapper, db *gorm.DB, oid *datatypes.UUID,
 	}
 
 	// This so we have the preloading.
-	modelObj2, _, err = mapper.getOneWithIDCore(db, oid, typeString, id)
+	modelObj2, _, err = mapper.getOneWithIDCore(db, oid, scope, typeString, id)
 	if err != nil { // Error is "record not found" when not found
 		log.Println("Error:", err)
 		return nil, err

@@ -37,7 +37,7 @@ func SharedUserMapper() *UserMapper {
 
 // CreateOne creates an user model based on json and store it in db
 // Also creates a ownership with admin access
-func (mapper *UserMapper) CreateOne(db *gorm.DB, oid *datatypes.UUID, typeString string, modelObj models.IModel) (models.IModel, error) {
+func (mapper *UserMapper) CreateOne(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel) (models.IModel, error) {
 	// Special case, there is really no oid in this case, user doesn't exist yet
 
 	// modelObj is a a User struct, but we cannot do type assertion because library user
@@ -67,23 +67,24 @@ func (mapper *UserMapper) CreateOne(db *gorm.DB, oid *datatypes.UUID, typeString
 	reflect.ValueOf(modelObj).Elem().FieldByName("PasswordHash").Set(reflect.ValueOf(hash))
 
 	// there isn't really an oid at this point
-	return CreateOneWithHooksUser(db, oid, "users", modelObj)
+	return CreateOneWithHooksUser(db, oid, scope, "users", modelObj)
 }
 
-func (mapper *UserMapper) CreateMany(db *gorm.DB, oid *datatypes.UUID, typeString string, modelObjs []models.IModel) ([]models.IModel, error) {
+// CreateMany is currently a dummy
+func (mapper *UserMapper) CreateMany(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObjs []models.IModel) ([]models.IModel, error) {
 	// not really implemented
 	return nil, errors.New("not implemented")
 }
 
 // GetOneWithID get one model object based on its type and its id string
-func (mapper *UserMapper) GetOneWithID(db *gorm.DB, oid *datatypes.UUID, typeString string, id datatypes.UUID) (models.IModel, models.UserRole, error) {
-	modelObj, role, err := mapper.getOneWithIDCore(db, oid, typeString, id)
+func (mapper *UserMapper) GetOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, id datatypes.UUID) (models.IModel, models.UserRole, error) {
+	modelObj, role, err := mapper.getOneWithIDCore(db, oid, scope, typeString, id)
 	if err != nil {
 		return nil, 0, err
 	}
 
 	if m, ok := modelObj.(models.IAfterRead); ok {
-		if err := m.AfterReadDB(db, oid, typeString, &role); err != nil {
+		if err := m.AfterReadDB(db, oid, scope, typeString, &role); err != nil {
 			return nil, 0, err
 		}
 	}
@@ -92,7 +93,7 @@ func (mapper *UserMapper) GetOneWithID(db *gorm.DB, oid *datatypes.UUID, typeStr
 }
 
 // getOneWithID get one model object based on its type and its id string without invoking read hookpoing
-func (mapper *UserMapper) getOneWithIDCore(db *gorm.DB, oid *datatypes.UUID, typeString string, id datatypes.UUID) (models.IModel, models.UserRole, error) {
+func (mapper *UserMapper) getOneWithIDCore(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, id datatypes.UUID) (models.IModel, models.UserRole, error) {
 	// TODO: Currently can only read ID from your own (not others in the admin group either)
 	db = db.Set("gorm:auto_preload", true)
 
@@ -112,9 +113,9 @@ func (mapper *UserMapper) getOneWithIDCore(db *gorm.DB, oid *datatypes.UUID, typ
 }
 
 // UpdateOneWithID updates model based on this json
-func (mapper *UserMapper) UpdateOneWithID(db *gorm.DB, oid *datatypes.UUID, typeString string, modelObj models.IModel, id datatypes.UUID) (models.IModel, error) {
+func (mapper *UserMapper) UpdateOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id datatypes.UUID) (models.IModel, error) {
 	log.Println("userMapper's UpdateOneWithID called")
-	if err := checkErrorBeforeUpdate(mapper, db, oid, typeString, modelObj, id); err != nil {
+	if err := checkErrorBeforeUpdate(mapper, db, oid, scope, typeString, modelObj, id); err != nil {
 		return nil, err
 	}
 
@@ -140,19 +141,19 @@ func (mapper *UserMapper) UpdateOneWithID(db *gorm.DB, oid *datatypes.UUID, type
 
 	// Before hook
 	if v, ok := modelObj.(models.IBeforeUpdate); ok {
-		if err := v.BeforeUpdateDB(db, oid, typeString, &cargo); err != nil {
+		if err := v.BeforeUpdateDB(db, oid, scope, typeString, &cargo); err != nil {
 			return nil, err
 		}
 	}
 
-	modelObj2, err := updateOneCore(mapper, db, oid, typeString, modelObj, id)
+	modelObj2, err := updateOneCore(mapper, db, oid, scope, typeString, modelObj, id)
 	if err != nil {
 		return nil, err
 	}
 
 	// After hook
 	if v, ok := modelObj2.(models.IAfterUpdate); ok {
-		if err = v.AfterUpdateDB(db, oid, typeString, &cargo); err != nil {
+		if err = v.AfterUpdateDB(db, oid, scope, typeString, &cargo); err != nil {
 			return nil, err
 		}
 	}
@@ -161,13 +162,13 @@ func (mapper *UserMapper) UpdateOneWithID(db *gorm.DB, oid *datatypes.UUID, type
 }
 
 // DeleteOneWithID deletes the user with the ID
-func (mapper *UserMapper) DeleteOneWithID(db *gorm.DB, oid *datatypes.UUID, typeString string, id datatypes.UUID) (models.IModel, error) {
+func (mapper *UserMapper) DeleteOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, id datatypes.UUID) (models.IModel, error) {
 	if id.UUID.String() == "" {
 		return nil, errIDEmpty
 	}
 
 	// Pull out entire modelObj
-	modelObj, role, err := mapper.GetOneWithID(db, oid, typeString, id)
+	modelObj, role, err := mapper.GetOneWithID(db, oid, scope, typeString, id)
 	if err != nil { // Error is "record not found" when not found
 		return nil, err
 	}
@@ -181,7 +182,7 @@ func (mapper *UserMapper) DeleteOneWithID(db *gorm.DB, oid *datatypes.UUID, type
 
 	// Before delete hookpoint
 	if v, ok := modelObj.(models.IBeforeDelete); ok {
-		err = v.BeforeDeleteDB(db, oid, typeString, &cargo)
+		err = v.BeforeDeleteDB(db, oid, scope, typeString, &cargo)
 		if err != nil {
 			return nil, err
 		}
@@ -198,7 +199,7 @@ func (mapper *UserMapper) DeleteOneWithID(db *gorm.DB, oid *datatypes.UUID, type
 
 	// After delete hookpoint
 	if v, ok := modelObj.(models.IAfterDelete); ok {
-		err = v.AfterDeleteDB(db, oid, typeString, &cargo)
+		err = v.AfterDeleteDB(db, oid, scope, typeString, &cargo)
 		if err != nil {
 			return nil, err
 		}

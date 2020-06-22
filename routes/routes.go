@@ -14,38 +14,46 @@ func addRoute(r *gin.Engine, typeString string, reg *models.Reg, mapper interfac
 	g := r.Group("/" + endpoint)
 	{
 		if strings.ContainsAny(reg.BatchEndpoints, "R") {
-			g.GET("", ReadAllHandler(typeString, mapper.(datamapper.IGetAllMapper))) // e.g. GET /devices
+			g.GET("", guardMiddleWare(typeString),
+				ReadAllHandler(typeString, mapper.(datamapper.IGetAllMapper))) // e.g. GET /devices
 		}
 
 		if strings.ContainsAny(reg.BatchEndpoints, "C") {
-			g.POST("", CreateOneHandler(typeString, mapper.(datamapper.ICreateOneMapper)))
+			g.POST("", guardMiddleWare(typeString),
+				CreateHandler(typeString, mapper.(datamapper.ICreateMapper)))
 		}
 
 		if strings.ContainsAny(reg.BatchEndpoints, "U") {
-			g.PUT("", UpdateManyHandler(typeString, mapper.(datamapper.IUpdateManyMapper)))
+			g.PUT("", guardMiddleWare(typeString),
+				UpdateManyHandler(typeString, mapper.(datamapper.IUpdateManyMapper)))
 		}
 
 		if strings.ContainsAny(reg.BatchEndpoints, "D") {
-			g.DELETE("", DeleteManyHandler(typeString, mapper.(datamapper.IDeleteMany)))
+			g.DELETE("", guardMiddleWare(typeString),
+				DeleteManyHandler(typeString, mapper.(datamapper.IDeleteMany)))
 		}
 
 		n := g.Group("/:id")
 		{
 			if strings.ContainsAny(reg.IDEndPoints, "R") {
 				// r.Use(OneMiddleWare(typeString))
-				n.GET("", ReadOneHandler(typeString, mapper.(datamapper.IGetOneWithIDMapper))) // e.g. GET /model/123
+				n.GET("", guardMiddleWare(typeString),
+					ReadOneHandler(typeString, mapper.(datamapper.IGetOneWithIDMapper))) // e.g. GET /model/123
 			}
 
 			if strings.ContainsAny(reg.IDEndPoints, "U") {
-				n.PUT("", UpdateOneHandler(typeString, mapper.(datamapper.IUpdateOneWithIDMapper))) // e.g. PUT /model/123
+				n.PUT("", guardMiddleWare(typeString),
+					UpdateOneHandler(typeString, mapper.(datamapper.IUpdateOneWithIDMapper))) // e.g. PUT /model/123
 			}
 
 			if strings.ContainsAny(reg.IDEndPoints, "P") {
-				n.PATCH("", PatchOneHandler(typeString, mapper.(datamapper.IPatchOneWithIDMapper))) // e.g. PATCH /model/123
+				n.PATCH("", guardMiddleWare(typeString),
+					PatchOneHandler(typeString, mapper.(datamapper.IPatchOneWithIDMapper))) // e.g. PATCH /model/123
 			}
 
 			if strings.ContainsAny(reg.IDEndPoints, "D") {
-				n.DELETE("", DeleteOneHandler(typeString, mapper.(datamapper.IDeleteOneWithID))) // e.g. DELETE /model/123
+				n.DELETE("", guardMiddleWare(typeString),
+					DeleteOneHandler(typeString, mapper.(datamapper.IDeleteOneWithID))) // e.g. DELETE /model/123
 			}
 		}
 	}

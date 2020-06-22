@@ -14,13 +14,24 @@ import (
 	uuid "github.com/satori/go.uuid"
 )
 
-// OwnerIDFromContext parses JSON body into array of models
+// OwnerIDFromContext gets id from context
 func OwnerIDFromContext(r *http.Request) *datatypes.UUID {
 	var ownerID *datatypes.UUID
-	if r.Context().Value(contextKeyOwnerID) != nil {
-		ownerID = r.Context().Value(contextKeyOwnerID).(*datatypes.UUID)
+	item := r.Context().Value(contextKeyOwnerID)
+	if item != nil {
+		ownerID = item.(*datatypes.UUID)
 	}
 	return ownerID
+}
+
+// ScopeFromContext gets scope from context
+func ScopeFromContext(r *http.Request) string {
+	var scope string
+	item := r.Context().Value(contextKeyScope)
+	if item != nil {
+		scope = item.(string)
+	}
+	return scope
 }
 
 // JSONBodyWithContent for partial unmarshalling
