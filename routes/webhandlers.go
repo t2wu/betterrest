@@ -176,7 +176,6 @@ func getVerifiedAuthUser(userModel models.IModel) (models.IModel, bool) {
 func UserLoginHandler() func(c *gin.Context) {
 	return func(c *gin.Context) {
 		w, r := c.Writer, c.Request
-		log.Println("UserLoginHandler")
 
 		m, httperr := ModelFromJSONBody(r, "users") // m is models.IModel
 		if httperr != nil {

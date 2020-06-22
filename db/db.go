@@ -27,7 +27,11 @@ func Shared() *gorm.DB {
 		// Somehow I have to set _db first, otherwise return db will have nil
 		// _db, err := gorm.Open("sqlite3", "./test.db")
 		_db, err := gorm.Open("mysql", username+":"+passwd+"@tcp("+host+":"+port+")/"+sqlDbName+"?charset=utf8mb4&parseTime=True&loc=Local")
-		_db.LogMode(true)
+
+		toLog := os.Getenv("BETTER_REST_DB_LOG")
+		if toLog == "true" {
+			_db.LogMode(true)
+		}
 
 		if err != nil {
 			panic("failed to connect database:" + err.Error())

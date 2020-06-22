@@ -2,7 +2,6 @@ package routes
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 	"regexp"
 
@@ -425,8 +424,6 @@ func WriteBytes(w http.ResponseWriter, jsonBytes []byte) {
 // I don't want it to say
 // "error": "Error 1062: Duplicate entry '\\x12\\xF6\\x8B\\xF6b\\xBCF\\x90\\xBC\\xED\\xA0\\xACa\\x066\\x92' for key 'PRIMARY'"
 func errorToSensibleString(err error) string {
-	log.Println("errorToSensibleString:", err)
-
 	me, ok := err.(*mysql.MySQLError)
 	if ok {
 		if me.Number == 1062 {
