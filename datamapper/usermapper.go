@@ -189,6 +189,13 @@ func (mapper *UserMapper) DeleteOneWithID(db *gorm.DB, oid *datatypes.UUID, scop
 	}
 
 	// Unscoped() for REAL delete!
+	// Foreign key constraint works only on real delete
+	// Soft delete will take more work, have to verify myself manually
+	if modelNeedsRealDelete(modelObj) {
+		db = db.Unscoped()
+	}
+
+	// Unscoped() for REAL delete!
 	// Otherwise my constraint won't work...
 	// Soft delete will take more work, have to verify myself manually
 	// db.Unscoped().Delete(modelObj).Error
