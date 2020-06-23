@@ -77,6 +77,11 @@ type IModel interface {
 	// The following two avoids having to use reflection to access ID
 	GetID() *datatypes.UUID
 	SetID(id *datatypes.UUID)
+}
+
+// IHasOwnershipType has a function that returns the ownership table
+// usable for OwnershipMapper
+type IHasOwnershipType interface {
 	OwnershipType() reflect.Type
 }
 

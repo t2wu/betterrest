@@ -365,7 +365,7 @@ func modelNeedsRealDelete(modelObj models.IModel) bool {
 	return realDelete
 }
 
-func getJoinTableName(modelObj models.IModel) string {
+func getJoinTableName(modelObj models.IHasOwnershipType) string {
 	if m, ok := reflect.New(modelObj.OwnershipType()).Interface().(models.IHasTableName); ok {
 		return m.TableName()
 	}

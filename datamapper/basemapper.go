@@ -13,7 +13,8 @@ import (
 var errPermission = errors.New("permission denied")
 var errIDEmpty = errors.New("cannot update when ID is empty")
 var errIDNotMatch = errors.New("cannot update when ID in HTTP body and URL parameter not match")
-var errPatch = errors.New("patch syntax error") // json: cannot unmarshal object into Go value of type jsonpatch.Patch
+var errPatch = errors.New("patch syntax error")               // json: cannot unmarshal object into Go value of type jsonpatch.Patch
+var errNoOwnership = errors.New("model has no OwnershipType") // this is a programmatic error
 
 // ICreateMapper has a create one interface
 type ICreateMapper interface {
