@@ -343,21 +343,21 @@ func (mapper *OrganizationMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, scop
 
 	thisRole := models.Guest              // just some default
 	organizationID := datatypes.NewUUID() // just some default
-	orgIDToRoleMap := make(map[*datatypes.UUID]models.UserRole)
+	orgIDToRoleMap := make(map[string]models.UserRole)
 	for rows.Next() {
 		if err = rows.Scan(organizationID, &thisRole); err != nil {
 			return nil, nil, err
 		}
 
-		orgIDToRoleMap[organizationID] = thisRole
+		orgIDToRoleMap[organizationID.String()] = thisRole
 	}
 
 	roles := make([]models.UserRole, 0)
 	for _, outmodel := range outmodels {
 		o := outmodel.(models.IHasOrganizationLink)
-		orgID := o.GetOrganizationID()
-		role := orgIDToRoleMap[orgID]
+		orgID := o.GetOrganizationID().String()
 
+		role := orgIDToRoleMap[orgID]
 		roles = append(roles, role)
 	}
 
