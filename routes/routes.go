@@ -63,8 +63,16 @@ func addRoute(r *gin.Engine, typeString string, reg *models.Reg, mapper interfac
 func AddRESTRoutes(r *gin.Engine) {
 	for typestring, reg := range models.ModelRegistry {
 		if typestring != "users" {
-			// db.Shared().AutoMigrate(model) // how to make it work?
-			dm := datamapper.SharedOwnershipMapper()
+			var dm interface{}
+			switch reg.Mapper {
+			case models.MapperTypeOrganization:
+				dm = datamapper.SharedOrganizationMapper()
+				break
+			case models.MapperTypeOwnership:
+				fallthrough
+			default:
+				dm = datamapper.SharedOwnershipMapper()
+			}
 			addRoute(r, typestring, reg, dm)
 		}
 	}

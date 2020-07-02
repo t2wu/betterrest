@@ -25,11 +25,30 @@ var OwnerTyp reflect.Type
 // UserTyp is the model of the User table
 var UserTyp reflect.Type
 
+// MapperType is the mapper type
+type MapperType int
+
+const (
+	// MapperTypeOwnership is for type which user owns something
+	MapperTypeOwnership = 0
+
+	// MapperTypeOrganization is for type where an organization owns something
+	MapperTypeOrganization = 1
+)
+
+// ModelRegistryOptions is options when you want to add a model to registry
+type ModelRegistryOptions struct {
+	BatchEndpoints string // Batch endpoints, "CRUD" for create, batch read, batch update, batch delete
+	IDEndPoints    string //  ID end points, "RUD" for read one, update one, and delete one
+	Mapper         MapperType
+}
+
 // Reg is a registry item
 type Reg struct {
 	Typ            reflect.Type
-	BatchEndpoints string // Batch endpoints, "CRUD" for create, batch read, batch update, batch delete
-	IDEndPoints    string //  ID end points, "RUD" for read one, update one, and delete one
+	BatchEndpoints string     // Batch endpoints, "CRUD" for create, batch read, batch update, batch delete
+	IDEndPoints    string     //  ID end points, "RUD" for read one, update one, and delete one
+	Mapper         MapperType // Custmized mapper, default to datamapper.SharedOwnershipMapper
 
 	// There is no batch insert yet
 	// BeforeInsert func(ms []IModel, db *gorm.DB, oid *datatypes.UUID, typeString string, cargo *BatchHookCargo) error
@@ -72,20 +91,39 @@ func AddUserToModelRegistry(typeString string, typ reflect.Type) {
 	UserTyp = typ
 }
 
+// AddModelReg adds a New function for an IModel
+// func AddModelReg(typeString string, Reg) {
+// 	AddModelRegistryWithOptions(typeString, typ, "CRUD", "RUPD")
+// }
+
 // AddModelRegistry adds a New function for an IModel
 func AddModelRegistry(typeString string, typ reflect.Type) {
-	AddModelRegistryWithOptions(typeString, typ, "CRUD", "RUPD")
+	options := ModelRegistryOptions{BatchEndpoints: "CRUD", IDEndPoints: "RUPD", Mapper: MapperTypeOwnership}
+	AddModelRegistryWithOptions(typeString, typ, options)
 }
 
 // AddModelRegistryWithOptions adds a New function for an IModel
-func AddModelRegistryWithOptions(typeString string, typ reflect.Type, batchEndpoints string, idEndPoints string) {
+func AddModelRegistryWithOptions(typeString string, typ reflect.Type, options ModelRegistryOptions) {
+	// func AddModelRegistryWithOptions(typeString string, typ reflect.Type, batchEndpoints string, idEndPoints string) {
 	if _, ok := ModelRegistry[typeString]; !ok {
 		ModelRegistry[typeString] = &Reg{}
 	}
 
 	ModelRegistry[typeString].Typ = typ
-	ModelRegistry[typeString].BatchEndpoints = batchEndpoints
-	ModelRegistry[typeString].IDEndPoints = idEndPoints
+	if options.BatchEndpoints == "" {
+		ModelRegistry[typeString].BatchEndpoints = "CRUD"
+	} else {
+		ModelRegistry[typeString].BatchEndpoints = options.BatchEndpoints
+	}
+
+	if options.IDEndPoints == "" {
+		ModelRegistry[typeString].IDEndPoints = "RUPD"
+	} else {
+		ModelRegistry[typeString].IDEndPoints = options.IDEndPoints
+	}
+
+	// Default 0 is ownershipmapper
+	ModelRegistry[typeString].Mapper = options.Mapper
 }
 
 // AddBatchInsertBeforeAndAfterHookPoints adds hookpoints which are called before
@@ -183,11 +221,19 @@ func NewSliceStructFromTypeString(typeString string) []IModel {
 	return modelObjs
 }
 
-// NewSliceFromDB queries the database for an array of models
+// NewSliceFromDBByTypeString queries the database for an array of models based on typeString
 // func(dest interface{}) *gorm.DB
-func NewSliceFromDB(typeString string, f func(interface{}, ...interface{}) *gorm.DB) ([]IModel, error) {
+func NewSliceFromDBByTypeString(typeString string, f func(interface{}, ...interface{}) *gorm.DB) ([]IModel, error) {
+
 	// func NewSliceFromDB(typeString string, f func(dest interface{}) *gorm.DB) ([]IModel, []models.Role, error) {
 	modelType := ModelRegistry[typeString].Typ
+	return NewSliceFromDBByType(modelType, f)
+}
+
+// NewSliceFromDBByType queries the database for an array of models based on modelType
+// func(dest interface{}) *gorm.DB
+func NewSliceFromDBByType(modelType reflect.Type, f func(interface{}, ...interface{}) *gorm.DB) ([]IModel, error) {
+	// func NewSliceFromDB(typeString string, f func(dest interface{}) *gorm.DB) ([]IModel, []models.Role, error) {
 	modelObjs := reflect.New(reflect.SliceOf(modelType))
 
 	if err := f(modelObjs.Interface()).Error; err != nil {

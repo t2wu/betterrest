@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/url"
 	"reflect"
+	"strconv"
 	"strings"
 
 	"github.com/t2wu/betterrest/libs/datatypes"
@@ -365,12 +367,21 @@ func modelNeedsRealDelete(modelObj models.IModel) bool {
 	return realDelete
 }
 
-func getJoinTableName(modelObj models.IHasOwnershipType) string {
+func getJoinTableName(modelObj models.IHasOwnershipLink) string {
 	if m, ok := reflect.New(modelObj.OwnershipType()).Interface().(models.IHasTableName); ok {
 		return m.TableName()
 	}
 
 	typeName := modelObj.OwnershipType().Name()
+	return letters.PascalCaseToSnakeCase(typeName)
+}
+
+func getOrganizationTableName(modelObj models.IHasOrganizationLink) string {
+	if m, ok := reflect.New(modelObj.OrganizationType()).Interface().(models.IHasTableName); ok {
+		return m.TableName()
+	}
+
+	typeName := modelObj.OrganizationType().Name()
 	return letters.PascalCaseToSnakeCase(typeName)
 }
 
@@ -417,4 +428,78 @@ func loadManyToManyBecauseGormFailsWithID(db *gorm.DB, modelObj models.IModel) e
 		}
 	}
 	return nil
+}
+
+func constructDbFromURLFieldQuery(db *gorm.DB, typeString string, options map[string]interface{}) (*gorm.DB, error) {
+	structName := reflect.TypeOf(models.NewFromTypeString(typeString)).Elem().Name()
+	rtable := strings.ToLower(structName) // table name
+
+	// any other fields?
+	if values, ok := options["better_otherqueries"].(url.Values); ok {
+		// Important!! Check if fieldName is actually part of the schema, otherwise risk of sequal injection
+
+		obj := models.NewFromTypeString(typeString)
+		v := reflect.Indirect(reflect.ValueOf(obj))
+		typeOfS := v.Type()
+		fieldMap := make(map[string]bool)
+		fieldTypeMap := make(map[string]string)
+
+		// https://stackoverflow.com/questions/18926303/iterate-through-the-fields-of-a-struct-in-go
+		for i := 0; i < v.NumField(); i++ {
+			fieldMap[typeOfS.Field(i).Name] = true
+			fieldTypeMap[typeOfS.Field(i).Name] = typeOfS.Field(i).Type.String()
+		}
+		// "id" is an exception because it's in struct embedding and isn't found this way
+		// so we hard code it.
+		fieldMap["Id"] = true
+		fieldTypeMap["Id"] = "*datatypes.UUID"
+
+		for fieldName, fieldValues := range values {
+			fieldNamePascal := letters.CamelCaseToPascalCase(fieldName)
+
+			if fieldMap[fieldNamePascal] == false && fieldNamePascal != "Id" {
+				return nil, fmt.Errorf("fieldname %s does not exist", fieldName)
+			}
+
+			blanks := strings.Repeat("?,", len(fieldValues))
+			blanks = blanks[:len(blanks)-1]
+			whereStmt := fmt.Sprintf(rtable+"."+letters.PascalCaseToSnakeCase(fieldName)+" IN (%s)", blanks)
+
+			fieldValues2 := make([]interface{}, len(fieldValues), len(fieldValues))
+
+			log.Println(" fieldTypeMap[fieldNamePascal]:", fieldTypeMap[fieldNamePascal])
+			switch fieldTypeMap[fieldNamePascal] {
+			case "*datatypes.UUID":
+				fallthrough
+			case "datatypes.UUID":
+				for i, fieldValue := range fieldValues {
+					data, err := datatypes.NewUUIDFromString(fieldValue)
+					if err != nil {
+						return nil, err
+					}
+					fieldValues2[i] = data
+				}
+				break
+			case "*bool":
+				fallthrough
+			case "bool":
+				for i, fieldValue := range fieldValues {
+					data, err := strconv.ParseBool(fieldValue)
+					if err != nil {
+						return nil, err
+					}
+					fieldValues2[i] = data
+				}
+				break
+			default:
+				for i, fieldValue := range fieldValues {
+					fieldValues2[i] = fieldValue
+				}
+			}
+
+			db = db.Where(whereStmt, fieldValues2...)
+		}
+	}
+
+	return db, nil
 }

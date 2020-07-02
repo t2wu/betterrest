@@ -3,20 +3,45 @@ package datamapper
 import (
 	"errors"
 	"fmt"
-	"log"
-	"net/url"
 	"reflect"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/t2wu/betterrest/libs/datatypes"
-	"github.com/t2wu/betterrest/libs/utils/letters"
 	"github.com/t2wu/betterrest/models"
 
 	"github.com/jinzhu/gorm"
 )
+
+// ---------------------------------------
+
+// createOneCoreOwnershipMapper creates a model
+func createOneCoreOwnershipMapper(db *gorm.DB, oid *datatypes.UUID, typeString string, modelObj models.IModel) (models.IModel, error) {
+	// It looks like I need to explicitly call create here
+	o := reflect.ValueOf(modelObj).Elem().FieldByName("Ownerships")
+	g, _ := o.Index(0).Addr().Interface().(models.IOwnership)
+
+	// No need to check if primary key is blank.
+	// If it is it'll be created by Gorm's BeforeCreate hook
+	// (defined in base model)
+	// if dbc := db.Create(modelObj); dbc.Error != nil {
+	if dbc := db.Create(modelObj).Create(g); dbc.Error != nil {
+		// create failed: UNIQUE constraint failed: user.email
+		// It looks like this error may be dependent on the type of database we use
+		return nil, dbc.Error
+	}
+
+	// For table with trigger which update before insert, we need to load it again
+	if err := db.First(modelObj).Error; err != nil {
+		// That's weird. we just inserted it.
+		return nil, err
+	}
+
+	return modelObj, nil
+}
+
+// ---------------------------------------
 
 var onceOwnership sync.Once
 var crudOwnership *OwnershipMapper
@@ -43,7 +68,7 @@ func (mapper *OwnershipMapper) CreateOne(db *gorm.DB, oid *datatypes.UUID, scope
 	// ownershipType := field.Type
 
 	// has to be true otherwise shouldn't use this mapper
-	modelObjOwnership, ok := modelObj.(models.IHasOwnershipType)
+	modelObjOwnership, ok := modelObj.(models.IHasOwnershipLink)
 	if !ok {
 		return nil, errNoOwnership
 	}
@@ -72,7 +97,7 @@ func (mapper *OwnershipMapper) CreateOne(db *gorm.DB, oid *datatypes.UUID, scope
 	o := reflect.ValueOf(modelObj).Elem().FieldByName("Ownerships")
 	o.Set(reflect.Append(o, reflect.ValueOf(g).Elem()))
 
-	return CreateOneWithHooks(db, oid, scope, typeString, modelObj)
+	return createOneWithHooks(createOneCoreOwnershipMapper, db, oid, scope, typeString, modelObj)
 }
 
 // CreateMany creates an instance of this model based on json and store it in db
@@ -82,7 +107,7 @@ func (mapper *OwnershipMapper) CreateMany(db *gorm.DB, oid *datatypes.UUID, scop
 	// Get ownership type and creates it
 	// field, _ := reflect.TypeOf(modelObj).Elem().FieldByName("Ownerships")
 	// ownershipType := field.Type
-	modelObjOwnership, ok := modelObjs[0].(models.IHasOwnershipType)
+	modelObjOwnership, ok := modelObjs[0].(models.IHasOwnershipLink)
 	if !ok {
 		return nil, errNoOwnership
 	}
@@ -121,7 +146,7 @@ func (mapper *OwnershipMapper) CreateMany(db *gorm.DB, oid *datatypes.UUID, scop
 		o := reflect.ValueOf(modelObj).Elem().FieldByName("Ownerships")
 		o.Set(reflect.Append(o, reflect.ValueOf(g).Elem()))
 
-		m, err := CreateOneCore(db, oid, typeString, modelObj)
+		m, err := createOneCoreOwnershipMapper(db, oid, typeString, modelObj)
 		if err != nil {
 			return nil, err
 		}
@@ -173,7 +198,7 @@ func (mapper *OwnershipMapper) getOneWithIDCore(db *gorm.DB, oid *datatypes.UUID
 		INNER JOIN user ON user.id = user_owns_somemodel.user_id AND user.id = UUID_TO_BIN(oid)
 	*/
 
-	modelObjOwnership, ok := modelObj.(models.IHasOwnershipType)
+	modelObjOwnership, ok := modelObj.(models.IHasOwnershipLink)
 	if !ok {
 		return nil, 0, errNoOwnership
 	}
@@ -282,7 +307,7 @@ func (mapper *OwnershipMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, scope *
 	structName := reflect.TypeOf(models.NewFromTypeString(typeString)).Elem().Name()
 	rtable := strings.ToLower(structName) // table name
 
-	modelObjOwnership, ok := models.NewFromTypeString(typeString).(models.IHasOwnershipType)
+	modelObjOwnership, ok := models.NewFromTypeString(typeString).(models.IHasOwnershipLink)
 	if !ok {
 		return nil, nil, errNoOwnership
 	}
@@ -295,71 +320,10 @@ func (mapper *OwnershipMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, scope *
 		db = db.Where(rtable+".created_at BETWEEN ? AND ?", time.Unix(int64(cstart), 0), time.Unix(int64(cstop), 0))
 	}
 
-	// any other fields?
-	if values, ok := options["better_otherqueries"].(url.Values); ok {
-		// Important!! Check if fieldName is actually part of the schema, otherwise risk of sequal injection
-
-		obj := models.NewFromTypeString(typeString)
-		v := reflect.Indirect(reflect.ValueOf(obj))
-		typeOfS := v.Type()
-		fieldMap := make(map[string]bool)
-		fieldTypeMap := make(map[string]string)
-
-		// https://stackoverflow.com/questions/18926303/iterate-through-the-fields-of-a-struct-in-go
-		for i := 0; i < v.NumField(); i++ {
-			fieldMap[typeOfS.Field(i).Name] = true
-			fieldTypeMap[typeOfS.Field(i).Name] = typeOfS.Field(i).Type.String()
-		}
-		// "id" is an exception because it's in struct embedding and isn't found this way
-		// so we hard code it.
-		fieldMap["Id"] = true
-		fieldTypeMap["Id"] = "*datatypes.UUID"
-
-		for fieldName, fieldValues := range values {
-			fieldNamePascal := letters.CamelCaseToPascalCase(fieldName)
-
-			if fieldMap[fieldNamePascal] == false && fieldNamePascal != "Id" {
-				return nil, nil, fmt.Errorf("fieldname %s does not exist", fieldName)
-			}
-
-			blanks := strings.Repeat("?,", len(fieldValues))
-			blanks = blanks[:len(blanks)-1]
-			whereStmt := fmt.Sprintf(rtable+"."+letters.PascalCaseToSnakeCase(fieldName)+" IN (%s)", blanks)
-
-			fieldValues2 := make([]interface{}, len(fieldValues), len(fieldValues))
-
-			log.Println(" fieldTypeMap[fieldNamePascal]:", fieldTypeMap[fieldNamePascal])
-			switch fieldTypeMap[fieldNamePascal] {
-			case "*datatypes.UUID":
-				fallthrough
-			case "datatypes.UUID":
-				for i, fieldValue := range fieldValues {
-					data, err := datatypes.NewUUIDFromString(fieldValue)
-					if err != nil {
-						return nil, nil, err
-					}
-					fieldValues2[i] = data
-				}
-				break
-			case "*bool":
-				fallthrough
-			case "bool":
-				for i, fieldValue := range fieldValues {
-					data, err := strconv.ParseBool(fieldValue)
-					if err != nil {
-						return nil, nil, err
-					}
-					fieldValues2[i] = data
-				}
-				break
-			default:
-				for i, fieldValue := range fieldValues {
-					fieldValues2[i] = fieldValue
-				}
-			}
-
-			db = db.Where(whereStmt, fieldValues2...)
-		}
+	var err error
+	db, err = constructDbFromURLFieldQuery(db, typeString, options)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	// Admin or guest..doesn't matter
@@ -394,9 +358,10 @@ func (mapper *OwnershipMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, scope *
 	// if err := db2.Find(&roles).Error; err != nil {
 	// 	return nil, nil, err
 	// }
-	outmodels, err := models.NewSliceFromDB(typeString, db.Find) // error from db is returned from here
+	outmodels, err := models.NewSliceFromDBByTypeString(typeString, db.Find) // error from db is returned from here
 	ownershipModelTyp := modelObjOwnership.OwnershipType()
 
+	// FIXME: this performance horrible...might as well query the above again for a role
 	for _, outmodel := range outmodels {
 		joinTable := reflect.New(ownershipModelTyp).Interface()
 		role := models.Admin // just some default
@@ -607,7 +572,7 @@ func (mapper *OwnershipMapper) DeleteOneWithID(db *gorm.DB, oid *datatypes.UUID,
 	// 	// 	return nil, err
 	// 	// }
 	// }
-	modelObjOwnership, ok := modelObj.(models.IHasOwnershipType)
+	modelObjOwnership, ok := modelObj.(models.IHasOwnershipLink)
 	if !ok {
 		return nil, errNoOwnership
 	}
@@ -697,7 +662,7 @@ func (mapper *OwnershipMapper) DeleteMany(db *gorm.DB, oid *datatypes.UUID, scop
 		}
 
 		// Also remove entries from ownership table
-		modelObjOwnership, ok := modelObj.(models.IHasOwnershipType)
+		modelObjOwnership, ok := modelObj.(models.IHasOwnershipLink)
 		if !ok {
 			return nil, errNoOwnership
 		}

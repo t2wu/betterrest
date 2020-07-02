@@ -123,6 +123,10 @@ func ModelsFromJSONBody(r *http.Request, typeString string) ([]models.IModel, re
 		return nil, NewErrReadingBody(err)
 	}
 
+	// Previously I don't know about partial marshalling
+	// So I had to unmarshal to the array of reflected type
+	// And then create an []IModel an assign it one by one.
+	// Now I can unmarshal each record one by one from json.RawMessage
 	var jcmodel JSONBodyWithContent
 
 	err = json.Unmarshal(jsn, &jcmodel)

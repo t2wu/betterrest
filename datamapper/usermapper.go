@@ -14,6 +14,31 @@ import (
 	"github.com/jinzhu/gorm"
 )
 
+// ---------------------------------------
+
+// createOneCoreUserMapper creates a user
+func createOneCoreUserMapper(db *gorm.DB, oid *datatypes.UUID, typeString string, modelObj models.IModel) (models.IModel, error) {
+	// No need to check if primary key is blank.
+	// If it is it'll be created by Gorm's BeforeCreate hook
+	// (defined in base model)
+	// if dbc := db.Create(modelObj); dbc.Error != nil {
+	if dbc := db.Create(modelObj); dbc.Error != nil {
+		// create failed: UNIQUE constraint failed: user.email
+		// It looks like this error may be dependent on the type of database we use
+		return nil, dbc.Error
+	}
+
+	// For table with trigger which update before insert, we need to load it again
+	if err := db.First(modelObj).Error; err != nil {
+		// That's weird. we just inserted it.
+		return nil, err
+	}
+
+	return modelObj, nil
+}
+
+// ---------------------------------------
+
 var onceUser sync.Once
 var usercrud *UserMapper
 
@@ -67,7 +92,7 @@ func (mapper *UserMapper) CreateOne(db *gorm.DB, oid *datatypes.UUID, scope *str
 	reflect.ValueOf(modelObj).Elem().FieldByName("PasswordHash").Set(reflect.ValueOf(hash))
 
 	// there isn't really an oid at this point
-	return CreateOneWithHooksUser(db, oid, scope, "users", modelObj)
+	return createOneWithHooks(createOneCoreUserMapper, db, oid, scope, typeString, modelObj)
 }
 
 // CreateMany is currently a dummy

@@ -79,10 +79,18 @@ type IModel interface {
 	SetID(id *datatypes.UUID)
 }
 
-// IHasOwnershipType has a function that returns the ownership table
+// IHasOwnershipLink has a function that returns the ownership table
 // usable for OwnershipMapper
-type IHasOwnershipType interface {
+type IHasOwnershipLink interface {
 	OwnershipType() reflect.Type
+}
+
+// IHasOrganizationLink has a function that returns the organization table
+// usable for OrganizationMapper
+type IHasOrganizationLink interface {
+	OrganizationType() reflect.Type
+	GetOrganizationID() *datatypes.UUID
+	GetOrganizationIDFieldName() string
 }
 
 // IDoRealDelete is an interface to customize specification for real db delete
