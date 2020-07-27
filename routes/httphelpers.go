@@ -11,26 +11,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-chi/render"
-	"github.com/go-playground/locales/en"
-	ut "github.com/go-playground/universal-translator"
 	"github.com/go-playground/validator/v10"
-	en_translations "github.com/go-playground/validator/v10/translations/en"
 	uuid "github.com/satori/go.uuid"
 )
-
-// use a single instance , it caches struct info
-var (
-	uni      *ut.UniversalTranslator
-	validate *validator.Validate
-)
-
-func init() {
-	en := en.New() // locales.Translator
-	uni = ut.New(en, en)
-	trans, _ := uni.GetTranslator("en")
-	validate = validator.New()
-	en_translations.RegisterDefaultTranslations(validate, trans)
-}
 
 // OwnerIDFromContext gets id from context
 func OwnerIDFromContext(r *http.Request) *datatypes.UUID {
@@ -98,7 +81,7 @@ func ModelOrModelsFromJSONBody(r *http.Request, typeString string) ([]models.IMo
 			return nil, nil, NewErrParsingJSON(err)
 		}
 
-		err := validate.Struct(modelObj)
+		err := models.Validate.Struct(modelObj)
 		if err != nil {
 			errs := err.(validator.ValidationErrors)
 			return nil, nil, NewErrValidation(errs)
@@ -130,7 +113,7 @@ func ModelOrModelsFromJSONBody(r *http.Request, typeString string) ([]models.IMo
 			return nil, nil, NewErrParsingJSON(err)
 		}
 
-		err := validate.Struct(modelObj)
+		err := models.Validate.Struct(modelObj)
 		if err != nil {
 			errs := err.(validator.ValidationErrors)
 			return nil, nil, NewErrValidation(errs)
@@ -194,7 +177,7 @@ func ModelsFromJSONBody(r *http.Request, typeString string) ([]models.IModel, re
 			return nil, NewErrParsingJSON(err)
 		}
 
-		err := validate.Struct(modelObj)
+		err := models.Validate.Struct(modelObj)
 		if err != nil {
 			errs := err.(validator.ValidationErrors)
 			return nil, NewErrValidation(errs)
@@ -242,7 +225,7 @@ func ModelFromJSONBody(r *http.Request, typeString string) (models.IModel, rende
 		return nil, NewErrParsingJSON(err)
 	}
 
-	err = validate.Struct(modelObj)
+	err = models.Validate.Struct(modelObj)
 	if err != nil {
 		errs := err.(validator.ValidationErrors)
 		return nil, NewErrValidation(errs)
