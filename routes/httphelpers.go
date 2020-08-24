@@ -88,7 +88,8 @@ func ModelOrModelsFromJSONBody(r *http.Request, typeString string) ([]models.IMo
 		}
 
 		if v, ok := modelObj.(models.IValidate); ok {
-			if err := v.Validate(); err != nil {
+			scope, path, method := ScopeFromContext(r), r.URL.Path, r.Method
+			if err := v.Validate(&scope, path, method); err != nil {
 				return nil, nil, NewErrValidation(err)
 			}
 		}
@@ -113,14 +114,15 @@ func ModelOrModelsFromJSONBody(r *http.Request, typeString string) ([]models.IMo
 			return nil, nil, NewErrParsingJSON(err)
 		}
 
-		err := models.Validate.Struct(modelObj)
-		if err != nil {
-			errs := err.(validator.ValidationErrors)
-			return nil, nil, NewErrValidation(errs)
-		}
+		// err := models.Validate.Struct(modelObj)
+		// if err != nil {
+		// 	errs := err.(validator.ValidationErrors)
+		// 	return nil, nil, NewErrValidation(errs)
+		// }
 
 		if v, ok := modelObj.(models.IValidate); ok {
-			if err := v.Validate(); err != nil {
+			scope, path, method := ScopeFromContext(r), r.URL.Path, r.Method
+			if err := v.Validate(&scope, path, method); err != nil {
 				return nil, nil, NewErrValidation(err)
 			}
 		}
@@ -177,14 +179,15 @@ func ModelsFromJSONBody(r *http.Request, typeString string) ([]models.IModel, re
 			return nil, NewErrParsingJSON(err)
 		}
 
-		err := models.Validate.Struct(modelObj)
-		if err != nil {
-			errs := err.(validator.ValidationErrors)
-			return nil, NewErrValidation(errs)
-		}
+		// err := models.Validate.Struct(modelObj)
+		// if err != nil {
+		// 	errs := err.(validator.ValidationErrors)
+		// 	return nil, NewErrValidation(errs)
+		// }
 
 		if v, ok := modelObj.(models.IValidate); ok {
-			if err := v.Validate(); err != nil {
+			scope, path, method := ScopeFromContext(r), r.URL.Path, r.Method
+			if err := v.Validate(&scope, path, method); err != nil {
 				return nil, NewErrValidation(err)
 			}
 		}
@@ -225,14 +228,16 @@ func ModelFromJSONBody(r *http.Request, typeString string) (models.IModel, rende
 		return nil, NewErrParsingJSON(err)
 	}
 
-	err = models.Validate.Struct(modelObj)
-	if err != nil {
-		errs := err.(validator.ValidationErrors)
-		return nil, NewErrValidation(errs)
-	}
+	// err = models.Validate.Struct(modelObj)
+	// if err != nil {
+	// 	errs := err.(validator.ValidationErrors)
+	// 	log.Println("==================HHHHHHHHHHHHHHHH a")
+	// 	return nil, NewErrValidation(errs)
+	// }
 
 	if v, ok := modelObj.(models.IValidate); ok {
-		if err := v.Validate(); err != nil {
+		scope, path, method := ScopeFromContext(r), r.URL.Path, r.Method
+		if err := v.Validate(&scope, path, method); err != nil {
 			return nil, NewErrValidation(err)
 		}
 	}

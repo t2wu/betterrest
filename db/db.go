@@ -6,7 +6,8 @@ import (
 
 	"github.com/jinzhu/gorm"
 	// _ "github.com/jinzhu/gorm/dialects/sqlite"
-	_ "github.com/jinzhu/gorm/dialects/mysql"
+	// _ "github.com/jinzhu/gorm/dialects/mysql"
+	_ "github.com/jinzhu/gorm/dialects/postgres"
 )
 
 var once sync.Once
@@ -26,7 +27,8 @@ func Shared() *gorm.DB {
 
 		// Somehow I have to set _db first, otherwise return db will have nil
 		// _db, err := gorm.Open("sqlite3", "./test.db")
-		_db, err := gorm.Open("mysql", username+":"+passwd+"@tcp("+host+":"+port+")/"+sqlDbName+"?charset=utf8mb4&parseTime=True&loc=Local")
+		// _db, err := gorm.Open("mysql", username+":"+passwd+"@tcp("+host+":"+port+")/"+sqlDbName+"?charset=utf8mb4&parseTime=True&loc=Local")
+		_db, err := gorm.Open("postgres", "host="+host+" port="+port+" user="+username+" dbname="+sqlDbName+" password="+passwd+" sslmode=disable")
 
 		toLog := os.Getenv("BETTER_REST_DB_LOG")
 		if toLog == "true" {

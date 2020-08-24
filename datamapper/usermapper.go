@@ -22,6 +22,17 @@ func createOneCoreUserMapper(db *gorm.DB, oid *datatypes.UUID, typeString string
 	// If it is it'll be created by Gorm's BeforeCreate hook
 	// (defined in base model)
 	// if dbc := db.Create(modelObj); dbc.Error != nil {
+
+	// id, ok := reflect.ValueOf(modelObj).Elem().FieldByName(("Email")).Interface().(*datatypes.UUID)
+	// log.Println("ok?", ok)
+	// log.Println("id?", id)
+	// id2, err := modelObj.GetID().Value()
+	// log.Println("err:", err)
+	// id3, ok3 := id2.(string)
+	// log.Println("ok2?", ok3)
+	// log.Println("id2?", id3)
+	// log.Println(modelObj.GetID())
+
 	if dbc := db.Create(modelObj); dbc.Error != nil {
 		// create failed: UNIQUE constraint failed: user.email
 		// It looks like this error may be dependent on the type of database we use

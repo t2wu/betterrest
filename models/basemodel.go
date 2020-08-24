@@ -25,7 +25,11 @@ const (
 
 // BaseModel is the base class domain model which has standard ID
 type BaseModel struct {
-	ID        *datatypes.UUID `gorm:"type:binary(16);primary_key;" json:"id"`
+	// For MySQL
+	// ID        *datatypes.UUID `gorm:"type:binary(16);primary_key;" json:"id"`
+
+	// For Postgres
+	ID        *datatypes.UUID `gorm:"type:uuid;primary_key;" json:"id"`
 	CreatedAt time.Time       `sql:"index" json:"createdAt"`
 	UpdatedAt time.Time
 	DeletedAt *time.Time `sql:"index"`
@@ -155,7 +159,7 @@ type IAfterDelete interface {
 
 // IValidate supports validation with govalidator
 type IValidate interface {
-	Validate() error
+	Validate(scope *string, endpoint string, method string) error
 }
 
 // ------------------------------------
