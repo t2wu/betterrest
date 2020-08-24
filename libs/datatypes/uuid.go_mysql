@@ -40,16 +40,15 @@ func (u *UUID) String() string {
 	return u.UUID.String()
 }
 
-// For Postgresql, Value()  can be string or uint8
-// But when Scan, it is string. So I make it consistent to uint8
-
 // Value satisfies the Valuer interace and is responsible for writing data to the database
 func (u *UUID) Value() (driver.Value, error) {
 	if u == nil {
 		return nil, nil
 	}
 
-	return []uint8(u.UUID.String()), nil
+	var v driver.Value
+	v = u.UUID.Bytes()
+	return v, nil
 }
 
 // Scan satisfies the Scanner interace and is responsible for reading data from the database
@@ -58,12 +57,12 @@ func (u *UUID) Scan(src interface{}) error {
 		return nil
 	}
 
-	s, ok := src.([]uint8)
+	b, ok := src.([]byte)
 	if !ok {
-		return fmt.Errorf("did not scan: expected string but was %T", src)
+		return fmt.Errorf("did not scan: expected []byte but was %T", src)
 	}
 	var err error
-	u.UUID, err = uuid.FromString(string(s))
+	u.UUID, err = uuid.FromBytes(b)
 	return err
 }
 

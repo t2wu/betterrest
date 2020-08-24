@@ -63,15 +63,15 @@ func updateOneCore(mapper IGetOneWithIDMapper, db *gorm.DB, oid *datatypes.UUID,
 
 	// For some unknown reason
 	// insert many-to-many works cuz Gorm does and works???
-	// [2020-05-22 18:50:17]  [1.63ms]  INSERT INTO `dock_group` (`group_id`,`dock_id`) SELECT '<binary>','<binary>' FROM DUAL WHERE NOT EXISTS (SELECT * FROM `dock_group` WHERE `group_id` = '<binary>' AND `dock_id` = '<binary>')
+	// [2020-05-22 18:50:17]  [1.63ms]  INSERT INTO \"dock_group\" (\"group_id\",\"dock_id\") SELECT '<binary>','<binary>' FROM DUAL WHERE NOT EXISTS (SELECT * FROM \"dock_group\" WHERE \"group_id\" = '<binary>' AND \"dock_id\" = '<binary>')
 	// [0 rows affected or returned ]
 
 	// (/Users/t2wu/Documents/Go/pkg/mod/github.com/t2wu/betterrest@v0.1.19/datamapper/modulelibs.go:62)
-	// [2020-05-22 18:50:17]  [1.30ms]  UPDATE `dock` SET `updated_at` = '2020-05-22 18:50:17', `deleted_at` = NULL, `name` = '', `model` = '', `serial_no` = '', `mac` = '', `hub_id` = NULL, `is_online` = false, `room_id` = NULL  WHERE `dock`.`deleted_at` IS NULL AND `dock`.`id` = '{2920e86e-33b1-4848-a773-e68e5bde4fc0}'
+	// [2020-05-22 18:50:17]  [1.30ms]  UPDATE \"dock\" SET \"updated_at\" = '2020-05-22 18:50:17', \"deleted_at\" = NULL, \"name\" = '', \"model\" = '', \"serial_no\" = '', \"mac\" = '', \"hub_id\" = NULL, \"is_online\" = false, \"room_id\" = NULL  WHERE \"dock\".\"deleted_at\" IS NULL AND \"dock\".\"id\" = '{2920e86e-33b1-4848-a773-e68e5bde4fc0}'
 	// [1 rows affected or returned ]
 
 	// (/Users/t2wu/Documents/Go/pkg/mod/github.com/t2wu/betterrest@v0.1.19/datamapper/modulelibs.go:62)
-	// [2020-05-22 18:50:17]  [2.84ms]  INSERT INTO `dock_group` (`dock_id`,`group_id`) SELECT ') �n3�HH�s�[�O�','<binary>' FROM DUAL WHERE NOT EXISTS (SELECT * FROM `dock_group` WHERE `dock_id` = ') �n3�HH�s�[�O�' AND `group_id` = '<binary>')
+	// [2020-05-22 18:50:17]  [2.84ms]  INSERT INTO \"dock_group\" (\"dock_id\",\"group_id\") SELECT ') �n3�HH�s�[�O�','<binary>' FROM DUAL WHERE NOT EXISTS (SELECT * FROM \"dock_group\" WHERE \"dock_id\" = ') �n3�HH�s�[�O�' AND \"group_id\" = '<binary>')
 	// [1 rows affected or returned ]
 	if err = db.Save(modelObj).Error; err != nil { // save updates all fields (FIXME: need to check for required)
 		log.Println("Error updating:", err)
@@ -125,7 +125,7 @@ func patchOneCore(typeString string, modelObj models.IModel, jsonPatch []byte) (
 	return modelObj, nil
 }
 
-// removePeggedField remove nested field if it has tag `betterrest="peg"`
+// removePeggedField remove nested field if it has tag \"betterrest="peg"\"
 // Only support one-level
 func removePeggedField(db *gorm.DB, modelObj models.IModel) (err error) {
 	// Delete nested field
@@ -172,7 +172,7 @@ func removePeggedField(db *gorm.DB, modelObj models.IModel) (err error) {
 			fieldVal := v.Field(i)
 
 			if fieldVal.Len() >= 1 {
-				uuidStmts := strings.Repeat("UUID_TO_BIN(?),", fieldVal.Len())
+				uuidStmts := strings.Repeat("?,", fieldVal.Len())
 
 				uuidStmts = uuidStmts[:len(uuidStmts)-1]
 
@@ -183,7 +183,7 @@ func removePeggedField(db *gorm.DB, modelObj models.IModel) (err error) {
 					allIds = append(allIds, idToDel.String())
 					// idToDel := reflect.Indirect(reflect.ValueOf(modelToDel)).FieldByName("ID").Interface()
 
-					// stmt := fmt.Sprintf("DELETE FROM `%s` WHERE `%s` = UUID_TO_BIN(?) AND `%s` = UUID_TO_BIN(?)",
+					// stmt := fmt.Sprintf("DELETE FROM \"%s\" WHERE \"%s\" = ? AND \"%s\" = ?",
 					// 	linkTableName, selfTableName+"_id", fieldTableName+"_id")
 					// err := db.Exec(stmt, modelObj.GetID().String(), idToDel.String()).Error
 					// if err != nil {
@@ -191,7 +191,7 @@ func removePeggedField(db *gorm.DB, modelObj models.IModel) (err error) {
 					// }
 				}
 
-				stmt := fmt.Sprintf("DELETE FROM `%s` WHERE `%s` = UUID_TO_BIN(?) AND `%s` IN (%s)",
+				stmt := fmt.Sprintf("DELETE FROM \"%s\" WHERE \"%s\" = ? AND \"%s\" IN (%s)",
 					linkTableName, selfTableName+"_id", fieldTableName+"_id", uuidStmts)
 				err := db.Exec(stmt, allIds...).Error
 				if err != nil {
@@ -298,7 +298,7 @@ func updatePeggedFields(db *gorm.DB, oldModelObj models.IModel, newModelObj mode
 					// log.Println(linkTableName, fieldIDName)
 					// test := &modelToDel
 
-					stmt := fmt.Sprintf("DELETE FROM `%s` WHERE `%s` = UUID_TO_BIN(?) AND `%s` = UUID_TO_BIN(?)",
+					stmt := fmt.Sprintf("DELETE FROM \"%s\" WHERE \"%s\" = ? AND \"%s\" = ?",
 						linkTableName, fieldIDName, selfID)
 					err := db.Exec(stmt, idToDel.(*datatypes.UUID).String(), oldModelObj.GetID().String()).Error
 					if err != nil {
@@ -406,10 +406,10 @@ func loadManyToManyBecauseGormFailsWithID(db *gorm.DB, modelObj models.IModel) e
 
 			sliceOfField := reflect.New(reflect.TypeOf(inter))
 
-			join1 := fmt.Sprintf("INNER JOIN `%s` ON `%s`.`id` = `%s`.`%s`", linkTableName, fieldTableName,
+			join1 := fmt.Sprintf("INNER JOIN \"%s\" ON \"%s\".\"id\" = \"%s\".\"%s\"", linkTableName, fieldTableName,
 				linkTableName, fieldTableName+"_id")
-			select1 := fmt.Sprintf("`%s`.*", fieldTableName)
-			where1 := fmt.Sprintf("`%s`.`%s` = UUID_TO_BIN(?)", linkTableName, tableName+"_id")
+			select1 := fmt.Sprintf("\"%s\".*", fieldTableName)
+			where1 := fmt.Sprintf("\"%s\".\"%s\" = ?", linkTableName, tableName+"_id")
 
 			err := db.Table(fieldTableName).Joins(join1).Where(where1, modelObj.GetID().String()).Select(select1).Find(sliceOfField.Interface()).Error
 			if err != nil {
