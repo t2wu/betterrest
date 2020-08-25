@@ -2,14 +2,12 @@ package datatypes
 
 import (
 	"database/sql/driver"
-	"encoding/hex"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 
 	"github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/wkb"
-	// Might be able to use ewkb library with PostGis if I could figure out how to work with go-geom
-	// Right now I'm not storing SRID in there
 )
 
 // https://stackoverflow.com/questions/60520863/working-with-spatial-data-with-gorm-and-mysql/
@@ -21,13 +19,21 @@ type EWKBPoint struct {
 
 // Value satisfies the Valuer interace and is responsible for writing data to the database
 func (m *EWKBPoint) Value() (driver.Value, error) {
-	pt := m.Point
-	pos := pt.Coords()
+	value, err := m.Point.Value()
+	if err != nil {
+		return nil, err
+	}
 
-	// How is it stored? I can't tell.
+	buf, ok := value.([]byte)
+	if !ok {
+		return nil, fmt.Errorf("did not convert value: expected []byte, but was %T", value)
+	}
 
-	// return fmt.Sprintf("SRID=32632;POINT(%f %f)", pos[0], pos[1]), nil
-	return fmt.Sprintf("SRID=0;POINT(%f %f)", pos[0], pos[1]), nil
+	mysqlEncoding := make([]byte, 4)
+	binary.LittleEndian.PutUint32(mysqlEncoding, 0)
+	mysqlEncoding = append(mysqlEncoding, buf...)
+
+	return mysqlEncoding, err
 }
 
 // Scan satisfies the Scanner interace and is responsible for reading data from the database
@@ -36,35 +42,14 @@ func (m *EWKBPoint) Scan(src interface{}) error {
 		return nil
 	}
 
-	// mysqlEncoding, err := hex.DecodeString(string(src.([]byte)))
-	// var wkbByteOrder byte
-	// reader := bytes.NewReader(mysqlEncoding)
-	// // Read as Little Endian to attempt to determine byte order
-	// if err := binary.Read(reader, binary.LittleEndian, &wkbByteOrder); err != nil {
-	// 	return err
-	// }
-
-	hexdata, err := hex.DecodeString(string(src.([]byte)))
-	if err != nil {
-		return err
+	mysqlEncoding, ok := src.([]byte)
+	if !ok {
+		return fmt.Errorf("did not scan: expected []byte but was %T", src)
 	}
 
-	m.Point.Scan(hexdata)
-
-	// Determine the geometery type
-	// var byteOrder binary.ByteOrder
-	// var wkbType uint32
-	// if err := binary.Read(reader, byteOrder, &wkbType); err != nil {
-	// 	return err
-	// }
-
-	// log.Println("wkbType:", wkbType)
-
-	// hexdata, err := hex.DecodeString(string(src.([]byte)))
-
-	// srid := binary.LittleEndian.Uint32(hexdata[1:5]) // uint32
-	// err = m.Point.Scan(hexdata[5:])
-	// m.Point.SetSRID(int(srid))
+	srid := binary.LittleEndian.Uint32(mysqlEncoding[0:4]) // uint32
+	err := m.Point.Scan(mysqlEncoding[4:])
+	m.Point.SetSRID(int(srid))
 
 	return err
 }

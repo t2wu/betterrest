@@ -58,13 +58,21 @@ func (u *UUID) Scan(src interface{}) error {
 		return nil
 	}
 
-	s, ok := src.([]uint8)
-	if !ok {
-		return fmt.Errorf("did not scan: expected string but was %T", src)
-	}
+	// Huh? Sometimes []uint8 sometimes string?
 	var err error
-	u.UUID, err = uuid.FromString(string(s))
-	return err
+	s, ok := src.([]uint8)
+	if ok {
+		u.UUID, err = uuid.FromString(string(s))
+		return err
+	}
+
+	s2, ok := src.(string)
+	if ok {
+		u.UUID, err = uuid.FromString(s2)
+		return err
+	}
+
+	return fmt.Errorf("did not scan: expected []uint8 but was %T", src)
 }
 
 // UnmarshalJSON unmarshalls it from a string of millisecond
