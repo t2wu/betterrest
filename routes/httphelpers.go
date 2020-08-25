@@ -228,13 +228,6 @@ func ModelFromJSONBody(r *http.Request, typeString string) (models.IModel, rende
 		return nil, NewErrParsingJSON(err)
 	}
 
-	// err = models.Validate.Struct(modelObj)
-	// if err != nil {
-	// 	errs := err.(validator.ValidationErrors)
-	// 	log.Println("==================HHHHHHHHHHHHHHHH a")
-	// 	return nil, NewErrValidation(errs)
-	// }
-
 	if v, ok := modelObj.(models.IValidate); ok {
 		scope, path, method := ScopeFromContext(r), r.URL.Path, r.Method
 		if err := v.Validate(&scope, path, method); err != nil {

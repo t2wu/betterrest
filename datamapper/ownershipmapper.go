@@ -205,8 +205,8 @@ func (mapper *OwnershipMapper) getOneWithIDCore(db *gorm.DB, oid *datatypes.UUID
 
 	joinTableName := getJoinTableName(modelObjOwnership)
 
-	firstJoin := fmt.Sprintf("INNER JOIN `%s` ON `%s`.id = `%s`.model_id AND `%s`.id = UUID_TO_BIN(?)", joinTableName, rtable, joinTableName, rtable)
-	secondJoin := fmt.Sprintf("INNER JOIN `user` ON `user`.id = `%s`.user_id AND `%s`.user_id = UUID_TO_BIN(?)", joinTableName, joinTableName)
+	firstJoin := fmt.Sprintf("INNER JOIN \"%s\" ON \"%s\".id = \"%s\".model_id AND \"%s\".id = ?", joinTableName, rtable, joinTableName, rtable)
+	secondJoin := fmt.Sprintf("INNER JOIN \"user\" ON \"user\".id = \"%s\".user_id AND \"%s\".user_id = ?", joinTableName, joinTableName)
 	// db2 := db
 
 	err := db.Table(rtable).Joins(firstJoin, id.String()).Joins(secondJoin, oid.String()).Find(modelObj).Error
@@ -216,7 +216,7 @@ func (mapper *OwnershipMapper) getOneWithIDCore(db *gorm.DB, oid *datatypes.UUID
 
 	joinTable := reflect.New(modelObjOwnership.OwnershipType()).Interface()
 	role := models.Guest // just some default
-	stmt := fmt.Sprintf("SELECT * FROM %s WHERE user_id = UUID_TO_BIN(?) AND model_id = UUID_TO_BIN(?)", joinTableName)
+	stmt := fmt.Sprintf("SELECT * FROM %s WHERE user_id = ? AND model_id = ?", joinTableName)
 	if err2 := db.Raw(stmt, oid.String(), id.String()).Scan(joinTable).Error; err2 != nil {
 		return nil, 0, err2
 	}
@@ -251,8 +251,8 @@ func (mapper *OwnershipMapper) getOneWithIDCore(db *gorm.DB, oid *datatypes.UUID
 
 	// 		sliceOfField := reflect.New(reflect.TypeOf(inter))
 
-	// 		join1 := fmt.Sprintf("INNER JOIN `%s` ON `%s`.`%s` = UUID_TO_BIN(?)", linkTableName, linkTableName, tableName+"_id")
-	// 		select1 := fmt.Sprintf("DISTINCT `%s`.*", fieldTableName)
+	// 		join1 := fmt.Sprintf("INNER JOIN \"%s\" ON \"%s\".\"%s\" = ?", linkTableName, linkTableName, tableName+"_id")
+	// 		select1 := fmt.Sprintf("DISTINCT \"%s\".*", fieldTableName)
 
 	// 		err := db.Table(fieldTableName).Joins(join1, modelObj.GetID().String()).Select(select1).Find(sliceOfField.Interface()).Error
 	// 		if err != nil {
@@ -313,8 +313,8 @@ func (mapper *OwnershipMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, scope *
 	}
 	joinTableName := getJoinTableName(modelObjOwnership)
 
-	firstJoin := fmt.Sprintf("INNER JOIN `%s` ON `%s`.id = `%s`.model_id", joinTableName, rtable, joinTableName)
-	secondJoin := fmt.Sprintf("INNER JOIN `user` ON `user`.id = `%s`.user_id AND `%s`.user_id = UUID_TO_BIN(?)", joinTableName, joinTableName)
+	firstJoin := fmt.Sprintf("INNER JOIN \"%s\" ON \"%s\".id = \"%s\".model_id", joinTableName, rtable, joinTableName)
+	secondJoin := fmt.Sprintf("INNER JOIN \"user\" ON \"user\".id = \"%s\".user_id AND \"%s\".user_id = ?", joinTableName, joinTableName)
 
 	if cstart != 0 && cstop != 0 {
 		db = db.Where(rtable+".created_at BETWEEN ? AND ?", time.Unix(int64(cstart), 0), time.Unix(int64(cstop), 0))
@@ -342,7 +342,7 @@ func (mapper *OwnershipMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, scope *
 	// db2 = db2.Table(rtable).Joins(firstJoin).Joins(secondJoin).Joins(thirdJoin).Select("ownership.role").Joins(fourthJoin, oid.String())
 
 	if order := options["order"].(string); order != "" {
-		stmt := fmt.Sprintf("`%s`.created_at %s", rtable, order)
+		stmt := fmt.Sprintf("\"%s\".created_at %s", rtable, order)
 		db = db.Order(stmt)
 		// db2 = db2.Order(stmt)
 	}
@@ -366,7 +366,7 @@ func (mapper *OwnershipMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, scope *
 		joinTable := reflect.New(ownershipModelTyp).Interface()
 		role := models.Admin // just some default
 		mid := outmodel.GetID()
-		stmt := fmt.Sprintf("SELECT * FROM %s WHERE user_id = UUID_TO_BIN(?) AND model_id = UUID_TO_BIN(?)", joinTableName)
+		stmt := fmt.Sprintf("SELECT * FROM %s WHERE user_id = ? AND model_id = ?", joinTableName)
 		if err2 := db2.Raw(stmt, oid.String(), mid.String()).Scan(joinTable).Error; err2 != nil {
 			return nil, nil, err2
 		}
@@ -576,7 +576,7 @@ func (mapper *OwnershipMapper) DeleteOneWithID(db *gorm.DB, oid *datatypes.UUID,
 	if !ok {
 		return nil, errNoOwnership
 	}
-	stmt := fmt.Sprintf("DELETE FROM %s WHERE user_id = UUID_TO_BIN(?) AND model_id = UUID_TO_BIN(?) AND role = ?", getJoinTableName(modelObjOwnership))
+	stmt := fmt.Sprintf("DELETE FROM %s WHERE user_id = ? AND model_id = ? AND role = ?", getJoinTableName(modelObjOwnership))
 
 	// Can't do db.Raw and db.Delete at the same time?!
 	db2 := db.Exec(stmt, oid.String(), modelObj.GetID().String(), models.Admin)
@@ -666,7 +666,7 @@ func (mapper *OwnershipMapper) DeleteMany(db *gorm.DB, oid *datatypes.UUID, scop
 		if !ok {
 			return nil, errNoOwnership
 		}
-		stmt := fmt.Sprintf("DELETE FROM %s WHERE user_id = UUID_TO_BIN(?) AND model_id = UUID_TO_BIN(?) AND role = ?", getJoinTableName(modelObjOwnership))
+		stmt := fmt.Sprintf("DELETE FROM %s WHERE user_id = ? AND model_id = ? AND role = ?", getJoinTableName(modelObjOwnership))
 		db2 := db.Exec(stmt, oid.String(), modelObj.GetID().String(), models.Admin)
 		if db2.Error != nil {
 			return nil, err
