@@ -91,9 +91,7 @@ func (m *EWKBPoint) UnmarshalJSON(b []byte) (err error) {
 	// because that makes generic handling across all models impossible
 	// And this is what I come up with. (Weird with pointer to struct
 	// embedding)
-	m.Point = wkb.Point{
-		geom.NewPoint(geom.XY).MustSetCoords([]float64{0, 0}).SetSRID(0),
-	}
+	m.Point = wkb.Point{Point: geom.NewPoint(geom.XY).MustSetCoords([]float64{0, 0}).SetSRID(0)}
 
 	pt := m.Point
 	_, err = pt.SetCoords(geom.Coord{loc.Coordinates[0], loc.Coordinates[1]})

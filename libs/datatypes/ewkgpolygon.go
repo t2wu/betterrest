@@ -2,37 +2,48 @@ package datatypes
 
 import (
 	"database/sql/driver"
-	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/twpayne/go-geom"
-	"github.com/twpayne/go-geom/encoding/wkb"
+	"github.com/twpayne/go-geom/encoding/ewkb"
 )
 
 // EWKBPolygon encapsulate Polygon and handles value and scanners to work with Gorm
 type EWKBPolygon struct {
-	Polygon wkb.Polygon
+	Polygon ewkb.Polygon
 }
 
 // Value satisfies the Valuer interace and is responsible for writing data to the database
 func (m *EWKBPolygon) Value() (driver.Value, error) {
 
-	value, err := m.Polygon.Value()
-	if err != nil {
-		return nil, err
+	// value, err := m.Polygon.Value()
+	// if err != nil {
+	// 	return nil, err
+	// }
+
+	var str strings.Builder
+	str.WriteString("POLYGON(")
+	// "POLYGON(("
+	for _, poly := range m.Polygon.Coords() {
+		str.WriteString("(")
+		for _, coords := range poly { // looping through a two-d coordinate polygon, for example
+			for _, coord := range coords {
+				str.WriteString(fmt.Sprintf("%f ", coord))
+			}
+			str.WriteString(",")
+		}
+		s := str.String()
+		s = strings.TrimRight(s, ",") + ")"
+		str.Reset()
+		str.WriteString(s)
 	}
+	str.WriteString(")")
+	s := str.String()
 
-	buf, ok := value.([]byte)
-	if !ok {
-		return nil, fmt.Errorf("did not convert value: expected []byte, but was %T", value)
-	}
-
-	mysqlEncoding := make([]byte, 4)
-	binary.LittleEndian.PutUint32(mysqlEncoding, 0)
-	mysqlEncoding = append(mysqlEncoding, buf...)
-
-	return mysqlEncoding, err
+	return s, nil
 }
 
 // Scan satisfies the Scanner interace and is responsible for reading data from the database
@@ -45,12 +56,17 @@ func (m *EWKBPolygon) Scan(src interface{}) error {
 	if !ok {
 		return fmt.Errorf("did not scan: expected []byte but was %T", src)
 	}
+	hexdata, err := hex.DecodeString(string(mysqlEncoding))
+	if err != nil {
+		return nil
+	}
 
-	srid := binary.LittleEndian.Uint32(mysqlEncoding[0:4]) // uint32
-	err := m.Polygon.Scan(mysqlEncoding[4:])
-	m.Polygon.SetSRID(int(srid))
+	// srid := binary.LittleEndian.Uint32(mysqlEncoding[0:4]) // uint32
+	// err := m.Polygon.Scan(mysqlEncoding[4:])
+	// m.Polygon.SetSRID(int(srid))
+	m.Polygon.Scan(hexdata)
 
-	return err
+	return nil
 }
 
 // UnmarshalJSON json satisfies the JSON library
@@ -75,7 +91,7 @@ func (m *EWKBPolygon) UnmarshalJSON(b []byte) (err error) {
 	}
 
 	poly, err := geom.NewPolygon(geom.XY).SetCoords(area.Coordinates)
-	m.Polygon = wkb.Polygon{poly}
+	m.Polygon = ewkb.Polygon{Polygon: poly}
 
 	return err // if err is nil, all good
 }
