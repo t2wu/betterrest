@@ -21,6 +21,11 @@ type EWKBPoint struct {
 
 // Value satisfies the Valuer interace and is responsible for writing data to the database
 func (m *EWKBPoint) Value() (driver.Value, error) {
+	// When updating a pegassoc but not give any value, it runs into this
+	if m == nil {
+		return "SRID=0;POINT(0 0)", nil
+	}
+
 	pt := m.Point
 	pos := pt.Coords()
 
