@@ -147,11 +147,12 @@ func removePeggedField(db *gorm.DB, modelObj models.IModel) (err error) {
 					}
 				}
 			default:
-				// it's something else, delete it directly
-				x := fieldVal.Interface()
-				err = db.Delete(x).Error
-				if err != nil {
-					return err
+				if !fieldVal.FieldByName("ID").IsNil() {
+					x := fieldVal.Interface()
+					err = db.Delete(x).Error
+					if err != nil {
+						return err
+					}
 				}
 			}
 		} else if strings.HasPrefix(tag, "pegassoc-manytomany") {
