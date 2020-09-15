@@ -24,9 +24,10 @@ type contextKey int
 
 const (
 	// contextKeyOwnerID is the id that's given in jwt's iss field
-	contextKeyOwnerID contextKey = iota
-	contextKeyClient  contextKey = iota
-	contextKeyScope   contextKey = iota
+	contextKeyOwnerID    contextKey = iota
+	contextKeyClient     contextKey = iota
+	contextKeyScope      contextKey = iota
+	contextKeyTokenHours contextKey = iota
 )
 
 // http.NotFound
@@ -137,6 +138,24 @@ func BearerAuthMiddleware() gin.HandlerFunc {
 			render.Render(w, r, NewErrTokenInvalid(errors.New("getting ISS from token error")))
 			c.Abort()
 			return
+		}
+
+		c.Next()
+	}
+}
+
+// XDebugMiddleWare parses "X-DEBUG-TOKEN-DURATION-HOURS" if available
+func XDebugMiddleWare() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		_, r := c.Writer, c.Request
+
+		tokenDuration := r.Header.Get("X-DEBUG-TOKEN-DURATION-HOURS")
+		if tokenDuration != "" {
+			if tokenDurationInHours, err := strconv.Atoi(tokenDuration); err == nil {
+				ctx := context.WithValue(c.Request.Context(), contextKeyTokenHours, tokenDurationInHours)
+				c.Request = c.Request.WithContext(ctx)
+			}
+			// if error, ignore, continue
 		}
 
 		c.Next()

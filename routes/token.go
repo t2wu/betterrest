@@ -61,7 +61,11 @@ func Token(c *gin.Context) {
 
 	// Issue new token
 	var payload map[string]interface{}
-	payload, err = createTokenPayloadForScope(ownerID, &scope)
+	tokenHours := TokenHoursFromContext(r)
+	if tokenHours == -1 {
+		tokenHours = 3
+	}
+	payload, err = createTokenPayloadForScope(ownerID, &scope, tokenHours)
 	if err != nil {
 		render.Render(w, r, NewErrGeneratingToken(err))
 		return

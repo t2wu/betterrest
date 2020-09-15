@@ -35,6 +35,16 @@ func ScopeFromContext(r *http.Request) string {
 	return scope
 }
 
+// TokenHoursFromContext gets hours from context
+func TokenHoursFromContext(r *http.Request) int {
+	tokenHours := -1
+	item := r.Context().Value(contextKeyTokenHours)
+	if item != nil {
+		tokenHours = item.(int)
+	}
+	return tokenHours
+}
+
 // JSONBodyWithContent for partial unmarshalling
 type JSONBodyWithContent struct {
 	Content []json.RawMessage

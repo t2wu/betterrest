@@ -177,6 +177,11 @@ func UserLoginHandler() func(c *gin.Context) {
 	return func(c *gin.Context) {
 		w, r := c.Writer, c.Request
 
+		tokenHours := TokenHoursFromContext(r)
+		if tokenHours == -1 {
+			tokenHours = 3
+		}
+
 		m, httperr := ModelFromJSONBody(r, "users") // m is models.IModel
 		if httperr != nil {
 			render.Render(w, r, httperr)
@@ -193,7 +198,7 @@ func UserLoginHandler() func(c *gin.Context) {
 
 		// login success, return access token
 		scope := "owner"
-		payload, err := createTokenPayloadForScope(authUser.GetID(), &scope)
+		payload, err := createTokenPayloadForScope(authUser.GetID(), &scope, tokenHours)
 		if err != nil {
 			render.Render(w, r, NewErrGeneratingToken(err))
 			return

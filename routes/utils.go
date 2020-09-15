@@ -14,10 +14,12 @@ import (
 // createTokenPayloadForScope creates token JSON payload
 // Follow oauth's
 // { acceess_token: acces_token, token_type: "Bearer", refresh_token: refresh_token, scope: ""}
-func createTokenPayloadForScope(id *datatypes.UUID, scope *string) (map[string]interface{}, error) {
+func createTokenPayloadForScope(id *datatypes.UUID, scope *string, tokenHours int) (map[string]interface{}, error) {
 	var accessToken, refreshToken string
 	var err error
-	accessToken, err = security.CreateAccessToken(id, time.Hour*time.Duration(3), scope) // 3 hours
+
+	// 3 hours by default or by X-DEBUG-TOKEN-DURATION-HOURS
+	accessToken, err = security.CreateAccessToken(id, time.Hour*time.Duration(tokenHours), scope)
 	if err != nil {
 		return nil, err
 	}
