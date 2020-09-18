@@ -231,6 +231,7 @@ func updatePeggedFields(db *gorm.DB, oldModelObj models.IModel, newModelObj mode
 					id := fieldVal1.Index(j).FieldByName("ID").Interface().(*datatypes.UUID)
 					set1.Add(id.String())
 					m[id.String()] = fieldVal1.Index(j).Interface()
+					// log.Println("----> tim: fieldVal1's type?", fieldVal1.Index(j).Type())
 				}
 
 				for j := 0; j < fieldVal2.Len(); j++ {
@@ -310,6 +311,7 @@ func updatePeggedFields(db *gorm.DB, oldModelObj models.IModel, newModelObj mode
 			}
 
 			setIsNew := set2.Difference(set1)
+			// log.Println("+==============================> IS NEW:", setIsNew)
 			for uuid := range setIsNew.List {
 				modelToAdd := m[uuid]
 
@@ -321,12 +323,20 @@ func updatePeggedFields(db *gorm.DB, oldModelObj models.IModel, newModelObj mode
 					// 	return err
 					// }
 				} else if tag == "pegassoc" {
+
+					// log.Println("!!!!!pegassoc addddddddddddddddddddddd")
 					// for data with its own endpoint, need to associate it
 					columnName := v1.Type().Field(i).Name
 					// assocModel := reflect.Indirect(reflect.ValueOf(modelToAdd)).Type().Name()
 					// fieldName := v1.Type().Field(i).Name
 					// fieldName = fieldName[0 : len(fieldName)-1] // get rid of s
 					// tableName := letters.CamelCaseToPascalCase(fieldName)
+
+					// I'm in a dilemma
+					// association_autoupdate when false, no update association
+					// But when true, update association AND update the associated model's content
+					// (because, in has-many, it's the associated model's foreign key that's being updated)
+					// and it update all fields as well.
 					if err = db.Set("gorm:association_autoupdate", true).Model(oldModelObj).Association(columnName).Append(modelToAdd).Error; err != nil {
 						return err
 					}
@@ -366,24 +376,6 @@ func modelNeedsRealDelete(modelObj models.IModel) bool {
 		realDelete = modelObj2.DoRealDelete()
 	}
 	return realDelete
-}
-
-func getJoinTableName(modelObj models.IHasOwnershipLink) string {
-	if m, ok := reflect.New(modelObj.OwnershipType()).Interface().(models.IHasTableName); ok {
-		return m.TableName()
-	}
-
-	typeName := modelObj.OwnershipType().Name()
-	return letters.PascalCaseToSnakeCase(typeName)
-}
-
-func getOrganizationTableName(modelObj models.IHasOrganizationLink) string {
-	if m, ok := reflect.New(modelObj.OrganizationType()).Interface().(models.IHasTableName); ok {
-		return m.TableName()
-	}
-
-	typeName := modelObj.OrganizationType().Name()
-	return letters.PascalCaseToSnakeCase(typeName)
 }
 
 func loadManyToManyBecauseGormFailsWithID(db *gorm.DB, modelObj models.IModel) error {

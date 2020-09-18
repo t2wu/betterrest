@@ -97,6 +97,26 @@ type IHasOrganizationLink interface {
 	GetOrganizationIDFieldName() string
 }
 
+// GetJoinTableName if comforms to IHasOwnershipLink
+func GetJoinTableName(modelObj IHasOwnershipLink) string {
+	if m, ok := reflect.New(modelObj.OwnershipType()).Interface().(IHasTableName); ok {
+		return m.TableName()
+	}
+
+	typeName := modelObj.OwnershipType().Name()
+	return letters.PascalCaseToSnakeCase(typeName)
+}
+
+// GetOrganizationTableName if comforms to IHasOrganizationLink
+func GetOrganizationTableName(modelObj IHasOrganizationLink) string {
+	if m, ok := reflect.New(modelObj.OrganizationType()).Interface().(IHasTableName); ok {
+		return m.TableName()
+	}
+
+	typeName := modelObj.OrganizationType().Name()
+	return letters.PascalCaseToSnakeCase(typeName)
+}
+
 // IDoRealDelete is an interface to customize specification for real db delete
 type IDoRealDelete interface {
 	DoRealDelete() bool

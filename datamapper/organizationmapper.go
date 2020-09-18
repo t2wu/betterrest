@@ -54,7 +54,7 @@ func userHasRolesAccessToModelOrg(db *gorm.DB, oid *datatypes.UUID, typeString s
 		return false, fmt.Errorf("Model %s does not comform to IHasOrganizationLink", typeString)
 	}
 
-	organizationTableName := getOrganizationTableName(modelObjHavingOrganization)
+	organizationTableName := models.GetOrganizationTableName(modelObjHavingOrganization)
 	// organization := reflect.New(modelObj.OwnershipType()).Interface().(models.IModel)
 
 	if modelObjHavingOwnership, ok = reflect.New(modelObjHavingOrganization.OrganizationType()).Interface().(models.IHasOwnershipLink); !ok {
@@ -62,7 +62,7 @@ func userHasRolesAccessToModelOrg(db *gorm.DB, oid *datatypes.UUID, typeString s
 	}
 
 	// Get organization's join table name
-	organizationJoinTableName := getJoinTableName(modelObjHavingOwnership)
+	organizationJoinTableName := models.GetJoinTableName(modelObjHavingOwnership)
 
 	rolesQuery := strconv.Itoa(int(roles[0]))
 	for i := 1; i < len(roles); i++ {
@@ -210,9 +210,9 @@ func (mapper *OrganizationMapper) getOneWithIDCore(db *gorm.DB, oid *datatypes.U
 
 	// Graphically:
 	// Model -- Org -- Join Table -- User
-	orgTableName := getOrganizationTableName(modelObjHavingOrganization)
+	orgTableName := models.GetOrganizationTableName(modelObjHavingOrganization)
 	orgTable := reflect.New(modelObjHavingOrganization.OrganizationType()).Interface()
-	joinTableName := getJoinTableName(orgTable.(models.IHasOwnershipLink))
+	joinTableName := models.GetJoinTableName(orgTable.(models.IHasOwnershipLink))
 	orgFieldName := letters.PascalCaseToSnakeCase(modelObjHavingOrganization.GetOrganizationIDFieldName())
 
 	// e.g. INNER JOIN `organization` ON `dock`.`OrganizationID` = `organization`.id
@@ -284,9 +284,9 @@ func (mapper *OrganizationMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, scop
 
 	// Graphically:
 	// Model -- Org -- Join Table -- User
-	orgTableName := getOrganizationTableName(modelObjHavingOrganization)
+	orgTableName := models.GetOrganizationTableName(modelObjHavingOrganization)
 	orgTable := reflect.New(modelObjHavingOrganization.OrganizationType()).Interface()
-	joinTableName := getJoinTableName(orgTable.(models.IHasOwnershipLink))
+	joinTableName := models.GetJoinTableName(orgTable.(models.IHasOwnershipLink))
 	orgFieldName := letters.PascalCaseToSnakeCase(modelObjHavingOrganization.GetOrganizationIDFieldName())
 
 	db = db.Set("gorm:auto_preload", true)
