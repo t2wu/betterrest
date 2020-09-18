@@ -94,7 +94,7 @@ func BearerAuthMiddleware() gin.HandlerFunc {
 		var token string
 		var ok bool
 
-		if token, ok = bearerToken(r); !ok {
+		if token, ok = BearerToken(r); !ok {
 			render.Render(w, r, NewErrTokenInvalid(errors.New("missing token"))) // Not pass, no token
 			c.Abort()
 			return
@@ -163,7 +163,7 @@ func XDebugMiddleWare() gin.HandlerFunc {
 }
 
 // BearerToken returns bearer token
-func bearerToken(r *http.Request) (token string, ok bool) {
+func BearerToken(r *http.Request) (token string, ok bool) {
 	ok = false
 
 	authstring := r.Header.Get("Authorization")
@@ -172,6 +172,23 @@ func bearerToken(r *http.Request) (token string, ok bool) {
 	for _, v := range fields {
 		if ok = strings.HasPrefix(v, "Bearer"); ok {
 			fmt.Sscanf(v, "Bearer %s", &token)
+			return token, ok
+		}
+	}
+
+	return "", false
+}
+
+// BasicToken()
+func BasicToken(r *http.Request) (token string, ok bool) {
+	ok = false
+
+	authstring := r.Header.Get("Authorization")
+	fields := strings.Split(authstring, ",")
+
+	for _, v := range fields {
+		if ok = strings.HasPrefix(v, "Basic"); ok {
+			fmt.Sscanf(v, "Basic %s", &token)
 			return token, ok
 		}
 	}
