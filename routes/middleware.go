@@ -23,11 +23,11 @@ import (
 type contextKey int
 
 const (
-	// contextKeyOwnerID is the id that's given in jwt's iss field
-	contextKeyOwnerID    contextKey = iota
-	contextKeyClient     contextKey = iota
-	contextKeyScope      contextKey = iota
-	contextKeyTokenHours contextKey = iota
+	// ContextKeyOwnerID is the id that's given in jwt's iss field
+	ContextKeyOwnerID    contextKey = iota
+	ContextKeyClient     contextKey = iota
+	ContextKeyScope      contextKey = iota
+	ContextKeyTokenHours contextKey = iota
 )
 
 // http.NotFound
@@ -80,7 +80,7 @@ func ClientAuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		ctx := context.WithValue(c.Request.Context(), contextKeyClient, client)
+		ctx := context.WithValue(c.Request.Context(), ContextKeyClient, client)
 		c.Request = c.Request.WithContext(ctx)
 		c.Next()
 	}
@@ -116,7 +116,7 @@ func BearerAuthMiddleware() gin.HandlerFunc {
 				return
 			}
 
-			ctx := context.WithValue(c.Request.Context(), contextKeyOwnerID, ownerID)
+			ctx := context.WithValue(c.Request.Context(), ContextKeyOwnerID, ownerID)
 			c.Request = c.Request.WithContext(ctx)
 		} else {
 			render.Render(w, r, NewErrTokenInvalid(errors.New("getting ISS from token error")))
@@ -132,7 +132,7 @@ func BearerAuthMiddleware() gin.HandlerFunc {
 				return
 			}
 
-			ctx := context.WithValue(c.Request.Context(), contextKeyScope, scope)
+			ctx := context.WithValue(c.Request.Context(), ContextKeyScope, scope)
 			c.Request = c.Request.WithContext(ctx)
 		} else {
 			render.Render(w, r, NewErrTokenInvalid(errors.New("getting ISS from token error")))
@@ -152,7 +152,7 @@ func XDebugMiddleWare() gin.HandlerFunc {
 		tokenDuration := r.Header.Get("X-DEBUG-TOKEN-DURATION-HOURS")
 		if tokenDuration != "" {
 			if tokenDurationInHours, err := strconv.Atoi(tokenDuration); err == nil {
-				ctx := context.WithValue(c.Request.Context(), contextKeyTokenHours, tokenDurationInHours)
+				ctx := context.WithValue(c.Request.Context(), ContextKeyTokenHours, tokenDurationInHours)
 				c.Request = c.Request.WithContext(ctx)
 			}
 			// if error, ignore, continue

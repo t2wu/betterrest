@@ -18,7 +18,7 @@ import (
 // OwnerIDFromContext gets id from context
 func OwnerIDFromContext(r *http.Request) *datatypes.UUID {
 	var ownerID *datatypes.UUID
-	item := r.Context().Value(contextKeyOwnerID)
+	item := r.Context().Value(ContextKeyOwnerID)
 	if item != nil {
 		ownerID = item.(*datatypes.UUID)
 	}
@@ -28,7 +28,7 @@ func OwnerIDFromContext(r *http.Request) *datatypes.UUID {
 // ScopeFromContext gets scope from context
 func ScopeFromContext(r *http.Request) string {
 	var scope string
-	item := r.Context().Value(contextKeyScope)
+	item := r.Context().Value(ContextKeyScope)
 	if item != nil {
 		scope = item.(string)
 	}
@@ -38,7 +38,7 @@ func ScopeFromContext(r *http.Request) string {
 // TokenHoursFromContext gets hours from context
 func TokenHoursFromContext(r *http.Request) int {
 	tokenHours := -1
-	item := r.Context().Value(contextKeyTokenHours)
+	item := r.Context().Value(ContextKeyTokenHours)
 	if item != nil {
 		tokenHours = item.(int)
 	}
