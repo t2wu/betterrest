@@ -8,7 +8,6 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -21,7 +20,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-chi/render"
-	"github.com/jinzhu/gorm"
 )
 
 // ---------------------------------------------
@@ -144,34 +142,6 @@ func renderModelSlice(w http.ResponseWriter, r *http.Request, typeString string,
 
 // ---------------------------------------------
 
-// getVerifiedAuthUser authenticates the user
-// getVerifiedAuthUser authenticates the user
-func getVerifiedAuthUser(userModel models.IModel) (models.IModel, bool) {
-	userModel2 := reflect.New(models.UserTyp).Interface().(models.IModel)
-
-	// TODO: maybe email is not the login, make it more flexible?
-	email := reflect.ValueOf(userModel).Elem().FieldByName(("Email")).Interface().(string)
-	password := reflect.ValueOf(userModel).Elem().FieldByName(("Password")).Interface().(string)
-
-	err := db.Shared().Where("email = ?", email).First(userModel2).Error
-	if gorm.IsRecordNotFoundError(err) {
-		return nil, false // User doesn't exists with this email
-	} else if err != nil {
-		// Some other unknown error
-		return nil, false
-	}
-
-	passwordHash := reflect.ValueOf(userModel2).Elem().FieldByName("PasswordHash").Interface().(string)
-	if !security.IsSamePassword(password, passwordHash) {
-		// Password doesn't match
-		return nil, false
-	}
-
-	return userModel2, true
-}
-
-// ---------------------------------------------
-
 // UserLoginHandler logs in the user. Effectively creates a JWT token for the user
 func UserLoginHandler() func(c *gin.Context) {
 	return func(c *gin.Context) {
@@ -188,7 +158,7 @@ func UserLoginHandler() func(c *gin.Context) {
 			return
 		}
 
-		authUser, authorized := getVerifiedAuthUser(m)
+		authUser, authorized := security.GetVerifiedAuthUser(m)
 		if !authorized {
 			// unable to login user. maybe doesn't exist?
 			// or username, password wrong

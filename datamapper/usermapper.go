@@ -160,6 +160,7 @@ func (mapper *UserMapper) UpdateOneWithID(db *gorm.DB, oid *datatypes.UUID, scop
 	}
 
 	password := reflect.ValueOf(modelObj).Elem().FieldByName(("Password")).Interface().(string)
+	newPassword := reflect.ValueOf(modelObj).Elem().FieldByName(("NewPassword")).Interface().(string)
 
 	// Additional checking because password should not be blank with update
 	if password == "" {
@@ -167,7 +168,13 @@ func (mapper *UserMapper) UpdateOneWithID(db *gorm.DB, oid *datatypes.UUID, scop
 		return nil, fmt.Errorf("password should not be blank")
 	}
 
-	hash, err := security.HashAndSalt(password)
+	if _, authorized := security.GetVerifiedAuthUser(modelObj); !authorized {
+		// unable to login user. maybe doesn't exist?
+		// or username, password wrong
+		return nil, fmt.Errorf("password incorrect")
+	}
+
+	hash, err := security.HashAndSalt(newPassword)
 	if err != nil {
 		return nil, err
 	}
