@@ -209,12 +209,18 @@ func removePeggedField(db *gorm.DB, modelObj models.IModel) (err error) {
 func updatePeggedFields(db *gorm.DB, oldModelObj models.IModel, newModelObj models.IModel) (err error) {
 	// Delete nested field
 	// Not yet support two-level of nested field
+
+	// Indirect is dereference
+	// Interface() is extract content than re-wrap to interface
+	// Since reflect.New() returns pointer to the object, after reflect.ValueOf
+	// We need to deference it, hence "Indirect", now v1 and v2 are the actual object, not
+	// ptr to objects
 	v1 := reflect.Indirect(reflect.ValueOf(oldModelObj))
 	v2 := reflect.Indirect(reflect.ValueOf(newModelObj))
 
 	for i := 0; i < v1.NumField(); i++ {
 		tag := v1.Type().Field(i).Tag.Get("betterrest")
-		// log.Println("tag:", tag)
+		log.Println("tag:", tag)
 		if tag == "peg" || tag == "pegassoc" || strings.HasPrefix(tag, "pegassoc-manytomany") {
 			fieldVal1 := v1.Field(i)
 			fieldVal2 := v2.Field(i)
@@ -225,12 +231,13 @@ func updatePeggedFields(db *gorm.DB, oldModelObj models.IModel, newModelObj mode
 
 			switch fieldVal1.Kind() {
 			case reflect.Slice:
-				// log.Println("fieldVal1.Len():????", fieldVal1.Len())
-				// log.Println("fieldVal2.Len():????", fieldVal2.Len())
+				// Loop through the slice
 				for j := 0; j < fieldVal1.Len(); j++ {
+					// For example, each fieldVal1.Index(j) is a "Dock{}"
 					id := fieldVal1.Index(j).FieldByName("ID").Interface().(*datatypes.UUID)
 					set1.Add(id.String())
-					m[id.String()] = fieldVal1.Index(j).Interface()
+
+					m[id.String()] = fieldVal1.Index(j).Addr().Interface() // re-wrap a dock
 					// log.Println("----> tim: fieldVal1's type?", fieldVal1.Index(j).Type())
 				}
 
@@ -239,7 +246,7 @@ func updatePeggedFields(db *gorm.DB, oldModelObj models.IModel, newModelObj mode
 					if id != nil {
 						// ID doesn't exist? ignore, it's a new entry without ID
 						set2.Add(id.String())
-						m[id.String()] = fieldVal2.Index(j).Interface()
+						m[id.String()] = fieldVal2.Index(j).Addr().Interface()
 					}
 				}
 			default:
@@ -283,22 +290,7 @@ func updatePeggedFields(db *gorm.DB, oldModelObj models.IModel, newModelObj mode
 					selfTableName := models.GetTableNameFromIModel(oldModelObj)
 					selfID := selfTableName + "_id"
 
-					// log.Println("pegassoc-manytomany------------", reflect.TypeOf(modelToDel))
-
-					// QUESTION: What's the diff between these two??
-					// reflect.ValueOf(modelToDel).FieldByName("ID")
-					// reflect.Indirect(reflect.ValueOf(modelToDel)).FieldByName("ID")
-					// The first return something like this when printed
-					// {ID  *datatypes.UUID gorm:"type:binary(16);primary_key;" json:"id" 0 [0 0] false}
-					// The second just 2920e86e-33b1-4848-a773-e68e5bde4fc0
-
-					idToDel := reflect.Indirect(reflect.ValueOf(modelToDel)).FieldByName("ID").Interface()
-
-					// s1, s2 := reflect.TypeOf(modelToDel).FieldByName("ID")
-					// // FieldByName("ID")
-					// log.Println("fieldby name?", s1, s2)
-					// log.Println(linkTableName, fieldIDName)
-					// test := &modelToDel
+					idToDel := reflect.Indirect(reflect.ValueOf(modelToDel)).Elem().FieldByName("ID").Interface()
 
 					stmt := fmt.Sprintf("DELETE FROM \"%s\" WHERE \"%s\" = ? AND \"%s\" = ?",
 						linkTableName, fieldIDName, selfID)
@@ -311,7 +303,6 @@ func updatePeggedFields(db *gorm.DB, oldModelObj models.IModel, newModelObj mode
 			}
 
 			setIsNew := set2.Difference(set1)
-			// log.Println("+==============================> IS NEW:", setIsNew)
 			for uuid := range setIsNew.List {
 				modelToAdd := m[uuid]
 
@@ -324,24 +315,17 @@ func updatePeggedFields(db *gorm.DB, oldModelObj models.IModel, newModelObj mode
 					// }
 				} else if tag == "pegassoc" {
 
-					// log.Println("!!!!!pegassoc addddddddddddddddddddddd")
-					// for data with its own endpoint, need to associate it
 					columnName := v1.Type().Field(i).Name
-					// assocModel := reflect.Indirect(reflect.ValueOf(modelToAdd)).Type().Name()
-					// fieldName := v1.Type().Field(i).Name
-					// fieldName = fieldName[0 : len(fieldName)-1] // get rid of s
-					// tableName := letters.CamelCaseToPascalCase(fieldName)
+					// id, _ := reflect.ValueOf(modelToAdd).Elem().FieldByName(("ID")).Interface().(*datatypes.UUID)
 
-					// I'm in a dilemma
-					// association_autoupdate when false, no update association
-					// But when true, update association AND update the associated model's content
-					// (because, in has-many, it's the associated model's foreign key that's being updated)
-					// and it update all fields as well.
+					if err = db.First(modelToAdd).Error; err != nil {
+						return err
+					}
+
 					if err = db.Set("gorm:association_autoupdate", true).Model(oldModelObj).Association(columnName).Append(modelToAdd).Error; err != nil {
 						return err
 					}
 				} else if strings.HasPrefix(tag, "pegassoc-manytomany") {
-					// log.Println("SOMETHING NEW HERE!!!!!!!!!!!!!")
 					// No need either, Gorm already creates it
 					// It's the preloading that's the issue.
 				}
