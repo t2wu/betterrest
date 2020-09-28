@@ -29,11 +29,11 @@ var UserTyp reflect.Type
 type MapperType int
 
 const (
-	// MapperTypeOwnership is for type which user owns something
-	MapperTypeOwnership = 0
+	// MapperTypeViaOwnership is for type which user owns something
+	MapperTypeViaOwnership = 0
 
-	// MapperTypeOrganization is for type where an organization owns something
-	MapperTypeOrganization = 1
+	// MapperTypeViaOrganization is for type where an organization owns something
+	MapperTypeViaOrganization = 1
 )
 
 // ModelRegistryOptions is options when you want to add a model to registry
@@ -98,7 +98,7 @@ func AddUserToModelRegistry(typeString string, typ reflect.Type) {
 
 // AddModelRegistry adds a New function for an IModel
 func AddModelRegistry(typeString string, typ reflect.Type) {
-	options := ModelRegistryOptions{BatchEndpoints: "CRUD", IDEndPoints: "RUPD", Mapper: MapperTypeOwnership}
+	options := ModelRegistryOptions{BatchEndpoints: "CRUD", IDEndPoints: "RUPD", Mapper: MapperTypeViaOwnership}
 	AddModelRegistryWithOptions(typeString, typ, options)
 }
 

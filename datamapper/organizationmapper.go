@@ -69,9 +69,9 @@ func userHasRolesAccessToModelOrg(db *gorm.DB, oid *datatypes.UUID, typeString s
 		rolesQuery += "," + strconv.Itoa(int(roles[i]))
 	}
 
-	firstJoin := fmt.Sprintf("INNER JOIN `%s` ON `%s`.id = `%s`.model_id AND `%s`.role IN (%s)", organizationJoinTableName, organizationTableName, organizationJoinTableName,
+	firstJoin := fmt.Sprintf("INNER JOIN \"%s\" ON \"%s\".id = \"%s\".model_id AND \"%s\".role IN (%s)", organizationJoinTableName, organizationTableName, organizationJoinTableName,
 		organizationJoinTableName, rolesQuery)
-	secondJoin := fmt.Sprintf("INNER JOIN `user` ON `user`.id = `%s`.user_id AND `%s`.user_id = UUID_TO_BIN(?)", organizationJoinTableName, organizationJoinTableName)
+	secondJoin := fmt.Sprintf("INNER JOIN \"user\" ON \"user\".id = \"%s\".user_id AND \"%s\".user_id = ?", organizationJoinTableName, organizationJoinTableName)
 	db = db.Table(organizationTableName).Joins(firstJoin).Joins(secondJoin, oid.String())
 
 	organizations, err := models.NewSliceFromDBByType(modelObjHavingOrganization.OrganizationType(), db.Find)
@@ -83,6 +83,10 @@ func userHasRolesAccessToModelOrg(db *gorm.DB, oid *datatypes.UUID, typeString s
 	// is specified in
 	organizationID := modelObjHavingOrganization.GetOrganizationID()
 	for _, org := range organizations {
+		if organizationID == nil {
+			return false, errors.New("missing organization link ID")
+
+		}
 		if org.GetID().String() == organizationID.String() {
 			return true, nil
 		}
@@ -215,11 +219,11 @@ func (mapper *OrganizationMapper) getOneWithIDCore(db *gorm.DB, oid *datatypes.U
 	joinTableName := models.GetJoinTableName(orgTable.(models.IHasOwnershipLink))
 	orgFieldName := letters.PascalCaseToSnakeCase(modelObjHavingOrganization.GetOrganizationIDFieldName())
 
-	// e.g. INNER JOIN `organization` ON `dock`.`OrganizationID` = `organization`.id
-	firstJoin := fmt.Sprintf("INNER JOIN `%s` ON `%s`.`%s` = `%s`.id AND `%s`.`id` = UUID_TO_BIN(?)", orgTableName, rtable, orgFieldName, orgTableName, rtable)
-	// e.g. INNER JOIN `user_owns_organization` ON `organization`.id = `user_owns_organization`.model_id
-	secondJoin := fmt.Sprintf("INNER JOIN `%s` ON `%s`.id = `%s`.model_id", joinTableName, orgTableName, joinTableName)
-	thirdJoin := fmt.Sprintf("INNER JOIN `user` ON `user`.id = `%s`.user_id AND `%s`.user_id = UUID_TO_BIN(?)", joinTableName, joinTableName)
+	// e.g. INNER JOIN \"organization\" ON \"dock\".\"OrganizationID\" = \"organization\".id
+	firstJoin := fmt.Sprintf("INNER JOIN \"%s\" ON \"%s\".\"%s\" = \"%s\".id AND \"%s\".\"id\" = ?", orgTableName, rtable, orgFieldName, orgTableName, rtable)
+	// e.g. INNER JOIN \"user_owns_organization\" ON \"organization\".id = \"user_owns_organization\".model_id
+	secondJoin := fmt.Sprintf("INNER JOIN \"%s\" ON \"%s\".id = \"%s\".model_id", joinTableName, orgTableName, joinTableName)
+	thirdJoin := fmt.Sprintf("INNER JOIN \"user\" ON \"user\".id = \"%s\".user_id AND \"%s\".user_id = ?", joinTableName, joinTableName)
 
 	err := db.Table(rtable).Joins(firstJoin, id.String()).Joins(secondJoin).Joins(thirdJoin, oid.String()).Find(modelObj).Error
 	if err != nil {
@@ -232,7 +236,7 @@ func (mapper *OrganizationMapper) getOneWithIDCore(db *gorm.DB, oid *datatypes.U
 	orgID := modelObj.(models.IHasOrganizationLink).GetOrganizationID().String()
 
 	// Get the roles for the organizations this user has access to
-	if err2 := db.Table(joinTableName).Select("model_id, role").Where("user_id = UUID_TO_BIN(?) AND model_id=UUID_TO_BIN(?)", oid.String(),
+	if err2 := db.Table(joinTableName).Select("model_id, role").Where("user_id = ? AND model_id = ?", oid.String(),
 		orgID).Scan(joinTable).Error; err2 != nil {
 		return nil, 0, err2
 	}
@@ -294,11 +298,11 @@ func (mapper *OrganizationMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, scop
 	structName := reflect.TypeOf(models.NewFromTypeString(typeString)).Elem().Name()
 	rtable := strings.ToLower(structName) // table name
 
-	// e.g. INNER JOIN `organization` ON `dock`.`OrganizationID` = `organization`.id
-	firstJoin := fmt.Sprintf("INNER JOIN `%s` ON `%s`.`%s` = `%s`.id", orgTableName, rtable, orgFieldName, orgTableName)
-	// e.g. INNER JOIN `user_owns_organization` ON `organization`.id = `user_owns_organization`.model_id
-	secondJoin := fmt.Sprintf("INNER JOIN `%s` ON `%s`.id = `%s`.model_id", joinTableName, orgTableName, joinTableName)
-	thirdJoin := fmt.Sprintf("INNER JOIN `user` ON `user`.id = `%s`.user_id AND `%s`.user_id = UUID_TO_BIN(?)", joinTableName, joinTableName)
+	// e.g. INNER JOIN \"organization\" ON \"dock\".\"OrganizationID\" = \"organization\".id
+	firstJoin := fmt.Sprintf("INNER JOIN \"%s\" ON \"%s\".\"%s\" = \"%s\".id", orgTableName, rtable, orgFieldName, orgTableName)
+	// e.g. INNER JOIN \"user_owns_organization\" ON \"organization\".id = \"user_owns_organization\".model_id
+	secondJoin := fmt.Sprintf("INNER JOIN \"%s\" ON \"%s\".id = \"%s\".model_id", joinTableName, orgTableName, joinTableName)
+	thirdJoin := fmt.Sprintf("INNER JOIN \"user\" ON \"user\".id = \"%s\".user_id AND \"%s\".user_id = ?", joinTableName, joinTableName)
 
 	if cstart != 0 && cstop != 0 {
 		db = db.Where(rtable+".created_at BETWEEN ? AND ?", time.Unix(int64(cstart), 0), time.Unix(int64(cstop), 0))
@@ -313,7 +317,7 @@ func (mapper *OrganizationMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, scop
 	db = db.Table(rtable).Joins(firstJoin).Joins(secondJoin).Joins(thirdJoin, oid.String())
 
 	if order := options["order"].(string); order != "" {
-		stmt := fmt.Sprintf("`%s`.created_at %s", rtable, order)
+		stmt := fmt.Sprintf("\"%s\".created_at %s", rtable, order)
 		db = db.Order(stmt)
 		// db2 = db2.Order(stmt)
 	}
@@ -335,8 +339,8 @@ func (mapper *OrganizationMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, scop
 	// then fetch the role, which becomes the role for the model
 
 	// Get the roles for the organizations this user has access to
-	// stmt := fmt.Sprintf("SELECT model_id, role FROM %s WHERE user_id = UUID_TO_BIN(?)", joinTableName)
-	rows, err := db2.Table(joinTableName).Select("model_id, role").Where("user_id = UUID_TO_BIN(?)", oid.String()).Rows()
+	// stmt := fmt.Sprintf("SELECT model_id, role FROM %s WHERE user_id = ?", joinTableName)
+	rows, err := db2.Table(joinTableName).Select("model_id, role").Where("user_id = ?", oid.String()).Rows()
 	if err != nil {
 		return nil, nil, err
 	}

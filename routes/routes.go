@@ -65,10 +65,10 @@ func AddRESTRoutes(r *gin.Engine) {
 		if typestring != "users" {
 			var dm interface{}
 			switch reg.Mapper {
-			case models.MapperTypeOrganization:
+			case models.MapperTypeViaOrganization:
 				dm = datamapper.SharedOrganizationMapper()
 				break
-			case models.MapperTypeOwnership:
+			case models.MapperTypeViaOwnership:
 				fallthrough
 			default:
 				dm = datamapper.SharedOwnershipMapper()
