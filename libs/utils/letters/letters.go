@@ -16,11 +16,17 @@ func PascalCaseToSnakeCase(str string) string {
 		if isStrLowerAtPosI(str, i) {
 			newstr.WriteString(string(str[i]))
 			i = i + 1
-		} else {
+		} else { // is upper case
 			byteArray := make([]byte, 0)
 			byteArray = append(byteArray, str[i])
 			var j int
 			for j = i + 1; len(str) > j && isStrUpperAtPosI(str, j); j++ {
+
+				// abcDEFgh -> abc_de_fgh, so f should be after _
+				k := j + 1
+				if len(str) > k && isStrLowerAtPosI(str, k) {
+					break
+				}
 				byteArray = append(byteArray, str[j])
 			}
 			newstr.WriteString("_")
