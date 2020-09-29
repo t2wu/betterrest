@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
-	"strings"
 	"sync"
 	"time"
 
@@ -187,10 +186,7 @@ func (mapper *OwnershipMapper) getOneWithIDCore(db *gorm.DB, oid *datatypes.UUID
 
 	db = db.Set("gorm:auto_preload", true)
 
-	// o := reflect.ValueOf(modelObj).Elem().FieldByName("Ownerships")
-
-	structName := reflect.TypeOf(modelObj).Elem().Name()
-	rtable := strings.ToLower(structName) // table name
+	rtable := models.GetTableNameFromIModel(modelObj)
 
 	/*
 		SELECT * from some_model
@@ -263,8 +259,7 @@ func (mapper *OwnershipMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, scope *
 
 	db = db.Set("gorm:auto_preload", true)
 
-	structName := reflect.TypeOf(models.NewFromTypeString(typeString)).Elem().Name()
-	rtable := strings.ToLower(structName) // table name
+	rtable := models.GetTableNameFromTypeString(typeString)
 
 	modelObjOwnership, ok := models.NewFromTypeString(typeString).(models.IHasOwnershipLink)
 	if !ok {
@@ -280,7 +275,15 @@ func (mapper *OwnershipMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, scope *
 	}
 
 	var err error
+	// If I want quering into nested data
+	// I need INNER JOIN that table where the field is what we search for,
+	// and that table's link back to this ID is the id of this table
 	db, err = constructDbFromURLFieldQuery(db, typeString, options)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	db, err = constructDbFromURLInnerFieldQuery(db, typeString, options)
 	if err != nil {
 		return nil, nil, err
 	}

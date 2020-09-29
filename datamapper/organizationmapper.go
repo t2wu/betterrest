@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"reflect"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -201,8 +200,7 @@ func (mapper *OrganizationMapper) getOneWithIDCore(db *gorm.DB, oid *datatypes.U
 
 	db = db.Set("gorm:auto_preload", true)
 
-	structName := reflect.TypeOf(modelObj).Elem().Name()
-	rtable := strings.ToLower(structName) // table name
+	rtable := models.GetTableNameFromIModel(modelObj)
 
 	var ok bool
 	var modelObjHavingOrganization models.IHasOrganizationLink
@@ -295,8 +293,7 @@ func (mapper *OrganizationMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, scop
 
 	db = db.Set("gorm:auto_preload", true)
 
-	structName := reflect.TypeOf(models.NewFromTypeString(typeString)).Elem().Name()
-	rtable := strings.ToLower(structName) // table name
+	rtable := models.GetTableNameFromTypeString(typeString)
 
 	// e.g. INNER JOIN \"organization\" ON \"dock\".\"OrganizationID\" = \"organization\".id
 	firstJoin := fmt.Sprintf("INNER JOIN \"%s\" ON \"%s\".\"%s\" = \"%s\".id", orgTableName, rtable, orgFieldName, orgTableName)
@@ -310,6 +307,11 @@ func (mapper *OrganizationMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, scop
 
 	var err error
 	db, err = constructDbFromURLFieldQuery(db, typeString, options)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	db, err = constructDbFromURLInnerFieldQuery(db, typeString, options)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -220,7 +220,7 @@ func updatePeggedFields(db *gorm.DB, oldModelObj models.IModel, newModelObj mode
 
 	for i := 0; i < v1.NumField(); i++ {
 		tag := v1.Type().Field(i).Tag.Get("betterrest")
-		log.Println("tag:", tag)
+
 		if tag == "peg" || tag == "pegassoc" || strings.HasPrefix(tag, "pegassoc-manytomany") {
 			fieldVal1 := v1.Field(i)
 			fieldVal2 := v2.Field(i)
@@ -407,6 +407,120 @@ func loadManyToManyBecauseGormFailsWithID(db *gorm.DB, modelObj models.IModel) e
 	return nil
 }
 
+func constructDbFromURLInnerFieldQuery(db *gorm.DB, typeString string, options map[string]interface{}) (*gorm.DB, error) {
+	structName := reflect.TypeOf(models.NewFromTypeString(typeString)).Elem().Name()
+	// rtable := letters.PascalCaseToSnakeCase(structName)
+	rtable := strings.ToLower(structName) // table name
+
+	if values, ok := options["better_otherqueries"].(url.Values); ok {
+		obj := models.NewFromTypeString(typeString)
+		v := reflect.Indirect(reflect.ValueOf(obj))
+		typeOfS := v.Type()
+		fieldMap := make(map[string]bool)
+		fieldTypeMap := make(map[string]string)
+
+		// https://stackoverflow.com/questions/18926303/iterate-through-the-fields-of-a-struct-in-go
+		for i := 0; i < v.NumField(); i++ {
+			fieldMap[typeOfS.Field(i).Name] = true
+			fieldTypeMap[typeOfS.Field(i).Name] = typeOfS.Field(i).Type.String()
+		}
+		// "id" is an exception because it's in struct embedding and isn't found this way
+		// so we hard code it.
+		fieldMap["Id"] = true
+		fieldTypeMap["Id"] = "*datatypes.UUID"
+
+		// values is a map
+		for fieldName, fieldValues := range values {
+			toks := strings.Split(fieldName, ".")
+			if len(toks) != 2 { // Currently only allow one level of nesting
+				continue
+			}
+			fieldName1, fieldName2 := toks[0], toks[1]
+
+			k, ok := typeOfS.FieldByName(letters.CamelCaseToPascalCase(fieldName1))
+			if !ok {
+				return nil, fmt.Errorf("field name %s does not exist", fieldName1)
+			}
+			// k.Index
+			t := k.Type
+
+			var innerTyp reflect.Type
+
+			switch t.Kind() {
+			case reflect.Slice:
+				innerTyp = t.Elem()
+			case reflect.Struct:
+				innerTyp = t
+			default:
+				fmt.Printf("Unknown type")
+				return nil, fmt.Errorf("unknown error occurred while processing nested field query")
+			}
+
+			// Check that fieldName2 is in innerType
+			// reflect.Type(reflect.New(innerTyp).Elem())
+			innerStructField, ok := innerTyp.FieldByName(letters.CamelCaseToPascalCase(fieldName2))
+			var searchType string
+			if !ok {
+				if fieldName2 != "id" {
+					return nil, fmt.Errorf("field name %s does not exist", fieldName2)
+				}
+				searchType = "datatypes.UUID"
+			} else {
+				searchType = innerStructField.Type.String()
+			}
+
+			fieldValues2 := make([]interface{}, len(fieldValues), len(fieldValues))
+			switch searchType {
+			case "*datatypes.UUID":
+				fallthrough
+			case "datatypes.UUID":
+				for i, fieldValue := range fieldValues {
+					data, err := datatypes.NewUUIDFromString(fieldValue)
+					if err != nil {
+						return nil, err
+					}
+					fieldValues2[i] = data
+				}
+				break
+			case "*bool":
+				fallthrough
+			case "bool":
+				for i, fieldValue := range fieldValues {
+					data, err := strconv.ParseBool(fieldValue)
+					if err != nil {
+						return nil, err
+					}
+					fieldValues2[i] = data
+				}
+				break
+			default:
+				for i, fieldValue := range fieldValues {
+					fieldValues2[i] = fieldValue
+				}
+			}
+
+			// Get the model name
+			// structName := reflect.TypeOf(innerTyp).Elem().Name()
+			// rtable := strings.ToLower(structName) // table name
+			innerTable := letters.PascalCaseToSnakeCase(strings.Split(innerTyp.String(), ".")[1])
+			rtableSnake := letters.PascalCaseToSnakeCase(structName)
+
+			// It's possible to have multiple values by using ?xx=yy&xx=zz
+			blanks := strings.Repeat("?,", len(fieldValues2))
+			blanks = blanks[:len(blanks)-1]
+			// joinStmt := fmt.Sprintf(innerTable+"."+letters.PascalCaseToSnakeCase(fieldName2)+" IN (%s)", blanks)
+
+			// Get the inner table's type
+			joinStmt := fmt.Sprintf("INNER JOIN \"%s\" ON \"%s\".%s = \"%s\".id AND ",
+				innerTable, innerTable, rtableSnake+"_id", rtable) + fmt.Sprintf(innerTable+"."+letters.PascalCaseToSnakeCase(fieldName2)+" IN (%s)", blanks)
+
+			db = db.Joins(joinStmt, fieldValues2...)
+		}
+	}
+
+	return db, nil
+}
+
 func constructDbFromURLFieldQuery(db *gorm.DB, typeString string, options map[string]interface{}) (*gorm.DB, error) {
 	structName := reflect.TypeOf(models.NewFromTypeString(typeString)).Elem().Name()
 	rtable := strings.ToLower(structName) // table name
@@ -431,20 +545,27 @@ func constructDbFromURLFieldQuery(db *gorm.DB, typeString string, options map[st
 		fieldMap["Id"] = true
 		fieldTypeMap["Id"] = "*datatypes.UUID"
 
+		// values is a map
 		for fieldName, fieldValues := range values {
+			// If querying nested field, skip
+			if strings.Contains(fieldName, ".") {
+				continue
+			}
+
 			fieldNamePascal := letters.CamelCaseToPascalCase(fieldName)
 
 			if fieldMap[fieldNamePascal] == false && fieldNamePascal != "Id" {
-				return nil, fmt.Errorf("fieldname %s does not exist", fieldName)
+				return nil, fmt.Errorf("field name %s does not exist", fieldName)
 			}
 
+			// It's possible to have multiple values by using ?xx=yy&xx=zz
 			blanks := strings.Repeat("?,", len(fieldValues))
 			blanks = blanks[:len(blanks)-1]
 			whereStmt := fmt.Sprintf(rtable+"."+letters.PascalCaseToSnakeCase(fieldName)+" IN (%s)", blanks)
 
 			fieldValues2 := make([]interface{}, len(fieldValues), len(fieldValues))
 
-			log.Println(" fieldTypeMap[fieldNamePascal]:", fieldTypeMap[fieldNamePascal])
+			// log.Println(" fieldTypeMap[fieldNamePascal]:", fieldTypeMap[fieldNamePascal])
 			switch fieldTypeMap[fieldNamePascal] {
 			case "*datatypes.UUID":
 				fallthrough
