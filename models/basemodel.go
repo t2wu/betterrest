@@ -251,7 +251,13 @@ func GetTableNameFromIModel(model IModel) string {
 	if m, ok := model.(IHasTableName); ok {
 		tableName = m.TableName()
 	} else {
-		tableName = letters.PascalCaseToSnakeCase(reflect.TypeOf(model).String())
+		tableName = reflect.TypeOf(model).String()
+		// If it is something like "models.XXX", we only want the stuff ater "."
+		if strings.Contains(tableName, ".") {
+			tableName = strings.Split(tableName, ".")[1]
+		}
+
+		tableName = letters.PascalCaseToSnakeCase(tableName)
 	}
 
 	// If it's a pointer, get rid of "*"
@@ -259,9 +265,5 @@ func GetTableNameFromIModel(model IModel) string {
 		tableName = tableName[1:]
 	}
 
-	// If it is something like "models.XXX", we only want the stuff ater "."
-	if strings.Contains(tableName, ".") {
-		return strings.Split(tableName, ".")[1]
-	}
 	return tableName
 }
