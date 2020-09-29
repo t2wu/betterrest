@@ -267,3 +267,15 @@ func GetTableNameFromIModel(model IModel) string {
 
 	return tableName
 }
+
+// GetTableNameFromTypeString get table name from typeString
+func GetTableNameFromTypeString(typeString string) string {
+	model := NewFromTypeString(typeString)
+	return GetTableNameFromIModel(model)
+}
+
+// GetTableNameFromType get table name from the model reflect.type
+func GetTableNameFromType(typ reflect.Type) string {
+	model := reflect.New(typ).Interface().(IModel)
+	return GetTableNameFromIModel(model)
+}
