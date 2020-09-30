@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/stoewer/go-strcase"
 	"github.com/t2wu/betterrest/libs/datatypes"
-	"github.com/t2wu/betterrest/libs/utils/letters"
 	"github.com/t2wu/betterrest/models"
 
 	"github.com/jinzhu/gorm"
@@ -215,7 +215,7 @@ func (mapper *OrganizationMapper) getOneWithIDCore(db *gorm.DB, oid *datatypes.U
 	orgTableName := models.GetOrganizationTableName(modelObjHavingOrganization)
 	orgTable := reflect.New(modelObjHavingOrganization.OrganizationType()).Interface()
 	joinTableName := models.GetJoinTableName(orgTable.(models.IHasOwnershipLink))
-	orgFieldName := letters.PascalCaseToSnakeCase(modelObjHavingOrganization.GetOrganizationIDFieldName())
+	orgFieldName := strcase.SnakeCase(modelObjHavingOrganization.GetOrganizationIDFieldName())
 
 	// e.g. INNER JOIN \"organization\" ON \"dock\".\"OrganizationID\" = \"organization\".id
 	firstJoin := fmt.Sprintf("INNER JOIN \"%s\" ON \"%s\".\"%s\" = \"%s\".id AND \"%s\".\"id\" = ?", orgTableName, rtable, orgFieldName, orgTableName, rtable)
@@ -289,7 +289,7 @@ func (mapper *OrganizationMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, scop
 	orgTableName := models.GetOrganizationTableName(modelObjHavingOrganization)
 	orgTable := reflect.New(modelObjHavingOrganization.OrganizationType()).Interface()
 	joinTableName := models.GetJoinTableName(orgTable.(models.IHasOwnershipLink))
-	orgFieldName := letters.PascalCaseToSnakeCase(modelObjHavingOrganization.GetOrganizationIDFieldName())
+	orgFieldName := strcase.SnakeCase(modelObjHavingOrganization.GetOrganizationIDFieldName())
 
 	db = db.Set("gorm:auto_preload", true)
 

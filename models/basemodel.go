@@ -5,9 +5,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/stoewer/go-strcase"
 	"github.com/t2wu/betterrest/libs/datatypes"
 	"github.com/t2wu/betterrest/libs/utils/jsontransform"
-	"github.com/t2wu/betterrest/libs/utils/letters"
 
 	"github.com/asaskevich/govalidator"
 	"github.com/jinzhu/gorm"
@@ -104,7 +104,7 @@ func GetJoinTableName(modelObj IHasOwnershipLink) string {
 	}
 
 	typeName := modelObj.OwnershipType().Name()
-	return letters.PascalCaseToSnakeCase(typeName)
+	return strcase.SnakeCase(typeName)
 }
 
 // GetOrganizationTableName if comforms to IHasOrganizationLink
@@ -114,7 +114,7 @@ func GetOrganizationTableName(modelObj IHasOrganizationLink) string {
 	}
 
 	typeName := modelObj.OrganizationType().Name()
-	return letters.PascalCaseToSnakeCase(typeName)
+	return strcase.SnakeCase(typeName)
 }
 
 // IDoRealDelete is an interface to customize specification for real db delete
@@ -257,7 +257,7 @@ func GetTableNameFromIModel(model IModel) string {
 			tableName = strings.Split(tableName, ".")[1]
 		}
 
-		tableName = letters.PascalCaseToSnakeCase(tableName)
+		tableName = strcase.SnakeCase(tableName)
 	}
 
 	// If it's a pointer, get rid of "*"

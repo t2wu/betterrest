@@ -6,37 +6,6 @@ import (
 	"unicode/utf8"
 )
 
-// PascalCaseToSnakeCase turns Pascal case to snake case, but if xxxID then xxx_id
-// This is so we can find the entry in the database
-func PascalCaseToSnakeCase(str string) string {
-	var newstr strings.Builder
-	newstr.WriteString(strings.ToLower(string(str[0])))
-	i := 1
-	for i < len(str) {
-		if isStrLowerAtPosI(str, i) {
-			newstr.WriteString(string(str[i]))
-			i = i + 1
-		} else { // is upper case
-			byteArray := make([]byte, 0)
-			byteArray = append(byteArray, str[i])
-			var j int
-			for j = i + 1; len(str) > j && isStrUpperAtPosI(str, j); j++ {
-
-				// abcDEFgh -> abc_de_fgh, so f should be after _
-				k := j + 1
-				if len(str) > k && isStrLowerAtPosI(str, k) {
-					break
-				}
-				byteArray = append(byteArray, str[j])
-			}
-			newstr.WriteString("_")
-			newstr.WriteString(strings.ToLower(string(byteArray)))
-			i = j
-		}
-	}
-	return newstr.String()
-}
-
 // CamelCaseToPascalCase turns camel case to pascal case (first letter capitalized)
 func CamelCaseToPascalCase(str string) string {
 	if len(str) == 0 {

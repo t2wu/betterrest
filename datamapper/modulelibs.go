@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/stoewer/go-strcase"
 	"github.com/t2wu/betterrest/libs/datatypes"
 	"github.com/t2wu/betterrest/libs/utils/letters"
 	"github.com/t2wu/betterrest/models"
@@ -437,7 +438,7 @@ func constructDbFromURLInnerFieldQuery(db *gorm.DB, typeString string, options m
 	log.Printf("fieldName: %+v\n", dic)
 
 	model := models.NewFromTypeString(typeString)
-	rtableSnake := letters.PascalCaseToSnakeCase(reflect.TypeOf(model).Elem().Name())
+	rtableSnake := strcase.SnakeCase(reflect.TypeOf(model).Elem().Name())
 
 	for fieldName1, field2Dic := range dic {
 		// Important!! Check if fieldName is actually part of the schema, otherwise risk of sequal injection
@@ -451,7 +452,7 @@ func constructDbFromURLInnerFieldQuery(db *gorm.DB, typeString string, options m
 			return nil, err
 		}
 
-		innerTable := letters.PascalCaseToSnakeCase(strings.Split(innerType.String(), ".")[1])
+		innerTable := strcase.SnakeCase(strings.Split(innerType.String(), ".")[1])
 
 		joinStmt := fmt.Sprintf("INNER JOIN \"%s\" ON \"%s\".%s = \"%s\".id ",
 			innerTable, innerTable, rtableSnake+"_id", rtable)
@@ -491,10 +492,9 @@ func constructDbFromURLInnerFieldQuery(db *gorm.DB, typeString string, options m
 			// It's possible to have multiple values by using ?xx=yy&xx=zz
 			blanks := strings.Repeat("?,", len(fieldValues2))
 			blanks = blanks[:len(blanks)-1]
-			// joinStmt := fmt.Sprintf(innerTable+"."+letters.PascalCaseToSnakeCase(fieldName2)+" IN (%s)", blanks)
 
 			// Get the inner table's type
-			joinStmt += fmt.Sprintf("AND "+innerTable+"."+letters.PascalCaseToSnakeCase(fieldName2)+" IN (%s) ", blanks)
+			joinStmt += fmt.Sprintf("AND "+innerTable+"."+strcase.SnakeCase(fieldName2)+" IN (%s) ", blanks)
 
 			queryValues = append(queryValues, fieldValues2...)
 		}
@@ -529,7 +529,7 @@ func constructDbFromURLFieldQuery(db *gorm.DB, typeString string, options map[st
 		// It's possible to have multiple values by using ?xx=yy&xx=zz
 		blanks := strings.Repeat("?,", len(fieldValues))
 		blanks = blanks[:len(blanks)-1]
-		whereStmt := fmt.Sprintf(rtable+"."+letters.PascalCaseToSnakeCase(fieldName)+" IN (%s)", blanks)
+		whereStmt := fmt.Sprintf(rtable+"."+strcase.SnakeCase(fieldName)+" IN (%s)", blanks)
 
 		fieldValues2, err := transformFieldValue(fieldType.String(), fieldValues)
 		if err != nil {
