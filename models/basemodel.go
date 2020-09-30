@@ -75,7 +75,7 @@ func (b *BaseModel) Validate() error {
 
 // IModel is the interface for all domain models
 type IModel interface {
-	Permissions(r UserRole) jsontransform.JSONFields
+	Permissions(r UserRole, scope *string) jsontransform.JSONFields
 	// CherryPickFields(r UserRole) jsontransform.JSONFields
 
 	// The following two avoids having to use reflection to access ID

@@ -52,7 +52,7 @@ type JSONBodyWithContent struct {
 
 // ModelOrModelsFromJSONBody parses JSON body into array of models
 // It take care where the case when it is not even an array and there is a "content" in there
-func ModelOrModelsFromJSONBody(r *http.Request, typeString string) ([]models.IModel, *bool, render.Renderer) {
+func ModelOrModelsFromJSONBody(r *http.Request, typeString string, scope *string) ([]models.IModel, *bool, render.Renderer) {
 	defer r.Body.Close()
 	var jsn []byte
 	var modelObjs []models.IModel
@@ -65,7 +65,7 @@ func ModelOrModelsFromJSONBody(r *http.Request, typeString string) ([]models.IMo
 
 	canHaveCreatedAt := false
 	modelObj := models.NewFromTypeString(typeString)
-	if _, ok := modelObj.Permissions(models.Admin)["createdAt"]; ok {
+	if _, ok := modelObj.Permissions(models.Admin, scope)["createdAt"]; ok {
 		canHaveCreatedAt = true
 	}
 
@@ -146,7 +146,7 @@ func ModelOrModelsFromJSONBody(r *http.Request, typeString string) ([]models.IMo
 }
 
 // ModelsFromJSONBody parses JSON body into array of models
-func ModelsFromJSONBody(r *http.Request, typeString string) ([]models.IModel, render.Renderer) {
+func ModelsFromJSONBody(r *http.Request, typeString string, scope *string) ([]models.IModel, render.Renderer) {
 	defer r.Body.Close()
 	var jsn []byte
 	var modelObjs []models.IModel
@@ -168,7 +168,7 @@ func ModelsFromJSONBody(r *http.Request, typeString string) ([]models.IModel, re
 
 	modelTest := models.NewFromTypeString(typeString)
 	removeCreated := false
-	if _, ok := modelTest.Permissions(models.Admin)["createdAt"]; ok {
+	if _, ok := modelTest.Permissions(models.Admin, scope)["createdAt"]; ok {
 		// there is created_at field, so we remove it because it's suppose to be
 		// time object and I have int which is not unmarshable
 		removeCreated = true
@@ -212,7 +212,7 @@ func ModelsFromJSONBody(r *http.Request, typeString string) ([]models.IModel, re
 // FIXME:
 // Validation should not be done here because empty field does not pass validation,
 // but sometimes we need empty fields such as patch
-func ModelFromJSONBody(r *http.Request, typeString string) (models.IModel, render.Renderer) {
+func ModelFromJSONBody(r *http.Request, typeString string, scope *string) (models.IModel, render.Renderer) {
 	defer r.Body.Close()
 	var jsn []byte
 	var err error
@@ -223,7 +223,7 @@ func ModelFromJSONBody(r *http.Request, typeString string) (models.IModel, rende
 
 	modelObj := models.NewFromTypeString(typeString)
 
-	if _, ok := modelObj.Permissions(models.Admin)["createdAt"]; ok {
+	if _, ok := modelObj.Permissions(models.Admin, scope)["createdAt"]; ok {
 		// there is created_at field, so we remove it because it's suppose to be
 		// time object and I have int which is not unmarshable
 		jsn2, err := removeCreatedAtFromModel(jsn)

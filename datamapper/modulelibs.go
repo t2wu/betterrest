@@ -435,8 +435,6 @@ func constructDbFromURLInnerFieldQuery(db *gorm.DB, typeString string, options m
 		innerD[fieldName2] = fieldValues
 	}
 
-	log.Printf("fieldName: %+v\n", dic)
-
 	model := models.NewFromTypeString(typeString)
 	rtableSnake := strcase.SnakeCase(reflect.TypeOf(model).Elem().Name())
 

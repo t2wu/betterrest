@@ -97,10 +97,10 @@ func createdTimeRangeFromQueryString(values *url.Values) (int, int, error) {
 	return 0, 0, nil
 }
 
-func modelObjsToJSON(typeString string, modelObjs []models.IModel, roles []models.UserRole) (string, error) {
+func modelObjsToJSON(typeString string, modelObjs []models.IModel, roles []models.UserRole, scope *string) (string, error) {
 	arr := make([]string, len(modelObjs))
 	for i, v := range modelObjs {
-		if j, err := tools.ToJSON(typeString, v, roles[i]); err != nil {
+		if j, err := tools.ToJSON(typeString, v, roles[i], scope); err != nil {
 			return "", err
 		} else {
 			arr[i] = string(j)
@@ -111,9 +111,9 @@ func modelObjsToJSON(typeString string, modelObjs []models.IModel, roles []model
 	return content, nil
 }
 
-func renderModel(w http.ResponseWriter, r *http.Request, typeString string, modelObj models.IModel, role models.UserRole) {
+func renderModel(w http.ResponseWriter, r *http.Request, typeString string, modelObj models.IModel, role models.UserRole, scope *string) {
 	// render.JSON(w, r, modelObj) // cannot use this since no picking the field we need
-	jsonBytes, err := tools.ToJSON(typeString, modelObj, role)
+	jsonBytes, err := tools.ToJSON(typeString, modelObj, role, scope)
 	if err != nil {
 		log.Println("Error in renderModel:", err)
 		render.Render(w, r, NewErrGenJSON(err))
@@ -126,8 +126,8 @@ func renderModel(w http.ResponseWriter, r *http.Request, typeString string, mode
 	w.Write([]byte(content))
 }
 
-func renderModelSlice(w http.ResponseWriter, r *http.Request, typeString string, modelObjs []models.IModel, roles []models.UserRole) {
-	jsonString, err := modelObjsToJSON(typeString, modelObjs, roles)
+func renderModelSlice(w http.ResponseWriter, r *http.Request, typeString string, modelObjs []models.IModel, roles []models.UserRole, scope *string) {
+	jsonString, err := modelObjsToJSON(typeString, modelObjs, roles, scope)
 	if err != nil {
 		log.Println("Error in renderModelSlice:", err)
 		render.Render(w, r, NewErrGenJSON(err))
@@ -152,7 +152,8 @@ func UserLoginHandler() func(c *gin.Context) {
 			tokenHours = 3
 		}
 
-		m, httperr := ModelFromJSONBody(r, "users") // m is models.IModel
+		scope := "owner"
+		m, httperr := ModelFromJSONBody(r, "users", &scope) // m is models.IModel
 		if httperr != nil {
 			render.Render(w, r, httperr)
 			return
@@ -167,7 +168,6 @@ func UserLoginHandler() func(c *gin.Context) {
 		}
 
 		// login success, return access token
-		scope := "owner"
 		payload, err := createTokenPayloadForScope(authUser.GetID(), &scope, tokenHours)
 		if err != nil {
 			render.Render(w, r, NewErrGeneratingToken(err))
@@ -244,7 +244,7 @@ func ReadAllHandler(typeString string, mapper datamapper.IGetAllMapper) func(c *
 			return
 		}
 
-		renderModelSlice(w, r, typeString, modelObjs, roles)
+		renderModelSlice(w, r, typeString, modelObjs, roles, &scope)
 		return
 	}
 }
@@ -259,7 +259,7 @@ func CreateHandler(typeString string, mapper datamapper.ICreateMapper) func(c *g
 
 		ownerID, scope := OwnerIDFromContext(r), ScopeFromContext(r)
 
-		modelObjs, isBatch, httperr := ModelOrModelsFromJSONBody(r, typeString)
+		modelObjs, isBatch, httperr := ModelOrModelsFromJSONBody(r, typeString, &scope)
 		if httperr != nil {
 			render.Render(w, r, httperr)
 			return
@@ -289,7 +289,7 @@ func CreateHandler(typeString string, mapper datamapper.ICreateMapper) func(c *g
 			for i := 0; i < len(modelObjs); i++ {
 				roles = append(roles, models.Admin)
 			}
-			renderModelSlice(w, r, typeString, modelObjs, roles)
+			renderModelSlice(w, r, typeString, modelObjs, roles, &scope)
 		} else {
 			if modelObj, err = mapper.CreateOne(tx, ownerID, &scope, typeString, modelObjs[0]); err != nil {
 				// FIXME, there is more than one type of error here
@@ -308,7 +308,7 @@ func CreateHandler(typeString string, mapper datamapper.ICreateMapper) func(c *g
 				return
 			}
 
-			renderModel(w, r, typeString, modelObj, models.Admin)
+			renderModel(w, r, typeString, modelObj, models.Admin, &scope)
 		}
 
 		return
@@ -346,7 +346,7 @@ func ReadOneHandler(typeString string, mapper datamapper.IGetOneWithIDMapper) fu
 			return
 		}
 
-		renderModel(w, r, typeString, modelObj, role)
+		renderModel(w, r, typeString, modelObj, role, &scope)
 		return
 	}
 }
@@ -368,7 +368,7 @@ func UpdateOneHandler(typeString string, mapper datamapper.IUpdateOneWithIDMappe
 
 		ownerID, scope := OwnerIDFromContext(r), ScopeFromContext(r)
 
-		modelObj, httperr := ModelFromJSONBody(r, typeString)
+		modelObj, httperr := ModelFromJSONBody(r, typeString, &scope)
 		if httperr != nil {
 			render.Render(w, r, httperr)
 			return
@@ -391,7 +391,7 @@ func UpdateOneHandler(typeString string, mapper datamapper.IUpdateOneWithIDMappe
 			return
 		}
 
-		renderModel(w, r, typeString, modelObj, models.Admin)
+		renderModel(w, r, typeString, modelObj, models.Admin, &scope)
 		return
 	}
 }
@@ -401,15 +401,14 @@ func UpdateManyHandler(typeString string, mapper datamapper.IUpdateManyMapper) f
 	return func(c *gin.Context) {
 		log.Println("UpdateManyHandler called")
 		w, r := c.Writer, c.Request
+		ownerID, scope := OwnerIDFromContext(r), ScopeFromContext(r)
 
-		modelObjs, httperr := ModelsFromJSONBody(r, typeString)
+		modelObjs, httperr := ModelsFromJSONBody(r, typeString, &scope)
 		if httperr != nil {
 			log.Println("Error in ModelsFromJSONBody:", typeString, httperr)
 			render.Render(w, r, httperr)
 			return
 		}
-
-		ownerID, scope := OwnerIDFromContext(r), ScopeFromContext(r)
 
 		tx := db.Shared().Begin()
 		modelObjs, err := mapper.UpdateMany(tx, ownerID, &scope, typeString, modelObjs)
@@ -433,7 +432,7 @@ func UpdateManyHandler(typeString string, mapper datamapper.IUpdateManyMapper) f
 			roles[i] = models.Admin
 		}
 
-		renderModelSlice(w, r, typeString, modelObjs, roles)
+		renderModelSlice(w, r, typeString, modelObjs, roles, &scope)
 		return
 	}
 }
@@ -476,7 +475,7 @@ func PatchOneHandler(typeString string, mapper datamapper.IPatchOneWithIDMapper)
 			return
 		}
 
-		renderModel(w, r, typeString, modelObj, models.Admin)
+		renderModel(w, r, typeString, modelObj, models.Admin, &scope)
 		return
 
 		// type JSONPatch struct {
@@ -518,7 +517,7 @@ func DeleteOneHandler(typeString string, mapper datamapper.IDeleteOneWithID) fun
 			return
 		}
 
-		renderModel(w, r, typeString, modelObj, models.Admin)
+		renderModel(w, r, typeString, modelObj, models.Admin, &scope)
 		return
 	}
 }
@@ -530,14 +529,14 @@ func DeleteManyHandler(typeString string, mapper datamapper.IDeleteMany) func(c 
 		log.Println("DeleteManyHandler called")
 		var err error
 
-		modelObjs, httperr := ModelsFromJSONBody(r, typeString)
+		ownerID, scope := OwnerIDFromContext(r), ScopeFromContext(r)
+
+		modelObjs, httperr := ModelsFromJSONBody(r, typeString, &scope)
 		if httperr != nil {
 			log.Println("Error in ModelsFromJSONBody:", typeString, httperr)
 			render.Render(w, r, httperr)
 			return
 		}
-
-		ownerID, scope := OwnerIDFromContext(r), ScopeFromContext(r)
 
 		tx := db.Shared().Begin() // transaction
 		modelObjs, err = mapper.DeleteMany(tx, ownerID, &scope, typeString, modelObjs)
@@ -561,7 +560,7 @@ func DeleteManyHandler(typeString string, mapper datamapper.IDeleteMany) func(c 
 			roles[i] = models.Admin
 		}
 
-		renderModelSlice(w, r, typeString, modelObjs, roles)
+		renderModelSlice(w, r, typeString, modelObjs, roles, &scope)
 		return
 	}
 }

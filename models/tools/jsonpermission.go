@@ -8,7 +8,7 @@ import (
 )
 
 // ToJSON pack json into this struct and the role
-func ToJSON(typeString string, v models.IModel, r models.UserRole) ([]byte, error) {
+func ToJSON(typeString string, v models.IModel, r models.UserRole, scope *string) ([]byte, error) {
 	var j []byte
 	var err error
 
@@ -16,7 +16,7 @@ func ToJSON(typeString string, v models.IModel, r models.UserRole) ([]byte, erro
 		return j, err
 	}
 
-	fields := v.Permissions(r)
+	fields := v.Permissions(r, scope)
 	return jsontransform.Transform(j, &fields)
 }
 
