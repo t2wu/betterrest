@@ -417,14 +417,29 @@ func constructDbFromURLInnerFieldQuery(db *gorm.DB, typeString string, options m
 
 	obj := models.NewFromTypeString(typeString)
 
-	// values is a map
-	for fieldName, fieldValues := range values {
+	// Python dic: {fieldName1: fieldName2: [val1, val2]}}
+	dic := make(map[string]map[string][]string, 0)
+	for fieldName, fieldValues := range values { // map, fieldName, fieldValues
 		toks := strings.Split(fieldName, ".")
 		if len(toks) != 2 { // Currently only allow one level of nesting
 			continue
 		}
 		fieldName1, fieldName2 := toks[0], toks[1]
+		_, ok := dic[fieldName1]
+		if !ok {
+			dic[fieldName1] = make(map[string][]string, 0)
+		}
 
+		innerD := dic[fieldName1]
+		innerD[fieldName2] = fieldValues
+	}
+
+	log.Printf("fieldName: %+v\n", dic)
+
+	model := models.NewFromTypeString(typeString)
+	rtableSnake := letters.PascalCaseToSnakeCase(reflect.TypeOf(model).Elem().Name())
+
+	for fieldName1, field2Dic := range dic {
 		// Important!! Check if fieldName is actually part of the schema, otherwise risk of sequal injection
 		fieldType, err := getModelFieldType(obj, letters.CamelCaseToPascalCase(fieldName1))
 		if err != nil {
@@ -436,39 +451,54 @@ func constructDbFromURLInnerFieldQuery(db *gorm.DB, typeString string, options m
 			return nil, err
 		}
 
-		// Check that fieldName2 is in innerType
-		// reflect.Type(reflect.New(innerType).Elem())
-		innerStructField, ok := innerType.FieldByName(letters.CamelCaseToPascalCase(fieldName2))
-		var searchType string
-		if !ok {
-			if fieldName2 != "id" {
-				return nil, fmt.Errorf("field name %s does not exist", fieldName2)
-			}
-			searchType = "datatypes.UUID"
-		} else {
-			searchType = innerStructField.Type.String()
-		}
-
-		fieldValues2, err := transformFieldValue(searchType, fieldValues)
-		if err != nil {
-			return nil, err
-		}
-
-		// Get the model name
-		model := models.NewFromTypeString(typeString)
 		innerTable := letters.PascalCaseToSnakeCase(strings.Split(innerType.String(), ".")[1])
-		rtableSnake := letters.PascalCaseToSnakeCase(reflect.TypeOf(model).Elem().Name())
 
-		// It's possible to have multiple values by using ?xx=yy&xx=zz
-		blanks := strings.Repeat("?,", len(fieldValues2))
-		blanks = blanks[:len(blanks)-1]
-		// joinStmt := fmt.Sprintf(innerTable+"."+letters.PascalCaseToSnakeCase(fieldName2)+" IN (%s)", blanks)
+		joinStmt := fmt.Sprintf("INNER JOIN \"%s\" ON \"%s\".%s = \"%s\".id ",
+			innerTable, innerTable, rtableSnake+"_id", rtable)
 
-		// Get the inner table's type
-		joinStmt := fmt.Sprintf("INNER JOIN \"%s\" ON \"%s\".%s = \"%s\".id AND ",
-			innerTable, innerTable, rtableSnake+"_id", rtable) + fmt.Sprintf(innerTable+"."+letters.PascalCaseToSnakeCase(fieldName2)+" IN (%s)", blanks)
+		queryValues := make([]interface{}, 0)
 
-		db = db.Joins(joinStmt, fieldValues2...)
+		for fieldName2, fieldValues := range field2Dic {
+			// Important!! Check if fieldName is actually part of the schema, otherwise risk of sequal injection
+			fieldType, err := getModelFieldType(obj, letters.CamelCaseToPascalCase(fieldName1))
+			if err != nil {
+				return nil, err
+			}
+
+			innerType, err := obtainModelTypeFromFieldType(fieldType)
+			if err != nil {
+				return nil, err
+			}
+
+			// Check that fieldName2 is in innerType
+			// reflect.Type(reflect.New(innerType).Elem())
+			innerStructField, ok := innerType.FieldByName(letters.CamelCaseToPascalCase(fieldName2))
+			var searchType string
+			if !ok {
+				if fieldName2 != "id" {
+					return nil, fmt.Errorf("field name %s does not exist", fieldName2)
+				}
+				searchType = "datatypes.UUID"
+			} else {
+				searchType = innerStructField.Type.String()
+			}
+
+			fieldValues2, err := transformFieldValue(searchType, fieldValues)
+			if err != nil {
+				return nil, err
+			}
+
+			// It's possible to have multiple values by using ?xx=yy&xx=zz
+			blanks := strings.Repeat("?,", len(fieldValues2))
+			blanks = blanks[:len(blanks)-1]
+			// joinStmt := fmt.Sprintf(innerTable+"."+letters.PascalCaseToSnakeCase(fieldName2)+" IN (%s)", blanks)
+
+			// Get the inner table's type
+			joinStmt += fmt.Sprintf("AND "+innerTable+"."+letters.PascalCaseToSnakeCase(fieldName2)+" IN (%s) ", blanks)
+
+			queryValues = append(queryValues, fieldValues2...)
+		}
+		db = db.Joins(joinStmt, queryValues...)
 	}
 
 	return db, nil
