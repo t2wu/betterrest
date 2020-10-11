@@ -205,6 +205,44 @@ func removePeggedField(db *gorm.DB, modelObj models.IModel) (err error) {
 	return nil
 }
 
+func createPeggedAssocFields(db *gorm.DB, modelObj models.IModel) (err error) {
+	v := reflect.Indirect(reflect.ValueOf(modelObj))
+	for i := 0; i < v.NumField(); i++ {
+		tag := v.Type().Field(i).Tag.Get("betterrest")
+		columnName := v.Type().Field(i).Name
+		if tag == "pegassoc" {
+			fieldVal := v.Field(i)
+			switch fieldVal.Kind() {
+			case reflect.Slice:
+				// Loop through the slice
+				for j := 0; j < fieldVal.Len(); j++ {
+					// nestedModelID := fieldVal.Index(j).FieldByName("ID").Interface().(*datatypes.UUID)
+					nestedModel := fieldVal.Index(j).Addr().Interface()
+
+					// Load the full model
+					if err = db.First(nestedModel).Error; err != nil {
+						return err
+					}
+
+					tableName := models.GetTableNameFromIModel(modelObj)
+					correspondingColumnName := tableName + "_id"
+
+					db.Model(nestedModel).Update(correspondingColumnName, modelObj.GetID())
+
+					// // this loops forever unlike update, why?
+					// if err = db.Set("gorm:association_autoupdate", true).Model(modelObj).Association(columnName).Append(nestedModel).Error; err != nil {
+					// 	return err
+					// }
+				}
+
+			default:
+				// embedded object is considered part of the structure, so no removal
+			}
+		}
+	}
+	return nil
+}
+
 // updatePeggedFields check if stuff in the pegged array
 // is actually
 func updatePeggedFields(db *gorm.DB, oldModelObj models.IModel, newModelObj models.IModel) (err error) {
@@ -315,10 +353,10 @@ func updatePeggedFields(db *gorm.DB, oldModelObj models.IModel, newModelObj mode
 					// 	return err
 					// }
 				} else if tag == "pegassoc" {
-
 					columnName := v1.Type().Field(i).Name
 					// id, _ := reflect.ValueOf(modelToAdd).Elem().FieldByName(("ID")).Interface().(*datatypes.UUID)
 
+					// Load the full model
 					if err = db.First(modelToAdd).Error; err != nil {
 						return err
 					}

@@ -29,6 +29,12 @@ func createOneCoreOrganization(db *gorm.DB, oid *datatypes.UUID, typeString stri
 		return nil, dbc.Error
 	}
 
+	// For pegassociated, the since we expect association_autoupdate:false
+	// need to manually create it
+	if err := createPeggedAssocFields(db, modelObj); err != nil {
+		return nil, err
+	}
+
 	// For table with trigger which update before insert, we need to load it again
 	if err := db.First(modelObj).Error; err != nil {
 		// That's weird. we just inserted it.
