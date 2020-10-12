@@ -209,7 +209,7 @@ func createPeggedAssocFields(db *gorm.DB, modelObj models.IModel) (err error) {
 	v := reflect.Indirect(reflect.ValueOf(modelObj))
 	for i := 0; i < v.NumField(); i++ {
 		tag := v.Type().Field(i).Tag.Get("betterrest")
-		columnName := v.Type().Field(i).Name
+		// columnName := v.Type().Field(i).Name
 		if tag == "pegassoc" {
 			fieldVal := v.Field(i)
 			switch fieldVal.Kind() {
