@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
-	"os"
 	"time"
 
 	"github.com/t2wu/betterrest/libs/datatypes"
@@ -28,13 +27,18 @@ import (
 // and that's it, not the third command
 // (Somedays I gotta figure out what this is all about. And ssh-keygen too.)
 
-var accessTokenPrivKeyPath = os.Getenv("ACCESS_TOKEN_PRIKEY")
-var accessTokenPubKeyPath = os.Getenv("ACCESS_TOKEN_PUBKEY")
+// CertAndKeys are paths for certificates and keys for initialization
+type CertAndKeys struct {
+	/* Access tokens */
+	AccessTokenPrivKeyPath string
+	AccessTokenPubKeyPath  string
+	AccessTokenPemPasswd   string
 
-var refreshTokenPrivKeyPath = os.Getenv("REFRESH_TOKEN_PRIKEY")
-var refreshTokenPubKeyPath = os.Getenv("REFRESH_TOKEN_PUBKEY")
-var accessTokenPemPasswd = os.Getenv("ACCESS_TOKEN_PEM_PASSWD")
-var refreshTokenPemPasswd = os.Getenv("REFRESH_TOKEN_PEM_PASSWD")
+	/* Refresh tokens */
+	RefreshTokenPrivKeyPath string
+	RefreshTokenPubKeyPath  string
+	RefreshTokenPemPasswd   string
+}
 
 var (
 	accessTokenVerifyKey *rsa.PublicKey
@@ -55,29 +59,29 @@ func fatal(err error) {
 // 	Token string `json:"token"`
 // }
 
-// init loads the public and private keys fromfile
-func init() {
+// Setup loads the public and private keys fromfile
+func Setup(ck *CertAndKeys) {
 	// Access Token
-	signBytes, err := ioutil.ReadFile(accessTokenPrivKeyPath)
+	signBytes, err := ioutil.ReadFile(ck.AccessTokenPrivKeyPath)
 	fatal(err)
 
 	// If I use the API that doesn't have the password option it will say
 	// asn1: structure error: tags don't match (16 vs {class:0 tag:20 length:105 isCompound:true}) ... blah
-	accessTokenSignKey, err = jwt.ParseRSAPrivateKeyFromPEMWithPassword(signBytes, accessTokenPemPasswd)
+	accessTokenSignKey, err = jwt.ParseRSAPrivateKeyFromPEMWithPassword(signBytes, ck.AccessTokenPemPasswd)
 	fatal(err)
 
-	verifyBytes, err := ioutil.ReadFile(accessTokenPubKeyPath)
+	verifyBytes, err := ioutil.ReadFile(ck.AccessTokenPubKeyPath)
 	fatal(err)
 
 	accessTokenVerifyKey, err = jwt.ParseRSAPublicKeyFromPEM(verifyBytes)
 	fatal(err)
 
 	// Refresh token
-	signBytes, err = ioutil.ReadFile(refreshTokenPrivKeyPath)
+	signBytes, err = ioutil.ReadFile(ck.RefreshTokenPrivKeyPath)
 	fatal(err)
-	refreshTokenSignKey, err = jwt.ParseRSAPrivateKeyFromPEMWithPassword(signBytes, refreshTokenPemPasswd)
+	refreshTokenSignKey, err = jwt.ParseRSAPrivateKeyFromPEMWithPassword(signBytes, ck.RefreshTokenPemPasswd)
 	fatal(err)
-	verifyBytes, err = ioutil.ReadFile(refreshTokenPubKeyPath)
+	verifyBytes, err = ioutil.ReadFile(ck.RefreshTokenPubKeyPath)
 	fatal(err)
 	refreshTokenVerifyKey, err = jwt.ParseRSAPublicKeyFromPEM(verifyBytes)
 	fatal(err)
