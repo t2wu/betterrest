@@ -6,12 +6,12 @@ import (
 	"log"
 	"net/url"
 	"reflect"
-	"strconv"
 	"strings"
 
 	"github.com/stoewer/go-strcase"
 	"github.com/t2wu/betterrest/libs/datatypes"
 	"github.com/t2wu/betterrest/libs/utils/letters"
+	"github.com/t2wu/betterrest/libs/utils/sqlbuilder"
 	"github.com/t2wu/betterrest/models"
 
 	jsonpatch "github.com/evanphx/json-patch"
@@ -447,47 +447,28 @@ func loadManyToManyBecauseGormFailsWithID(db *gorm.DB, modelObj models.IModel) e
 }
 
 func constructDbFromURLInnerFieldQuery(db *gorm.DB, typeString string, options map[string]interface{}) (*gorm.DB, error) {
-	values, ok := options["better_otherqueries"].(url.Values)
+	urlParams, ok := options["better_otherqueries"].(url.Values)
 	if !ok {
 		return db, nil
 	}
+	urlParamDic := urlParametersToMapOfMap(urlParams)
 
 	rtable := models.GetTableNameFromTypeString(typeString)
-
 	obj := models.NewFromTypeString(typeString)
-
-	// Python dic: {fieldName1: fieldName2: [val1, val2]}}
-	dic := make(map[string]map[string][]string, 0)
-	for fieldName, fieldValues := range values { // map, fieldName, fieldValues
-		toks := strings.Split(fieldName, ".")
-		if len(toks) != 2 { // Currently only allow one level of nesting
-			continue
-		}
-		fieldName1, fieldName2 := toks[0], toks[1]
-		_, ok := dic[fieldName1]
-		if !ok {
-			dic[fieldName1] = make(map[string][]string, 0)
-		}
-
-		innerD := dic[fieldName1]
-		innerD[fieldName2] = fieldValues
-	}
 
 	model := models.NewFromTypeString(typeString)
 	rtableSnake := strcase.SnakeCase(reflect.TypeOf(model).Elem().Name())
 
-	for fieldName1, field2Dic := range dic {
+	// fieldName1 is first level field name
+	// fieldName2 is second level field name
+	for fieldName1, field2Dic := range urlParamDic {
 		// Important!! Check if fieldName is actually part of the schema, otherwise risk of sequal injection
-		fieldType, err := getModelFieldType(obj, letters.CamelCaseToPascalCase(fieldName1))
+		innerType, err := datatypes.GetModelFieldTypeElmIfValid(obj, letters.CamelCaseToPascalCase(fieldName1))
 		if err != nil {
 			return nil, err
 		}
 
-		innerType, err := obtainModelTypeFromFieldType(fieldType)
-		if err != nil {
-			return nil, err
-		}
-
+		// split "models" from "models.XXX"
 		innerTable := strcase.SnakeCase(strings.Split(innerType.String(), ".")[1])
 
 		joinStmt := fmt.Sprintf("INNER JOIN \"%s\" ON \"%s\".%s = \"%s\".id ",
@@ -496,41 +477,15 @@ func constructDbFromURLInnerFieldQuery(db *gorm.DB, typeString string, options m
 		queryValues := make([]interface{}, 0)
 
 		for fieldName2, fieldValues := range field2Dic {
-			// Important!! Check if fieldName is actually part of the schema, otherwise risk of sequal injection
-			fieldType, err := getModelFieldType(obj, letters.CamelCaseToPascalCase(fieldName1))
-			if err != nil {
-				return nil, err
-			}
-
-			innerType, err := obtainModelTypeFromFieldType(fieldType)
-			if err != nil {
-				return nil, err
-			}
-
-			// Check that fieldName2 is in innerType
-			// reflect.Type(reflect.New(innerType).Elem())
-			innerStructField, ok := innerType.FieldByName(letters.CamelCaseToPascalCase(fieldName2))
-			var searchType string
-			if !ok {
-				if fieldName2 != "id" {
-					return nil, fmt.Errorf("field name %s does not exist", fieldName2)
-				}
-				searchType = "datatypes.UUID"
-			} else {
-				searchType = innerStructField.Type.String()
-			}
-
-			fieldValues2, err := transformFieldValue(searchType, fieldValues)
+			fieldValues2, err := getTransformedValueFromValidField(typeString, letters.CamelCaseToPascalCase(fieldName1), fieldValues)
 			if err != nil {
 				return nil, err
 			}
 
 			// It's possible to have multiple values by using ?xx=yy&xx=zz
-			blanks := strings.Repeat("?,", len(fieldValues2))
-			blanks = blanks[:len(blanks)-1]
-
 			// Get the inner table's type
-			joinStmt += fmt.Sprintf("AND "+innerTable+"."+strcase.SnakeCase(fieldName2)+" IN (%s) ", blanks)
+			inStmt := sqlbuilder.InOpWithFields(innerTable, strcase.SnakeCase(fieldName2), len(fieldValues2))
+			joinStmt += "AND " + inStmt
 
 			queryValues = append(queryValues, fieldValues2...)
 		}
@@ -546,39 +501,28 @@ func constructDbFromURLFieldQuery(db *gorm.DB, typeString string, options map[st
 		return db, nil
 	}
 
-	rtable := models.GetTableNameFromTypeString(typeString)
-
-	obj := models.NewFromTypeString(typeString)
-
+	var err error
 	for fieldName, fieldValues := range values {
 		// If querying nested field, skip
 		if strings.Contains(fieldName, ".") {
 			continue
 		}
 
-		// Important!! Check if fieldName is actually part of the schema, otherwise risk of sequal injection
-		fieldType, err := getModelFieldType(obj, letters.CamelCaseToPascalCase(fieldName))
-		if err != nil {
-			return nil, err
+		criteria := sqlbuilder.FilterCriteria{
+			TableNameSnakeCase: models.GetTableNameFromTypeString(typeString),
+			FieldName:          fieldName,
+			FieldValues:        fieldValues,
 		}
-
-		// It's possible to have multiple values by using ?xx=yy&xx=zz
-		blanks := strings.Repeat("?,", len(fieldValues))
-		blanks = blanks[:len(blanks)-1]
-		whereStmt := fmt.Sprintf(rtable+"."+strcase.SnakeCase(fieldName)+" IN (%s)", blanks)
-
-		fieldValues2, err := transformFieldValue(fieldType.String(), fieldValues)
+		db, err = sqlbuilder.AddWhereStmt(db, typeString, criteria)
 		if err != nil {
-			return nil, err
+			return db, err
 		}
-
-		db = db.Where(whereStmt, fieldValues2...)
 	}
 
 	return db, nil
 }
 
-func obtainModelTypeFromFieldType(fieldType reflect.Type) (reflect.Type, error) {
+func obtainModelTypeFromArrayFieldType(fieldType reflect.Type) (reflect.Type, error) {
 	var innerTyp reflect.Type
 	switch fieldType.Kind() {
 	case reflect.Slice:
@@ -592,50 +536,41 @@ func obtainModelTypeFromFieldType(fieldType reflect.Type) (reflect.Type, error) 
 	return innerTyp, nil
 }
 
-func getModelFieldType(modelObj models.IModel, fieldName string) (reflect.Type, error) {
-	var fieldType reflect.Type
-	v := reflect.Indirect(reflect.ValueOf(modelObj))
-	structField, ok := v.Type().FieldByName(fieldName)
-	if ok {
-		fieldType = structField.Type
-	} else if fieldName == "id" {
-		fieldType = reflect.TypeOf(&datatypes.UUID{})
-	} else {
-		return nil, fmt.Errorf("field name %s does not exist", fieldName)
+// getTransformedValueFromValidField make sure the field does exist in struct
+// and output the field value in correct types
+func getTransformedValueFromValidField(typeString, structFieldName string, urlFieldValues []string) ([]interface{}, error) {
+	modelObj := models.NewFromTypeString(typeString)
+
+	// Important!! Check if fieldName is actually part of the schema, otherwise risk of sequal injection
+	fieldType, err := datatypes.GetModelFieldTypeElmIfValid(modelObj, letters.CamelCaseToPascalCase(structFieldName))
+	if err != nil {
+		return nil, err
 	}
-	return fieldType, nil
+
+	transURLFieldValues, err := datatypes.TransformFieldValue(fieldType.String(), urlFieldValues)
+	if err != nil {
+		return nil, err
+	}
+
+	return transURLFieldValues, nil
 }
 
-// These types are the supported types of HTTP URL parameter queries
-func transformFieldValue(typeInString string, fieldValues []string) ([]interface{}, error) {
-	fieldValuesRet := make([]interface{}, len(fieldValues), len(fieldValues))
-	switch typeInString {
-	case "*datatypes.UUID":
-		fallthrough
-	case "datatypes.UUID":
-		for i, fieldValue := range fieldValues {
-			data, err := datatypes.NewUUIDFromString(fieldValue)
-			if err != nil {
-				return nil, err
-			}
-			fieldValuesRet[i] = data
+func urlParametersToMapOfMap(urlParameters map[string][]string) map[string]map[string][]string {
+	// Python dic: {fieldName1: {fieldName2: [val1, val2]}}
+	dic := make(map[string]map[string][]string, 0)
+	for fieldName, fieldValues := range urlParameters { // map, fieldName, fieldValues
+		toks := strings.Split(fieldName, ".")
+		if len(toks) != 2 { // Currently only allow one level of nesting
+			continue
 		}
-		break
-	case "*bool":
-		fallthrough
-	case "bool":
-		for i, fieldValue := range fieldValues {
-			data, err := strconv.ParseBool(fieldValue)
-			if err != nil {
-				return nil, err
-			}
-			fieldValuesRet[i] = data
+		fieldName1, fieldName2 := toks[0], toks[1]
+		_, ok := dic[fieldName1]
+		if !ok {
+			dic[fieldName1] = make(map[string][]string, 0)
 		}
-		break
-	default:
-		for i, fieldValue := range fieldValues {
-			fieldValuesRet[i] = fieldValue
-		}
+
+		innerD := dic[fieldName1]
+		innerD[fieldName2] = fieldValues
 	}
-	return fieldValuesRet, nil
+	return dic
 }
