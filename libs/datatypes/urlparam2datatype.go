@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"reflect"
 	"strconv"
+
+	"github.com/stoewer/go-strcase"
 )
 
 // TransformFieldValue transforms type in URL parameter to the proper data types
@@ -52,7 +54,21 @@ func GetModelFieldTypeIfValid(modelObj interface{}, fieldName string) (reflect.T
 	} else if fieldName == "id" {
 		fieldType = reflect.TypeOf(&UUID{})
 	} else {
-		return nil, fmt.Errorf("field name %s does not exist", fieldName)
+		// It may not exists, or the field name is capitalized. search for JSON tag
+		// v.Type().FieldByIndex(0).Tag
+		found := false
+		snake := strcase.SnakeCase(fieldName)
+		for i := 0; i < v.NumField(); i++ {
+			v2 := v.Type().Field(i)
+			tag := v2.Tag.Get("json")
+			if tag == snake {
+				found = true
+				fieldType = v2.Type
+			}
+		}
+		if !found {
+			return nil, fmt.Errorf("field name %s does not exist", fieldName)
+		}
 	}
 	return fieldType, nil
 }
