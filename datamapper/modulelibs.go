@@ -451,13 +451,9 @@ func constructDbFromURLInnerFieldQuery(db *gorm.DB, typeString string, options m
 	if !ok {
 		return db, nil
 	}
+
 	urlParamDic := urlParametersToMapOfMap(urlParams)
-
-	rtable := models.GetTableNameFromTypeString(typeString)
 	obj := models.NewFromTypeString(typeString)
-
-	model := models.NewFromTypeString(typeString)
-	rtableSnake := strcase.SnakeCase(reflect.TypeOf(model).Elem().Name())
 
 	// fieldName1 is first level field name
 	// fieldName2 is second level field name
@@ -468,28 +464,24 @@ func constructDbFromURLInnerFieldQuery(db *gorm.DB, typeString string, options m
 			return nil, err
 		}
 
-		// split "models" from "models.XXX"
+		rtable := models.GetTableNameFromTypeString(typeString)
 		innerTable := strcase.SnakeCase(strings.Split(innerType.String(), ".")[1])
 
-		joinStmt := fmt.Sprintf("INNER JOIN \"%s\" ON \"%s\".%s = \"%s\".id ",
-			innerTable, innerTable, rtableSnake+"_id", rtable)
-
-		queryValues := make([]interface{}, 0)
-
+		filters := make([]sqlbuilder.FilterCriteria, 0)
 		for fieldName2, fieldValues := range field2Dic {
-			fieldValues2, err := getTransformedValueFromValidField(typeString, letters.CamelCaseToPascalCase(fieldName1), fieldValues)
-			if err != nil {
-				return nil, err
-			}
-
-			// It's possible to have multiple values by using ?xx=yy&xx=zz
-			// Get the inner table's type
-			inStmt := sqlbuilder.InOpWithFields(innerTable, strcase.SnakeCase(fieldName2), len(fieldValues2))
-			joinStmt += "AND " + inStmt
-
-			queryValues = append(queryValues, fieldValues2...)
+			filter := sqlbuilder.FilterCriteria{FieldName: fieldName2, FieldValues: fieldValues}
+			filters = append(filters, filter)
 		}
-		db = db.Joins(joinStmt, queryValues...)
+		twoLevelFilter := sqlbuilder.TwoLevelFilterCriteria{
+			OuterTableName: rtable,
+			InnerTableName: innerTable,
+			OuterFieldName: fieldName1,
+			Filters:        filters,
+		}
+		db, err = sqlbuilder.AddNestedQueryJoinStmt(db, typeString, twoLevelFilter)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return db, nil
@@ -509,11 +501,10 @@ func constructDbFromURLFieldQuery(db *gorm.DB, typeString string, options map[st
 		}
 
 		criteria := sqlbuilder.FilterCriteria{
-			TableNameSnakeCase: models.GetTableNameFromTypeString(typeString),
-			FieldName:          fieldName,
-			FieldValues:        fieldValues,
+			FieldName:   fieldName,
+			FieldValues: fieldValues,
 		}
-		db, err = sqlbuilder.AddWhereStmt(db, typeString, criteria)
+		db, err = sqlbuilder.AddWhereStmt(db, typeString, models.GetTableNameFromTypeString(typeString), criteria)
 		if err != nil {
 			return db, err
 		}
