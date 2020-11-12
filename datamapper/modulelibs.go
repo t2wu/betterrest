@@ -455,27 +455,19 @@ func constructDbFromURLInnerFieldQuery(db *gorm.DB, typeString string, options m
 	urlParamDic := urlParametersToMapOfMap(urlParams)
 	obj := models.NewFromTypeString(typeString)
 
-	// fieldName1 is first level field name
-	// fieldName2 is second level field name
-	for fieldName1, field2Dic := range urlParamDic {
+	for outerFieldName, filters := range urlParamDic {
 		// Important!! Check if fieldName is actually part of the schema, otherwise risk of sequal injection
-		innerType, err := datatypes.GetModelFieldTypeElmIfValid(obj, letters.CamelCaseToPascalCase(fieldName1))
+		innerType, err := datatypes.GetModelFieldTypeElmIfValid(obj, letters.CamelCaseToPascalCase(outerFieldName))
 		if err != nil {
 			return nil, err
 		}
 
 		rtable := models.GetTableNameFromTypeString(typeString)
 		innerTable := strcase.SnakeCase(strings.Split(innerType.String(), ".")[1])
-
-		filters := make([]sqlbuilder.FilterCriteria, 0)
-		for fieldName2, fieldValues := range field2Dic {
-			filter := sqlbuilder.FilterCriteria{FieldName: fieldName2, FieldValues: fieldValues}
-			filters = append(filters, filter)
-		}
 		twoLevelFilter := sqlbuilder.TwoLevelFilterCriteria{
 			OuterTableName: rtable,
 			InnerTableName: innerTable,
-			OuterFieldName: fieldName1,
+			OuterFieldName: outerFieldName,
 			Filters:        filters,
 		}
 		db, err = sqlbuilder.AddNestedQueryJoinStmt(db, typeString, twoLevelFilter)
@@ -504,6 +496,8 @@ func constructDbFromURLFieldQuery(db *gorm.DB, typeString string, options map[st
 			FieldName:   fieldName,
 			FieldValues: fieldValues,
 		}
+
+		// We used the fact that repeatedly call AddWhereStmt genereates only ONE WHERE with multiple filters
 		db, err = sqlbuilder.AddWhereStmt(db, typeString, models.GetTableNameFromTypeString(typeString), criteria)
 		if err != nil {
 			return db, err
@@ -513,55 +507,22 @@ func constructDbFromURLFieldQuery(db *gorm.DB, typeString string, options map[st
 	return db, nil
 }
 
-func obtainModelTypeFromArrayFieldType(fieldType reflect.Type) (reflect.Type, error) {
-	var innerTyp reflect.Type
-	switch fieldType.Kind() {
-	case reflect.Slice:
-		innerTyp = fieldType.Elem()
-	case reflect.Struct:
-		innerTyp = fieldType
-	default:
-		fmt.Printf("Unknown type")
-		return nil, fmt.Errorf("unknown error occurred while processing nested field query")
-	}
-	return innerTyp, nil
-}
-
-// getTransformedValueFromValidField make sure the field does exist in struct
-// and output the field value in correct types
-func getTransformedValueFromValidField(typeString, structFieldName string, urlFieldValues []string) ([]interface{}, error) {
-	modelObj := models.NewFromTypeString(typeString)
-
-	// Important!! Check if fieldName is actually part of the schema, otherwise risk of sequal injection
-	fieldType, err := datatypes.GetModelFieldTypeElmIfValid(modelObj, letters.CamelCaseToPascalCase(structFieldName))
-	if err != nil {
-		return nil, err
-	}
-
-	transURLFieldValues, err := datatypes.TransformFieldValue(fieldType.String(), urlFieldValues)
-	if err != nil {
-		return nil, err
-	}
-
-	return transURLFieldValues, nil
-}
-
-func urlParametersToMapOfMap(urlParameters map[string][]string) map[string]map[string][]string {
-	// Python dic: {fieldName1: {fieldName2: [val1, val2]}}
-	dic := make(map[string]map[string][]string, 0)
+func urlParametersToMapOfMap(urlParameters map[string][]string) map[string][]sqlbuilder.FilterCriteria {
+	dic := make(map[string][]sqlbuilder.FilterCriteria, 0)
 	for fieldName, fieldValues := range urlParameters { // map, fieldName, fieldValues
 		toks := strings.Split(fieldName, ".")
 		if len(toks) != 2 { // Currently only allow one level of nesting
 			continue
 		}
-		fieldName1, fieldName2 := toks[0], toks[1]
-		_, ok := dic[fieldName1]
+		outerFieldName, innerFieldName := toks[0], toks[1]
+		_, ok := dic[outerFieldName]
 		if !ok {
-			dic[fieldName1] = make(map[string][]string, 0)
+			dic[outerFieldName] = make([]sqlbuilder.FilterCriteria, 0)
 		}
 
-		innerD := dic[fieldName1]
-		innerD[fieldName2] = fieldValues
+		// criteriaArray := dic[outerFieldName]
+		filterc := sqlbuilder.FilterCriteria{FieldName: innerFieldName, FieldValues: fieldValues}
+		dic[outerFieldName] = append(dic[outerFieldName], filterc)
 	}
 	return dic
 }
