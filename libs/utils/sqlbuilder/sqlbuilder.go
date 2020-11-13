@@ -78,7 +78,7 @@ func AddNestedQueryJoinStmt(db *gorm.DB, typeString string, criteria TwoLevelFil
 
 // AddLatestJoinWithOneLevelFilter generates latest join with one-level filter
 // TODO? Can tablename be part of the "?"
-func AddLatestJoinWithOneLevelFilter(db *gorm.DB, typeString string, tableName string, latestN int, filters []FilterCriteria) (*gorm.DB, error) {
+func AddLatestJoinWithOneLevelFilter(db *gorm.DB, typeString string, tableName string, latestn int, filters []FilterCriteria) (*gorm.DB, error) {
 	partitionByArr := make([]string, 0)
 	whereArr := make([]string, 0)
 
@@ -108,7 +108,7 @@ func AddLatestJoinWithOneLevelFilter(db *gorm.DB, typeString string, tableName s
 	sb.WriteString(fmt.Sprintf("ON %s.id = latestn.id AND latestn.dense_rank <= ?", tableName))
 	stmt := sb.String()
 
-	transformedValues = append(transformedValues, latestN)
+	transformedValues = append(transformedValues, latestn)
 
 	db = db.Joins(stmt, transformedValues...)
 	return db, nil
@@ -116,7 +116,7 @@ func AddLatestJoinWithOneLevelFilter(db *gorm.DB, typeString string, tableName s
 
 // AddLatestJoinWithTwoLevelFilter generates latest join with two-level filter
 // TODO? Can tablename be part of the "?"
-// func AddLatestJoinWithTwoLevelFilter(db *gorm.DB, typeString string, tableName string, latestN int, filter FilterCriteria) {
+// func AddLatestJoinWithTwoLevelFilter(db *gorm.DB, typeString string, tableName string, latestn int, filter FilterCriteria) {
 // 	var sb strings.Builder
 // 	sb.WriteString(fmt.Sprintf("INNER JOIN (SELECT %s, DENSE_RANK() OVER (PARTITION by %s ORDER BY created_at DESC) FROM %s) AS latestn ",
 // 		tableName, filter.FieldName, tableName))

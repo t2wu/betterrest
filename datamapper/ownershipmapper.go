@@ -3,7 +3,9 @@ package datamapper
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"reflect"
+	"strconv"
 	"sync"
 	"time"
 
@@ -260,6 +262,13 @@ func (mapper *OwnershipMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, scope *
 		cstop, _ = options["cstop"].(int)
 	}
 
+	var latestn *int
+	if n, ok := options["latestn"]; ok {
+		if n2, err := strconv.Atoi(n.(string)); err == nil {
+			latestn = &n2
+		}
+	}
+
 	// var f func(interface{}, ...interface{}) *gorm.DB
 	// var f func(dest interface{}) *gorm.DB
 
@@ -281,17 +290,23 @@ func (mapper *OwnershipMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, scope *
 	}
 
 	var err error
-	// If I want quering into nested data
-	// I need INNER JOIN that table where the field is what we search for,
-	// and that table's link back to this ID is the id of this table
-	db, err = constructDbFromURLFieldQuery(db, typeString, options)
-	if err != nil {
-		return nil, nil, err
-	}
 
-	db, err = constructDbFromURLInnerFieldQuery(db, typeString, options)
-	if err != nil {
-		return nil, nil, err
+	urlParams, ok := options["better_otherqueries"].(url.Values)
+	if ok && len(urlParams) != 0 {
+		// If I want quering into nested data
+		// I need INNER JOIN that table where the field is what we search for,
+		// and that table's link back to this ID is the id of this table
+		db, err = constructDbFromURLFieldQuery(db, typeString, urlParams, latestn)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		db, err = constructDbFromURLInnerFieldQuery(db, typeString, urlParams, latestn)
+		if err != nil {
+			return nil, nil, err
+		}
+	} else if latestn != nil {
+		return nil, nil, errors.New("latestn cannot be used without querying field value")
 	}
 
 	// Admin or guest..doesn't matter

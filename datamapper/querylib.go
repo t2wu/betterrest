@@ -2,8 +2,6 @@ package datamapper
 
 import (
 	"errors"
-	"net/url"
-	"strconv"
 	"strings"
 
 	"github.com/jinzhu/gorm"
@@ -14,25 +12,13 @@ import (
 	"github.com/t2wu/betterrest/models"
 )
 
-func constructDbFromURLFieldQuery(db *gorm.DB, typeString string, options map[string]interface{}) (*gorm.DB, error) {
-	values, ok := options["better_otherqueries"].(url.Values)
-	if !ok {
-		return db, nil
-	}
-
-	var latestN *int
-	if n, ok := options["latestn"]; ok {
-		if n2, err := strconv.Atoi(n.(string)); err == nil {
-			latestN = &n2
-		}
-	}
-
+func constructDbFromURLFieldQuery(db *gorm.DB, typeString string, urlParams map[string][]string, latestn *int) (*gorm.DB, error) {
 	var err error
 
-	// If there is NO latestN, a simple WHERE clause will suffice
-	// IF thee IS latestN, then we use INNER JOIN with a dense_rank
-	if latestN == nil {
-		for fieldName, fieldValues := range values {
+	// If there is NO latestn, a simple WHERE clause will suffice
+	// IF thee IS latestn, then we use INNER JOIN with a dense_rank
+	if latestn == nil {
+		for fieldName, fieldValues := range urlParams {
 			// If querying nested field, skip
 			if strings.Contains(fieldName, ".") {
 				continue
@@ -51,7 +37,7 @@ func constructDbFromURLFieldQuery(db *gorm.DB, typeString string, options map[st
 		}
 	} else {
 		filters := make([]sqlbuilder.FilterCriteria, 0)
-		for fieldName, fieldValues := range values {
+		for fieldName, fieldValues := range urlParams {
 			// If querying nested field, skip
 			if strings.Contains(fieldName, ".") {
 				continue
@@ -64,28 +50,21 @@ func constructDbFromURLFieldQuery(db *gorm.DB, typeString string, options map[st
 			filters = append(filters, criteria)
 		}
 
-		db, err = sqlbuilder.AddLatestJoinWithOneLevelFilter(db, typeString, models.GetTableNameFromTypeString(typeString), *latestN, filters)
+		db, err = sqlbuilder.AddLatestJoinWithOneLevelFilter(db, typeString, models.GetTableNameFromTypeString(typeString), *latestn, filters)
 		if err != nil {
 			return db, err
 		}
 	}
 
-	// log.Println("==================>RETURN HERE", db)
 	return db, nil
 }
 
-func constructDbFromURLInnerFieldQuery(db *gorm.DB, typeString string, options map[string]interface{}) (*gorm.DB, error) {
-	urlParams, ok := options["better_otherqueries"].(url.Values)
-	if !ok {
-		return db, nil
-	}
-	urlParamDic := urlParametersToMapOfMap(urlParams)
+func constructDbFromURLInnerFieldQuery(db *gorm.DB, typeString string, urlParams map[string][]string, latestn *int) (*gorm.DB, error) {
+	urlParamDic := urlLevel2ParametersToMapOfMap(urlParams)
 
 	if len(urlParamDic) != 0 {
-		if latestn, ok := options["latestn"]; ok {
-			if latestn != "" {
-				return db, errors.New("latestn with two-level query is currently not supported")
-			}
+		if latestn != nil {
+			return db, errors.New("latestn with two-level query is currently not supported")
 		}
 	}
 
@@ -115,41 +94,11 @@ func constructDbFromURLInnerFieldQuery(db *gorm.DB, typeString string, options m
 	return db, nil
 }
 
-// constructDbFromLatestN constructs the latest N queries. Bool indicates that the latest does exists.
-// func constructDbFromLatestN(db *gorm.DB, typeString string, options map[string]interface{}) (*gorm.DB, bool, error) {
-// 	latest := -1
-// 	if _, ok := options["latest"]; ok {
-// 		latest, _ = options["latest"].(int)
-// 	}
-
-// 	if latest == -1 {
-// 		return db, false, nil
-// 	}
-
-// 	/*
-// 		// WITH CTE (same as bove)
-// 		WITH latestn AS (
-// 		  SELECT *, DENSE_RANK() OVER (order by created_at desc)
-// 		  FROM dock_status
-// 		)
-// 		SELECT dock_status.dock_id, dock_status.created_at, latestn.dense_rank
-// 		FROM dock_status
-// 		INNER JOIN latestn
-// 		ON dock_status.dock_id = latestn.dock_id AND dock_status.created_at = latestn.created_at
-// 		AND latestn.dense_rank <= 2;
-// 	*/
-// 	// stmt := "WITH latestn as (" +
-// 	// 	"SELECT dock_id"
-// 	// ")"
-
-// 	return db, true, nil
-// }
-
 // ***************************************
 // Private within this file
 // ***************************************
 
-func urlParametersToMapOfMap(urlParameters map[string][]string) map[string][]sqlbuilder.FilterCriteria {
+func urlLevel2ParametersToMapOfMap(urlParameters map[string][]string) map[string][]sqlbuilder.FilterCriteria {
 	dic := make(map[string][]sqlbuilder.FilterCriteria, 0)
 	for fieldName, fieldValues := range urlParameters { // map, fieldName, fieldValues
 		toks := strings.Split(fieldName, ".")
