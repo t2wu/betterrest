@@ -69,6 +69,20 @@ func orderFromQueryString(values *url.Values) string {
 	return ""
 }
 
+func latestnFromQueryString(values *url.Values) string {
+	defer delete(*values, "latestn")
+
+	if latestn := values.Get("latestn"); latestn != "" {
+		// Prevent sql injection
+		_, err := strconv.Atoi(latestn)
+		if err != nil {
+			return ""
+		}
+		return latestn
+	}
+	return ""
+}
+
 func createdTimeRangeFromQueryString(values *url.Values) (int, int, error) {
 	defer delete(*values, "cstart")
 	defer delete(*values, "cstop")
@@ -195,6 +209,7 @@ func getOptionByParsingURL(r *http.Request) (map[string]interface{}, error) {
 	}
 
 	options["order"] = orderFromQueryString(&values)
+	options["latestn"] = latestnFromQueryString(&values)
 	options["better_otherqueries"] = values
 
 	if cstart, cstop, err := createdTimeRangeFromQueryString(&values); err == nil {

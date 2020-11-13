@@ -4,14 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"net/url"
 	"reflect"
 	"strings"
 
-	"github.com/stoewer/go-strcase"
 	"github.com/t2wu/betterrest/libs/datatypes"
-	"github.com/t2wu/betterrest/libs/utils/letters"
-	"github.com/t2wu/betterrest/libs/utils/sqlbuilder"
 	"github.com/t2wu/betterrest/models"
 
 	jsonpatch "github.com/evanphx/json-patch"
@@ -444,85 +440,4 @@ func loadManyToManyBecauseGormFailsWithID(db *gorm.DB, modelObj models.IModel) e
 		}
 	}
 	return nil
-}
-
-func constructDbFromURLInnerFieldQuery(db *gorm.DB, typeString string, options map[string]interface{}) (*gorm.DB, error) {
-	urlParams, ok := options["better_otherqueries"].(url.Values)
-	if !ok {
-		return db, nil
-	}
-
-	urlParamDic := urlParametersToMapOfMap(urlParams)
-	obj := models.NewFromTypeString(typeString)
-
-	for outerFieldName, filters := range urlParamDic {
-		// Important!! Check if fieldName is actually part of the schema, otherwise risk of sequal injection
-		innerType, err := datatypes.GetModelFieldTypeElmIfValid(obj, letters.CamelCaseToPascalCase(outerFieldName))
-		if err != nil {
-			return nil, err
-		}
-
-		rtable := models.GetTableNameFromTypeString(typeString)
-		innerTable := strcase.SnakeCase(strings.Split(innerType.String(), ".")[1])
-		twoLevelFilter := sqlbuilder.TwoLevelFilterCriteria{
-			OuterTableName: rtable,
-			InnerTableName: innerTable,
-			OuterFieldName: outerFieldName,
-			Filters:        filters,
-		}
-		db, err = sqlbuilder.AddNestedQueryJoinStmt(db, typeString, twoLevelFilter)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return db, nil
-}
-
-func constructDbFromURLFieldQuery(db *gorm.DB, typeString string, options map[string]interface{}) (*gorm.DB, error) {
-	values, ok := options["better_otherqueries"].(url.Values)
-	if !ok {
-		return db, nil
-	}
-
-	var err error
-	for fieldName, fieldValues := range values {
-		// If querying nested field, skip
-		if strings.Contains(fieldName, ".") {
-			continue
-		}
-
-		criteria := sqlbuilder.FilterCriteria{
-			FieldName:   fieldName,
-			FieldValues: fieldValues,
-		}
-
-		// We used the fact that repeatedly call AddWhereStmt genereates only ONE WHERE with multiple filters
-		db, err = sqlbuilder.AddWhereStmt(db, typeString, models.GetTableNameFromTypeString(typeString), criteria)
-		if err != nil {
-			return db, err
-		}
-	}
-
-	return db, nil
-}
-
-func urlParametersToMapOfMap(urlParameters map[string][]string) map[string][]sqlbuilder.FilterCriteria {
-	dic := make(map[string][]sqlbuilder.FilterCriteria, 0)
-	for fieldName, fieldValues := range urlParameters { // map, fieldName, fieldValues
-		toks := strings.Split(fieldName, ".")
-		if len(toks) != 2 { // Currently only allow one level of nesting
-			continue
-		}
-		outerFieldName, innerFieldName := toks[0], toks[1]
-		_, ok := dic[outerFieldName]
-		if !ok {
-			dic[outerFieldName] = make([]sqlbuilder.FilterCriteria, 0)
-		}
-
-		// criteriaArray := dic[outerFieldName]
-		filterc := sqlbuilder.FilterCriteria{FieldName: innerFieldName, FieldValues: fieldValues}
-		dic[outerFieldName] = append(dic[outerFieldName], filterc)
-	}
-	return dic
 }
