@@ -65,6 +65,9 @@ func AddRESTRoutes(r *gin.Engine) {
 		if typestring != "users" {
 			var dm interface{}
 			switch reg.Mapper {
+			case models.MapperTypeGlobal:
+				dm = datamapper.SharedGlobalMapper()
+				break
 			case models.MapperTypeViaOrganization:
 				dm = datamapper.SharedOrganizationMapper()
 				break

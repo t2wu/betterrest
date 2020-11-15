@@ -14,7 +14,7 @@ import (
 	"github.com/jinzhu/gorm"
 )
 
-func checkErrorBeforeUpdate(mapper IGetOneWithIDMapper, db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id datatypes.UUID) error {
+func checkErrorBeforeUpdate(mapper IGetOneWithIDMapper, db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id datatypes.UUID, permittedRole models.UserRole) error {
 	if id.UUID.String() == "" {
 		return errIDEmpty
 	}
@@ -26,7 +26,7 @@ func checkErrorBeforeUpdate(mapper IGetOneWithIDMapper, db *gorm.DB, oid *dataty
 	if err != nil { // Error is "record not found" when not found
 		return err
 	}
-	if role != models.Admin {
+	if role != permittedRole {
 		return errPermission
 	}
 
@@ -41,12 +41,15 @@ func checkErrorBeforeUpdate(mapper IGetOneWithIDMapper, db *gorm.DB, oid *dataty
 	return nil
 }
 
-func updateOneCore(mapper IGetOneWithIDMapper, db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id datatypes.UUID) (modelObj2 models.IModel, err error) {
+func updateOneCore(mapper IGetOneWithIDMapper, db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id datatypes.UUID, permittedRole models.UserRole) (modelObj2 models.IModel, err error) {
 	oldModelObj, role, err2 := mapper.getOneWithIDCore(db, oid, scope, typeString, id)
 	if err2 != nil {
 		return nil, err2
 	}
-	if role != models.Admin {
+
+	log.Println("===>role is:", role)
+
+	if role != permittedRole {
 		return nil, errPermission
 	}
 

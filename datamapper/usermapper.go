@@ -147,7 +147,7 @@ func (mapper *UserMapper) getOneWithIDCore(db *gorm.DB, oid *datatypes.UUID, sco
 // UpdateOneWithID updates model based on this json
 func (mapper *UserMapper) UpdateOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id datatypes.UUID) (models.IModel, error) {
 	log.Println("userMapper's UpdateOneWithID called")
-	if err := checkErrorBeforeUpdate(mapper, db, oid, scope, typeString, modelObj, id); err != nil {
+	if err := checkErrorBeforeUpdate(mapper, db, oid, scope, typeString, modelObj, id, models.Admin); err != nil {
 		return nil, err
 	}
 
@@ -185,7 +185,7 @@ func (mapper *UserMapper) UpdateOneWithID(db *gorm.DB, oid *datatypes.UUID, scop
 		}
 	}
 
-	modelObj2, err := updateOneCore(mapper, db, oid, scope, typeString, modelObj, id)
+	modelObj2, err := updateOneCore(mapper, db, oid, scope, typeString, modelObj, id, models.Admin)
 	if err != nil {
 		return nil, err
 	}

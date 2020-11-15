@@ -34,6 +34,9 @@ const (
 
 	// MapperTypeViaOrganization is for type where an organization owns something
 	MapperTypeViaOrganization = 1
+
+	// MapperTypeGlobal is for type where data is public to all
+	MapperTypeGlobal = 2
 )
 
 // ModelRegistryOptions is options when you want to add a model to registry

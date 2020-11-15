@@ -19,8 +19,12 @@ type UserRole int
 const (
 	// Admin is admin UserRole
 	Admin UserRole = 0
+
 	// Guest is guest UserRole (screw go-lint man)
 	Guest UserRole = 1
+
+	// Public to all (global object)
+	Public UserRole = 2
 )
 
 // BaseModel is the base class domain model which has standard ID

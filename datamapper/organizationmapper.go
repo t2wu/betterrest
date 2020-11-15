@@ -415,7 +415,7 @@ func (mapper *OrganizationMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, scop
 
 // UpdateOneWithID updates model based on this json
 func (mapper *OrganizationMapper) UpdateOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id datatypes.UUID) (models.IModel, error) {
-	if err := checkErrorBeforeUpdate(mapper, db, oid, scope, typeString, modelObj, id); err != nil {
+	if err := checkErrorBeforeUpdate(mapper, db, oid, scope, typeString, modelObj, id, models.Admin); err != nil {
 		return nil, err
 	}
 
@@ -428,7 +428,7 @@ func (mapper *OrganizationMapper) UpdateOneWithID(db *gorm.DB, oid *datatypes.UU
 		}
 	}
 
-	modelObj2, err := updateOneCore(mapper, db, oid, scope, typeString, modelObj, id)
+	modelObj2, err := updateOneCore(mapper, db, oid, scope, typeString, modelObj, id, models.Admin)
 	if err != nil {
 		return nil, err
 	}
@@ -459,11 +459,11 @@ func (mapper *OrganizationMapper) UpdateMany(db *gorm.DB, oid *datatypes.UUID, s
 	for _, modelObj := range modelObjs {
 		id := modelObj.GetID()
 
-		if err = checkErrorBeforeUpdate(mapper, db, oid, scope, typeString, modelObj, *id); err != nil {
+		if err = checkErrorBeforeUpdate(mapper, db, oid, scope, typeString, modelObj, *id, models.Admin); err != nil {
 			return nil, err
 		}
 
-		m, err := updateOneCore(mapper, db, oid, scope, typeString, modelObj, *id)
+		m, err := updateOneCore(mapper, db, oid, scope, typeString, modelObj, *id, models.Admin)
 		if err != nil { // Error is "record not found" when not found
 			return nil, err
 		}
@@ -520,7 +520,7 @@ func (mapper *OrganizationMapper) PatchOneWithID(db *gorm.DB, oid *datatypes.UUI
 	}
 
 	// Now save it
-	modelObj2, err := updateOneCore(mapper, db, oid, scope, typeString, modelObj, id)
+	modelObj2, err := updateOneCore(mapper, db, oid, scope, typeString, modelObj, id, models.Admin)
 	if err != nil {
 		return nil, err
 	}
