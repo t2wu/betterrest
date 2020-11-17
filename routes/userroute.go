@@ -15,7 +15,7 @@ func UserRoutes(endpoint string, r *gin.Engine) {
 	// r.Get("/", ReadAllHandler("users"))
 	// r.With(paginate).Get("/", ListArticles)
 	g.POST("", guardMiddleWare(typeString), CreateHandler(typeString, dm))
-	g.POST("/login", guardMiddleWare(typeString), UserLoginHandler()) // no crud on this one...access db itself
+	g.POST("/login", guardMiddleWare(typeString), UserLoginHandler(typeString)) // no crud on this one...access db itself
 
 	// g := r.Group(nil)
 	g.Use(BearerAuthMiddleware()) // The following one needs authentication

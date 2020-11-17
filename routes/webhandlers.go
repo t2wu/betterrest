@@ -14,6 +14,7 @@ import (
 
 	"github.com/t2wu/betterrest/datamapper"
 	"github.com/t2wu/betterrest/db"
+	"github.com/t2wu/betterrest/libs/datatypes"
 	"github.com/t2wu/betterrest/libs/security"
 	"github.com/t2wu/betterrest/models"
 	"github.com/t2wu/betterrest/models/tools"
@@ -157,7 +158,7 @@ func renderModelSlice(w http.ResponseWriter, r *http.Request, typeString string,
 // ---------------------------------------------
 
 // UserLoginHandler logs in the user. Effectively creates a JWT token for the user
-func UserLoginHandler() func(c *gin.Context) {
+func UserLoginHandler(typeString string) func(c *gin.Context) {
 	return func(c *gin.Context) {
 		w, r := c.Writer, c.Request
 
@@ -173,6 +174,17 @@ func UserLoginHandler() func(c *gin.Context) {
 			return
 		}
 
+		tx := db.Shared().Begin()
+
+		cargo := models.ModelCargo{}
+		// Before hook
+		if v, ok := m.(models.IBeforeLogin); ok {
+			if err := v.BeforeLogin(tx, &scope, typeString, &cargo); err != nil {
+				render.Render(w, r, NewErrInternalServerError(err))
+				return
+			}
+		}
+
 		authUser, authorized := security.GetVerifiedAuthUser(m)
 		if !authorized {
 			// unable to login user. maybe doesn't exist?
@@ -186,6 +198,33 @@ func UserLoginHandler() func(c *gin.Context) {
 		if err != nil {
 			render.Render(w, r, NewErrGeneratingToken(err))
 			return
+		}
+
+		// User hookpoing after login
+		if v, ok := m.(models.IAfterLogin); ok {
+			content := payload["content"].(map[string]interface{})
+			oid := content["id"].(*datatypes.UUID)
+			if err != nil {
+				tx.Rollback()
+				log.Println("Error in UserLogin creating uuid:", typeString, err)
+				render.Render(w, r, NewErrNotFound(err))
+			}
+
+			payload, err = v.AfterLogin(tx, oid, &scope, typeString, &cargo, payload)
+			if err != nil {
+				tx.Rollback()
+				log.Println("Error in UserLogin callign AfterLogin:", typeString, err)
+				render.Render(w, r, NewErrNotFound(err))
+				return
+			}
+
+			err = tx.Commit().Error
+			if err != nil {
+				log.Println("Error in UserLogin commit:", typeString, err)
+				tx.Rollback() // what if roll back fails??
+				render.Render(w, r, NewErrDBError(err))
+				return
+			}
 		}
 
 		var jsn []byte

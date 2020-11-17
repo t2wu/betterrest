@@ -136,6 +136,16 @@ type ModelCargo struct {
 	Payload interface{}
 }
 
+// IBeforeLogin has a function that is a hookpoint for actions after login but before marshalling
+type IBeforeLogin interface {
+	BeforeLogin(db *gorm.DB, scope *string, typeString string, cargo *ModelCargo) error
+}
+
+// IAfterLogin has a function that is a hookpoint for actions after login but before marshalling
+type IAfterLogin interface {
+	AfterLogin(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, cargo *ModelCargo, payload map[string]interface{}) (map[string]interface{}, error)
+}
+
 // IBeforeInsert supports method to be called before data is inserted (created) into the database
 type IBeforeInsert interface {
 	BeforeInsertDB(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, cargo *ModelCargo) error
