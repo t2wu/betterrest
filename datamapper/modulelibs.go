@@ -328,7 +328,10 @@ func updatePeggedFields(db *gorm.DB, oldModelObj models.IModel, newModelObj mode
 					selfTableName := models.GetTableNameFromIModel(oldModelObj)
 					selfID := selfTableName + "_id"
 
-					idToDel := reflect.Indirect(reflect.ValueOf(modelToDel)).Elem().FieldByName("ID").Interface()
+					// The following line seems to puke on a many-to-many, I hope I don't need it anywhere
+					// else in another many-to-many
+					// idToDel := reflect.Indirect(reflect.ValueOf(modelToDel)).Elem().FieldByName("ID").Interface()
+					idToDel := reflect.Indirect(reflect.ValueOf(modelToDel)).FieldByName("ID").Interface()
 
 					stmt := fmt.Sprintf("DELETE FROM \"%s\" WHERE \"%s\" = ? AND \"%s\" = ?",
 						linkTableName, fieldIDName, selfID)
