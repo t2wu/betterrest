@@ -151,8 +151,10 @@ func renderModelSlice(w http.ResponseWriter, r *http.Request, typeString string,
 
 	content := fmt.Sprintf("{ \"code\": 0, \"content\": %s }", jsonString)
 
+	data := []byte(content)
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.Write([]byte(content))
+	w.Header().Set("Content-Length", strconv.Itoa(len(data)))
+	w.Write(data)
 }
 
 // ---------------------------------------------
