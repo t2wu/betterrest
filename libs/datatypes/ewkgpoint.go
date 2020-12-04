@@ -14,6 +14,13 @@ import (
 
 // https://stackoverflow.com/questions/60520863/working-with-spatial-data-with-gorm-and-mysql/
 
+// NewEWKBPoint creates a new EWKBPoint
+func NewEWKBPoint(coords []float64) *EWKBPoint {
+	p := &EWKBPoint{}
+	p.Point = wkb.Point{Point: geom.NewPoint(geom.XY).MustSetCoords([]float64{0, 0}).SetSRID(0)}
+	return p
+}
+
 // EWKBPoint encapsulate Point and handles value and scanners to work with Gorm
 type EWKBPoint struct {
 	Point wkb.Point
