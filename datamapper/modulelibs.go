@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"reflect"
+	"strconv"
 	"strings"
 
 	"github.com/t2wu/betterrest/libs/datatypes"
@@ -13,6 +14,48 @@ import (
 	jsonpatch "github.com/evanphx/json-patch"
 	"github.com/jinzhu/gorm"
 )
+
+// URLParam is the URL parameter
+type URLParam string
+
+const (
+	URLParamOffset       URLParam = "offset"
+	URLParamLimit        URLParam = "limit"
+	URLParamOrder        URLParam = "order"
+	URLParamLatestN      URLParam = "latestn"
+	URLParamCstart       URLParam = "cstart"
+	URLParamCstop        URLParam = "cstop"
+	URLParamOtherQueries URLParam = "better_otherqueries"
+)
+
+func getOptions(options map[URLParam]interface{}) (offset *int, limit *int, cstart *int, cstop *int, order *string, latestn *int) {
+	if _, ok := options[URLParamOffset]; ok {
+		offset, _ = options[URLParamOffset].(*int)
+	}
+
+	if _, ok := options[URLParamLimit]; ok {
+		limit, _ = options[URLParamLimit].(*int)
+	}
+
+	if _, ok := options[URLParamOrder]; ok {
+		order, _ = options[URLParamOrder].(*string)
+	}
+
+	if _, ok := options[URLParamCstart]; ok {
+		cstart, _ = options[URLParamCstart].(*int)
+	}
+	if _, ok := options[URLParamCstop]; ok {
+		cstop, _ = options[URLParamCstop].(*int)
+	}
+
+	if n, ok := options[URLParamLatestN]; ok {
+		if n2, err := strconv.Atoi(*(n.(*string))); err == nil {
+			latestn = &n2
+		}
+	}
+
+	return offset, limit, cstart, cstop, order, latestn
+}
 
 func checkErrorBeforeUpdate(mapper IGetOneWithIDMapper, db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id datatypes.UUID, permittedRole models.UserRole) error {
 	if id.UUID.String() == "" {

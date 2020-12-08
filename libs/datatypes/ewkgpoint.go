@@ -115,6 +115,7 @@ func (m *EWKBPoint) MarshalJSON() ([]byte, error) {
 	pt := m.Point
 	pos := pt.Coords()
 	if len(pos) == 2 {
+		// lon first, lat second
 		return []byte(fmt.Sprintf("{\"type\": \"Point\", \"coordinates\": [%f, %f] }", pos[0], pos[1])), nil
 	}
 

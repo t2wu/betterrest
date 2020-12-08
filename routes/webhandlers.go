@@ -24,76 +24,77 @@ import (
 )
 
 // ---------------------------------------------
-func limitAndOffsetFromQueryString(values *url.Values) (int, int, error) {
-	defer delete(*values, "offset")
-	defer delete(*values, "limit")
+func limitAndOffsetFromQueryString(values *url.Values) (*int, *int, error) {
+	defer delete(*values, string(datamapper.URLParamOffset))
+	defer delete(*values, string(datamapper.URLParamLimit))
 
 	var o, l int
 	var err error
 
-	offset := values.Get("offset")
-	limit := values.Get("limit")
+	offset := values.Get(string(datamapper.URLParamOffset))
+	limit := values.Get(string(datamapper.URLParamLimit))
 
 	if offset == "" && limit == "" {
-		return 0, 0, nil
+		return nil, nil, nil
 	}
 
 	if offset == "" {
-		return 0, 0, errors.New("limit should be used with offset")
+		return nil, nil, errors.New("limit should be used with offset")
 	} else {
 		if o, err = strconv.Atoi(offset); err != nil {
-			return 0, 0, err
+			return nil, nil, err
 		}
 	}
 
 	if limit == "" {
-		return 0, 0, errors.New("offset should be used with limit")
+		return nil, nil, errors.New("offset should be used with limit")
 	} else {
 		if l, err = strconv.Atoi(limit); err != nil {
-			return 0, 0, err
+			return nil, nil, err
 		}
 	}
 
-	return o, l, nil // It's ok to pass 0 limit, it'll be interpreted as an all.
+	return &o, &l, nil // It's ok to pass 0 limit, it'll be interpreted as an all.
 }
 
-func orderFromQueryString(values *url.Values) string {
-	defer delete(*values, "order")
+func orderFromQueryString(values *url.Values) *string {
+	defer delete(*values, string(datamapper.URLParamOrder))
 
-	if order := values.Get("order"); order != "" {
+	if order := values.Get(string(datamapper.URLParamOrder)); order != "" {
 		// Prevent sql injection
 		if order != "desc" && order != "asc" {
-			return ""
+			return nil
 		}
-		return order
+		return &order
 	}
-	return ""
+	return nil
 }
 
-func latestnFromQueryString(values *url.Values) string {
-	defer delete(*values, "latestn")
+func latestnFromQueryString(values *url.Values) *string {
+	defer delete(*values, string(datamapper.URLParamLatestN))
 
-	if latestn := values.Get("latestn"); latestn != "" {
+	if latestn := values.Get(string(datamapper.URLParamLatestN)); latestn != "" {
 		// Prevent sql injection
 		_, err := strconv.Atoi(latestn)
 		if err != nil {
-			return ""
+			return nil
 		}
-		return latestn
+		return &latestn
 	}
-	return ""
+	return nil
 }
 
-func createdTimeRangeFromQueryString(values *url.Values) (int, int, error) {
-	defer delete(*values, "cstart")
-	defer delete(*values, "cstop")
+func createdTimeRangeFromQueryString(values *url.Values) (*int, *int, error) {
+	defer delete(*values, string(datamapper.URLParamCstart))
+	defer delete(*values, string(datamapper.URLParamCstop))
 
-	if cstart, cstop := values.Get("cstart"), values.Get("cstop"); cstart != "" && cstop != "" {
+	if cstart, cstop := values.Get(string(datamapper.URLParamCstart)),
+		values.Get(string(datamapper.URLParamCstop)); cstart != "" && cstop != "" {
 		var err error
 		cStartInt, cStopInt := 0, 0
 		if cstart != "" {
 			if cStartInt, err = strconv.Atoi(cstart); err != nil {
-				return 0, 0, err
+				return nil, nil, err
 			}
 		} else {
 			cStartInt = 0
@@ -101,15 +102,15 @@ func createdTimeRangeFromQueryString(values *url.Values) (int, int, error) {
 
 		if cstop != "" {
 			if cStopInt, err = strconv.Atoi(cstop); err != nil {
-				return 0, 0, err
+				return nil, nil, err
 			}
 		} else {
 			cStopInt = int(time.Now().Unix()) // now
 		}
 
-		return cStartInt, cStopInt, nil
+		return &cStartInt, &cStopInt, nil
 	}
-	return 0, 0, nil
+	return nil, nil, nil
 }
 
 func modelObjsToJSON(typeString string, modelObjs []models.IModel, roles []models.UserRole, scope *string) (string, error) {
@@ -239,22 +240,22 @@ func UserLoginHandler(typeString string) func(c *gin.Context) {
 	}
 }
 
-func getOptionByParsingURL(r *http.Request) (map[string]interface{}, error) {
-	options := make(map[string]interface{})
+func getOptionByParsingURL(r *http.Request) (map[datamapper.URLParam]interface{}, error) {
+	options := make(map[datamapper.URLParam]interface{})
 
 	values := r.URL.Query()
 	if o, l, err := limitAndOffsetFromQueryString(&values); err == nil {
-		options["offset"], options["limit"] = o, l
+		options[datamapper.URLParamOffset], options[datamapper.URLParamLimit] = o, l
 	} else if err != nil {
 		return nil, err
 	}
 
-	options["order"] = orderFromQueryString(&values)
-	options["latestn"] = latestnFromQueryString(&values)
-	options["better_otherqueries"] = values
+	options[datamapper.URLParamOrder] = orderFromQueryString(&values)
+	options[datamapper.URLParamLatestN] = latestnFromQueryString(&values)
+	options[datamapper.URLParamOtherQueries] = values
 
 	if cstart, cstop, err := createdTimeRangeFromQueryString(&values); err == nil {
-		options["cstart"], options["cstop"] = cstart, cstop
+		options[datamapper.URLParamCstart], options[datamapper.URLParamCstop] = cstart, cstop
 	} else if err != nil {
 		return nil, err
 	}
@@ -276,7 +277,7 @@ func ReadAllHandler(typeString string, mapper datamapper.IGetAllMapper) func(c *
 		ownerID, scope := OwnerIDFromContext(r), ScopeFromContext(r)
 
 		var modelObjs []models.IModel
-		options := make(map[string]interface{})
+		options := make(map[datamapper.URLParam]interface{})
 
 		if options, err = getOptionByParsingURL(r); err != nil {
 			render.Render(w, r, NewErrQueryParameter(err))

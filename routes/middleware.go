@@ -24,10 +24,10 @@ type contextKey int
 
 const (
 	// ContextKeyOwnerID is the id that's given in jwt's iss field
-	ContextKeyOwnerID    contextKey = iota
-	ContextKeyClient     contextKey = iota
-	ContextKeyScope      contextKey = iota
-	ContextKeyTokenHours contextKey = iota
+	ContextKeyOwnerID contextKey = iota
+	ContextKeyClient
+	ContextKeyScope
+	ContextKeyTokenHours
 )
 
 // http.NotFound

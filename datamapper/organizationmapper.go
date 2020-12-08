@@ -265,30 +265,10 @@ func (mapper *OrganizationMapper) getOneWithIDCore(db *gorm.DB, oid *datatypes.U
 // How does Gorm do the following? Might want to check out its source code.
 // Cancel offset condition with -1
 //  db.Offset(10).Find(&users1).Offset(-1).Find(&users2)
-func (mapper *OrganizationMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, options map[string]interface{}) ([]models.IModel, []models.UserRole, error) {
+func (mapper *OrganizationMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, options map[URLParam]interface{}) ([]models.IModel, []models.UserRole, error) {
 	db2 := db
-	offset, limit := 0, 0
-	if _, ok := options["offset"]; ok {
-		offset, _ = options["offset"].(int)
-	}
-	if _, ok := options["limit"]; ok {
-		limit, _ = options["limit"].(int)
-	}
 
-	cstart, cstop := 0, 0
-	if _, ok := options["cstart"]; ok {
-		cstart, _ = options["cstart"].(int)
-	}
-	if _, ok := options["cstop"]; ok {
-		cstop, _ = options["cstop"].(int)
-	}
-
-	var latestn *int
-	if n, ok := options["latestn"]; ok {
-		if n2, err := strconv.Atoi(n.(string)); err == nil {
-			latestn = &n2
-		}
-	}
+	offset, limit, cstart, cstop, order, latestn := getOptions(options)
 
 	var ok bool
 	var modelObjHavingOrganization models.IHasOrganizationLink
@@ -315,13 +295,13 @@ func (mapper *OrganizationMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, scop
 	secondJoin := fmt.Sprintf("INNER JOIN \"%s\" ON \"%s\".id = \"%s\".model_id", joinTableName, orgTableName, joinTableName)
 	thirdJoin := fmt.Sprintf("INNER JOIN \"user\" ON \"user\".id = \"%s\".user_id AND \"%s\".user_id = ?", joinTableName, joinTableName)
 
-	if cstart != 0 && cstop != 0 {
-		db = db.Where(rtable+".created_at BETWEEN ? AND ?", time.Unix(int64(cstart), 0), time.Unix(int64(cstop), 0))
+	if cstart != nil && cstop != nil {
+		db = db.Where(rtable+".created_at BETWEEN ? AND ?", time.Unix(int64(*cstart), 0), time.Unix(int64(*cstop), 0))
 	}
 
 	var err error
 
-	urlParams, ok := options["better_otherqueries"].(url.Values)
+	urlParams, ok := options[URLParamOtherQueries].(url.Values)
 	if ok && len(urlParams) != 0 {
 		// If I want quering into nested data
 		// I need INNER JOIN that table where the field is what we search for,
@@ -341,16 +321,16 @@ func (mapper *OrganizationMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, scop
 
 	db = db.Table(rtable).Joins(firstJoin).Joins(secondJoin).Joins(thirdJoin, oid.String())
 
-	if order := options["order"].(string); order != "" {
-		stmt := fmt.Sprintf("\"%s\".created_at %s", rtable, order)
+	if order != nil {
+		stmt := fmt.Sprintf("\"%s\".created_at %s", rtable, *order)
 		db = db.Order(stmt)
 		// db2 = db2.Order(stmt)
 	}
 
-	if limit != 0 {
+	if offset != nil && limit != nil {
 		// rows.Scan()
-		db = db.Offset(offset).Limit(limit)
-		// db2 = db2.Offset(offset).Limit(limit)
+		db = db.Offset(*offset).Limit(*limit)
+		// db2 = db2.Offset(*offset).Limit(*limit)
 	}
 
 	outmodels, err := models.NewSliceFromDBByTypeString(typeString, db.Find) // error from db is returned from here
