@@ -8,10 +8,12 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/jinzhu/gorm"
 	"github.com/t2wu/betterrest/datamapper"
 	"github.com/t2wu/betterrest/db"
 	"github.com/t2wu/betterrest/libs/datatypes"
@@ -178,6 +180,13 @@ func UserLoginHandler(typeString string) func(c *gin.Context) {
 		}
 
 		tx := db.Shared().Begin()
+		defer func(tx *gorm.DB) {
+			if r := recover(); r != nil {
+				tx.Rollback()
+				debug.PrintStack()
+				fmt.Println("Panic in ReadAllHandler", r)
+			}
+		}(tx)
 
 		cargo := models.ModelCargo{}
 		// Before hook
@@ -245,17 +254,27 @@ func getOptionByParsingURL(r *http.Request) (map[datamapper.URLParam]interface{}
 
 	values := r.URL.Query()
 	if o, l, err := limitAndOffsetFromQueryString(&values); err == nil {
-		options[datamapper.URLParamOffset], options[datamapper.URLParamLimit] = o, l
+		if o != nil && l != nil {
+			options[datamapper.URLParamOffset], options[datamapper.URLParamLimit] = o, l
+		}
 	} else if err != nil {
 		return nil, err
 	}
 
-	options[datamapper.URLParamOrder] = orderFromQueryString(&values)
-	options[datamapper.URLParamLatestN] = latestnFromQueryString(&values)
+	if order := orderFromQueryString(&values); order != nil {
+		options[datamapper.URLParamOrder] = order
+	}
+
+	if latest := latestnFromQueryString(&values); latest != nil {
+		options[datamapper.URLParamLatestN] = latest
+	}
+
 	options[datamapper.URLParamOtherQueries] = values
 
 	if cstart, cstop, err := createdTimeRangeFromQueryString(&values); err == nil {
-		options[datamapper.URLParamCstart], options[datamapper.URLParamCstop] = cstart, cstop
+		if cstart != nil && cstop != nil {
+			options[datamapper.URLParamCstart], options[datamapper.URLParamCstop] = cstart, cstop
+		}
 	} else if err != nil {
 		return nil, err
 	}
@@ -286,6 +305,14 @@ func ReadAllHandler(typeString string, mapper datamapper.IGetAllMapper) func(c *
 
 		var roles []models.UserRole
 		tx := db.Shared().Begin()
+
+		defer func(tx *gorm.DB) {
+			if r := recover(); r != nil {
+				tx.Rollback()
+				debug.PrintStack()
+				fmt.Println("Panic in ReadAllHandler", r)
+			}
+		}(tx)
 
 		if modelObjs, roles, err = mapper.ReadAll(tx, ownerID, &scope, typeString, options); err != nil {
 			tx.Rollback()
@@ -323,6 +350,15 @@ func CreateHandler(typeString string, mapper datamapper.ICreateMapper) func(c *g
 		}
 
 		tx := db.Shared().Begin()
+
+		defer func(tx *gorm.DB) {
+			if r := recover(); r != nil {
+				tx.Rollback()
+				debug.PrintStack()
+				fmt.Println("Panic in ReadAllHandler", r)
+			}
+		}(tx)
+
 		if *isBatch {
 			if modelObjs, err = mapper.CreateMany(tx, ownerID, &scope, typeString, modelObjs); err != nil {
 				// FIXME, there is more than one type of error here
@@ -387,6 +423,15 @@ func ReadOneHandler(typeString string, mapper datamapper.IGetOneWithIDMapper) fu
 		ownerID, scope := OwnerIDFromContext(r), ScopeFromContext(r)
 
 		tx := db.Shared().Begin()
+
+		defer func(tx *gorm.DB) {
+			if r := recover(); r != nil {
+				tx.Rollback()
+				debug.PrintStack()
+				fmt.Println("Panic in ReadAllHandler", r)
+			}
+		}(tx)
+
 		modelObj, role, err := mapper.GetOneWithID(tx, ownerID, &scope, typeString, *id)
 
 		if err != nil {
@@ -432,6 +477,15 @@ func UpdateOneHandler(typeString string, mapper datamapper.IUpdateOneWithIDMappe
 		}
 
 		tx := db.Shared().Begin()
+
+		defer func(tx *gorm.DB) {
+			if r := recover(); r != nil {
+				tx.Rollback()
+				debug.PrintStack()
+				fmt.Println("Panic in ReadAllHandler", r)
+			}
+		}(tx)
+
 		modelObj, err := mapper.UpdateOneWithID(tx, ownerID, &scope, typeString, modelObj, *id)
 		if err != nil {
 			tx.Rollback()
@@ -468,6 +522,15 @@ func UpdateManyHandler(typeString string, mapper datamapper.IUpdateManyMapper) f
 		}
 
 		tx := db.Shared().Begin()
+
+		defer func(tx *gorm.DB) {
+			if r := recover(); r != nil {
+				tx.Rollback()
+				debug.PrintStack()
+				fmt.Println("Panic in ReadAllHandler", r)
+			}
+		}(tx)
+
 		modelObjs, err := mapper.UpdateMany(tx, ownerID, &scope, typeString, modelObjs)
 		if err != nil {
 			tx.Rollback()
@@ -516,6 +579,15 @@ func PatchOneHandler(typeString string, mapper datamapper.IPatchOneWithIDMapper)
 		ownerID, scope := OwnerIDFromContext(r), ScopeFromContext(r)
 
 		tx := db.Shared().Begin()
+
+		defer func(tx *gorm.DB) {
+			if r := recover(); r != nil {
+				tx.Rollback()
+				debug.PrintStack()
+				fmt.Println("Panic in ReadAllHandler", r)
+			}
+		}(tx)
+
 		modelObj, err := mapper.PatchOneWithID(tx, ownerID, &scope, typeString, jsonPatch, *id)
 		if err != nil {
 			tx.Rollback()
@@ -558,6 +630,15 @@ func DeleteOneHandler(typeString string, mapper datamapper.IDeleteOneWithID) fun
 		ownerID, scope := OwnerIDFromContext(r), ScopeFromContext(r)
 
 		tx := db.Shared().Begin()
+
+		defer func(tx *gorm.DB) {
+			if r := recover(); r != nil {
+				tx.Rollback()
+				debug.PrintStack()
+				fmt.Println("Panic in ReadAllHandler", r)
+			}
+		}(tx)
+
 		modelObj, err := mapper.DeleteOneWithID(tx, ownerID, &scope, typeString, *id)
 		if err != nil {
 			tx.Rollback()
@@ -596,6 +677,15 @@ func DeleteManyHandler(typeString string, mapper datamapper.IDeleteMany) func(c 
 		}
 
 		tx := db.Shared().Begin() // transaction
+
+		defer func(tx *gorm.DB) {
+			if r := recover(); r != nil {
+				tx.Rollback()
+				debug.PrintStack()
+				fmt.Println("Panic in ReadAllHandler", r)
+			}
+		}(tx)
+
 		modelObjs, err = mapper.DeleteMany(tx, ownerID, &scope, typeString, modelObjs)
 		if err != nil {
 			tx.Rollback()

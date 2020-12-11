@@ -31,6 +31,8 @@ const (
 )
 
 func getOptions(options map[URLParam]interface{}) (offset *int, limit *int, cstart *int, cstop *int, order *string, latestn *int) {
+	// If key is in it, even if value is nil, ok will be true
+
 	if _, ok := options[URLParamOffset]; ok {
 		offset, _ = options[URLParamOffset].(*int)
 	}
@@ -50,9 +52,12 @@ func getOptions(options map[URLParam]interface{}) (offset *int, limit *int, csta
 		cstop, _ = options[URLParamCstop].(*int)
 	}
 
+	latestn = nil
 	if n, ok := options[URLParamLatestN]; ok {
-		if n2, err := strconv.Atoi(*(n.(*string))); err == nil {
-			latestn = &n2
+		if n != nil {
+			if n2, err := strconv.Atoi(*(n.(*string))); err == nil {
+				latestn = &n2
+			}
 		}
 	}
 
