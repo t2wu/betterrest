@@ -81,10 +81,11 @@ func getOwnershipModelTypeFromTypeString(typeString string) reflect.Type {
 
 func constructInnerFieldParamQueries(db *gorm.DB, typeString string, options map[URLParam]interface{}, latestn *int) (*gorm.DB, error) {
 	if urlParams, ok := options[URLParamOtherQueries].(url.Values); ok && len(urlParams) != 0 {
+		var err error
 		// If I want quering into nested data
 		// I need INNER JOIN that table where the field is what we search for,
 		// and that table's link back to this ID is the id of this table
-		db, err := constructDbFromURLFieldQuery(db, typeString, urlParams, latestn)
+		db, err = constructDbFromURLFieldQuery(db, typeString, urlParams, latestn)
 		if err != nil {
 			return nil, err
 		}
@@ -96,6 +97,7 @@ func constructInnerFieldParamQueries(db *gorm.DB, typeString string, options map
 	} else if latestn != nil {
 		return nil, errors.New("latestn cannot be used without querying field value")
 	}
+
 	return db, nil
 }
 
