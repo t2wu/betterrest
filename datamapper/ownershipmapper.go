@@ -3,7 +3,6 @@ package datamapper
 import (
 	"errors"
 	"fmt"
-	"net/url"
 	"reflect"
 	"sync"
 	"time"
@@ -245,21 +244,13 @@ func (mapper *OwnershipMapper) getOneWithIDCore(db *gorm.DB, oid *datatypes.UUID
 //  db.Offset(10).Find(&users1).Offset(-1).Find(&users2)
 func (mapper *OwnershipMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, options map[URLParam]interface{}) ([]models.IModel, []models.UserRole, error) {
 	db2 := db
-
-	offset, limit, cstart, cstop, order, latestn := getOptions(options)
-
-	// var f func(interface{}, ...interface{}) *gorm.DB
-	// var f func(dest interface{}) *gorm.DB
-
 	db = db.Set("gorm:auto_preload", true)
 
-	rtable := models.GetTableNameFromTypeString(typeString)
-
-	modelObjOwnership, ok := models.NewFromTypeString(typeString).(models.IHasOwnershipLink)
-	if !ok {
-		return nil, nil, errNoOwnership
+	offset, limit, cstart, cstop, order, latestn := getOptions(options)
+	rtable, joinTableName, err := getModelTableNameAndJoinTableNameFromTypeString(typeString)
+	if err != nil {
+		return nil, nil, err
 	}
-	joinTableName := models.GetJoinTableName(modelObjOwnership)
 
 	firstJoin := fmt.Sprintf("INNER JOIN \"%s\" ON \"%s\".id = \"%s\".model_id", joinTableName, rtable, joinTableName)
 	secondJoin := fmt.Sprintf("INNER JOIN \"user\" ON \"user\".id = \"%s\".user_id AND \"%s\".user_id = ?", joinTableName, joinTableName)
@@ -268,24 +259,9 @@ func (mapper *OwnershipMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, scope *
 		db = db.Where(rtable+".created_at BETWEEN ? AND ?", time.Unix(int64(*cstart), 0), time.Unix(int64(*cstop), 0))
 	}
 
-	var err error
-
-	urlParams, ok := options[URLParamOtherQueries].(url.Values)
-	if ok && len(urlParams) != 0 {
-		// If I want quering into nested data
-		// I need INNER JOIN that table where the field is what we search for,
-		// and that table's link back to this ID is the id of this table
-		db, err = constructDbFromURLFieldQuery(db, typeString, urlParams, latestn)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		db, err = constructDbFromURLInnerFieldQuery(db, typeString, urlParams, latestn)
-		if err != nil {
-			return nil, nil, err
-		}
-	} else if latestn != nil {
-		return nil, nil, errors.New("latestn cannot be used without querying field value")
+	db, err = constructInnerFieldParamQueries(db, typeString, options, latestn)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	db = db.Table(rtable).Joins(firstJoin).Joins(secondJoin, oid.String())
@@ -301,8 +277,9 @@ func (mapper *OwnershipMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, scope *
 
 	roles := make([]models.UserRole, 0)
 	outmodels, err := models.NewSliceFromDBByTypeString(typeString, db.Find) // error from db is returned from here
-	ownershipModelTyp := modelObjOwnership.OwnershipType()
 
+	// ---------------------------
+	ownershipModelTyp := getOwnershipModelTypeFromTypeString(typeString)
 	// FIXME: this performance horrible...might as well query the above again for a role
 	for _, outmodel := range outmodels {
 		joinTable := reflect.New(ownershipModelTyp).Interface()

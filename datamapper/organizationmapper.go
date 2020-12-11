@@ -3,7 +3,6 @@ package datamapper
 import (
 	"errors"
 	"fmt"
-	"net/url"
 	"reflect"
 	"strconv"
 	"sync"
@@ -267,6 +266,7 @@ func (mapper *OrganizationMapper) getOneWithIDCore(db *gorm.DB, oid *datatypes.U
 //  db.Offset(10).Find(&users1).Offset(-1).Find(&users2)
 func (mapper *OrganizationMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, options map[URLParam]interface{}) ([]models.IModel, []models.UserRole, error) {
 	db2 := db
+	db = db.Set("gorm:auto_preload", true)
 
 	offset, limit, cstart, cstop, order, latestn := getOptions(options)
 
@@ -285,8 +285,6 @@ func (mapper *OrganizationMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, scop
 	joinTableName := models.GetJoinTableName(orgTable.(models.IHasOwnershipLink))
 	orgFieldName := strcase.SnakeCase(modelObjHavingOrganization.GetOrganizationIDFieldName())
 
-	db = db.Set("gorm:auto_preload", true)
-
 	rtable := models.GetTableNameFromTypeString(typeString)
 
 	// e.g. INNER JOIN \"organization\" ON \"dock\".\"OrganizationID\" = \"organization\".id
@@ -301,22 +299,9 @@ func (mapper *OrganizationMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, scop
 
 	var err error
 
-	urlParams, ok := options[URLParamOtherQueries].(url.Values)
-	if ok && len(urlParams) != 0 {
-		// If I want quering into nested data
-		// I need INNER JOIN that table where the field is what we search for,
-		// and that table's link back to this ID is the id of this table
-		db, err = constructDbFromURLFieldQuery(db, typeString, urlParams, latestn)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		db, err = constructDbFromURLInnerFieldQuery(db, typeString, urlParams, latestn)
-		if err != nil {
-			return nil, nil, err
-		}
-	} else if latestn != nil {
-		return nil, nil, errors.New("latestn cannot be used without querying field value")
+	db, err = constructInnerFieldParamQueries(db, typeString, options, latestn)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	db = db.Table(rtable).Joins(firstJoin).Joins(secondJoin).Joins(thirdJoin, oid.String())
@@ -328,9 +313,7 @@ func (mapper *OrganizationMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, scop
 	}
 
 	if offset != nil && limit != nil {
-		// rows.Scan()
 		db = db.Offset(*offset).Limit(*limit)
-		// db2 = db2.Offset(*offset).Limit(*limit)
 	}
 
 	outmodels, err := models.NewSliceFromDBByTypeString(typeString, db.Find) // error from db is returned from here

@@ -1,9 +1,7 @@
 package datamapper
 
 import (
-	"errors"
 	"fmt"
-	"net/url"
 	"sync"
 	"time"
 
@@ -143,10 +141,9 @@ func (mapper *GlobalMapper) getOneWithIDCore(db *gorm.DB, oid *datatypes.UUID, s
 // ReadAll is when user do a read
 func (mapper *GlobalMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, options map[URLParam]interface{}) ([]models.IModel, []models.UserRole, error) {
 	db2 := db
+	db = db.Set("gorm:auto_preload", true)
 
 	offset, limit, cstart, cstop, order, latestn := getOptions(options)
-
-	db = db.Set("gorm:auto_preload", true)
 
 	rtable := models.GetTableNameFromTypeString(typeString)
 
@@ -156,22 +153,9 @@ func (mapper *GlobalMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, scope *str
 
 	var err error
 
-	urlParams, ok := options[URLParamOtherQueries].(url.Values)
-	if ok && len(urlParams) != 0 {
-		// If I want quering into nested data
-		// I need INNER JOIN that table where the field is what we search for,
-		// and that table's link back to this ID is the id of this table
-		db, err = constructDbFromURLFieldQuery(db, typeString, urlParams, latestn)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		db, err = constructDbFromURLInnerFieldQuery(db, typeString, urlParams, latestn)
-		if err != nil {
-			return nil, nil, err
-		}
-	} else if latestn != nil {
-		return nil, nil, errors.New("latestn cannot be used without querying field value")
+	db, err = constructInnerFieldParamQueries(db, typeString, options, latestn)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	db = db.Table(rtable)

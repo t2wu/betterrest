@@ -2,8 +2,10 @@ package datamapper
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
+	"net/url"
 	"reflect"
 	"strconv"
 	"strings"
@@ -55,6 +57,41 @@ func getOptions(options map[URLParam]interface{}) (offset *int, limit *int, csta
 	}
 
 	return offset, limit, cstart, cstop, order, latestn
+}
+
+func getModelTableNameAndJoinTableNameFromTypeString(typeString string) (string, string, error) {
+	modelObjOwnership, ok := models.NewFromTypeString(typeString).(models.IHasOwnershipLink)
+	if !ok {
+		return "", "", errNoOwnership
+	}
+	joinTableName := models.GetJoinTableName(modelObjOwnership)
+	modelTableName := models.GetTableNameFromTypeString(typeString)
+	return modelTableName, joinTableName, nil
+}
+
+func getOwnershipModelTypeFromTypeString(typeString string) reflect.Type {
+	modelObjOwnership, _ := models.NewFromTypeString(typeString).(models.IHasOwnershipLink)
+	return modelObjOwnership.OwnershipType()
+}
+
+func constructInnerFieldParamQueries(db *gorm.DB, typeString string, options map[URLParam]interface{}, latestn *int) (*gorm.DB, error) {
+	if urlParams, ok := options[URLParamOtherQueries].(url.Values); ok && len(urlParams) != 0 {
+		// If I want quering into nested data
+		// I need INNER JOIN that table where the field is what we search for,
+		// and that table's link back to this ID is the id of this table
+		db, err := constructDbFromURLFieldQuery(db, typeString, urlParams, latestn)
+		if err != nil {
+			return nil, err
+		}
+
+		db, err = constructDbFromURLInnerFieldQuery(db, typeString, urlParams, latestn)
+		if err != nil {
+			return nil, err
+		}
+	} else if latestn != nil {
+		return nil, errors.New("latestn cannot be used without querying field value")
+	}
+	return db, nil
 }
 
 func checkErrorBeforeUpdate(mapper IGetOneWithIDMapper, db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id datatypes.UUID, permittedRole models.UserRole) error {
