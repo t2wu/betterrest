@@ -266,7 +266,10 @@ func (mapper *OwnershipMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, scope *
 
 	db = db.Table(rtable).Joins(firstJoin).Joins(secondJoin, oid.String())
 
-	db = constructOrderFieldQueries(db, rtable, order)
+	if order != nil {
+		stmt := fmt.Sprintf("\"%s\".created_at %s", rtable, *order)
+		db = db.Order(stmt)
+	}
 
 	if offset != nil && limit != nil {
 		db = db.Offset(*offset).Limit(*limit)

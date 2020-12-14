@@ -101,15 +101,6 @@ func constructInnerFieldParamQueries(db *gorm.DB, typeString string, options map
 	return db, nil
 }
 
-func constructOrderFieldQueries(db *gorm.DB, tableName string, order *string) *gorm.DB {
-	if order != nil && *order == "asc" {
-		db = db.Order(fmt.Sprintf("\"%s\".created_at ASC", tableName))
-	} else {
-		db = db.Order(fmt.Sprintf("\"%s\".created_at DESC", tableName)) // descending by default
-	}
-	return db
-}
-
 func checkErrorBeforeUpdate(mapper IGetOneWithIDMapper, db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id datatypes.UUID, permittedRole models.UserRole) error {
 	if id.UUID.String() == "" {
 		return errIDEmpty
@@ -142,8 +133,6 @@ func updateOneCore(mapper IGetOneWithIDMapper, db *gorm.DB, oid *datatypes.UUID,
 	if err2 != nil {
 		return nil, err2
 	}
-
-	log.Println("===>role is:", role)
 
 	if role != permittedRole {
 		return nil, errPermission

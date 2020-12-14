@@ -2,7 +2,7 @@ package sqlbuilder
 
 import (
 	"fmt"
-	"log"
+	"reflect"
 	"strings"
 
 	"github.com/jinzhu/gorm"
@@ -32,17 +32,20 @@ type TwoLevelFilterCriteria struct { //看到I看不到 lower left bracket
 
 // AddWhereStmt adds where statement into db
 func AddWhereStmt(db *gorm.DB, typeString string, tableName string, filter FilterCriteria) (*gorm.DB, error) {
-	transformedFieldValues, err := getTransformedValueFromValidField(typeString,
+	modelObj := models.NewFromTypeString(typeString)
+	transformedFieldValues, err := getTransformedValueFromValidField(modelObj,
 		letters.CamelCaseToPascalCase(filter.FieldName), filter.FieldValues)
 	if err != nil {
 		return nil, err
 	}
 
+	fiterdFieldValues, anyNull := filterNullValue(transformedFieldValues)
+
 	// Gorm will actually use one WHERE clause with AND statements if Where is called repeatedly
 	whereStmt := inOpWithFields(tableName, strcase.SnakeCase(filter.FieldName),
-		len(filter.FieldValues))
-	log.Println("whereStmt: ", whereStmt)
-	db = db.Where(whereStmt, transformedFieldValues...)
+		len(fiterdFieldValues), anyNull)
+
+	db = db.Where(whereStmt, fiterdFieldValues...)
 	return db, nil
 }
 
@@ -53,22 +56,38 @@ func AddNestedQueryJoinStmt(db *gorm.DB, typeString string, criteria TwoLevelFil
 		criteria.InnerTableName, criteria.InnerTableName, criteria.OuterTableName+"_id", criteria.OuterTableName)
 
 	queryValues := make([]interface{}, 0)
+	// var err error
 
 	for _, filter := range criteria.Filters {
 		innerFieldName := filter.FieldName
 		fieldValues := filter.FieldValues
-		transformedValues, err := getTransformedValueFromValidField(typeString,
-			letters.CamelCaseToPascalCase(criteria.OuterFieldName), fieldValues)
+
+		// Get inner field type
+		m := models.NewFromTypeString(typeString) // THIS IS TO BE FIXED
+		fieldType, err := datatypes.GetModelFieldTypeElmIfValid(m, letters.CamelCaseToPascalCase(criteria.OuterFieldName))
 		if err != nil {
 			return nil, err
 		}
 
+		m2 := reflect.New(fieldType).Interface()
+		fieldType2, err := datatypes.GetModelFieldTypeElmIfValid(m2, letters.CamelCaseToPascalCase(innerFieldName))
+		if err != nil {
+			return nil, err
+		}
+
+		transformedValues, err := datatypes.TransformFieldValue(fieldType2.String(), fieldValues)
+		if err != nil {
+			return nil, err
+		}
+
+		fiterdFieldValues, anyNull := filterNullValue(transformedValues)
+
 		// It's possible to have multiple values by using ?xx=yy&xx=zz
 		// Get the inner table's type
-		inStmt := inOpWithFields(criteria.InnerTableName, strcase.SnakeCase(innerFieldName), len(transformedValues))
-		joinStmt += "AND " + inStmt
+		inStmt := inOpWithFields(criteria.InnerTableName, strcase.SnakeCase(innerFieldName), len(fiterdFieldValues), anyNull)
+		joinStmt += "AND (" + inStmt + ")"
 
-		queryValues = append(queryValues, transformedValues...)
+		queryValues = append(queryValues, fiterdFieldValues...)
 	}
 
 	db = db.Joins(joinStmt, queryValues...)
@@ -85,19 +104,21 @@ func AddLatestJoinWithOneLevelFilter(db *gorm.DB, typeString string, tableName s
 	transformedValues := make([]interface{}, 0)
 
 	for _, filter := range filters {
-		transformedFieldValues, err := getTransformedValueFromValidField(typeString,
+		m := models.NewFromTypeString(typeString)
+		transformedFieldValues, err := getTransformedValueFromValidField(m,
 			letters.CamelCaseToPascalCase(filter.FieldName), filter.FieldValues)
 		if err != nil {
 			return nil, err
 		}
 
+		fiterdFieldValues, anyNull := filterNullValue(transformedFieldValues)
 		// If passed, the field is part of the data structure
 
 		fieldName := strcase.SnakeCase(filter.FieldName)
 		partitionByArr = append(partitionByArr, fieldName)
 
-		whereArr = append(whereArr, inOpWithFields(tableName, fieldName, len(filter.FieldValues))) // "%s.%s IN (%s)
-		transformedValues = append(transformedValues, transformedFieldValues...)
+		whereArr = append(whereArr, inOpWithFields(tableName, fieldName, len(fiterdFieldValues), anyNull)) // "%s.%s IN (%s)
+		transformedValues = append(transformedValues, fiterdFieldValues...)
 	}
 	partitionBy := strings.Join(partitionByArr, ", ")
 	whereStmt := strings.Join(whereArr, " AND ")
@@ -135,19 +156,36 @@ func AddLatestJoinWithOneLevelFilter(db *gorm.DB, typeString string, tableName s
 // and
 // (x1, x2, x3)
 // from better_other_queries
-func inOpWithFields(tableName string, fieldName string, numfieldValues int) string {
+func inOpWithFields(tableName string, fieldName string, numfieldValues int, checkNull bool) string {
 	tableName = "\"" + tableName + "\""
 	fieldName = "\"" + fieldName + "\""
-	blanks := strings.Repeat("?,", numfieldValues)
-	blanks = blanks[:len(blanks)-1]
-	return fmt.Sprintf("%s.%s IN (%s) ", tableName, fieldName, blanks)
+	tableAndField := fmt.Sprintf("%s.%s", tableName, fieldName)
+
+	// A simple IN clause is OK except when I need to check if the field is an null value
+	// then the IN clause won't work, need to do
+	// (fieldName IN ('fieldValue1', 'fieldValue2') OR fieldName IS NULL)
+
+	var stmt strings.Builder
+	if numfieldValues >= 1 {
+		questionMarks := strings.Repeat("?,", numfieldValues)
+		questionMarks = questionMarks[:len(questionMarks)-1]
+		stmt.WriteString(fmt.Sprintf("%s IN (%s)", tableAndField, questionMarks))
+	}
+
+	if numfieldValues >= 1 && checkNull {
+		stmt.WriteString(" OR ")
+	}
+
+	if checkNull {
+		stmt.WriteString(fmt.Sprintf("%s IS NULL", tableAndField))
+	}
+
+	return stmt.String()
 }
 
 // getTransformedValueFromValidField make sure the field does exist in struct
 // and output the field value in correct types
-func getTransformedValueFromValidField(typeString, structFieldName string, urlFieldValues []string) ([]interface{}, error) {
-	modelObj := models.NewFromTypeString(typeString)
-
+func getTransformedValueFromValidField(modelObj interface{}, structFieldName string, urlFieldValues []string) ([]interface{}, error) {
 	// Important!! Check if fieldName is actually part of the schema, otherwise risk of sequal injection
 	fieldType, err := datatypes.GetModelFieldTypeElmIfValid(modelObj, letters.CamelCaseToPascalCase(structFieldName))
 	if err != nil {
@@ -160,4 +198,49 @@ func getTransformedValueFromValidField(typeString, structFieldName string, urlFi
 	}
 
 	return transURLFieldValues, nil
+}
+
+// getTransformedValueFromValidField make sure the field does exist in struct
+// and output the field value in correct types
+// func getTransformedValueFromValidField2(modelObj interface{}, structFieldName string, urlFieldValues []string) ([]interface{}, error) {
+// 	// Important!! Check if fieldName is actually part of the schema, otherwise risk of sequal injection
+// 	fieldType, err := datatypes.GetModelFieldTypeElmIfValid(modelObj, letters.CamelCaseToPascalCase(structFieldName))
+// 	if err != nil {
+// 		return nil, err
+// 	}
+
+// 	log.Println("fieldType:", fieldType)
+
+// 	transURLFieldValues, err := datatypes.TransformFieldValue(fieldType.String(), urlFieldValues)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+
+// 	return transURLFieldValues, nil
+// }
+
+func filterNullValue(transformedFieldValues []interface{}) (filtered []interface{}, anyNull bool) {
+	// Filter out the "null" ones
+	anyNull = false
+	filtered = make([]interface{}, 0)
+	for _, value := range transformedFieldValues {
+		if isNil(value) {
+			anyNull = true
+		} else { // when isNil panic and recovered it goes here..I'm not sure how it works but this is what I need
+			filtered = append(filtered, value)
+		}
+	}
+	return filtered, anyNull
+}
+
+// https://mangatmodi.medium.com/go-check-nil-interface-the-right-way-d142776edef1
+func isNil(i interface{}) bool {
+	// Will panic for value type such as string and int
+	defer func() {
+		if r := recover(); r != nil {
+			// fmt.Println("Recovered in f", r)
+			return // for string type and stuff..
+		}
+	}()
+	return i == nil || reflect.ValueOf(i).IsNil()
 }

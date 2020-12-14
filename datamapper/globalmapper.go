@@ -1,6 +1,7 @@
 package datamapper
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
@@ -159,7 +160,11 @@ func (mapper *GlobalMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, scope *str
 
 	db = db.Table(rtable)
 
-	db = constructOrderFieldQueries(db, rtable, order)
+	if order != nil {
+		stmt := fmt.Sprintf("\"%s\".created_at %s", rtable, *order)
+		db = db.Order(stmt)
+		// db2 = db2.Order(stmt)
+	}
 
 	if offset != nil && limit != nil {
 		// rows.Scan()

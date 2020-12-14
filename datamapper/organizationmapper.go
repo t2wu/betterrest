@@ -306,7 +306,11 @@ func (mapper *OrganizationMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, scop
 
 	db = db.Table(rtable).Joins(firstJoin).Joins(secondJoin).Joins(thirdJoin, oid.String())
 
-	db = constructOrderFieldQueries(db, rtable, order)
+	if order != nil {
+		stmt := fmt.Sprintf("\"%s\".created_at %s", rtable, *order)
+		db = db.Order(stmt)
+		// db2 = db2.Order(stmt)
+	}
 
 	if offset != nil && limit != nil {
 		db = db.Offset(*offset).Limit(*limit)
