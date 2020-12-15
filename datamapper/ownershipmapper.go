@@ -275,25 +275,20 @@ func (mapper *OwnershipMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, scope *
 		db = db.Offset(*offset).Limit(*limit)
 	}
 
+	db3 := db
+
 	roles := make([]models.UserRole, 0)
 	outmodels, err := models.NewSliceFromDBByTypeString(typeString, db.Find) // error from db is returned from here
 
 	// ---------------------------
-	ownershipModelTyp := getOwnershipModelTypeFromTypeString(typeString)
-	// FIXME: this performance horrible...might as well query the above again for a role
-	for _, outmodel := range outmodels {
-		joinTable := reflect.New(ownershipModelTyp).Interface()
-		role := models.Admin // just some default
-		mid := outmodel.GetID()
-		stmt := fmt.Sprintf("SELECT * FROM %s WHERE user_id = ? AND model_id = ?", joinTableName)
-		if err2 := db2.Raw(stmt, oid.String(), mid.String()).Scan(joinTable).Error; err2 != nil {
-			return nil, nil, err2
-		}
+	// ownershipModelTyp := getOwnershipModelTypeFromTypeString(typeString)
 
-		if m, ok := joinTable.(models.IOwnership); ok {
-			role = m.GetRole()
-			roles = append(roles, role)
-		}
+	// role := models.Admin // just some default
+	// The difference between this method and the find is that it's missing the
+	// WHERE "model"."deleted_at" IS NULL, so we need to add it
+	if err = db3.Where(fmt.Sprintf("\"%s\".\"deleted_at\" IS NULL", rtable)).
+		Select(fmt.Sprintf("\"%s\".\"role\"", joinTableName)).Scan(&roles).Error; err != nil {
+		return nil, nil, err
 	}
 
 	// safeguard, Must be coded wrongly
