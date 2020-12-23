@@ -91,9 +91,8 @@ func Setup(ck *CertAndKeys) {
 func CreateAccessToken(ident *datatypes.UUID, duration time.Duration, scope *string) (string, error) {
 	// Support both UUID and id
 	claims := jwt.MapClaims{
-		// "exp": time.Now().Add(time.Hour * time.Duration(3)).Unix(),
-		"exp": time.Now().Add(duration).Unix(),
-		"iat": time.Now().Unix(),
+		"exp": time.Now().Add(duration).UnixNano() / 1e6,
+		"iat": time.Now().UnixNano() / 1e6,
 		"iss": ident.String(),
 	}
 
@@ -113,8 +112,8 @@ func CreateRefreshToken(ident *datatypes.UUID, duration time.Duration, scope *st
 	// Support both UUID and id
 	claims := jwt.MapClaims{
 		// "exp": time.Now().Add(time.Hour * 24 * time.Duration(60)).Unix(), // 60 days refresh token
-		"exp": time.Now().Add(duration).Unix(), // 60 days refresh token
-		"iat": time.Now().Unix(),
+		"exp": time.Now().Add(duration).UnixNano() / 1e6, // 60 days refresh token
+		"iat": time.Now().UnixNano() / 1e6,
 		"iss": ident.String(),
 	}
 
