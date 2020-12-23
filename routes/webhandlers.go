@@ -139,9 +139,11 @@ func renderModel(w http.ResponseWriter, r *http.Request, typeString string, mode
 	}
 
 	content := fmt.Sprintf("{ \"code\": 0, \"content\": %s }", string(jsonBytes))
+	data := []byte(content)
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.Write([]byte(content))
+	w.Header().Set("Content-Length", strconv.Itoa(len(data)))
+	w.Write(data)
 }
 
 func renderModelSlice(w http.ResponseWriter, r *http.Request, typeString string, modelObjs []models.IModel, roles []models.UserRole, scope *string) {
@@ -184,7 +186,7 @@ func UserLoginHandler(typeString string) func(c *gin.Context) {
 			if r := recover(); r != nil {
 				tx.Rollback()
 				debug.PrintStack()
-				fmt.Println("Panic in ReadAllHandler", r)
+				fmt.Println("Panic in UserLoginHandler", r)
 			}
 		}(tx)
 
@@ -241,6 +243,7 @@ func UserLoginHandler(typeString string) func(c *gin.Context) {
 
 		var jsn []byte
 		if jsn, err = json.Marshal(payload); err != nil {
+			tx.Rollback()
 			render.Render(w, r, NewErrGenJSON(err))
 			return
 		}
@@ -428,7 +431,7 @@ func ReadOneHandler(typeString string, mapper datamapper.IGetOneWithIDMapper) fu
 			if r := recover(); r != nil {
 				tx.Rollback()
 				debug.PrintStack()
-				fmt.Println("Panic in ReadAllHandler", r)
+				fmt.Println("Panic in ReadOneHandler", r)
 			}
 		}(tx)
 
@@ -482,7 +485,7 @@ func UpdateOneHandler(typeString string, mapper datamapper.IUpdateOneWithIDMappe
 			if r := recover(); r != nil {
 				tx.Rollback()
 				debug.PrintStack()
-				fmt.Println("Panic in ReadAllHandler", r)
+				fmt.Println("Panic in UpdateOneHandler", r)
 			}
 		}(tx)
 
@@ -527,7 +530,7 @@ func UpdateManyHandler(typeString string, mapper datamapper.IUpdateManyMapper) f
 			if r := recover(); r != nil {
 				tx.Rollback()
 				debug.PrintStack()
-				fmt.Println("Panic in ReadAllHandler", r)
+				fmt.Println("Panic in UpdateManyHandler", r)
 			}
 		}(tx)
 
@@ -584,7 +587,7 @@ func PatchOneHandler(typeString string, mapper datamapper.IPatchOneWithIDMapper)
 			if r := recover(); r != nil {
 				tx.Rollback()
 				debug.PrintStack()
-				fmt.Println("Panic in ReadAllHandler", r)
+				fmt.Println("Panic in PatchOneHandler", r)
 			}
 		}(tx)
 
@@ -635,7 +638,7 @@ func DeleteOneHandler(typeString string, mapper datamapper.IDeleteOneWithID) fun
 			if r := recover(); r != nil {
 				tx.Rollback()
 				debug.PrintStack()
-				fmt.Println("Panic in ReadAllHandler", r)
+				fmt.Println("Panic in DeleteOneHandler", r)
 			}
 		}(tx)
 
@@ -682,7 +685,7 @@ func DeleteManyHandler(typeString string, mapper datamapper.IDeleteMany) func(c 
 			if r := recover(); r != nil {
 				tx.Rollback()
 				debug.PrintStack()
-				fmt.Println("Panic in ReadAllHandler", r)
+				fmt.Println("Panic in DeleteManyHandler", r)
 			}
 		}(tx)
 
