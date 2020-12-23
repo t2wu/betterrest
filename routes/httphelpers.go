@@ -35,6 +35,26 @@ func ScopeFromContext(r *http.Request) string {
 	return scope
 }
 
+// IatFromContext gets iat from context
+func IatFromContext(r *http.Request) int64 {
+	var scope string
+	item := r.Context().Value(ContextKeyIat)
+	if item != nil {
+		scope = item.(string)
+	}
+	return scope
+}
+
+// ExpFromContext gets iat from context
+func ExpFromContext(r *http.Request) int64 {
+	var scope string
+	item := r.Context().Value(ContextKeyExp)
+	if item != nil {
+		scope = item.(string)
+	}
+	return scope
+}
+
 // TokenHoursFromContext gets hours from context
 func TokenHoursFromContext(r *http.Request) int {
 	tokenHours := -1
