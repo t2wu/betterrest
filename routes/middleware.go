@@ -27,6 +27,8 @@ const (
 	ContextKeyOwnerID contextKey = iota
 	ContextKeyClient
 	ContextKeyScope
+	ContextKeyIat
+	ContextKeyExp
 	ContextKeyTokenHours
 )
 
@@ -133,6 +135,36 @@ func BearerAuthMiddleware() gin.HandlerFunc {
 			}
 
 			ctx := context.WithValue(c.Request.Context(), ContextKeyScope, scope)
+			c.Request = c.Request.WithContext(ctx)
+		} else {
+			render.Render(w, r, NewErrTokenInvalid(errors.New("getting ISS from token error")))
+			c.Abort()
+			return
+		}
+
+		if iat, ok := (*claims)["iat"].(string); ok {
+			if err != nil {
+				render.Render(w, r, NewErrTokenInvalid(err))
+				c.Abort()
+				return
+			}
+
+			ctx := context.WithValue(c.Request.Context(), ContextKeyIat, iat)
+			c.Request = c.Request.WithContext(ctx)
+		} else {
+			render.Render(w, r, NewErrTokenInvalid(errors.New("getting ISS from token error")))
+			c.Abort()
+			return
+		}
+
+		if exp, ok := (*claims)["exp"].(string); ok {
+			if err != nil {
+				render.Render(w, r, NewErrTokenInvalid(err))
+				c.Abort()
+				return
+			}
+
+			ctx := context.WithValue(c.Request.Context(), ContextKeyExp, exp)
 			c.Request = c.Request.WithContext(ctx)
 		} else {
 			render.Render(w, r, NewErrTokenInvalid(errors.New("getting ISS from token error")))
