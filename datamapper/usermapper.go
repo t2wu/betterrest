@@ -164,7 +164,7 @@ func (mapper *UserMapper) UpdateOneWithID(db *gorm.DB, oid *datatypes.UUID, scop
 		return nil, fmt.Errorf("password should not be blank")
 	}
 
-	if _, authorized := security.GetVerifiedAuthUser(modelObj); !authorized {
+	if _, code := security.GetVerifiedAuthUser(modelObj); code != security.VerifyUserResultOK {
 		// unable to login user. maybe doesn't exist?
 		// or username, password wrong
 		return nil, fmt.Errorf("password incorrect")

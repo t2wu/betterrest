@@ -16,7 +16,6 @@ import (
 	"github.com/jinzhu/gorm"
 	"github.com/t2wu/betterrest/datamapper"
 	"github.com/t2wu/betterrest/db"
-	"github.com/t2wu/betterrest/libs/datatypes"
 	"github.com/t2wu/betterrest/libs/security"
 	"github.com/t2wu/betterrest/models"
 	"github.com/t2wu/betterrest/models/tools"
@@ -139,11 +138,9 @@ func renderModel(w http.ResponseWriter, r *http.Request, typeString string, mode
 	}
 
 	content := fmt.Sprintf("{ \"code\": 0, \"content\": %s }", string(jsonBytes))
-	data := []byte(content)
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.Header().Set("Content-Length", strconv.Itoa(len(data)))
-	w.Write(data)
+	w.Write([]byte(content))
 }
 
 func renderModelSlice(w http.ResponseWriter, r *http.Request, typeString string, modelObjs []models.IModel, roles []models.UserRole, scope *string) {
@@ -186,7 +183,7 @@ func UserLoginHandler(typeString string) func(c *gin.Context) {
 			if r := recover(); r != nil {
 				tx.Rollback()
 				debug.PrintStack()
-				fmt.Println("Panic in UserLoginHandler", r)
+				fmt.Println("Panic in ReadAllHandler", r)
 			}
 		}(tx)
 
@@ -199,51 +196,92 @@ func UserLoginHandler(typeString string) func(c *gin.Context) {
 			}
 		}
 
-		authUser, authorized := security.GetVerifiedAuthUser(m)
-		if !authorized {
-			// unable to login user. maybe doesn't exist?
-			// or username, password wrong
-			render.Render(w, r, NewErrLoginUser(nil))
-			return
-		}
+		authUserModel, verifyUserResult := security.GetVerifiedAuthUser(m)
+		if verifyUserResult == security.VerifyUserResultPasswordNotMatch {
+			// User hookpoing after login
+			if v, ok := authUserModel.(models.AfterLoginFailed); ok {
+				oid := authUserModel.GetID()
+				if err := v.AfterLoginFailed(tx, oid, &scope, typeString, &cargo); err != nil {
+					// tx.Rollback() // no rollback!!, actually. commit!
+					err = tx.Commit().Error
+					if err != nil {
+						log.Println("Error in UserLogin commit:", typeString, err)
+						tx.Rollback() // what if roll back fails??
+						render.Render(w, r, NewErrDBError(err))
+						return
+					}
 
-		// login success, return access token
-		payload, err := createTokenPayloadForScope(authUser.GetID(), &scope, tokenHours)
-		if err != nil {
-			render.Render(w, r, NewErrGeneratingToken(err))
-			return
-		}
-
-		// User hookpoing after login
-		if v, ok := m.(models.IAfterLogin); ok {
-			content := payload["content"].(map[string]interface{})
-			oid := content["id"].(*datatypes.UUID)
-			if err != nil {
-				tx.Rollback()
-				log.Println("Error in UserLogin creating uuid:", typeString, err)
-				render.Render(w, r, NewErrNotFound(err))
+					log.Println("Error in UserLogin callign AfterLogin:", typeString, err)
+					render.Render(w, r, NewErrLoginUser(err))
+					return
+				}
 			}
 
-			payload, err = v.AfterLogin(tx, oid, &scope, typeString, &cargo, payload)
-			if err != nil {
-				tx.Rollback()
-				log.Println("Error in UserLogin callign AfterLogin:", typeString, err)
-				render.Render(w, r, NewErrNotFound(err))
-				return
-			}
-
-			err = tx.Commit().Error
+			// tx.Rollback() //no rollback, actually. commit
+			err := tx.Commit().Error
 			if err != nil {
 				log.Println("Error in UserLogin commit:", typeString, err)
 				tx.Rollback() // what if roll back fails??
 				render.Render(w, r, NewErrDBError(err))
 				return
 			}
+
+			render.Render(w, r, NewErrLoginUser(nil))
+			return
+		} else if verifyUserResult != security.VerifyUserResultOK {
+			// unable to login user. maybe doesn't exist?
+			// or username, password wrong
+			// tx.Rollback() no rollback, actually commit
+			err := tx.Commit().Error
+			if err != nil {
+				log.Println("Error in UserLogin commit:", typeString, err)
+				tx.Rollback() // what if roll back fails??
+				render.Render(w, r, NewErrDBError(err))
+				return
+			}
+
+			render.Render(w, r, NewErrLoginUser(nil))
+			return
+		}
+
+		// login success, return access token
+		payload, err := createTokenPayloadForScope(authUserModel.GetID(), &scope, tokenHours)
+		if err != nil {
+			tx.Rollback()
+			render.Render(w, r, NewErrGeneratingToken(err))
+			return
+		}
+
+		// User hookpoing after login
+		if v, ok := m.(models.IAfterLogin); ok {
+			oid := authUserModel.GetID()
+			payload, err = v.AfterLogin(tx, oid, &scope, typeString, &cargo, payload)
+			if err != nil {
+				// tx.Rollback() no rollback, actually, commit!
+				err = tx.Commit().Error
+				if err != nil {
+					log.Println("Error in UserLogin commit:", typeString, err)
+					tx.Rollback() // what if roll back fails??
+					render.Render(w, r, NewErrDBError(err))
+					return
+				}
+
+				log.Println("Error in UserLogin calling AfterLogin:", typeString, err)
+				render.Render(w, r, NewErrNotFound(err))
+				return
+			}
+		}
+
+		err = tx.Commit().Error
+		if err != nil {
+			log.Println("Error in UserLogin commit:", typeString, err)
+			tx.Rollback() // what if roll back fails??
+			render.Render(w, r, NewErrDBError(err))
+			return
 		}
 
 		var jsn []byte
 		if jsn, err = json.Marshal(payload); err != nil {
-			tx.Rollback()
 			render.Render(w, r, NewErrGenJSON(err))
 			return
 		}
@@ -431,7 +469,7 @@ func ReadOneHandler(typeString string, mapper datamapper.IGetOneWithIDMapper) fu
 			if r := recover(); r != nil {
 				tx.Rollback()
 				debug.PrintStack()
-				fmt.Println("Panic in ReadOneHandler", r)
+				fmt.Println("Panic in ReadAllHandler", r)
 			}
 		}(tx)
 
@@ -485,7 +523,7 @@ func UpdateOneHandler(typeString string, mapper datamapper.IUpdateOneWithIDMappe
 			if r := recover(); r != nil {
 				tx.Rollback()
 				debug.PrintStack()
-				fmt.Println("Panic in UpdateOneHandler", r)
+				fmt.Println("Panic in ReadAllHandler", r)
 			}
 		}(tx)
 
@@ -530,7 +568,7 @@ func UpdateManyHandler(typeString string, mapper datamapper.IUpdateManyMapper) f
 			if r := recover(); r != nil {
 				tx.Rollback()
 				debug.PrintStack()
-				fmt.Println("Panic in UpdateManyHandler", r)
+				fmt.Println("Panic in ReadAllHandler", r)
 			}
 		}(tx)
 
@@ -587,7 +625,7 @@ func PatchOneHandler(typeString string, mapper datamapper.IPatchOneWithIDMapper)
 			if r := recover(); r != nil {
 				tx.Rollback()
 				debug.PrintStack()
-				fmt.Println("Panic in PatchOneHandler", r)
+				fmt.Println("Panic in ReadAllHandler", r)
 			}
 		}(tx)
 
@@ -638,7 +676,7 @@ func DeleteOneHandler(typeString string, mapper datamapper.IDeleteOneWithID) fun
 			if r := recover(); r != nil {
 				tx.Rollback()
 				debug.PrintStack()
-				fmt.Println("Panic in DeleteOneHandler", r)
+				fmt.Println("Panic in ReadAllHandler", r)
 			}
 		}(tx)
 
@@ -685,7 +723,7 @@ func DeleteManyHandler(typeString string, mapper datamapper.IDeleteMany) func(c 
 			if r := recover(); r != nil {
 				tx.Rollback()
 				debug.PrintStack()
-				fmt.Println("Panic in DeleteManyHandler", r)
+				fmt.Println("Panic in ReadAllHandler", r)
 			}
 		}(tx)
 
