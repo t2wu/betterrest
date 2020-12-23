@@ -36,23 +36,23 @@ func ScopeFromContext(r *http.Request) string {
 }
 
 // IatFromContext gets iat from context
-func IatFromContext(r *http.Request) int64 {
-	var scope string
+func IatFromContext(r *http.Request) float64 {
+	var iat float64
 	item := r.Context().Value(ContextKeyIat)
 	if item != nil {
-		scope = item.(string)
+		iat = item.(float64)
 	}
-	return scope
+	return iat
 }
 
 // ExpFromContext gets iat from context
-func ExpFromContext(r *http.Request) int64 {
-	var scope string
+func ExpFromContext(r *http.Request) float64 {
+	var exp float64
 	item := r.Context().Value(ContextKeyExp)
 	if item != nil {
-		scope = item.(string)
+		exp = item.(float64)
 	}
-	return scope
+	return exp
 }
 
 // TokenHoursFromContext gets hours from context

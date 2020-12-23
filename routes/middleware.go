@@ -152,7 +152,7 @@ func BearerAuthMiddleware() gin.HandlerFunc {
 			ctx := context.WithValue(c.Request.Context(), ContextKeyIat, iat)
 			c.Request = c.Request.WithContext(ctx)
 		} else {
-			render.Render(w, r, NewErrTokenInvalid(errors.New("getting ISS from token error")))
+			render.Render(w, r, NewErrTokenInvalid(errors.New("getting IAT from token error")))
 			c.Abort()
 			return
 		}
@@ -167,7 +167,7 @@ func BearerAuthMiddleware() gin.HandlerFunc {
 			ctx := context.WithValue(c.Request.Context(), ContextKeyExp, exp)
 			c.Request = c.Request.WithContext(ctx)
 		} else {
-			render.Render(w, r, NewErrTokenInvalid(errors.New("getting ISS from token error")))
+			render.Render(w, r, NewErrTokenInvalid(errors.New("getting EXP from token error")))
 			c.Abort()
 			return
 		}
