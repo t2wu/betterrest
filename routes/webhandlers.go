@@ -253,7 +253,7 @@ func UserLoginHandler(typeString string) func(c *gin.Context) {
 		}
 
 		// User hookpoing after login
-		if v, ok := m.(models.IAfterLogin); ok {
+		if v, ok := authUserModel.(models.IAfterLogin); ok {
 			oid := authUserModel.GetID()
 			payload, err = v.AfterLogin(tx, oid, &scope, typeString, &cargo, payload)
 			if err != nil {
