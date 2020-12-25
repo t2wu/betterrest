@@ -142,7 +142,7 @@ func BearerAuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		if iat, ok := (*claims)["iat"].(int64); ok {
+		if iat, ok := (*claims)["iat"].(float64); ok {
 			if err != nil {
 				render.Render(w, r, NewErrTokenInvalid(err))
 				c.Abort()
@@ -157,7 +157,7 @@ func BearerAuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		if exp, ok := (*claims)["exp"].(int64); ok {
+		if exp, ok := (*claims)["exp"].(float64); ok {
 			if err != nil {
 				render.Render(w, r, NewErrTokenInvalid(err))
 				c.Abort()
