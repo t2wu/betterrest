@@ -498,10 +498,6 @@ func ReadOneHandler(typeString string, mapper datamapper.IGetOneWithIDMapper) fu
 func UpdateOneHandler(typeString string, mapper datamapper.IUpdateOneWithIDMapper) func(c *gin.Context) {
 	return func(c *gin.Context) {
 		w, r := c.Writer, c.Request
-		// var err error
-		// var model models.DomainModel
-
-		log.Println("UpdateOneHandler called")
 
 		id, httperr := IDFromURLQueryString(c)
 		if httperr != nil {

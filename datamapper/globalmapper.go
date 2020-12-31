@@ -116,13 +116,14 @@ func (mapper *GlobalMapper) GetOneWithID(db *gorm.DB, oid *datatypes.UUID, scope
 // getOneWithIDCore get one model object based on its type and its id string
 func (mapper *GlobalMapper) getOneWithIDCore(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, id datatypes.UUID) (models.IModel, models.UserRole, error) {
 	modelObj := models.NewFromTypeString(typeString)
+	modelObj.SetID(&id)
 
 	db = db.Set("gorm:auto_preload", true)
 
-	rtable := models.GetTableNameFromIModel(modelObj)
+	// rtable := models.GetTableNameFromIModel(modelObj)
 
 	// Global object, everyone can find it, simply find it
-	err := db.Table(rtable).Find(modelObj).Error
+	err := db.Find(modelObj).Error
 	if err != nil {
 		return nil, 0, err
 	}
