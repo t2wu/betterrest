@@ -136,24 +136,19 @@ type ModelCargo struct {
 	Payload interface{}
 }
 
-// HookPointData is the data send to most hookpoints
+// HookPointData is the data send to single model hookpoints
 type HookPointData struct {
 	// DB handle
 	DB *gorm.DB
-
-	// User ID is accessing the API right now.
+	// OID is owner ID, the user accessing the API right now
 	// Not available in BeforeLogin
 	OID *datatypes.UUID
-
 	// Scope included in the token who is accessing right now
 	Scope *string
-
 	// TypeString is the typeString (model string) of this model
 	TypeString string
-
 	// Cargo between Before and After hookpoints (not used in IAfterRead since there is no IBeforeRead.)
 	Cargo *ModelCargo
-
 	// Role of this user in relation to this data, only available during read
 	Role *UserRole
 }

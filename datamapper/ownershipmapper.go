@@ -123,7 +123,8 @@ func (mapper *OwnershipMapper) CreateMany(db *gorm.DB, oid *datatypes.UUID, scop
 	cargo := models.BatchHookCargo{}
 	// Before batch inert hookpoint
 	if before := models.ModelRegistry[typeString].BeforeInsert; before != nil {
-		if err := before(modelObjs, db, oid, scope, typeString, &cargo); err != nil {
+		bhpData := models.BatchHookPointData{Ms: modelObjs, DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
+		if err := before(bhpData); err != nil {
 			return nil, err
 		}
 	}
@@ -161,7 +162,8 @@ func (mapper *OwnershipMapper) CreateMany(db *gorm.DB, oid *datatypes.UUID, scop
 
 	// After batch insert hookpoint
 	if after := models.ModelRegistry[typeString].AfterInsert; after != nil {
-		if err := after(modelObjs, db, oid, scope, typeString, &cargo); err != nil {
+		bhpData := models.BatchHookPointData{Ms: modelObjs, DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
+		if err := after(bhpData); err != nil {
 			return nil, err
 		}
 	}
@@ -304,7 +306,8 @@ func (mapper *OwnershipMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, scope *
 
 	// use db2 cuz it's not chained
 	if after := models.ModelRegistry[typeString].AfterRead; after != nil {
-		if err = after(outmodels, db2, oid, scope, typeString, roles); err != nil {
+		bhpData := models.BatchHookPointData{Ms: outmodels, DB: db2, OID: oid, Scope: scope, TypeString: typeString, Roles: roles}
+		if err = after(bhpData); err != nil {
 			return nil, nil, err
 		}
 	}
@@ -352,7 +355,8 @@ func (mapper *OwnershipMapper) UpdateMany(db *gorm.DB, oid *datatypes.UUID, scop
 
 	// Before batch update hookpoint
 	if before := models.ModelRegistry[typeString].BeforeUpdate; before != nil {
-		if err = before(modelObjs, db, oid, scope, typeString, &cargo); err != nil {
+		bhpData := models.BatchHookPointData{Ms: modelObjs, DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
+		if err = before(bhpData); err != nil {
 			return nil, err
 		}
 	}
@@ -374,7 +378,8 @@ func (mapper *OwnershipMapper) UpdateMany(db *gorm.DB, oid *datatypes.UUID, scop
 
 	// After batch update hookpoint
 	if after := models.ModelRegistry[typeString].AfterUpdate; after != nil {
-		if err = after(modelObjs, db, oid, scope, typeString, &cargo); err != nil {
+		bhpData := models.BatchHookPointData{Ms: modelObjs, DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
+		if err = after(bhpData); err != nil {
 			return nil, err
 		}
 	}
@@ -552,7 +557,8 @@ func (mapper *OwnershipMapper) DeleteMany(db *gorm.DB, oid *datatypes.UUID, scop
 
 	// Before batch delete hookpoint
 	if before := models.ModelRegistry[typeString].BeforeDelete; before != nil {
-		if err = before(modelObjs, db, oid, scope, typeString, &cargo); err != nil {
+		bhpData := models.BatchHookPointData{Ms: modelObjs, DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
+		if err = before(bhpData); err != nil {
 			return nil, err
 		}
 	}
@@ -611,7 +617,8 @@ func (mapper *OwnershipMapper) DeleteMany(db *gorm.DB, oid *datatypes.UUID, scop
 
 	// After batch delete hookpoint
 	if after := models.ModelRegistry[typeString].AfterDelete; after != nil {
-		if err = after(modelObjs, db, oid, scope, typeString, &cargo); err != nil {
+		bhpData := models.BatchHookPointData{Ms: modelObjs, DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
+		if err = after(bhpData); err != nil {
 			return nil, err
 		}
 	}
