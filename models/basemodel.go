@@ -136,64 +136,86 @@ type ModelCargo struct {
 	Payload interface{}
 }
 
+// HookPointData is the data send to most hookpoints
+type HookPointData struct {
+	// DB handle
+	DB *gorm.DB
+
+	// User ID is accessing the API right now.
+	// Not available in BeforeLogin
+	OID *datatypes.UUID
+
+	// Scope included in the token who is accessing right now
+	Scope *string
+
+	// TypeString is the typeString (model string) of this model
+	TypeString string
+
+	// Cargo between Before and After hookpoints (not used in IAfterRead since there is no IBeforeRead.)
+	Cargo *ModelCargo
+
+	// Role of this user in relation to this data, only available during read
+	Role *UserRole
+}
+
 // IBeforeLogin has a function that is a hookpoint for actions after login but before marshalling
 type IBeforeLogin interface {
-	BeforeLogin(db *gorm.DB, scope *string, typeString string, cargo *ModelCargo) error
+	BeforeLogin(hpdata HookPointData) error
 }
 
 // IAfterLogin has a function that is a hookpoint for actions after login but before marshalling
 type IAfterLogin interface {
-	AfterLogin(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, cargo *ModelCargo, payload map[string]interface{}) (map[string]interface{}, error)
+	AfterLogin(hpdata HookPointData, payload map[string]interface{}) (map[string]interface{}, error)
 }
 
-// AfterLoginFailed has a function that is a hookpoint for actions after login but before marshalling
-type AfterLoginFailed interface {
-	AfterLoginFailed(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, cargo *ModelCargo) error
+// IAfterLoginFailed has a function that is a hookpoint for actions after login but before marshalling
+type IAfterLoginFailed interface {
+	AfterLoginFailed(hpdata HookPointData) error
 }
 
 // IBeforeInsert supports method to be called before data is inserted (created) into the database
 type IBeforeInsert interface {
-	BeforeInsertDB(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, cargo *ModelCargo) error
+	BeforeInsertDB(hpdata HookPointData) error
 }
 
 // IBeforeUpdate supports method to be called before data is updated in the database
 type IBeforeUpdate interface {
-	BeforeUpdateDB(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, cargo *ModelCargo) error
+	BeforeUpdateDB(hpdata HookPointData) error
 }
 
 // IBeforePatch supports method to be called before data is patched in the database
 type IBeforePatch interface {
-	BeforePatchDB(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, cargo *ModelCargo) error
+	BeforePatchDB(hpdata HookPointData) error
 }
 
 // IBeforeDelete supports method to be called before data is deleted from the database
 type IBeforeDelete interface {
-	BeforeDeleteDB(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, cargo *ModelCargo) error
+	BeforeDeleteDB(hpdata HookPointData) error
 }
 
 // IAfterRead supports method to be called after data is read from the database
 type IAfterRead interface {
-	AfterReadDB(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, role *UserRole) error
+	AfterReadDB(hpdata HookPointData) error
 }
 
 // IAfterInsert supports method to be called after data is inserted (created) into the database
 type IAfterInsert interface {
-	AfterInsertDB(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, cargo *ModelCargo) error
+	AfterInsertDB(hpdata HookPointData) error
 }
 
 // IAfterUpdate supports method to be called after data is updated in the database
 type IAfterUpdate interface {
-	AfterUpdateDB(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, cargo *ModelCargo) error
+	AfterUpdateDB(hpdata HookPointData) error
 }
 
 // IAfterPatch supports method to be called before data is patched in the database
 type IAfterPatch interface {
-	AfterPatchDB(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, cargo *ModelCargo) error
+	AfterPatchDB(hpdata HookPointData) error
 }
 
 // IAfterDelete supports method to be called after data is deleted from the database
 type IAfterDelete interface {
-	AfterDeleteDB(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, cargo *ModelCargo) error
+	AfterDeleteDB(hpdata HookPointData) error
 }
 
 // IValidate supports validation with govalidator

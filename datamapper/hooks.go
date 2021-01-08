@@ -16,7 +16,8 @@ func createOneWithHooks(createOneCore func(db *gorm.DB, oid *datatypes.UUID, typ
 	var cargo models.ModelCargo
 
 	if v, ok := modelObj.(models.IBeforeInsert); ok {
-		err = v.BeforeInsertDB(db, oid, scope, typeString, &cargo)
+		hpdata := models.HookPointData{DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
+		err = v.BeforeInsertDB(hpdata)
 		if err != nil {
 			return nil, err
 		}
@@ -28,7 +29,8 @@ func createOneWithHooks(createOneCore func(db *gorm.DB, oid *datatypes.UUID, typ
 	}
 
 	if v, ok := modelObj.(models.IAfterInsert); ok {
-		err = v.AfterInsertDB(db, oid, scope, typeString, &cargo)
+		hpdata := models.HookPointData{DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
+		err = v.AfterInsertDB(hpdata)
 		if err != nil {
 			return nil, err
 		}

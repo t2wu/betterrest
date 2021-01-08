@@ -116,7 +116,8 @@ func (mapper *UserMapper) GetOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *
 	}
 
 	if m, ok := modelObj.(models.IAfterRead); ok {
-		if err := m.AfterReadDB(db, oid, scope, typeString, &role); err != nil {
+		hpdata := models.HookPointData{DB: db, OID: oid, Scope: scope, TypeString: typeString, Role: &role}
+		if err := m.AfterReadDB(hpdata); err != nil {
 			return nil, 0, err
 		}
 	}
@@ -180,7 +181,8 @@ func (mapper *UserMapper) UpdateOneWithID(db *gorm.DB, oid *datatypes.UUID, scop
 
 	// Before hook
 	if v, ok := modelObj.(models.IBeforeUpdate); ok {
-		if err := v.BeforeUpdateDB(db, oid, scope, typeString, &cargo); err != nil {
+		hpdata := models.HookPointData{DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
+		if err := v.BeforeUpdateDB(hpdata); err != nil {
 			return nil, err
 		}
 	}
@@ -192,7 +194,8 @@ func (mapper *UserMapper) UpdateOneWithID(db *gorm.DB, oid *datatypes.UUID, scop
 
 	// After hook
 	if v, ok := modelObj2.(models.IAfterUpdate); ok {
-		if err = v.AfterUpdateDB(db, oid, scope, typeString, &cargo); err != nil {
+		hpdata := models.HookPointData{DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
+		if err = v.AfterUpdateDB(hpdata); err != nil {
 			return nil, err
 		}
 	}
@@ -221,7 +224,8 @@ func (mapper *UserMapper) DeleteOneWithID(db *gorm.DB, oid *datatypes.UUID, scop
 
 	// Before delete hookpoint
 	if v, ok := modelObj.(models.IBeforeDelete); ok {
-		err = v.BeforeDeleteDB(db, oid, scope, typeString, &cargo)
+		hpdata := models.HookPointData{DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
+		err = v.BeforeDeleteDB(hpdata)
 		if err != nil {
 			return nil, err
 		}
@@ -245,7 +249,8 @@ func (mapper *UserMapper) DeleteOneWithID(db *gorm.DB, oid *datatypes.UUID, scop
 
 	// After delete hookpoint
 	if v, ok := modelObj.(models.IAfterDelete); ok {
-		err = v.AfterDeleteDB(db, oid, scope, typeString, &cargo)
+		hpdata := models.HookPointData{DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
+		err = v.AfterDeleteDB(hpdata)
 		if err != nil {
 			return nil, err
 		}

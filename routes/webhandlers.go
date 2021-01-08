@@ -190,7 +190,8 @@ func UserLoginHandler(typeString string) func(c *gin.Context) {
 		cargo := models.ModelCargo{}
 		// Before hook
 		if v, ok := m.(models.IBeforeLogin); ok {
-			if err := v.BeforeLogin(tx, &scope, typeString, &cargo); err != nil {
+			hpdata := models.HookPointData{DB: tx, Scope: &scope, TypeString: typeString, Cargo: &cargo}
+			if err := v.BeforeLogin(hpdata); err != nil {
 				render.Render(w, r, NewErrInternalServerError(err))
 				return
 			}
@@ -199,9 +200,10 @@ func UserLoginHandler(typeString string) func(c *gin.Context) {
 		authUserModel, verifyUserResult := security.GetVerifiedAuthUser(m)
 		if verifyUserResult == security.VerifyUserResultPasswordNotMatch {
 			// User hookpoing after login
-			if v, ok := authUserModel.(models.AfterLoginFailed); ok {
+			if v, ok := authUserModel.(models.IAfterLoginFailed); ok {
 				oid := authUserModel.GetID()
-				if err := v.AfterLoginFailed(tx, oid, &scope, typeString, &cargo); err != nil {
+				hpdata := models.HookPointData{DB: tx, OID: oid, Scope: &scope, TypeString: typeString, Cargo: &cargo}
+				if err := v.AfterLoginFailed(hpdata); err != nil {
 					// tx.Rollback() // no rollback!!, actually. commit!
 					err = tx.Commit().Error
 					if err != nil {
@@ -255,7 +257,8 @@ func UserLoginHandler(typeString string) func(c *gin.Context) {
 		// User hookpoing after login
 		if v, ok := authUserModel.(models.IAfterLogin); ok {
 			oid := authUserModel.GetID()
-			payload, err = v.AfterLogin(tx, oid, &scope, typeString, &cargo, payload)
+			hpdata := models.HookPointData{DB: tx, OID: oid, Scope: &scope, TypeString: typeString, Cargo: &cargo}
+			payload, err = v.AfterLogin(hpdata, payload)
 			if err != nil {
 				// tx.Rollback() no rollback, actually, commit!
 				err = tx.Commit().Error

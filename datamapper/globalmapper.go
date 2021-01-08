@@ -105,7 +105,8 @@ func (mapper *GlobalMapper) GetOneWithID(db *gorm.DB, oid *datatypes.UUID, scope
 	}
 
 	if m, ok := modelObj.(models.IAfterRead); ok {
-		if err := m.AfterReadDB(db, oid, scope, typeString, &role); err != nil {
+		hpdata := models.HookPointData{DB: db, OID: oid, Scope: scope, TypeString: typeString, Role: &role}
+		if err := m.AfterReadDB(hpdata); err != nil {
 			return nil, 0, err
 		}
 	}
@@ -206,7 +207,8 @@ func (mapper *GlobalMapper) UpdateOneWithID(db *gorm.DB, oid *datatypes.UUID, sc
 
 	// Before hook
 	if v, ok := modelObj.(models.IBeforeUpdate); ok {
-		if err := v.BeforeUpdateDB(db, oid, scope, typeString, &cargo); err != nil {
+		hpdata := models.HookPointData{DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
+		if err := v.BeforeUpdateDB(hpdata); err != nil {
 			return nil, err
 		}
 	}
@@ -218,7 +220,8 @@ func (mapper *GlobalMapper) UpdateOneWithID(db *gorm.DB, oid *datatypes.UUID, sc
 
 	// After hook
 	if v, ok := modelObj2.(models.IAfterUpdate); ok {
-		if err = v.AfterUpdateDB(db, oid, scope, typeString, &cargo); err != nil {
+		hpdata := models.HookPointData{DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
+		if err = v.AfterUpdateDB(hpdata); err != nil {
 			return nil, err
 		}
 	}
@@ -292,7 +295,8 @@ func (mapper *GlobalMapper) PatchOneWithID(db *gorm.DB, oid *datatypes.UUID, sco
 	// It is now expected that the hookpoint for before expect that the patch
 	// gets applied to the JSON, but not before actually updating to DB.
 	if v, ok := modelObj.(models.IBeforePatch); ok {
-		if err := v.BeforePatchDB(db, oid, scope, typeString, &cargo); err != nil {
+		hpdata := models.HookPointData{DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
+		if err := v.BeforePatchDB(hpdata); err != nil {
 			return nil, err
 		}
 	}
@@ -305,7 +309,8 @@ func (mapper *GlobalMapper) PatchOneWithID(db *gorm.DB, oid *datatypes.UUID, sco
 
 	// After hook
 	if v, ok := modelObj2.(models.IAfterPatch); ok {
-		if err = v.AfterPatchDB(db, oid, scope, typeString, &cargo); err != nil {
+		hpdata := models.HookPointData{DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
+		if err = v.AfterPatchDB(hpdata); err != nil {
 			return nil, err
 		}
 	}
@@ -338,7 +343,8 @@ func (mapper *GlobalMapper) DeleteOneWithID(db *gorm.DB, oid *datatypes.UUID, sc
 
 	// Before delete hookpoint
 	if v, ok := modelObj.(models.IBeforeDelete); ok {
-		err = v.BeforeDeleteDB(db, oid, scope, typeString, &cargo)
+		hpdata := models.HookPointData{DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
+		err = v.BeforeDeleteDB(hpdata)
 		if err != nil {
 			return nil, err
 		}
@@ -368,7 +374,8 @@ func (mapper *GlobalMapper) DeleteOneWithID(db *gorm.DB, oid *datatypes.UUID, sc
 
 	// After delete hookpoint
 	if v, ok := modelObj.(models.IAfterDelete); ok {
-		err = v.AfterDeleteDB(db, oid, scope, typeString, &cargo)
+		hpdata := models.HookPointData{DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
+		err = v.AfterDeleteDB(hpdata)
 		if err != nil {
 			return nil, err
 		}
