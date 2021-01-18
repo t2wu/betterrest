@@ -31,7 +31,7 @@ func IsSamePassword(plainPwd string, hashedPwd string) bool {
 	err := bcrypt.CompareHashAndPassword([]byte(hashedPwd), []byte(plainPwd))
 
 	if err != nil {
-		log.Println(err)
+		log.Println("Error in IsSamePassword:", err)
 		return false
 	}
 

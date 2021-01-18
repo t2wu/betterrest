@@ -56,13 +56,13 @@ func ExpFromContext(r *http.Request) float64 {
 }
 
 // TokenHoursFromContext gets hours from context
-func TokenHoursFromContext(r *http.Request) int {
-	tokenHours := -1
+func TokenHoursFromContext(r *http.Request) *float64 {
 	item := r.Context().Value(ContextKeyTokenHours)
 	if item != nil {
-		tokenHours = item.(int)
+		tokenHours := item.(float64)
+		return &tokenHours
 	}
-	return tokenHours
+	return nil
 }
 
 // JSONBodyWithContent for partial unmarshalling

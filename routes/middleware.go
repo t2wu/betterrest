@@ -104,7 +104,7 @@ func BearerAuthMiddleware() gin.HandlerFunc {
 
 		claims, err := security.GetClaimsIfAccessTokenIsValid(token)
 		if err != nil {
-			log.Println(err)
+			log.Println("Error in BearerAuthMiddleware:", err)
 			render.Render(w, r, NewErrTokenInvalid(errors.New("invalid token"))) // Token invalid (either expired or just wrong)
 			c.Abort()
 			return
@@ -182,12 +182,12 @@ func XDebugMiddleWare() gin.HandlerFunc {
 		_, r := c.Writer, c.Request
 
 		tokenDuration := r.Header.Get("X-DEBUG-TOKEN-DURATION-HOURS")
+		// log.Println("X-DEBUG-TOKEN-DURATION-HOURS tokenDuration?", tokenDuration)
 		if tokenDuration != "" {
-			if tokenDurationInHours, err := strconv.Atoi(tokenDuration); err == nil {
+			if tokenDurationInHours, err := strconv.ParseFloat(tokenDuration, 32); err == nil {
 				ctx := context.WithValue(c.Request.Context(), ContextKeyTokenHours, tokenDurationInHours)
 				c.Request = c.Request.WithContext(ctx)
 			}
-			// if error, ignore, continue
 		}
 
 		c.Next()

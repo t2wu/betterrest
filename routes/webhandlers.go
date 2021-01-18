@@ -167,10 +167,6 @@ func UserLoginHandler(typeString string) func(c *gin.Context) {
 		w, r := c.Writer, c.Request
 
 		tokenHours := TokenHoursFromContext(r)
-		if tokenHours == -1 {
-			tokenHours = 3
-		}
-
 		scope := "owner"
 		m, httperr := ModelFromJSONBody(r, "users", &scope) // m is models.IModel
 		if httperr != nil {

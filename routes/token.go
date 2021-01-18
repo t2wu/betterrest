@@ -38,7 +38,7 @@ func Token(c *gin.Context) {
 
 	claims, err := security.GetClaimsIfRefreshTokenIsValid(m.RefreshToken)
 	if err != nil {
-		log.Println(err)
+		log.Println("Error in Token:", err)
 		render.Render(w, r, NewErrInvalidRefreshToken(errors.New("invalid refresh token"))) // Token invalid (either expired or just wrong)
 		return
 	}
@@ -62,9 +62,6 @@ func Token(c *gin.Context) {
 	// Issue new token
 	var payload map[string]interface{}
 	tokenHours := TokenHoursFromContext(r)
-	if tokenHours == -1 {
-		tokenHours = 3
-	}
 	payload, err = createTokenPayloadForScope(ownerID, &scope, tokenHours)
 	if err != nil {
 		render.Render(w, r, NewErrGeneratingToken(err))
