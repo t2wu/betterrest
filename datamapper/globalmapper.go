@@ -1,6 +1,7 @@
 package datamapper
 
 import (
+	"log"
 	"sync"
 	"time"
 
@@ -142,11 +143,11 @@ func (mapper *GlobalMapper) getOneWithIDCore(db *gorm.DB, oid *datatypes.UUID, s
 }
 
 // ReadAll is when user do a read
-func (mapper *GlobalMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, options map[URLParam]interface{}) ([]models.IModel, []models.UserRole, error) {
+func (mapper *GlobalMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, options map[URLParam]interface{}) ([]models.IModel, []models.UserRole, *int, error) {
 	db2 := db
 	db = db.Set("gorm:auto_preload", true)
 
-	offset, limit, cstart, cstop, order, latestn := getOptions(options)
+	offset, limit, cstart, cstop, order, latestn, totalcount := getOptions(options)
 
 	rtable := models.GetTableNameFromTypeString(typeString)
 
@@ -158,12 +159,22 @@ func (mapper *GlobalMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, scope *str
 
 	db, err = constructInnerFieldParamQueries(db, typeString, options, latestn)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	db = db.Table(rtable)
 
 	db = constructOrderFieldQueries(db, rtable, order)
+
+	var no *int
+	if totalcount {
+		no = new(int)
+		// Query for total count, without offset and limit (all)
+		if err := db.Count(no).Error; err != nil {
+			log.Println("count error:", err)
+			return nil, nil, nil, err
+		}
+	}
 
 	if offset != nil && limit != nil {
 		// rows.Scan()
@@ -184,7 +195,7 @@ func (mapper *GlobalMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, scope *str
 	for _, m := range outmodels {
 		err = loadManyToManyBecauseGormFailsWithID(db2, m)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 	}
 
@@ -192,11 +203,11 @@ func (mapper *GlobalMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, scope *str
 	if after := models.ModelRegistry[typeString].AfterRead; after != nil {
 		bhpData := models.BatchHookPointData{Ms: outmodels, DB: db2, OID: oid, Scope: scope, TypeString: typeString, Roles: roles}
 		if err = after(bhpData); err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 	}
 
-	return outmodels, roles, err
+	return outmodels, roles, no, err
 }
 
 // UpdateOneWithID updates model based on this json

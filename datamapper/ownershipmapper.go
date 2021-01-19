@@ -3,6 +3,7 @@ package datamapper
 import (
 	"errors"
 	"fmt"
+	"log"
 	"reflect"
 	"sync"
 	"time"
@@ -245,14 +246,14 @@ func (mapper *OwnershipMapper) getOneWithIDCore(db *gorm.DB, oid *datatypes.UUID
 // How does Gorm do the following? Might want to check out its source code.
 // Cancel offset condition with -1
 //  db.Offset(10).Find(&users1).Offset(-1).Find(&users2)
-func (mapper *OwnershipMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, options map[URLParam]interface{}) ([]models.IModel, []models.UserRole, error) {
+func (mapper *OwnershipMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, options map[URLParam]interface{}) ([]models.IModel, []models.UserRole, *int, error) {
 	db2 := db
 	db = db.Set("gorm:auto_preload", true)
 
-	offset, limit, cstart, cstop, order, latestn := getOptions(options)
+	offset, limit, cstart, cstop, order, latestn, totalcount := getOptions(options)
 	rtable, joinTableName, err := getModelTableNameAndJoinTableNameFromTypeString(typeString)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	firstJoin := fmt.Sprintf("INNER JOIN \"%s\" ON \"%s\".id = \"%s\".model_id", joinTableName, rtable, joinTableName)
@@ -264,12 +265,22 @@ func (mapper *OwnershipMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, scope *
 
 	db, err = constructInnerFieldParamQueries(db, typeString, options, latestn)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	db = db.Table(rtable).Joins(firstJoin).Joins(secondJoin, oid.String())
 
 	db = constructOrderFieldQueries(db, rtable, order)
+
+	var no *int
+	if totalcount {
+		no = new(int)
+		// Query for total count, without offset and limit (all)
+		if err := db.Count(no).Error; err != nil {
+			log.Println("count error:", err)
+			return nil, nil, nil, err
+		}
+	}
 
 	if offset != nil && limit != nil {
 		db = db.Offset(*offset).Limit(*limit)
@@ -288,19 +299,19 @@ func (mapper *OwnershipMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, scope *
 	// WHERE "model"."deleted_at" IS NULL, so we need to add it
 	if err = db3.Where(fmt.Sprintf("\"%s\".\"deleted_at\" IS NULL", rtable)).
 		Select(fmt.Sprintf("\"%s\".\"role\"", joinTableName)).Scan(&roles).Error; err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	// safeguard, Must be coded wrongly
 	if len(outmodels) != len(roles) {
-		return nil, nil, errors.New("unknown query error")
+		return nil, nil, nil, errors.New("unknown query error")
 	}
 
 	// make many to many tag works
 	for _, m := range outmodels {
 		err = loadManyToManyBecauseGormFailsWithID(db2, m)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 	}
 
@@ -308,11 +319,11 @@ func (mapper *OwnershipMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, scope *
 	if after := models.ModelRegistry[typeString].AfterRead; after != nil {
 		bhpData := models.BatchHookPointData{Ms: outmodels, DB: db2, OID: oid, Scope: scope, TypeString: typeString, Roles: roles}
 		if err = after(bhpData); err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 	}
 
-	return outmodels, roles, err
+	return outmodels, roles, no, err
 }
 
 // UpdateOneWithID updates model based on this json

@@ -21,16 +21,17 @@ import (
 type URLParam string
 
 const (
-	URLParamOffset       URLParam = "offset"
-	URLParamLimit        URLParam = "limit"
-	URLParamOrder        URLParam = "order"
-	URLParamLatestN      URLParam = "latestn"
-	URLParamCstart       URLParam = "cstart"
-	URLParamCstop        URLParam = "cstop"
-	URLParamOtherQueries URLParam = "better_otherqueries"
+	URLParamOffset        URLParam = "offset"
+	URLParamLimit         URLParam = "limit"
+	URLParamOrder         URLParam = "order"
+	URLParamLatestN       URLParam = "latestn"
+	URLParamCstart        URLParam = "cstart"
+	URLParamCstop         URLParam = "cstop"
+	URLParamHasTotalCount URLParam = "totalcount"
+	URLParamOtherQueries  URLParam = "better_otherqueries"
 )
 
-func getOptions(options map[URLParam]interface{}) (offset *int, limit *int, cstart *int, cstop *int, order *string, latestn *int) {
+func getOptions(options map[URLParam]interface{}) (offset *int, limit *int, cstart *int, cstop *int, order *string, latestn *int, count bool) {
 	// If key is in it, even if value is nil, ok will be true
 
 	if _, ok := options[URLParamOffset]; ok {
@@ -61,7 +62,12 @@ func getOptions(options map[URLParam]interface{}) (offset *int, limit *int, csta
 		}
 	}
 
-	return offset, limit, cstart, cstop, order, latestn
+	hasTotalCount := false
+	if _, ok := options[URLParamHasTotalCount]; ok {
+		hasTotalCount = options[URLParamHasTotalCount].(bool)
+	}
+
+	return offset, limit, cstart, cstop, order, latestn, hasTotalCount
 }
 
 func getModelTableNameAndJoinTableNameFromTypeString(typeString string) (string, string, error) {

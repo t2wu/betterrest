@@ -114,6 +114,14 @@ func createdTimeRangeFromQueryString(values *url.Values) (*int, *int, error) {
 	return nil, nil, nil
 }
 
+func hasTotalCountFromQueryString(values *url.Values) bool {
+	defer delete(*values, string(datamapper.URLParamHasTotalCount))
+	if totalCount := values.Get(string(datamapper.URLParamHasTotalCount)); totalCount != "" && totalCount == "true" {
+		return true
+	}
+	return false
+}
+
 func modelObjsToJSON(typeString string, modelObjs []models.IModel, roles []models.UserRole, scope *string) (string, error) {
 	arr := make([]string, len(modelObjs))
 	for i, v := range modelObjs {
@@ -143,7 +151,7 @@ func renderModel(w http.ResponseWriter, r *http.Request, typeString string, mode
 	w.Write([]byte(content))
 }
 
-func renderModelSlice(w http.ResponseWriter, r *http.Request, typeString string, modelObjs []models.IModel, roles []models.UserRole, scope *string) {
+func renderModelSlice(w http.ResponseWriter, r *http.Request, typeString string, modelObjs []models.IModel, roles []models.UserRole, total *int, scope *string) {
 	jsonString, err := modelObjsToJSON(typeString, modelObjs, roles, scope)
 	if err != nil {
 		log.Println("Error in renderModelSlice:", err)
@@ -151,7 +159,12 @@ func renderModelSlice(w http.ResponseWriter, r *http.Request, typeString string,
 		return
 	}
 
-	content := fmt.Sprintf("{ \"code\": 0, \"content\": %s }", jsonString)
+	var content string
+	if total != nil {
+		content = fmt.Sprintf("{ \"code\": 0, \"total\": %d, \"content\": %s }", *total, jsonString)
+	} else {
+		content = fmt.Sprintf("{ \"code\": 0, \"content\": %s }", jsonString)
+	}
 
 	data := []byte(content)
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -319,6 +332,8 @@ func getOptionByParsingURL(r *http.Request) (map[datamapper.URLParam]interface{}
 		return nil, err
 	}
 
+	options[datamapper.URLParamHasTotalCount] = hasTotalCountFromQueryString(&values)
+
 	return options, nil
 }
 
@@ -354,7 +369,8 @@ func ReadAllHandler(typeString string, mapper datamapper.IGetAllMapper) func(c *
 			}
 		}(tx)
 
-		if modelObjs, roles, err = mapper.ReadAll(tx, ownerID, &scope, typeString, options); err != nil {
+		var no *int
+		if modelObjs, roles, no, err = mapper.ReadAll(tx, ownerID, &scope, typeString, options); err != nil {
 			tx.Rollback()
 			log.Println("Error in ReadAllHandler ErrNotFound:", typeString, err)
 			render.Render(w, r, NewErrNotFound(err))
@@ -368,7 +384,7 @@ func ReadAllHandler(typeString string, mapper datamapper.IGetAllMapper) func(c *
 			return
 		}
 
-		renderModelSlice(w, r, typeString, modelObjs, roles, &scope)
+		renderModelSlice(w, r, typeString, modelObjs, roles, no, &scope)
 		return
 	}
 }
@@ -422,7 +438,7 @@ func CreateHandler(typeString string, mapper datamapper.ICreateMapper) func(c *g
 			for i := 0; i < len(modelObjs); i++ {
 				roles = append(roles, models.Admin)
 			}
-			renderModelSlice(w, r, typeString, modelObjs, roles, &scope)
+			renderModelSlice(w, r, typeString, modelObjs, roles, nil, &scope)
 		} else {
 			if modelObj, err = mapper.CreateOne(tx, ownerID, &scope, typeString, modelObjs[0]); err != nil {
 				// FIXME, there is more than one type of error here
@@ -588,7 +604,7 @@ func UpdateManyHandler(typeString string, mapper datamapper.IUpdateManyMapper) f
 			roles[i] = models.Admin
 		}
 
-		renderModelSlice(w, r, typeString, modelObjs, roles, &scope)
+		renderModelSlice(w, r, typeString, modelObjs, roles, nil, &scope)
 		return
 	}
 }
@@ -743,7 +759,7 @@ func DeleteManyHandler(typeString string, mapper datamapper.IDeleteMany) func(c 
 			roles[i] = models.Admin
 		}
 
-		renderModelSlice(w, r, typeString, modelObjs, roles, &scope)
+		renderModelSlice(w, r, typeString, modelObjs, roles, nil, &scope)
 		return
 	}
 }
