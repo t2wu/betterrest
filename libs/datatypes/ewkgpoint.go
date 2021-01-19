@@ -17,7 +17,7 @@ import (
 // NewEWKBPoint creates a new EWKBPoint
 func NewEWKBPoint(coords []float64) *EWKBPoint {
 	p := &EWKBPoint{}
-	p.Point = wkb.Point{Point: geom.NewPoint(geom.XY).MustSetCoords([]float64{0, 0}).SetSRID(0)}
+	p.Point = wkb.Point{Point: geom.NewPoint(geom.XY).MustSetCoords(coords).SetSRID(0)}
 	return p
 }
 
