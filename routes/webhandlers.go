@@ -192,7 +192,7 @@ func UserLoginHandler(typeString string) func(c *gin.Context) {
 			if r := recover(); r != nil {
 				tx.Rollback()
 				debug.PrintStack()
-				fmt.Println("Panic in ReadAllHandler", r)
+				fmt.Println("Panic in UserLoginHandler", r)
 			}
 		}(tx)
 
@@ -214,13 +214,7 @@ func UserLoginHandler(typeString string) func(c *gin.Context) {
 				hpdata := models.HookPointData{DB: tx, OID: oid, Scope: &scope, TypeString: typeString, Cargo: &cargo}
 				if err := v.AfterLoginFailed(hpdata); err != nil {
 					// tx.Rollback() // no rollback!!, actually. commit!
-					err = tx.Commit().Error
-					if err != nil {
-						log.Println("Error in UserLogin commit:", typeString, err)
-						tx.Rollback() // what if roll back fails??
-						render.Render(w, r, NewErrDBError(err))
-						return
-					}
+					tx.Commit()
 
 					log.Println("Error in UserLogin callign AfterLogin:", typeString, err)
 					render.Render(w, r, NewErrLoginUser(err))
@@ -229,13 +223,7 @@ func UserLoginHandler(typeString string) func(c *gin.Context) {
 			}
 
 			// tx.Rollback() //no rollback, actually. commit
-			err := tx.Commit().Error
-			if err != nil {
-				log.Println("Error in UserLogin commit:", typeString, err)
-				tx.Rollback() // what if roll back fails??
-				render.Render(w, r, NewErrDBError(err))
-				return
-			}
+			tx.Commit()
 
 			render.Render(w, r, NewErrLoginUser(nil))
 			return
@@ -243,13 +231,7 @@ func UserLoginHandler(typeString string) func(c *gin.Context) {
 			// unable to login user. maybe doesn't exist?
 			// or username, password wrong
 			// tx.Rollback() no rollback, actually commit
-			err := tx.Commit().Error
-			if err != nil {
-				log.Println("Error in UserLogin commit:", typeString, err)
-				tx.Rollback() // what if roll back fails??
-				render.Render(w, r, NewErrDBError(err))
-				return
-			}
+			tx.Commit()
 
 			render.Render(w, r, NewErrLoginUser(nil))
 			return
@@ -270,13 +252,7 @@ func UserLoginHandler(typeString string) func(c *gin.Context) {
 			payload, err = v.AfterLogin(hpdata, payload)
 			if err != nil {
 				// tx.Rollback() no rollback, actually, commit!
-				err = tx.Commit().Error
-				if err != nil {
-					log.Println("Error in UserLogin commit:", typeString, err)
-					tx.Rollback() // what if roll back fails??
-					render.Render(w, r, NewErrDBError(err))
-					return
-				}
+				tx.Commit()
 
 				log.Println("Error in UserLogin calling AfterLogin:", typeString, err)
 				render.Render(w, r, NewErrNotFound(err))
@@ -284,13 +260,7 @@ func UserLoginHandler(typeString string) func(c *gin.Context) {
 			}
 		}
 
-		err = tx.Commit().Error
-		if err != nil {
-			log.Println("Error in UserLogin commit:", typeString, err)
-			tx.Rollback() // what if roll back fails??
-			render.Render(w, r, NewErrDBError(err))
-			return
-		}
+		tx.Commit()
 
 		var jsn []byte
 		if jsn, err = json.Marshal(payload); err != nil {
@@ -376,14 +346,8 @@ func ReadAllHandler(typeString string, mapper datamapper.IGetAllMapper) func(c *
 			render.Render(w, r, NewErrNotFound(err))
 			return
 		}
-		err = tx.Commit().Error
-		if err != nil {
-			log.Println("Error in ReadAllHandler ErrDBError:", typeString, err)
-			tx.Rollback() // what if roll back fails??
-			render.Render(w, r, NewErrDBError(err))
-			return
-		}
 
+		tx.Commit()
 		renderModelSlice(w, r, typeString, modelObjs, roles, no, &scope)
 		return
 	}
@@ -411,7 +375,7 @@ func CreateHandler(typeString string, mapper datamapper.ICreateMapper) func(c *g
 			if r := recover(); r != nil {
 				tx.Rollback()
 				debug.PrintStack()
-				fmt.Println("Panic in ReadAllHandler", r)
+				fmt.Println("Panic in CreateHandler", r)
 			}
 		}(tx)
 
@@ -425,13 +389,7 @@ func CreateHandler(typeString string, mapper datamapper.ICreateMapper) func(c *g
 				return
 			}
 
-			err = tx.Commit().Error
-			if err != nil {
-				log.Println("Error in CreateMany ErrDBError:", typeString, err)
-				tx.Rollback() // what if roll back fails??
-				render.Render(w, r, NewErrDBError(err))
-				return
-			}
+			tx.Commit()
 
 			// admin is 0 so it's ok
 			roles := make([]models.UserRole, 0, 20)
@@ -449,14 +407,7 @@ func CreateHandler(typeString string, mapper datamapper.ICreateMapper) func(c *g
 				return
 			}
 
-			err = tx.Commit().Error
-			if err != nil {
-				log.Println("Error in CreateOne ErrDBError:", typeString, err)
-				tx.Rollback() // what if roll back fails??
-				render.Render(w, r, NewErrDBError(err))
-				return
-			}
-
+			tx.Commit()
 			renderModel(w, r, typeString, modelObj, models.Admin, &scope)
 		}
 
@@ -484,7 +435,7 @@ func ReadOneHandler(typeString string, mapper datamapper.IGetOneWithIDMapper) fu
 			if r := recover(); r != nil {
 				tx.Rollback()
 				debug.PrintStack()
-				fmt.Println("Panic in ReadAllHandler", r)
+				fmt.Println("Panic in ReadOneHandler", r)
 			}
 		}(tx)
 
@@ -496,14 +447,7 @@ func ReadOneHandler(typeString string, mapper datamapper.IGetOneWithIDMapper) fu
 			render.Render(w, r, NewErrNotFound(err))
 			return
 		}
-		err = tx.Commit().Error
-		if err != nil {
-			log.Println("Error in ReadOneHandler ErrDBError:", typeString, err)
-			tx.Rollback() // what if roll back fails??
-			render.Render(w, r, NewErrDBError(err))
-			return
-		}
-
+		tx.Commit()
 		renderModel(w, r, typeString, modelObj, role, &scope)
 		return
 	}
@@ -534,7 +478,7 @@ func UpdateOneHandler(typeString string, mapper datamapper.IUpdateOneWithIDMappe
 			if r := recover(); r != nil {
 				tx.Rollback()
 				debug.PrintStack()
-				fmt.Println("Panic in ReadAllHandler", r)
+				fmt.Println("Panic in UpdateOneHandler", r)
 			}
 		}(tx)
 
@@ -546,14 +490,7 @@ func UpdateOneHandler(typeString string, mapper datamapper.IUpdateOneWithIDMappe
 			return
 		}
 
-		err = tx.Commit().Error
-		if err != nil {
-			log.Println("Error in UpdateOneHandler ErrDBError:", typeString, err)
-			tx.Rollback() // what if roll back fails??
-			render.Render(w, r, NewErrDBError(err))
-			return
-		}
-
+		tx.Commit()
 		renderModel(w, r, typeString, modelObj, models.Admin, &scope)
 		return
 	}
@@ -579,7 +516,7 @@ func UpdateManyHandler(typeString string, mapper datamapper.IUpdateManyMapper) f
 			if r := recover(); r != nil {
 				tx.Rollback()
 				debug.PrintStack()
-				fmt.Println("Panic in ReadAllHandler", r)
+				fmt.Println("Panic in UpdateManyHandler", r)
 			}
 		}(tx)
 
@@ -591,14 +528,7 @@ func UpdateManyHandler(typeString string, mapper datamapper.IUpdateManyMapper) f
 			return
 		}
 
-		err = tx.Commit().Error
-		if err != nil {
-			log.Println("Error in UpdateManyHandler ErrDBError:", typeString, err)
-			tx.Rollback() // what if roll back fails??
-			render.Render(w, r, NewErrDBError(err))
-			return
-		}
-
+		tx.Commit()
 		roles := make([]models.UserRole, len(modelObjs), len(modelObjs))
 		for i := 0; i < len(roles); i++ {
 			roles[i] = models.Admin
@@ -636,7 +566,7 @@ func PatchOneHandler(typeString string, mapper datamapper.IPatchOneWithIDMapper)
 			if r := recover(); r != nil {
 				tx.Rollback()
 				debug.PrintStack()
-				fmt.Println("Panic in ReadAllHandler", r)
+				fmt.Println("Panic in PatchOneHandler", r)
 			}
 		}(tx)
 
@@ -648,14 +578,7 @@ func PatchOneHandler(typeString string, mapper datamapper.IPatchOneWithIDMapper)
 			return
 		}
 
-		err = tx.Commit().Error
-		if err != nil {
-			log.Println("Error in PatchOneHandler ErrDBError:", typeString, err)
-			tx.Rollback() // what if roll back fails??
-			render.Render(w, r, NewErrDBError(err))
-			return
-		}
-
+		tx.Commit()
 		renderModel(w, r, typeString, modelObj, models.Admin, &scope)
 		return
 
@@ -687,7 +610,7 @@ func DeleteOneHandler(typeString string, mapper datamapper.IDeleteOneWithID) fun
 			if r := recover(); r != nil {
 				tx.Rollback()
 				debug.PrintStack()
-				fmt.Println("Panic in ReadAllHandler", r)
+				fmt.Println("Panic in DeleteOneHandler", r)
 			}
 		}(tx)
 
@@ -699,14 +622,7 @@ func DeleteOneHandler(typeString string, mapper datamapper.IDeleteOneWithID) fun
 			return
 		}
 
-		err = tx.Commit().Error
-		if err != nil {
-			log.Println("Error in DeleteOneHandler ErrDBError:", typeString, err)
-			tx.Rollback() // what if roll back fails??
-			render.Render(w, r, NewErrDBError(err))
-			return
-		}
-
+		tx.Commit()
 		renderModel(w, r, typeString, modelObj, models.Admin, &scope)
 		return
 	}
@@ -734,7 +650,7 @@ func DeleteManyHandler(typeString string, mapper datamapper.IDeleteMany) func(c 
 			if r := recover(); r != nil {
 				tx.Rollback()
 				debug.PrintStack()
-				fmt.Println("Panic in ReadAllHandler", r)
+				fmt.Println("Panic in DeleteManyHandler", r)
 			}
 		}(tx)
 
@@ -746,13 +662,7 @@ func DeleteManyHandler(typeString string, mapper datamapper.IDeleteMany) func(c 
 			return
 		}
 
-		err = tx.Commit().Error
-		if err != nil {
-			log.Println("Error in DeleteOneHandler ErrDBError:", typeString, err)
-			tx.Rollback() // what if roll back fails??
-			render.Render(w, r, NewErrDBError(err))
-			return
-		}
+		tx.Commit()
 
 		roles := make([]models.UserRole, len(modelObjs), len(modelObjs))
 		for i := 0; i < len(roles); i++ {
@@ -760,6 +670,49 @@ func DeleteManyHandler(typeString string, mapper datamapper.IDeleteMany) func(c 
 		}
 
 		renderModelSlice(w, r, typeString, modelObjs, roles, nil, &scope)
+		return
+	}
+}
+
+// ChangeEmailPasswordHandler returns a gin handler which changes password
+func ChangeEmailPasswordHandler(typeString string, mapper datamapper.IChangeEmailPasswordMapper) func(c *gin.Context) {
+	return func(c *gin.Context) {
+		w, r := c.Writer, c.Request
+
+		id, httperr := IDFromURLQueryString(c)
+		if httperr != nil {
+			render.Render(w, r, httperr)
+			return
+		}
+
+		ownerID, scope := OwnerIDFromContext(r), ScopeFromContext(r)
+
+		modelObj, httperr := ModelFromJSONBody(r, typeString, &scope)
+		if httperr != nil {
+			render.Render(w, r, httperr)
+			return
+		}
+
+		tx := db.Shared().Begin()
+
+		defer func(tx *gorm.DB) {
+			if r := recover(); r != nil {
+				tx.Rollback()
+				debug.PrintStack()
+				fmt.Println("Panic in ChangePasswordHandler", r)
+			}
+		}(tx)
+
+		modelObj, err := mapper.ChangeEmailPasswordWithID(tx, ownerID, &scope, typeString, modelObj, *id)
+		if err != nil {
+			tx.Rollback()
+			log.Println("Error in ChangeEmailPasswordHandler ErrUpdate:", typeString, err)
+			render.Render(w, r, NewErrUpdate(err))
+			return
+		}
+
+		tx.Commit()
+		renderModel(w, r, typeString, modelObj, models.Admin, &scope)
 		return
 	}
 }

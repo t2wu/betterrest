@@ -67,3 +67,13 @@ type IDeleteMany interface {
 	DeleteMany(db *gorm.DB, oid *datatypes.UUID, scope *string,
 		typeString string, modelObjs []models.IModel) ([]models.IModel, error)
 }
+
+//------------------------------------
+// User model only
+//------------------------------------
+
+// IChangeEmailPasswordMapper changes email and password
+type IChangeEmailPasswordMapper interface {
+	ChangeEmailPasswordWithID(db *gorm.DB, oid *datatypes.UUID, scope *string,
+		typeString string, modelobj models.IModel, id datatypes.UUID) (models.IModel, error)
+}

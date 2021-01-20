@@ -146,6 +146,8 @@ func (mapper *UserMapper) getOneWithIDCore(db *gorm.DB, oid *datatypes.UUID, sco
 }
 
 // UpdateOneWithID updates model based on this json
+// Update DOESN'T change password. It'll load up the password hash and save the same.
+// Update password require special endpoint
 func (mapper *UserMapper) UpdateOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id datatypes.UUID) (models.IModel, error) {
 	log.Println("userMapper's UpdateOneWithID called")
 	if err := checkErrorBeforeUpdate(mapper, db, oid, scope, typeString, modelObj, id, models.Admin); err != nil {
@@ -156,26 +158,11 @@ func (mapper *UserMapper) UpdateOneWithID(db *gorm.DB, oid *datatypes.UUID, scop
 		return nil, errPermission
 	}
 
-	password := reflect.ValueOf(modelObj).Elem().FieldByName(("Password")).Interface().(string)
-	newPassword := reflect.ValueOf(modelObj).Elem().FieldByName(("NewPassword")).Interface().(string)
-
-	// Additional checking because password should not be blank with update
-	if password == "" {
-		log.Println("password should not be blank!!!")
-		return nil, fmt.Errorf("password should not be blank")
-	}
-
-	if _, code := security.GetVerifiedAuthUser(modelObj); code != security.VerifyUserResultOK {
-		// unable to login user. maybe doesn't exist?
-		// or username, password wrong
-		return nil, fmt.Errorf("password incorrect")
-	}
-
-	hash, err := security.HashAndSalt(newPassword)
+	var err error
+	modelObj, err = preserveEmailPassword(db, oid, modelObj)
 	if err != nil {
 		return nil, err
 	}
-	reflect.ValueOf(modelObj).Elem().FieldByName("PasswordHash").Set(reflect.ValueOf(hash))
 
 	cargo := models.ModelCargo{}
 
@@ -241,7 +228,7 @@ func (mapper *UserMapper) DeleteOneWithID(db *gorm.DB, oid *datatypes.UUID, scop
 	// Unscoped() for REAL delete!
 	// Otherwise my constraint won't work...
 	// Soft delete will take more work, have to verify myself manually
-	// db.Unscoped().Delete(modelObj).Error
+	// db.Unscoped().Delete(modelObj).Errorf
 	err = db.Delete(modelObj).Error
 	if err != nil {
 		return nil, err
@@ -255,6 +242,100 @@ func (mapper *UserMapper) DeleteOneWithID(db *gorm.DB, oid *datatypes.UUID, scop
 			return nil, err
 		}
 	}
+
+	return modelObj, nil
+}
+
+// ChangeEmailPasswordWithID changes email and/or password
+func (mapper *UserMapper) ChangeEmailPasswordWithID(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id datatypes.UUID) (models.IModel, error) {
+	log.Println("userMapper's ChangeEmailPasswordWithID called")
+	if err := checkErrorBeforeUpdate(mapper, db, oid, scope, typeString, modelObj, id, models.Admin); err != nil {
+		return nil, err
+	}
+
+	if *oid != id {
+		return nil, errPermission
+	}
+
+	// Verify the password in the current modelObj
+	if _, code := security.GetVerifiedAuthUser(modelObj); code != security.VerifyUserResultOK {
+		// unable to login user. maybe doesn't exist?
+		// or username, password wrong
+		return nil, fmt.Errorf("password incorrect")
+	}
+
+	// Hash the new password (assume already the correct format and length)
+	newPassword := reflect.ValueOf(modelObj).Elem().FieldByName(("NewPassword")).Interface().(string)
+	hash, err := security.HashAndSalt(newPassword)
+	if err != nil {
+		return nil, err
+	}
+
+	newEmail := reflect.ValueOf(modelObj).Elem().FieldByName(("NewEmail")).Interface().(string)
+
+	// Load the original model, then override email and password hash which we want to change
+	oldModel, _, err := mapper.getOneWithIDCore(db, oid, scope, typeString, id)
+	if err != nil {
+		return nil, err
+	}
+	modelObj = oldModel
+
+	// Override email with newemail
+	reflect.ValueOf(modelObj).Elem().FieldByName("Email").Set(reflect.ValueOf(newEmail))
+
+	reflect.ValueOf(modelObj).Elem().FieldByName("PasswordHash").Set(reflect.ValueOf(hash))
+	reflect.ValueOf(modelObj).Elem().FieldByName("Password").Set(reflect.ValueOf(""))    // just in case user mess up
+	reflect.ValueOf(modelObj).Elem().FieldByName("NewPassword").Set(reflect.ValueOf("")) // just in case
+
+	cargo := models.ModelCargo{}
+
+	// Before hook
+	if v, ok := modelObj.(models.IBeforePasswordUpdate); ok {
+		hpdata := models.HookPointData{DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
+		if err := v.BeforePasswordUpdateDB(hpdata); err != nil {
+			return nil, err
+		}
+	}
+
+	modelObj2, err := updateOneCore(mapper, db, oid, scope, typeString, modelObj, id, models.Admin)
+	if err != nil {
+		return nil, err
+	}
+
+	// After hook
+	if v, ok := modelObj2.(models.IAfterPasswordUpdate); ok {
+		hpdata := models.HookPointData{DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
+		if err = v.AfterPasswordUpdateDB(hpdata); err != nil {
+			return nil, err
+		}
+	}
+
+	return modelObj2, nil
+}
+
+func preserveEmailPassword(db *gorm.DB, oid *datatypes.UUID, modelObj models.IModel) (models.IModel, error) {
+	// Don't mess with password here, load the password hash
+	// Load password hash so we don't override it with blank
+	type result struct {
+		PasswordHash string
+		Email        string
+	}
+	res := result{}
+	rtable := models.GetTableNameFromIModel(modelObj)
+	if err := db.Table(rtable).Select([]string{"password_hash", "email"}).Where("id = ?", oid).Scan(&res).Error; err != nil {
+		// Doesn't work
+		// if err := db.Table(rtable).Select("password_hash", "email").Where("id = ?", oid).Scan(&res).Error; err != nil {
+		log.Println("Fetching passwordhash and email problem:", err)
+		return nil, err
+	}
+
+	// Override modelObj because this endpoint does not allow changing password and email
+	reflect.ValueOf(modelObj).Elem().FieldByName("PasswordHash").Set(reflect.ValueOf(res.PasswordHash))
+	reflect.ValueOf(modelObj).Elem().FieldByName("Email").Set(reflect.ValueOf(res.Email))
+
+	// Erase passwords fields in case user makes a mistake and forgot gorm:"-" and save them to db
+	reflect.ValueOf(modelObj).Elem().FieldByName("Password").Set(reflect.ValueOf(""))    // just in case user mess up
+	reflect.ValueOf(modelObj).Elem().FieldByName("NewPassword").Set(reflect.ValueOf("")) // just in case
 
 	return modelObj, nil
 }

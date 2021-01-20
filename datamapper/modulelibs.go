@@ -121,7 +121,7 @@ func checkErrorBeforeUpdate(mapper IGetOneWithIDMapper, db *gorm.DB, oid *dataty
 		return errIDEmpty
 	}
 
-	// If you're able to read, you hvea the permission to update...
+	// If you're able to read, you have the permission to update...
 	// Not really now you have to check role
 	// TODO: Is there a more efficient way?
 	_, role, err := mapper.getOneWithIDCore(db, oid, scope, typeString, id)

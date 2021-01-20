@@ -218,6 +218,16 @@ type IValidate interface {
 	Validate(scope *string, endpoint string, method string) error
 }
 
+// IBeforePasswordUpdate supports method to be called before data is updated in the database
+type IBeforePasswordUpdate interface {
+	BeforePasswordUpdateDB(hpdata HookPointData) error
+}
+
+// IAfterPasswordUpdate supports method to be called after data is updated in the database
+type IAfterPasswordUpdate interface {
+	AfterPasswordUpdateDB(hpdata HookPointData) error
+}
+
 // ------------------------------------
 
 // IOwnership is what OwnershipModelBase tables should satisfy.
