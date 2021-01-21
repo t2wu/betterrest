@@ -30,13 +30,16 @@ type MapperType int
 
 const (
 	// MapperTypeViaOwnership is for type which user owns something
-	MapperTypeViaOwnership = 0
+	MapperTypeViaOwnership MapperType = iota
 
 	// MapperTypeViaOrganization is for type where an organization owns something
-	MapperTypeViaOrganization = 1
+	MapperTypeViaOrganization
 
 	// MapperTypeGlobal is for type where data is public to all
-	MapperTypeGlobal = 2
+	MapperTypeGlobal
+
+	// MapperTypeLinkTable is for table linking user and regular models
+	MapperTypeLinkTable
 )
 
 // ModelRegistryOptions is options when you want to add a model to registry

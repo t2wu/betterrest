@@ -474,6 +474,7 @@ func (mapper *OwnershipMapper) DeleteOneWithID(db *gorm.DB, oid *datatypes.UUID,
 	if err != nil { // Error is "record not found" when not found
 		return nil, err
 	}
+
 	if role != models.Admin {
 		return nil, errPermission
 	}
@@ -509,17 +510,17 @@ func (mapper *OwnershipMapper) DeleteOneWithID(db *gorm.DB, oid *datatypes.UUID,
 	if !ok {
 		return nil, errNoOwnership
 	}
-	stmt := fmt.Sprintf("DELETE FROM %s WHERE user_id = ? AND model_id = ? AND role = ?", models.GetJoinTableName(modelObjOwnership))
+
+	// I'm removing stuffs from this link table, I cannot just remove myself from this. I have to remove
+	// everyone who is linked to this table!
+
+	// stmt := fmt.Sprintf("DELETE FROM %s WHERE user_id = ? AND model_id = ? AND role = ?", models.GetJoinTableName(modelObjOwnership))
+	stmt := fmt.Sprintf("DELETE FROM %s WHERE model_id = ?", models.GetJoinTableName(modelObjOwnership))
 
 	// Can't do db.Raw and db.Delete at the same time?!
-	db2 := db.Exec(stmt, oid.String(), modelObj.GetID().String(), models.Admin)
+	db2 := db.Exec(stmt, modelObj.GetID().String())
 	if db2.Error != nil {
 		return nil, err
-	}
-
-	if db2.RowsAffected == 0 {
-		// If guest, goes here, so no delete the actual model
-		return nil, errPermission
 	}
 
 	err = db.Delete(modelObj).Error
@@ -601,15 +602,10 @@ func (mapper *OwnershipMapper) DeleteMany(db *gorm.DB, oid *datatypes.UUID, scop
 		if !ok {
 			return nil, errNoOwnership
 		}
-		stmt := fmt.Sprintf("DELETE FROM %s WHERE user_id = ? AND model_id = ? AND role = ?", models.GetJoinTableName(modelObjOwnership))
-		db2 := db.Exec(stmt, oid.String(), modelObj.GetID().String(), models.Admin)
+		stmt := fmt.Sprintf("DELETE FROM %s WHERE model_id = ?", models.GetJoinTableName(modelObjOwnership))
+		db2 := db.Exec(stmt, modelObj.GetID().String())
 		if db2.Error != nil {
 			return nil, err
-		}
-
-		if db2.RowsAffected == 0 {
-			// If guest, goes here, so no delete the actual model
-			return nil, errPermission
 		}
 
 		err = db.Delete(modelObj).Error

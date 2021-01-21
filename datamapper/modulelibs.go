@@ -149,9 +149,12 @@ func updateOneCore(mapper IGetOneWithIDMapper, db *gorm.DB, oid *datatypes.UUID,
 		return nil, err2
 	}
 
-	if role != permittedRole {
+	if permittedRole != models.UserRoleAny && role != permittedRole {
 		return nil, errPermission
 	}
+
+	log.Printf("modelObj: %+v", modelObj)
+	log.Printf("oldmodelObj: %+v", oldModelObj)
 
 	if modelNeedsRealDelete(oldModelObj) { // parent model
 		db = db.Unscoped()

@@ -11,6 +11,7 @@ import (
 
 // Error
 var errPermission = errors.New("permission denied")
+var errPermissionWrongEndPoint = errors.New("permission denied. Delete it through the resource endpoint instead.")
 var errIDEmpty = errors.New("cannot update when ID is empty")
 var errIDNotMatch = errors.New("cannot update when ID in HTTP body and URL parameter not match")
 var errPatch = errors.New("patch syntax error")               // json: cannot unmarshal object into Go value of type jsonpatch.Patch

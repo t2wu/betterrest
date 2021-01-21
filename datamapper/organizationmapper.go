@@ -174,7 +174,7 @@ func (mapper *OrganizationMapper) CreateMany(db *gorm.DB, oid *datatypes.UUID, s
 		retModels = append(retModels, m)
 	}
 
-	// After batch inert hookpoint
+	// After batch insert hookpoint
 	if after := models.ModelRegistry[typeString].AfterInsert; after != nil {
 		bhpData := models.BatchHookPointData{Ms: modelObjs, DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
 		if err := after(bhpData); err != nil {

@@ -71,6 +71,9 @@ func AddRESTRoutes(r *gin.Engine) {
 			case models.MapperTypeViaOrganization:
 				dm = datamapper.SharedOrganizationMapper()
 				break
+			case models.MapperTypeLinkTable:
+				dm = datamapper.SharedLinkTableMapper()
+				break
 			case models.MapperTypeViaOwnership:
 				fallthrough
 			default:

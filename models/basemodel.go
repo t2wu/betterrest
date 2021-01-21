@@ -17,6 +17,9 @@ import (
 type UserRole int
 
 const (
+	// UserRoleAny not for value in db, but for permission where any is fine (link table)
+	UserRoleAny UserRole = -2
+
 	// Invalid for this resource
 	Invalid UserRole = -1
 
@@ -256,10 +259,7 @@ type OwnershipModelBase struct {
 	UpdatedAt time.Time
 	DeletedAt *time.Time `sql:"index"`
 
-	UserID  *datatypes.UUID
-	ModelID *datatypes.UUID
-
-	Role UserRole // an int
+	Role UserRole `json:"role"` // an int
 }
 
 // BeforeCreate sets a UUID if no ID is set
@@ -271,28 +271,6 @@ func (o *OwnershipModelBase) BeforeCreate(scope *gorm.Scope) error {
 	}
 
 	return nil
-}
-
-// GetUserID gets the user id of the model, comforms to IOwnership
-func (o *OwnershipModelBase) GetUserID() *datatypes.UUID {
-	return o.UserID
-	// v := reflect.ValueOf(o)
-	// return reflect.Indirect(v).FieldByName("ID").Interface().(*datatypes.UUID)
-}
-
-// SetUserID sets the user id of the model, comforms to IOwnership
-func (o *OwnershipModelBase) SetUserID(id *datatypes.UUID) {
-	o.UserID = id
-}
-
-// SetModelID sets the id of the model, comforms to IOwnership
-func (o *OwnershipModelBase) SetModelID(id *datatypes.UUID) {
-	o.ModelID = id
-}
-
-// GetModelID gets the id of the model, comforms to IOwnership
-func (o *OwnershipModelBase) GetModelID() *datatypes.UUID {
-	return o.ModelID
 }
 
 // GetRole gets the role field of the model, comforms to IOwnership
@@ -313,6 +291,38 @@ func (o *OwnershipModelBase) GetID() *datatypes.UUID {
 // SetID Set the ID field of the model (useful when using interface)
 func (o *OwnershipModelBase) SetID(id *datatypes.UUID) {
 	o.ID = id
+}
+
+// OwnershipModelWithIDBase is one with ID, if you don't need unique index
+// for userID and modelID (if you don't expose the link table via LinkTableMapper)
+// You can use this.
+type OwnershipModelWithIDBase struct {
+	OwnershipModelBase
+
+	UserID  *datatypes.UUID `json:"userID"` // I guess the user's table has to be named "User" then.
+	ModelID *datatypes.UUID `json:"modelID"`
+}
+
+// GetUserID gets the user id of the model, comforms to IOwnership
+func (o *OwnershipModelWithIDBase) GetUserID() *datatypes.UUID {
+	return o.UserID
+	// v := reflect.ValueOf(o)
+	// return reflect.Indirect(v).FieldByName("ID").Interface().(*datatypes.UUID)
+}
+
+// SetUserID sets the user id of the model, comforms to IOwnership
+func (o *OwnershipModelWithIDBase) SetUserID(id *datatypes.UUID) {
+	o.UserID = id
+}
+
+// SetModelID sets the id of the model, comforms to IOwnership
+func (o *OwnershipModelWithIDBase) SetModelID(id *datatypes.UUID) {
+	o.ModelID = id
+}
+
+// GetModelID gets the id of the model, comforms to IOwnership
+func (o *OwnershipModelWithIDBase) GetModelID() *datatypes.UUID {
+	return o.ModelID
 }
 
 // ---------------
