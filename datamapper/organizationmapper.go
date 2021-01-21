@@ -314,7 +314,7 @@ func (mapper *OrganizationMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, scop
 
 	var no *int
 	if totalcount {
-		*no = 0
+		no = new(int)
 		// Query for total count, without offset and limit (all)
 		if err := db.Count(no).Error; err != nil {
 			log.Println("count error:", err)

@@ -17,6 +17,9 @@ import (
 type UserRole int
 
 const (
+	// Invalid for this resource
+	Invalid UserRole = -1
+
 	// Admin is admin UserRole
 	Admin UserRole = 0
 
@@ -240,16 +243,34 @@ type IOwnership interface {
 
 	GetModelID() *datatypes.UUID
 	SetModelID(*datatypes.UUID)
+
+	GetID() *datatypes.UUID
+	SetID(*datatypes.UUID)
 }
 
 // OwnershipModelBase has a role
 type OwnershipModelBase struct {
-	gorm.Model // uses standard int id (cuz I started with it and it works)
+	ID *datatypes.UUID `gorm:"type:uuid;primary_key;" json:"id"`
+
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	DeletedAt *time.Time `sql:"index"`
 
 	UserID  *datatypes.UUID
 	ModelID *datatypes.UUID
 
 	Role UserRole // an int
+}
+
+// BeforeCreate sets a UUID if no ID is set
+// (this is Gorm's hookpoint)
+func (o *OwnershipModelBase) BeforeCreate(scope *gorm.Scope) error {
+	if o.ID == nil {
+		uuid := datatypes.NewUUID()
+		return scope.SetColumn("ID", uuid)
+	}
+
+	return nil
 }
 
 // GetUserID gets the user id of the model, comforms to IOwnership
@@ -282,6 +303,16 @@ func (o *OwnershipModelBase) GetRole() UserRole {
 // SetRole sets the role field of the model, comforms to IOwnership
 func (o *OwnershipModelBase) SetRole(r UserRole) {
 	o.Role = r
+}
+
+// GetID Get the ID field of the model (useful when using interface)
+func (o *OwnershipModelBase) GetID() *datatypes.UUID {
+	return o.ID
+}
+
+// SetID Set the ID field of the model (useful when using interface)
+func (o *OwnershipModelBase) SetID(id *datatypes.UUID) {
+	o.ID = id
 }
 
 // ---------------
