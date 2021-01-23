@@ -389,7 +389,7 @@ func (mapper *OrganizationMapper) GetAll(db *gorm.DB, oid *datatypes.UUID, scope
 
 // UpdateOneWithID updates model based on this json
 func (mapper *OrganizationMapper) UpdateOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id datatypes.UUID) (models.IModel, error) {
-	if err := checkErrorBeforeUpdate(mapper, db, oid, scope, typeString, modelObj, id, models.Admin); err != nil {
+	if _, err := loadAndCheckErrorBeforeModify(mapper, db, oid, scope, typeString, modelObj, id, models.Admin); err != nil {
 		return nil, err
 	}
 
@@ -427,7 +427,7 @@ func (mapper *OrganizationMapper) UpdateMany(db *gorm.DB, oid *datatypes.UUID, s
 
 	for _, modelObj := range modelObjs {
 		id := modelObj.GetID()
-		if err = checkErrorBeforeUpdate(mapper, db, oid, scope, typeString, modelObj, *id, models.Admin); err != nil {
+		if _, err = loadAndCheckErrorBeforeModify(mapper, db, oid, scope, typeString, modelObj, *id, models.Admin); err != nil {
 			return nil, err
 		}
 	}
@@ -473,12 +473,12 @@ func (mapper *OrganizationMapper) PatchOneWithID(db *gorm.DB, oid *datatypes.UUI
 		return nil, errIDEmpty
 	}
 
-	// role already chcked in checkErrorBeforeUpdate
+	// role already chcked in loadAndCheckErrorBeforeModify
 	if modelObj, role, err = mapper.getOneWithIDCore(db, oid, scope, typeString, id); err != nil {
 		return nil, err
 	}
 
-	// calling checkErrorBeforeUpdate is redundant in this case since we need to fetch it out first in order to patch it
+	// calling loadAndCheckErrorBeforeModify is redundant in this case since we need to fetch it out first in order to patch it
 	// Just check if role matches models.Admin
 	if role != models.Admin {
 		return nil, errPermission
@@ -696,22 +696,18 @@ func (mapper *OrganizationMapper) DeleteOneWithID(db *gorm.DB, oid *datatypes.UU
 
 // DeleteMany deletes multiple models
 func (mapper *OrganizationMapper) DeleteMany(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObjs []models.IModel) ([]models.IModel, error) {
-
-	ids := make([]datatypes.UUID, len(modelObjs), len(modelObjs))
 	var err error
-	cargo := models.BatchHookCargo{}
-	for i, v := range modelObjs {
-		id := v.GetID()
-		if id.String() == "" {
-			return nil, errIDEmpty
-		}
 
-		ids[i] = *id
+	for i, modelObj := range modelObjs {
+		id := modelObj.GetID()
+		// load the one in db in case user just enter wrong stuff
+		if modelObjs[i], err = loadAndCheckErrorBeforeModify(mapper, db, oid, scope, typeString, modelObj, *id, models.Admin); err != nil {
+			return nil, err
+		}
 	}
 
-	ms := make([]models.IModel, 0, 0)
-
 	// Before batch delete hookpoint
+	cargo := models.BatchHookCargo{}
 	if before := models.ModelRegistry[typeString].BeforeDelete; before != nil {
 		bhpData := models.BatchHookPointData{Ms: modelObjs, DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
 		if err = before(bhpData); err != nil {
@@ -719,28 +715,15 @@ func (mapper *OrganizationMapper) DeleteMany(db *gorm.DB, oid *datatypes.UUID, s
 		}
 	}
 
-	for i, id := range ids {
+	// Unscoped() for REAL delete!
+	// Foreign key constraint works only on real delete
+	// Soft delete will take more work, have to verify myself manually
+	if len(modelObjs) > 0 && modelNeedsRealDelete(modelObjs[0]) {
+		db = db.Unscoped()
+	}
 
-		if id.UUID.String() == "" {
-			return nil, errIDEmpty
-		}
-
-		// Pull out entire modelObj
-		modelObj, role, err := mapper.getOneWithIDCore(db, oid, scope, typeString, id)
-		if err != nil { // Error is "record not found" when not found
-			return nil, err
-		}
-		if role != models.Admin {
-			return nil, errPermission
-		}
-
-		// Unscoped() for REAL delete!
-		// Foreign key constraint works only on real delete
-		// Soft delete will take more work, have to verify myself manually
-		if modelNeedsRealDelete(modelObj) && i == 0 { // only do once
-			db = db.Unscoped()
-		}
-
+	ms := make([]models.IModel, 0, 0)
+	for _, modelObj := range modelObjs {
 		err = db.Delete(modelObj).Error
 		// err = db.Delete(modelObj).Error
 		if err != nil {

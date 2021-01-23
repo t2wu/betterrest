@@ -214,7 +214,7 @@ func (mapper *GlobalMapper) GetAll(db *gorm.DB, oid *datatypes.UUID, scope *stri
 // UpdateOneWithID updates model based on this json
 // This is the same as ownershipdata mapper (inheritance?)
 func (mapper *GlobalMapper) UpdateOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id datatypes.UUID) (models.IModel, error) {
-	if err := checkErrorBeforeUpdate(mapper, db, oid, scope, typeString, modelObj, id, models.Public); err != nil {
+	if _, err := loadAndCheckErrorBeforeModify(mapper, db, oid, scope, typeString, modelObj, id, models.Public); err != nil {
 		return nil, err
 	}
 
@@ -253,7 +253,7 @@ func (mapper *GlobalMapper) UpdateMany(db *gorm.DB, oid *datatypes.UUID, scope *
 
 	for _, modelObj := range modelObjs {
 		id := modelObj.GetID()
-		if err = checkErrorBeforeUpdate(mapper, db, oid, scope, typeString, modelObj, *id, models.Public); err != nil {
+		if _, err = loadAndCheckErrorBeforeModify(mapper, db, oid, scope, typeString, modelObj, *id, models.Public); err != nil {
 			return nil, err
 		}
 	}
@@ -300,7 +300,7 @@ func (mapper *GlobalMapper) PatchOneWithID(db *gorm.DB, oid *datatypes.UUID, sco
 		return nil, errIDEmpty
 	}
 
-	// role already chcked in checkErrorBeforeUpdate
+	// role already chcked in loadAndCheckErrorBeforeModify
 	if modelObj, _, err = mapper.getOneWithIDCore(db, oid, scope, typeString, id); err != nil {
 		return nil, err
 	}
@@ -484,6 +484,8 @@ func (mapper *GlobalMapper) DeleteOneWithID(db *gorm.DB, oid *datatypes.UUID, sc
 
 // DeleteMany deletes multiple models
 func (mapper *GlobalMapper) DeleteMany(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObjs []models.IModel) ([]models.IModel, error) {
+	// Since it's global, no permission to check here
+	// only need to check if id is empty
 
 	ids := make([]datatypes.UUID, len(modelObjs), len(modelObjs))
 	var err error
@@ -507,12 +509,14 @@ func (mapper *GlobalMapper) DeleteMany(db *gorm.DB, oid *datatypes.UUID, scope *
 		}
 	}
 
+	// Unscoped() for REAL delete!
+	// Foreign key constraint works only on real delete
+	// Soft delete will take more work, have to verify myself manually
+	if len(modelObjs) > 0 && modelNeedsRealDelete(modelObjs[0]) {
+		db = db.Unscoped()
+	}
+
 	for i, id := range ids {
-
-		if id.UUID.String() == "" {
-			return nil, errIDEmpty
-		}
-
 		// Pull out entire modelObj
 		modelObj, _, err := mapper.getOneWithIDCore(db, oid, scope, typeString, id)
 		if err != nil { // Error is "record not found" when not found

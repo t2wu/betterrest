@@ -150,7 +150,7 @@ func (mapper *UserMapper) getOneWithIDCore(db *gorm.DB, oid *datatypes.UUID, sco
 // Update password require special endpoint
 func (mapper *UserMapper) UpdateOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id datatypes.UUID) (models.IModel, error) {
 	log.Println("userMapper's UpdateOneWithID called")
-	if err := checkErrorBeforeUpdate(mapper, db, oid, scope, typeString, modelObj, id, models.Admin); err != nil {
+	if _, err := loadAndCheckErrorBeforeModify(mapper, db, oid, scope, typeString, modelObj, id, models.Admin); err != nil {
 		return nil, err
 	}
 
@@ -249,7 +249,7 @@ func (mapper *UserMapper) DeleteOneWithID(db *gorm.DB, oid *datatypes.UUID, scop
 // ChangeEmailPasswordWithID changes email and/or password
 func (mapper *UserMapper) ChangeEmailPasswordWithID(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id datatypes.UUID) (models.IModel, error) {
 	log.Println("userMapper's ChangeEmailPasswordWithID called")
-	if err := checkErrorBeforeUpdate(mapper, db, oid, scope, typeString, modelObj, id, models.Admin); err != nil {
+	if _, err := loadAndCheckErrorBeforeModify(mapper, db, oid, scope, typeString, modelObj, id, models.Admin); err != nil {
 		return nil, err
 	}
 

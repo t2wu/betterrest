@@ -29,6 +29,10 @@ func userHasAdminAccessToOriginalModel(db *gorm.DB, oid *datatypes.UUID, typeStr
 }
 
 func userHasPermissionToEdit(mapper *LinkTableMapper, db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, id datatypes.UUID) (models.IModel, error) {
+	if id.UUID.String() == "" {
+		return nil, errIDEmpty
+	}
+
 	// Pull out entire modelObj
 	modelObj, _, err := mapper.getOneWithIDCore(db, oid, scope, typeString, id)
 	if err != nil { // Error is "record not found" when not found
@@ -497,10 +501,6 @@ func (mapper *LinkTableMapper) PatchMany(db *gorm.DB, oid *datatypes.UUID, scope
 
 // DeleteOneWithID delete the model
 func (mapper *LinkTableMapper) DeleteOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, id datatypes.UUID) (models.IModel, error) {
-	if id.UUID.String() == "" {
-		return nil, errIDEmpty
-	}
-
 	modelObj, err := userHasPermissionToEdit(mapper, db, oid, scope, typeString, id)
 	if err != nil {
 		return nil, err
@@ -545,22 +545,18 @@ func (mapper *LinkTableMapper) DeleteOneWithID(db *gorm.DB, oid *datatypes.UUID,
 
 // DeleteMany deletes multiple models
 func (mapper *LinkTableMapper) DeleteMany(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObjs []models.IModel) ([]models.IModel, error) {
-
-	ids := make([]datatypes.UUID, len(modelObjs), len(modelObjs))
 	var err error
-	cargo := models.BatchHookCargo{}
-	for i, v := range modelObjs {
-		id := v.GetID()
-		if id.String() == "" {
-			return nil, errIDEmpty
-		}
 
-		ids[i] = *id
+	for i, modelObj := range modelObjs {
+		id := modelObj.GetID()
+		if modelObjs[i], err = userHasPermissionToEdit(mapper, db, oid, scope, typeString, *id); err != nil {
+			// if modelObjs[i], err = loadAndCheckErrorBeforeModify(mapper, db, oid, scope, typeString, modelObj, *id, models.Admin); err != nil {
+			return nil, err
+		}
 	}
 
-	ms := make([]models.IModel, 0, 0)
-
 	// Before batch delete hookpoint
+	cargo := models.BatchHookCargo{}
 	if before := models.ModelRegistry[typeString].BeforeDelete; before != nil {
 		bhpData := models.BatchHookPointData{Ms: modelObjs, DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
 		if err = before(bhpData); err != nil {
@@ -568,25 +564,15 @@ func (mapper *LinkTableMapper) DeleteMany(db *gorm.DB, oid *datatypes.UUID, scop
 		}
 	}
 
-	for i, id := range ids {
+	// Unscoped() for REAL delete!
+	// Foreign key constraint works only on real delete
+	// Soft delete will take more work, have to verify myself manually
+	if len(modelObjs) > 0 && modelNeedsRealDelete(modelObjs[0]) {
+		db = db.Unscoped()
+	}
 
-		if id.UUID.String() == "" {
-			return nil, errIDEmpty
-		}
-
-		modelObj, err := userHasPermissionToEdit(mapper, db, oid, scope, typeString, id)
-		if err != nil {
-			return nil, err
-		}
-		// Now safe to delete no matter who you are
-
-		// Unscoped() for REAL delete!
-		// Foreign key constraint works only on real delete
-		// Soft delete will take more work, have to verify myself manually
-		if modelNeedsRealDelete(modelObj) && i == 0 { // only do once
-			db = db.Unscoped()
-		}
-
+	ms := make([]models.IModel, 0, 0)
+	for _, modelObj := range modelObjs {
 		err = db.Delete(modelObj).Error
 		// err = db.Delete(modelObj).Error
 		if err != nil {

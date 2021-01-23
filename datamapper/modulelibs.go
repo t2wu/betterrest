@@ -116,31 +116,31 @@ func constructOrderFieldQueries(db *gorm.DB, tableName string, order *string) *g
 	return db
 }
 
-func checkErrorBeforeUpdate(mapper IGetOneWithIDMapper, db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id datatypes.UUID, permittedRole models.UserRole) error {
+func loadAndCheckErrorBeforeModify(mapper IGetOneWithIDMapper, db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id datatypes.UUID, permittedRole models.UserRole) (models.IModel, error) {
 	if id.UUID.String() == "" {
-		return errIDEmpty
+		return nil, errIDEmpty
 	}
 
 	// If you're able to read, you have the permission to update...
 	// Not really now you have to check role
 	// TODO: Is there a more efficient way?
-	_, role, err := mapper.getOneWithIDCore(db, oid, scope, typeString, id)
+	modelObj, role, err := mapper.getOneWithIDCore(db, oid, scope, typeString, id)
 	if err != nil { // Error is "record not found" when not found
-		return err
+		return nil, err
 	}
 	if role != permittedRole {
-		return errPermission
+		return nil, errPermission
 	}
 
 	uuidVal := modelObj.GetID()
 	if uuidVal == nil || uuidVal.String() == "" {
 		// in case it's an empty string
-		return errIDEmpty
+		return nil, errIDEmpty
 	} else if uuidVal.String() != id.UUID.String() {
-		return errIDNotMatch
+		return nil, errIDNotMatch
 	}
 
-	return nil
+	return modelObj, nil
 }
 
 func updateOneCore(mapper IGetOneWithIDMapper, db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id datatypes.UUID, permittedRole models.UserRole) (modelObj2 models.IModel, err error) {
