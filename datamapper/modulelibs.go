@@ -153,9 +153,6 @@ func updateOneCore(mapper IGetOneWithIDMapper, db *gorm.DB, oid *datatypes.UUID,
 		return nil, errPermission
 	}
 
-	log.Printf("modelObj: %+v", modelObj)
-	log.Printf("oldmodelObj: %+v", oldModelObj)
-
 	if modelNeedsRealDelete(oldModelObj) { // parent model
 		db = db.Unscoped()
 	}

@@ -268,6 +268,49 @@ func ModelFromJSONBody(r *http.Request, typeString string, scope *string) (model
 	return modelObj, nil
 }
 
+// JSONPatchesFromJSONBody pares an array of JSON patch from the HTTP body
+func JSONPatchesFromJSONBody(r *http.Request) ([]models.JSONIDPatch, render.Renderer) {
+	defer r.Body.Close()
+	var jsn []byte
+	var err error
+
+	if jsn, err = ioutil.ReadAll(r.Body); err != nil {
+		return nil, NewErrReadingBody(err)
+	}
+
+	// One jsonPath is an array of patches
+	// {
+	// content:[
+	// {
+	//   "id": "2f9795fd-fb39-4ea5-af69-14bfa69840aa",
+	//   "patches": [
+	// 	  { "op": "test", "path": "/a/b/c", "value": "foo" },
+	// 	  { "op": "remove", "path": "/a/b/c" },
+	//   ]
+	// }
+	// ]
+	// }
+
+	type jsonSlice struct {
+		Content []models.JSONIDPatch `json:"content"`
+	}
+
+	jsObj := jsonSlice{}
+	err = json.Unmarshal(jsn, &jsObj)
+	if err != nil {
+		return nil, NewErrParsingJSON(err)
+	}
+
+	// if v, ok := modelObj.(models.IValidate); ok {
+	// 	scope, path, method := ScopeFromContext(r), r.URL.Path, r.Method
+	// 	if err := v.Validate(&scope, path, method); err != nil {
+	// 		return nil, NewErrValidation(err)
+	// 	}
+	// }
+
+	return jsObj.Content, nil
+}
+
 // IDFromURLQueryString parses resource ID from the URL query string
 func IDFromURLQueryString(c *gin.Context) (*datatypes.UUID, render.Renderer) {
 	if idstr := c.Param("id"); idstr != "" {

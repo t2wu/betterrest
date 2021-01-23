@@ -1,6 +1,7 @@
 package datamapper
 
 import (
+	"fmt"
 	"log"
 	"sync"
 	"time"
@@ -332,6 +333,84 @@ func (mapper *GlobalMapper) PatchOneWithID(db *gorm.DB, oid *datatypes.UUID, sco
 	}
 
 	return modelObj2, nil
+}
+
+// PatchMany updates models based on JSON
+func (mapper *GlobalMapper) PatchMany(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, jsonIDPatches []models.JSONIDPatch) ([]models.IModel, error) {
+	ms := make([]models.IModel, 0, len(jsonIDPatches)) // len(ms)=0, cap(ms)=len(jsonIDPatches)
+	// var err error
+
+	// Load data, patch it, then send it to the hookpoint
+	// Load IDs
+	ids := make([]*datatypes.UUID, len(jsonIDPatches))
+	for i, jsonIDPatch := range jsonIDPatches {
+		// Check error, make sure it has an id and not empty string (could potentially update all records!)
+		if jsonIDPatch.ID.String() == "" {
+			return nil, errIDEmpty
+		}
+		ids[i] = jsonIDPatch.ID
+	}
+
+	rtable := models.GetTableNameFromTypeString(typeString)
+	db2 := db.Table(rtable).Where(fmt.Sprintf("\"%s\".\"id\" IN (?)", rtable), ids).Set("gorm:auto_preload", true)
+
+	modelObjs, err := models.NewSliceFromDBByTypeString(typeString, db2.Set("gorm:auto_preload", true).Find)
+	if err != nil {
+		log.Println("calling NewSliceFromDBByTypeString err:", err)
+		return nil, err
+	}
+
+	// Just in case err didn't work (as in the case with IN clause NOT in the ID field, maybe Gorm bug)
+	if len(modelObjs) == 0 {
+		return nil, fmt.Errorf("not found")
+	}
+
+	if len(modelObjs) != len(jsonIDPatches) {
+		return nil, errBatchUpdateOrPatchOneNotFound
+	}
+
+	// Now patch it
+	for i, jsonIDPatch := range jsonIDPatches {
+		// Any one can patch is since it's global. If there should be restrictions, it should be done
+		// in hookpoints
+		// Apply patch operations
+		modelObjs[i], err = patchOneCore(typeString, modelObjs[i], []byte(jsonIDPatch.Patch))
+		if err != nil {
+			log.Println("patch error: ", err, string(jsonIDPatch.Patch))
+			return nil, err
+		}
+	}
+
+	cargo := models.BatchHookCargo{}
+	// Before batch update hookpoint
+	if before := models.ModelRegistry[typeString].BeforeUpdate; before != nil {
+		bhpData := models.BatchHookPointData{Ms: modelObjs, DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
+		if err = before(bhpData); err != nil {
+			return nil, err
+		}
+	}
+
+	// TODO: Could update all at once, then load all at once again
+	for _, modelObj := range modelObjs {
+		id := modelObj.GetID()
+
+		m, err := updateOneCore(mapper, db, oid, scope, typeString, modelObj, *id, models.Public)
+		if err != nil { // Error is "record not found" when not found
+			return nil, err
+		}
+
+		ms = append(ms, m)
+	}
+
+	// After batch update hookpoint
+	if after := models.ModelRegistry[typeString].AfterUpdate; after != nil {
+		bhpData := models.BatchHookPointData{Ms: ms, DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
+		if err = after(bhpData); err != nil {
+			return nil, err
+		}
+	}
+
+	return ms, nil
 }
 
 // DeleteOneWithID delete the model

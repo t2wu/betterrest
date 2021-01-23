@@ -590,6 +590,49 @@ func PatchOneHandler(typeString string, mapper datamapper.IPatchOneWithIDMapper)
 	}
 }
 
+// PatchManyHandler returns a Gin handler which patch (partial update) many records
+func PatchManyHandler(typeString string, mapper datamapper.IPatchManyMapper) func(c *gin.Context) {
+	return func(c *gin.Context) {
+		log.Println("PatchManyHandler")
+		w, r := c.Writer, c.Request
+		ownerID, scope := OwnerIDFromContext(r), ScopeFromContext(r)
+
+		jsonIDPatches, httperr := JSONPatchesFromJSONBody(r)
+		if httperr != nil {
+			log.Println("Error in JSONPatchesFromJSONBody:", typeString, httperr)
+			render.Render(w, r, httperr)
+			return
+		}
+
+		tx := db.Shared().Begin()
+
+		defer func(tx *gorm.DB) {
+			if r := recover(); r != nil {
+				tx.Rollback()
+				debug.PrintStack()
+				fmt.Println("Panic in PatchManyHandler", r)
+			}
+		}(tx)
+
+		modelObjs, err := mapper.PatchMany(tx, ownerID, &scope, typeString, jsonIDPatches)
+		if err != nil {
+			tx.Rollback()
+			log.Println("Error in PatchManyHandler ErrUpdate:", typeString, err)
+			render.Render(w, r, NewErrUpdate(err))
+			return
+		}
+
+		tx.Commit()
+		roles := make([]models.UserRole, len(modelObjs), len(modelObjs))
+		for i := 0; i < len(roles); i++ {
+			roles[i] = models.Admin
+		}
+
+		renderModelSlice(w, r, typeString, modelObjs, roles, nil, &scope)
+		return
+	}
+}
+
 // DeleteOneHandler returns a Gin handler which delete one record
 func DeleteOneHandler(typeString string, mapper datamapper.IDeleteOneWithID) func(c *gin.Context) {
 	return func(c *gin.Context) {

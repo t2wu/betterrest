@@ -1,6 +1,7 @@
 package models
 
 import (
+	"encoding/json"
 	"reflect"
 	"strings"
 	"time"
@@ -91,6 +92,25 @@ type IModel interface {
 	// The following two avoids having to use reflection to access ID
 	GetID() *datatypes.UUID
 	SetID(id *datatypes.UUID)
+}
+
+// Inside content is an array of JSONIDPatch
+// {
+// content:[
+// {
+//   "id": "2f9795fd-fb39-4ea5-af69-14bfa69840aa",
+//   "patches": [
+// 	  { "op": "test", "path": "/a/b/c", "value": "foo" },
+// 	  { "op": "remove", "path": "/a/b/c" },
+//   ]
+// }
+// ]
+// }
+
+// JSONIDPatch is the stuff inside "content" for PatchMany operation
+type JSONIDPatch struct {
+	ID    *datatypes.UUID `json:"id"`
+	Patch json.RawMessage `json:"patch"` // json.RawMessage is actually just typedefed to []byte
 }
 
 // IHasOwnershipLink has a function that returns the ownership table

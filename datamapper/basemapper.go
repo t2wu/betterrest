@@ -11,11 +11,12 @@ import (
 
 // Error
 var errPermission = errors.New("permission denied")
-var errPermissionWrongEndPoint = errors.New("permission denied. Delete it through the resource endpoint instead.")
+var errPermissionWrongEndPoint = errors.New("permission denied. Change it through the resource endpoint or unable to change your own role.")
 var errIDEmpty = errors.New("cannot update when ID is empty")
 var errIDNotMatch = errors.New("cannot update when ID in HTTP body and URL parameter not match")
 var errPatch = errors.New("patch syntax error")               // json: cannot unmarshal object into Go value of type jsonpatch.Patch
 var errNoOwnership = errors.New("model has no OwnershipType") // this is a programmatic error
+var errBatchUpdateOrPatchOneNotFound = errors.New("at least one not found")
 
 // ICreateMapper has a create one interface
 type ICreateMapper interface {
@@ -55,6 +56,12 @@ type IUpdateManyMapper interface {
 type IPatchOneWithIDMapper interface {
 	PatchOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string,
 		typeString string, jsonPatch []byte, id datatypes.UUID) (models.IModel, error)
+}
+
+// IPatchManyMapper patch a record with the ID
+type IPatchManyMapper interface {
+	PatchMany(db *gorm.DB, oid *datatypes.UUID, scope *string,
+		typeString string, jsonIDPatches []models.JSONIDPatch) ([]models.IModel, error)
 }
 
 // IDeleteOneWithID delete a record with the ID

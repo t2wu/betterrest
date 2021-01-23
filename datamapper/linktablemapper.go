@@ -344,7 +344,8 @@ func (mapper *LinkTableMapper) UpdateMany(db *gorm.DB, oid *datatypes.UUID, scop
 			return nil, err
 		}
 
-		m, err := updateOneCore(mapper, db, oid, scope, typeString, modelObj, *id, models.Admin)
+		// models.UserRoleAny because it's a complicated role which is already checked by userHasPermissionToEdit
+		m, err := updateOneCore(mapper, db, oid, scope, typeString, modelObj, *id, models.UserRoleAny)
 		if err != nil { // Error is "record not found" when not found
 			return nil, err
 		}
@@ -393,7 +394,7 @@ func (mapper *LinkTableMapper) PatchOneWithID(db *gorm.DB, oid *datatypes.UUID, 
 	}
 
 	// Now save it
-	modelObj2, err := updateOneCore(mapper, db, oid, scope, typeString, modelObj, id, models.Admin)
+	modelObj2, err := updateOneCore(mapper, db, oid, scope, typeString, modelObj, id, models.UserRoleAny)
 	if err != nil {
 		return nil, err
 	}
@@ -407,6 +408,88 @@ func (mapper *LinkTableMapper) PatchOneWithID(db *gorm.DB, oid *datatypes.UUID, 
 	}
 
 	return modelObj2, nil
+}
+
+// PatchMany updates models based on JSON
+func (mapper *LinkTableMapper) PatchMany(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, jsonIDPatches []models.JSONIDPatch) ([]models.IModel, error) {
+	ms := make([]models.IModel, 0, 0)
+	var err error
+	cargo := models.BatchHookCargo{}
+
+	// Load data, patch it, then send it to the hookpoint
+	// Load IDs
+	ids := make([]*datatypes.UUID, len(jsonIDPatches))
+	for i, jsonIDPatch := range jsonIDPatches {
+		// Check error, make sure it has an id and not empty string (could potentially update all records!)
+		if jsonIDPatch.ID.String() == "" {
+			return nil, errIDEmpty
+		}
+		ids[i] = jsonIDPatch.ID
+	}
+
+	rtable := models.GetTableNameFromTypeString(typeString)
+	subquery := fmt.Sprintf("model_id IN (select model_id from %s where user_id = ?)", rtable)
+	db2 := db.Table(rtable).Where(subquery, oid).Where("id in (?)", ids)
+	modelObjs, err := models.NewSliceFromDBByTypeString(typeString, db2.Set("gorm:auto_preload", true).Find)
+	if err != nil {
+		log.Println("calling NewSliceFromDBByTypeString err:", err)
+		return nil, err
+	}
+
+	// Just in case err didn't work (as in the case with IN clause NOT in the ID field, maybe Gorm bug)
+	if len(modelObjs) == 0 {
+		return nil, fmt.Errorf("not found")
+	}
+
+	if len(modelObjs) != len(jsonIDPatches) {
+		return nil, errBatchUpdateOrPatchOneNotFound
+	}
+
+	// Check if user has permission to edit it
+	// patch it if OK.
+	for i, modelObj := range modelObjs {
+		id := modelObj.GetID()
+
+		_, err := userHasPermissionToEdit(mapper, db, oid, scope, typeString, *id)
+		if err != nil {
+			return nil, err
+		}
+
+		// Apply patch operations
+		modelObjs[i], err = patchOneCore(typeString, modelObj, jsonIDPatches[i].Patch)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Before batch update hookpoint
+	if before := models.ModelRegistry[typeString].BeforeUpdate; before != nil {
+		bhpData := models.BatchHookPointData{Ms: modelObjs, DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
+		if err = before(bhpData); err != nil {
+			return nil, err
+		}
+	}
+
+	for _, modelObj := range modelObjs {
+		id := modelObj.GetID()
+
+		m, err := updateOneCore(mapper, db, oid, scope, typeString, modelObj, *id, models.UserRoleAny)
+		if err != nil { // Error is "record not found" when not found
+			return nil, err
+		}
+
+		ms = append(ms, m)
+	}
+
+	// After batch update hookpoint
+	if after := models.ModelRegistry[typeString].AfterUpdate; after != nil {
+		bhpData := models.BatchHookPointData{Ms: modelObjs, DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
+		if err = after(bhpData); err != nil {
+			return nil, err
+		}
+	}
+
+	return ms, nil
 }
 
 // DeleteOneWithID delete the model

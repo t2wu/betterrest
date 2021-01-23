@@ -28,6 +28,11 @@ func addRoute(r *gin.Engine, typeString string, reg *models.Reg, mapper interfac
 				UpdateManyHandler(typeString, mapper.(datamapper.IUpdateManyMapper)))
 		}
 
+		if strings.ContainsAny(reg.BatchEndpoints, "P") {
+			g.PATCH("", guardMiddleWare(typeString),
+				PatchManyHandler(typeString, mapper.(datamapper.IPatchManyMapper)))
+		}
+
 		if strings.ContainsAny(reg.BatchEndpoints, "D") {
 			g.DELETE("", guardMiddleWare(typeString),
 				DeleteManyHandler(typeString, mapper.(datamapper.IDeleteMany)))

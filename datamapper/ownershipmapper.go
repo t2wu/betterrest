@@ -410,7 +410,7 @@ func (mapper *OwnershipMapper) PatchOneWithID(db *gorm.DB, oid *datatypes.UUID, 
 		return nil, errIDEmpty
 	}
 
-	// role already chcked in checkErrorBeforeUpdate
+	// role already checked in checkErrorBeforeUpdate
 	if modelObj, role, err = mapper.getOneWithIDCore(db, oid, scope, typeString, id); err != nil {
 		return nil, err
 	}
@@ -426,6 +426,8 @@ func (mapper *OwnershipMapper) PatchOneWithID(db *gorm.DB, oid *datatypes.UUID, 
 	if err != nil {
 		return nil, err
 	}
+
+	// TODO: Huh? How do we do validation here?!
 
 	// Before hook
 	// It is now expected that the hookpoint for before expect that the patch
@@ -452,6 +454,99 @@ func (mapper *OwnershipMapper) PatchOneWithID(db *gorm.DB, oid *datatypes.UUID, 
 	}
 
 	return modelObj2, nil
+}
+
+// PatchMany patches multiple models
+func (mapper *OwnershipMapper) PatchMany(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, jsonIDPatches []models.JSONIDPatch) ([]models.IModel, error) {
+	ms := make([]models.IModel, 0, len(jsonIDPatches)) // len(ms)=0, cap(ms)=len(jsonIDPatches)
+
+	// Load data, patch it, then send it to the hookpoint
+	// Load IDs
+	ids := make([]*datatypes.UUID, len(jsonIDPatches))
+	for i, jsonIDPatch := range jsonIDPatches {
+		// Check error, make sure it has an id and not empty string (could potentially update all records!)
+		if jsonIDPatch.ID.String() == "" {
+			return nil, errIDEmpty
+		}
+		ids[i] = jsonIDPatch.ID
+	}
+
+	rtable, joinTableName, err := getModelTableNameAndJoinTableNameFromTypeString(typeString)
+	firstJoin := fmt.Sprintf("INNER JOIN \"%s\" ON \"%s\".id = \"%s\".model_id AND \"%s\".id IN (?)", joinTableName, rtable, joinTableName, rtable)
+	secondJoin := fmt.Sprintf("INNER JOIN \"user\" ON \"user\".id = \"%s\".user_id AND \"%s\".user_id = ?", joinTableName, joinTableName)
+	// db2 := db
+
+	db2 := db.Table(rtable).Joins(firstJoin, ids).Joins(secondJoin, oid)
+
+	modelObjs, err := models.NewSliceFromDBByTypeString(typeString, db2.Set("gorm:auto_preload", true).Find)
+	if err != nil {
+		log.Println("calling NewSliceFromDBByTypeString err:", err)
+		return nil, err
+	}
+
+	// Just in case err didn't work (as in the case with IN clause NOT in the ID field, maybe Gorm bug)
+	if len(modelObjs) == 0 {
+		return nil, fmt.Errorf("not found")
+	}
+
+	if len(modelObjs) != len(jsonIDPatches) {
+		return nil, errBatchUpdateOrPatchOneNotFound
+	}
+
+	// Check error
+	// Load the roles and check if they're admin
+	roles := make([]models.UserRole, 0)
+	if err := db2.Select(fmt.Sprintf("\"%s\".\"role\"", joinTableName)).Scan(&roles).Error; err != nil {
+		log.Printf("err getting roles")
+		return nil, err
+	}
+
+	for _, role := range roles {
+		if role != models.Admin {
+			return nil, errPermission
+		}
+	}
+
+	// Now patch it
+	for i, jsonIDPatch := range jsonIDPatches {
+		// Apply patch operations
+		modelObjs[i], err = patchOneCore(typeString, modelObjs[i], []byte(jsonIDPatch.Patch))
+		if err != nil {
+			log.Println("patch error: ", err, string(jsonIDPatch.Patch))
+			return nil, err
+		}
+	}
+
+	cargo := models.BatchHookCargo{}
+	// Before batch update hookpoint
+	if before := models.ModelRegistry[typeString].BeforeUpdate; before != nil {
+		bhpData := models.BatchHookPointData{Ms: modelObjs, DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
+		if err = before(bhpData); err != nil {
+			return nil, err
+		}
+	}
+
+	// TODO: Could update all at once, then load all at once again
+	for _, modelObj := range modelObjs {
+		id := modelObj.GetID()
+
+		m, err := updateOneCore(mapper, db, oid, scope, typeString, modelObj, *id, models.Admin)
+		if err != nil { // Error is "record not found" when not found
+			return nil, err
+		}
+
+		ms = append(ms, m)
+	}
+
+	// After batch update hookpoint
+	if after := models.ModelRegistry[typeString].AfterUpdate; after != nil {
+		bhpData := models.BatchHookPointData{Ms: ms, DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
+		if err = after(bhpData); err != nil {
+			return nil, err
+		}
+	}
+
+	return ms, nil
 }
 
 // DeleteOneWithID delete the model

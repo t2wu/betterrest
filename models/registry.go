@@ -118,7 +118,7 @@ func AddUserToModelRegistry(typeString string, typ reflect.Type) {
 
 // AddModelRegistry adds a New function for an IModel
 func AddModelRegistry(typeString string, typ reflect.Type) {
-	options := ModelRegistryOptions{BatchEndpoints: "CRUD", IDEndPoints: "RUPD", Mapper: MapperTypeViaOwnership}
+	options := ModelRegistryOptions{BatchEndpoints: "CRUPD", IDEndPoints: "RUPD", Mapper: MapperTypeViaOwnership}
 	AddModelRegistryWithOptions(typeString, typ, options)
 }
 
@@ -131,7 +131,7 @@ func AddModelRegistryWithOptions(typeString string, typ reflect.Type, options Mo
 
 	ModelRegistry[typeString].Typ = typ
 	if options.BatchEndpoints == "" {
-		ModelRegistry[typeString].BatchEndpoints = "CRUD"
+		ModelRegistry[typeString].BatchEndpoints = "CRUPD"
 	} else {
 		ModelRegistry[typeString].BatchEndpoints = options.BatchEndpoints
 	}

@@ -210,8 +210,6 @@ func (mapper *OrganizationMapper) getOneWithIDCore(db *gorm.DB, oid *datatypes.U
 
 	db = db.Set("gorm:auto_preload", true)
 
-	rtable := models.GetTableNameFromIModel(modelObj)
-
 	var ok bool
 	var modelObjHavingOrganization models.IHasOrganizationLink
 	// (Maybe organization should be defined in the library)
@@ -226,6 +224,8 @@ func (mapper *OrganizationMapper) getOneWithIDCore(db *gorm.DB, oid *datatypes.U
 	orgTable := reflect.New(modelObjHavingOrganization.OrganizationType()).Interface()
 	joinTableName := models.GetJoinTableName(orgTable.(models.IHasOwnershipLink))
 	orgFieldName := strcase.SnakeCase(modelObjHavingOrganization.GetOrganizationIDFieldName())
+
+	rtable := models.GetTableNameFromIModel(modelObj)
 
 	// e.g. INNER JOIN \"organization\" ON \"dock\".\"OrganizationID\" = \"organization\".id
 	firstJoin := fmt.Sprintf("INNER JOIN \"%s\" ON \"%s\".\"%s\" = \"%s\".id AND \"%s\".\"id\" = ?", orgTableName, rtable, orgFieldName, orgTableName, rtable)
@@ -513,6 +513,114 @@ func (mapper *OrganizationMapper) PatchOneWithID(db *gorm.DB, oid *datatypes.UUI
 	}
 
 	return modelObj2, nil
+}
+
+// PatchMany updates models based on JSON
+func (mapper *OrganizationMapper) PatchMany(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, jsonIDPatches []models.JSONIDPatch) ([]models.IModel, error) {
+	ms := make([]models.IModel, 0, len(jsonIDPatches)) // len(ms)=0, cap(ms)=len(jsonIDPatches)
+	// var err error
+
+	// Load data, patch it, then send it to the hookpoint
+	// Load IDs
+	ids := make([]*datatypes.UUID, len(jsonIDPatches))
+	for i, jsonIDPatch := range jsonIDPatches {
+		// Check error, make sure it has an id and not empty string (could potentially update all records!)
+		if jsonIDPatch.ID.String() == "" {
+			return nil, errIDEmpty
+		}
+		ids[i] = jsonIDPatch.ID
+	}
+
+	var ok bool
+	var modelObjHavingOrganization models.IHasOrganizationLink
+	if modelObjHavingOrganization, ok = models.NewFromTypeString(typeString).(models.IHasOrganizationLink); !ok {
+		return nil, fmt.Errorf("Model %s does not comform to IHasOrganizationLink", typeString)
+	}
+
+	// Graphically:
+	// Model -- Org -- Join Table -- User
+	rtable := models.GetTableNameFromTypeString(typeString)
+	orgTableName := models.GetOrganizationTableName(modelObjHavingOrganization)
+	orgTable := reflect.New(modelObjHavingOrganization.OrganizationType()).Interface()
+	joinTableName := models.GetJoinTableName(orgTable.(models.IHasOwnershipLink))
+	orgFieldName := strcase.SnakeCase(modelObjHavingOrganization.GetOrganizationIDFieldName())
+
+	// e.g. INNER JOIN \"organization\" ON \"dock\".\"OrganizationID\" = \"organization\".id
+	firstJoin := fmt.Sprintf("INNER JOIN \"%s\" ON \"%s\".\"%s\" = \"%s\".id AND \"%s\".\"id\" IN (?)", orgTableName, rtable, orgFieldName, orgTableName, rtable)
+	// e.g. INNER JOIN \"user_owns_organization\" ON \"organization\".id = \"user_owns_organization\".model_id
+	secondJoin := fmt.Sprintf("INNER JOIN \"%s\" ON \"%s\".id = \"%s\".model_id", joinTableName, orgTableName, joinTableName)
+	thirdJoin := fmt.Sprintf("INNER JOIN \"user\" ON \"user\".id = \"%s\".user_id AND \"%s\".user_id = ?", joinTableName, joinTableName)
+
+	db2 := db.Table(rtable).Joins(firstJoin, ids).Joins(secondJoin).Joins(thirdJoin, oid) // .Find(modelObj).Error
+	modelObjs, err := models.NewSliceFromDBByTypeString(typeString, db2.Set("gorm:auto_preload", true).Find)
+	if err != nil {
+		log.Println("calling NewSliceFromDBByTypeString err:", err)
+		return nil, err
+	}
+
+	// Just in case err didn't work (as in the case with IN clause NOT in the ID field, maybe Gorm bug)
+	if len(modelObjs) == 0 {
+		return nil, fmt.Errorf("not found")
+	}
+
+	if len(modelObjs) != len(jsonIDPatches) {
+		return nil, errBatchUpdateOrPatchOneNotFound
+	}
+
+	// Check error
+	// Load the roles and check if they're admin
+	roles := make([]models.UserRole, 0)
+	if err := db2.Select(fmt.Sprintf("\"%s\".\"role\"", joinTableName)).Scan(&roles).Error; err != nil {
+		log.Printf("err getting roles")
+		return nil, err
+	}
+
+	for _, role := range roles {
+		if role != models.Admin {
+			return nil, errPermission
+		}
+	}
+
+	// Now patch it
+	for i, jsonIDPatch := range jsonIDPatches {
+		// Apply patch operations
+		modelObjs[i], err = patchOneCore(typeString, modelObjs[i], []byte(jsonIDPatch.Patch))
+		if err != nil {
+			log.Println("patch error: ", err, string(jsonIDPatch.Patch))
+			return nil, err
+		}
+	}
+
+	cargo := models.BatchHookCargo{}
+	// Before batch update hookpoint
+	if before := models.ModelRegistry[typeString].BeforeUpdate; before != nil {
+		bhpData := models.BatchHookPointData{Ms: modelObjs, DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
+		if err = before(bhpData); err != nil {
+			return nil, err
+		}
+	}
+
+	// TODO: Could update all at once, then load all at once again
+	for _, modelObj := range modelObjs {
+		id := modelObj.GetID()
+
+		m, err := updateOneCore(mapper, db, oid, scope, typeString, modelObj, *id, models.Admin)
+		if err != nil { // Error is "record not found" when not found
+			return nil, err
+		}
+
+		ms = append(ms, m)
+	}
+
+	// After batch update hookpoint
+	if after := models.ModelRegistry[typeString].AfterUpdate; after != nil {
+		bhpData := models.BatchHookPointData{Ms: ms, DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
+		if err = after(bhpData); err != nil {
+			return nil, err
+		}
+	}
+
+	return ms, nil
 }
 
 // DeleteOneWithID delete the model
