@@ -239,14 +239,14 @@ func (mapper *OwnershipMapper) getOneWithIDCore(db *gorm.DB, oid *datatypes.UUID
 	return modelObj, role, err
 }
 
-// ReadAll obtains a slice of models.DomainModel
+// GetAll obtains a slice of models.DomainModel
 // options can be string "offset" and "limit", both of type int
 // This is very Javascript-esque. I would have liked Python's optional parameter more.
 // Alas, no such feature in Go. https://stackoverflow.com/questions/2032149/optional-parameters-in-go
 // How does Gorm do the following? Might want to check out its source code.
 // Cancel offset condition with -1
 //  db.Offset(10).Find(&users1).Offset(-1).Find(&users2)
-func (mapper *OwnershipMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, options map[URLParam]interface{}) ([]models.IModel, []models.UserRole, *int, error) {
+func (mapper *OwnershipMapper) GetAll(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, options map[URLParam]interface{}) ([]models.IModel, []models.UserRole, *int, error) {
 	db2 := db
 	db = db.Set("gorm:auto_preload", true)
 

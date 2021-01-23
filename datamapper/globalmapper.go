@@ -143,8 +143,8 @@ func (mapper *GlobalMapper) getOneWithIDCore(db *gorm.DB, oid *datatypes.UUID, s
 	return modelObj, role, err
 }
 
-// ReadAll is when user do a read
-func (mapper *GlobalMapper) ReadAll(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, options map[URLParam]interface{}) ([]models.IModel, []models.UserRole, *int, error) {
+// GetAll is when user do a read
+func (mapper *GlobalMapper) GetAll(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, options map[URLParam]interface{}) ([]models.IModel, []models.UserRole, *int, error) {
 	db2 := db
 	db = db.Set("gorm:auto_preload", true)
 

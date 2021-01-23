@@ -340,7 +340,7 @@ func ReadAllHandler(typeString string, mapper datamapper.IGetAllMapper) func(c *
 		}(tx)
 
 		var no *int
-		if modelObjs, roles, no, err = mapper.ReadAll(tx, ownerID, &scope, typeString, options); err != nil {
+		if modelObjs, roles, no, err = mapper.GetAll(tx, ownerID, &scope, typeString, options); err != nil {
 			tx.Rollback()
 			log.Println("Error in ReadAllHandler ErrNotFound:", typeString, err)
 			render.Render(w, r, NewErrNotFound(err))

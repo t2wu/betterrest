@@ -36,7 +36,7 @@ type IGetOneWithIDMapper interface {
 
 // IGetAllMapper gets all record
 type IGetAllMapper interface {
-	ReadAll(db *gorm.DB, oid *datatypes.UUID, scope *string,
+	GetAll(db *gorm.DB, oid *datatypes.UUID, scope *string,
 		typeString string, options map[URLParam]interface{}) ([]models.IModel, []models.UserRole, *int, error)
 }
 
