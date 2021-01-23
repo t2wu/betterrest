@@ -221,7 +221,7 @@ func (mapper *OwnershipMapper) getOneWithIDCore(db *gorm.DB, oid *datatypes.UUID
 	}
 
 	joinTable := reflect.New(modelObjOwnership.OwnershipType()).Interface()
-	role := models.Guest // just some default
+	role := models.Invalid // just some default
 	stmt := fmt.Sprintf("SELECT * FROM %s WHERE user_id = ? AND model_id = ?", joinTableName)
 	if err2 := db.Raw(stmt, oid.String(), id.String()).Scan(joinTable).Error; err2 != nil {
 		return nil, 0, err2
@@ -364,6 +364,13 @@ func (mapper *OwnershipMapper) UpdateMany(db *gorm.DB, oid *datatypes.UUID, scop
 	var err error
 	cargo := models.BatchHookCargo{}
 
+	for _, modelObj := range modelObjs {
+		id := modelObj.GetID()
+		if err = checkErrorBeforeUpdate(mapper, db, oid, scope, typeString, modelObj, *id, models.Admin); err != nil {
+			return nil, err
+		}
+	}
+
 	// Before batch update hookpoint
 	if before := models.ModelRegistry[typeString].BeforeUpdate; before != nil {
 		bhpData := models.BatchHookPointData{Ms: modelObjs, DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
@@ -374,11 +381,6 @@ func (mapper *OwnershipMapper) UpdateMany(db *gorm.DB, oid *datatypes.UUID, scop
 
 	for _, modelObj := range modelObjs {
 		id := modelObj.GetID()
-
-		if err = checkErrorBeforeUpdate(mapper, db, oid, scope, typeString, modelObj, *id, models.Admin); err != nil {
-			return nil, err
-		}
-
 		m, err := updateOneCore(mapper, db, oid, scope, typeString, modelObj, *id, models.Admin)
 		if err != nil { // Error is "record not found" when not found
 			return nil, err
@@ -410,13 +412,12 @@ func (mapper *OwnershipMapper) PatchOneWithID(db *gorm.DB, oid *datatypes.UUID, 
 		return nil, errIDEmpty
 	}
 
-	// role already checked in checkErrorBeforeUpdate
+	// If I can load it, and I'm admin, then I have permission to edit it.
+	// Calling checkErrorBeforeUpdate is redundant in this case since we need to fetch it out first in order to patch it
+	// Just check if role matches models.Admin
 	if modelObj, role, err = mapper.getOneWithIDCore(db, oid, scope, typeString, id); err != nil {
 		return nil, err
 	}
-
-	// calling checkErrorBeforeUpdate is redundant in this case since we need to fetch it out first in order to patch it
-	// Just check if role matches models.Admin
 	if role != models.Admin {
 		return nil, errPermission
 	}
@@ -471,10 +472,11 @@ func (mapper *OwnershipMapper) PatchMany(db *gorm.DB, oid *datatypes.UUID, scope
 		ids[i] = jsonIDPatch.ID
 	}
 
+	// If I can load it, I have permission to edit it. So no need to call checkErrorBeforeUpdate
+	// like when I do for update. Just get the role and check if it's admin
 	rtable, joinTableName, err := getModelTableNameAndJoinTableNameFromTypeString(typeString)
 	firstJoin := fmt.Sprintf("INNER JOIN \"%s\" ON \"%s\".id = \"%s\".model_id AND \"%s\".id IN (?)", joinTableName, rtable, joinTableName, rtable)
 	secondJoin := fmt.Sprintf("INNER JOIN \"user\" ON \"user\".id = \"%s\".user_id AND \"%s\".user_id = ?", joinTableName, joinTableName)
-	// db2 := db
 
 	db2 := db.Table(rtable).Joins(firstJoin, ids).Joins(secondJoin, oid)
 

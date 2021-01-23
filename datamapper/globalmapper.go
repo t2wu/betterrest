@@ -251,6 +251,13 @@ func (mapper *GlobalMapper) UpdateMany(db *gorm.DB, oid *datatypes.UUID, scope *
 	var err error
 	cargo := models.BatchHookCargo{}
 
+	for _, modelObj := range modelObjs {
+		id := modelObj.GetID()
+		if err = checkErrorBeforeUpdate(mapper, db, oid, scope, typeString, modelObj, *id, models.Public); err != nil {
+			return nil, err
+		}
+	}
+
 	// Before batch update hookpoint
 	if before := models.ModelRegistry[typeString].BeforeUpdate; before != nil {
 		bhpData := models.BatchHookPointData{Ms: modelObjs, DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
@@ -261,10 +268,6 @@ func (mapper *GlobalMapper) UpdateMany(db *gorm.DB, oid *datatypes.UUID, scope *
 
 	for _, modelObj := range modelObjs {
 		id := modelObj.GetID()
-
-		if err = checkErrorBeforeUpdate(mapper, db, oid, scope, typeString, modelObj, *id, models.Public); err != nil {
-			return nil, err
-		}
 
 		m, err := updateOneCore(mapper, db, oid, scope, typeString, modelObj, *id, models.Public)
 		if err != nil { // Error is "record not found" when not found

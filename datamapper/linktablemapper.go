@@ -328,6 +328,14 @@ func (mapper *LinkTableMapper) UpdateMany(db *gorm.DB, oid *datatypes.UUID, scop
 	var err error
 	cargo := models.BatchHookCargo{}
 
+	for _, modelObj := range modelObjs {
+		id := modelObj.GetID()
+		_, err := userHasPermissionToEdit(mapper, db, oid, scope, typeString, *id)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	// Before batch update hookpoint
 	if before := models.ModelRegistry[typeString].BeforeUpdate; before != nil {
 		bhpData := models.BatchHookPointData{Ms: modelObjs, DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
@@ -338,11 +346,6 @@ func (mapper *LinkTableMapper) UpdateMany(db *gorm.DB, oid *datatypes.UUID, scop
 
 	for _, modelObj := range modelObjs {
 		id := modelObj.GetID()
-
-		_, err := userHasPermissionToEdit(mapper, db, oid, scope, typeString, *id)
-		if err != nil {
-			return nil, err
-		}
 
 		// models.UserRoleAny because it's a complicated role which is already checked by userHasPermissionToEdit
 		m, err := updateOneCore(mapper, db, oid, scope, typeString, modelObj, *id, models.UserRoleAny)
