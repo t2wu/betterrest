@@ -173,7 +173,7 @@ func (mapper *OwnershipMapper) CreateMany(db *gorm.DB, oid *datatypes.UUID, scop
 }
 
 // GetOneWithID get one model object based on its type and its id string
-func (mapper *OwnershipMapper) GetOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, id datatypes.UUID) (models.IModel, models.UserRole, error) {
+func (mapper *OwnershipMapper) GetOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error) {
 
 	modelObj, role, err := mapper.getOneWithIDCore(db, oid, scope, typeString, id)
 	if err != nil {
@@ -191,7 +191,7 @@ func (mapper *OwnershipMapper) GetOneWithID(db *gorm.DB, oid *datatypes.UUID, sc
 }
 
 // getOneWithIDCore get one model object based on its type and its id string
-func (mapper *OwnershipMapper) getOneWithIDCore(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, id datatypes.UUID) (models.IModel, models.UserRole, error) {
+func (mapper *OwnershipMapper) getOneWithIDCore(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error) {
 	modelObj := models.NewFromTypeString(typeString)
 
 	db = db.Set("gorm:auto_preload", true)
@@ -327,7 +327,7 @@ func (mapper *OwnershipMapper) GetAll(db *gorm.DB, oid *datatypes.UUID, scope *s
 }
 
 // UpdateOneWithID updates model based on this json
-func (mapper *OwnershipMapper) UpdateOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id datatypes.UUID) (models.IModel, error) {
+func (mapper *OwnershipMapper) UpdateOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id *datatypes.UUID) (models.IModel, error) {
 	if _, err := loadAndCheckErrorBeforeModify(mapper, db, oid, scope, typeString, modelObj, id, models.Admin); err != nil {
 		return nil, err
 	}
@@ -366,7 +366,7 @@ func (mapper *OwnershipMapper) UpdateMany(db *gorm.DB, oid *datatypes.UUID, scop
 
 	for _, modelObj := range modelObjs {
 		id := modelObj.GetID()
-		if _, err = loadAndCheckErrorBeforeModify(mapper, db, oid, scope, typeString, modelObj, *id, models.Admin); err != nil {
+		if _, err = loadAndCheckErrorBeforeModify(mapper, db, oid, scope, typeString, modelObj, id, models.Admin); err != nil {
 			return nil, err
 		}
 	}
@@ -381,7 +381,7 @@ func (mapper *OwnershipMapper) UpdateMany(db *gorm.DB, oid *datatypes.UUID, scop
 
 	for _, modelObj := range modelObjs {
 		id := modelObj.GetID()
-		m, err := updateOneCore(mapper, db, oid, scope, typeString, modelObj, *id, models.Admin)
+		m, err := updateOneCore(mapper, db, oid, scope, typeString, modelObj, id, models.Admin)
 		if err != nil { // Error is "record not found" when not found
 			return nil, err
 		}
@@ -401,14 +401,14 @@ func (mapper *OwnershipMapper) UpdateMany(db *gorm.DB, oid *datatypes.UUID, scop
 }
 
 // PatchOneWithID updates model based on this json
-func (mapper *OwnershipMapper) PatchOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, jsonPatch []byte, id datatypes.UUID) (models.IModel, error) {
+func (mapper *OwnershipMapper) PatchOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, jsonPatch []byte, id *datatypes.UUID) (models.IModel, error) {
 	var modelObj models.IModel
 	var err error
 	cargo := models.ModelCargo{}
 	var role models.UserRole
 
 	// Check id error
-	if id.UUID.String() == "" {
+	if id == nil || id.UUID.String() == "" {
 		return nil, errIDEmpty
 	}
 
@@ -532,7 +532,7 @@ func (mapper *OwnershipMapper) PatchMany(db *gorm.DB, oid *datatypes.UUID, scope
 	for _, modelObj := range modelObjs {
 		id := modelObj.GetID()
 
-		m, err := updateOneCore(mapper, db, oid, scope, typeString, modelObj, *id, models.Admin)
+		m, err := updateOneCore(mapper, db, oid, scope, typeString, modelObj, id, models.Admin)
 		if err != nil { // Error is "record not found" when not found
 			return nil, err
 		}
@@ -553,8 +553,8 @@ func (mapper *OwnershipMapper) PatchMany(db *gorm.DB, oid *datatypes.UUID, scope
 
 // DeleteOneWithID delete the model
 // TODO: delete the groups associated with this record?
-func (mapper *OwnershipMapper) DeleteOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, id datatypes.UUID) (models.IModel, error) {
-	if id.UUID.String() == "" {
+func (mapper *OwnershipMapper) DeleteOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, id *datatypes.UUID) (models.IModel, error) {
+	if id == nil || id.UUID.String() == "" {
 		return nil, errIDEmpty
 	}
 
@@ -655,7 +655,7 @@ func (mapper *OwnershipMapper) DeleteMany(db *gorm.DB, oid *datatypes.UUID, scop
 		id := modelObj.GetID()
 
 		// load the one in db in case user just enter wrong stuff
-		if modelObjs[i], err = loadAndCheckErrorBeforeModify(mapper, db, oid, scope, typeString, modelObj, *id, models.Admin); err != nil {
+		if modelObjs[i], err = loadAndCheckErrorBeforeModify(mapper, db, oid, scope, typeString, modelObj, id, models.Admin); err != nil {
 			return nil, err
 		}
 	}

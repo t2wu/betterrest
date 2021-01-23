@@ -116,8 +116,8 @@ func constructOrderFieldQueries(db *gorm.DB, tableName string, order *string) *g
 	return db
 }
 
-func loadAndCheckErrorBeforeModify(mapper IGetOneWithIDMapper, db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id datatypes.UUID, permittedRole models.UserRole) (models.IModel, error) {
-	if id.UUID.String() == "" {
+func loadAndCheckErrorBeforeModify(mapper IGetOneWithIDMapper, db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id *datatypes.UUID, permittedRole models.UserRole) (models.IModel, error) {
+	if id == nil || id.UUID.String() == "" {
 		return nil, errIDEmpty
 	}
 
@@ -143,7 +143,7 @@ func loadAndCheckErrorBeforeModify(mapper IGetOneWithIDMapper, db *gorm.DB, oid 
 	return modelObj, nil
 }
 
-func updateOneCore(mapper IGetOneWithIDMapper, db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id datatypes.UUID, permittedRole models.UserRole) (modelObj2 models.IModel, err error) {
+func updateOneCore(mapper IGetOneWithIDMapper, db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id *datatypes.UUID, permittedRole models.UserRole) (modelObj2 models.IModel, err error) {
 	oldModelObj, role, err2 := mapper.getOneWithIDCore(db, oid, scope, typeString, id)
 	if err2 != nil {
 		return nil, err2

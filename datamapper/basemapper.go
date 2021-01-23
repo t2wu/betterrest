@@ -27,11 +27,11 @@ type ICreateMapper interface {
 // IGetOneWithIDMapper gets a record with ID
 type IGetOneWithIDMapper interface {
 	GetOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string,
-		typeString string, id datatypes.UUID) (models.IModel, models.UserRole, error)
+		typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error)
 
 	// getOneWithIDCore gets a record with ID without invoking read hookpoint (internal use only)
 	getOneWithIDCore(db *gorm.DB, oid *datatypes.UUID, scope *string,
-		typeString string, id datatypes.UUID) (models.IModel, models.UserRole, error)
+		typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error)
 }
 
 // IGetAllMapper gets all record
@@ -43,7 +43,7 @@ type IGetAllMapper interface {
 // IUpdateOneWithIDMapper updates a record with the ID
 type IUpdateOneWithIDMapper interface {
 	UpdateOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string,
-		typeString string, modelobj models.IModel, id datatypes.UUID) (models.IModel, error)
+		typeString string, modelobj models.IModel, id *datatypes.UUID) (models.IModel, error)
 }
 
 // IUpdateManyMapper updates many records
@@ -55,7 +55,7 @@ type IUpdateManyMapper interface {
 // IPatchOneWithIDMapper patch a record with the ID
 type IPatchOneWithIDMapper interface {
 	PatchOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string,
-		typeString string, jsonPatch []byte, id datatypes.UUID) (models.IModel, error)
+		typeString string, jsonPatch []byte, id *datatypes.UUID) (models.IModel, error)
 }
 
 // IPatchManyMapper patch a record with the ID
@@ -67,7 +67,7 @@ type IPatchManyMapper interface {
 // IDeleteOneWithID delete a record with the ID
 type IDeleteOneWithID interface {
 	DeleteOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string,
-		typeString string, id datatypes.UUID) (models.IModel, error)
+		typeString string, id *datatypes.UUID) (models.IModel, error)
 }
 
 // IDeleteMany delete many records
@@ -83,5 +83,5 @@ type IDeleteMany interface {
 // IChangeEmailPasswordMapper changes email and password
 type IChangeEmailPasswordMapper interface {
 	ChangeEmailPasswordWithID(db *gorm.DB, oid *datatypes.UUID, scope *string,
-		typeString string, modelobj models.IModel, id datatypes.UUID) (models.IModel, error)
+		typeString string, modelobj models.IModel, id *datatypes.UUID) (models.IModel, error)
 }

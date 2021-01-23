@@ -28,8 +28,8 @@ func userHasAdminAccessToOriginalModel(db *gorm.DB, oid *datatypes.UUID, typeStr
 	return nil
 }
 
-func userHasPermissionToEdit(mapper *LinkTableMapper, db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, id datatypes.UUID) (models.IModel, error) {
-	if id.UUID.String() == "" {
+func userHasPermissionToEdit(mapper *LinkTableMapper, db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, id *datatypes.UUID) (models.IModel, error) {
+	if id == nil || id.UUID.String() == "" {
 		return nil, errIDEmpty
 	}
 
@@ -172,7 +172,7 @@ func (mapper *LinkTableMapper) CreateMany(db *gorm.DB, oid *datatypes.UUID, scop
 }
 
 // GetOneWithID get one model object based on its type and its id string
-func (mapper *LinkTableMapper) GetOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, id datatypes.UUID) (models.IModel, models.UserRole, error) {
+func (mapper *LinkTableMapper) GetOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error) {
 
 	modelObj, role, err := mapper.getOneWithIDCore(db, oid, scope, typeString, id)
 	if err != nil {
@@ -191,7 +191,7 @@ func (mapper *LinkTableMapper) GetOneWithID(db *gorm.DB, oid *datatypes.UUID, sc
 
 // getOneWithIDCore get one model object based on its type and its id string
 // since this is organizationMapper, need to make sure it's the same organization
-func (mapper *LinkTableMapper) getOneWithIDCore(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, id datatypes.UUID) (models.IModel, models.UserRole, error) {
+func (mapper *LinkTableMapper) getOneWithIDCore(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error) {
 	modelObj := models.NewFromTypeString(typeString)
 
 	// Check if link table
@@ -294,7 +294,7 @@ func (mapper *LinkTableMapper) GetAll(db *gorm.DB, oid *datatypes.UUID, scope *s
 }
 
 // UpdateOneWithID updates model based on this json
-func (mapper *LinkTableMapper) UpdateOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id datatypes.UUID) (models.IModel, error) {
+func (mapper *LinkTableMapper) UpdateOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id *datatypes.UUID) (models.IModel, error) {
 	_, err := userHasPermissionToEdit(mapper, db, oid, scope, typeString, id)
 	if err != nil {
 		return nil, err
@@ -334,7 +334,7 @@ func (mapper *LinkTableMapper) UpdateMany(db *gorm.DB, oid *datatypes.UUID, scop
 
 	for _, modelObj := range modelObjs {
 		id := modelObj.GetID()
-		_, err := userHasPermissionToEdit(mapper, db, oid, scope, typeString, *id)
+		_, err := userHasPermissionToEdit(mapper, db, oid, scope, typeString, id)
 		if err != nil {
 			return nil, err
 		}
@@ -352,7 +352,7 @@ func (mapper *LinkTableMapper) UpdateMany(db *gorm.DB, oid *datatypes.UUID, scop
 		id := modelObj.GetID()
 
 		// models.UserRoleAny because it's a complicated role which is already checked by userHasPermissionToEdit
-		m, err := updateOneCore(mapper, db, oid, scope, typeString, modelObj, *id, models.UserRoleAny)
+		m, err := updateOneCore(mapper, db, oid, scope, typeString, modelObj, id, models.UserRoleAny)
 		if err != nil { // Error is "record not found" when not found
 			return nil, err
 		}
@@ -372,12 +372,7 @@ func (mapper *LinkTableMapper) UpdateMany(db *gorm.DB, oid *datatypes.UUID, scop
 }
 
 // PatchOneWithID updates model based on this json
-func (mapper *LinkTableMapper) PatchOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, jsonPatch []byte, id datatypes.UUID) (models.IModel, error) {
-	// Check id error
-	if id.UUID.String() == "" {
-		return nil, errIDEmpty
-	}
-
+func (mapper *LinkTableMapper) PatchOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, jsonPatch []byte, id *datatypes.UUID) (models.IModel, error) {
 	modelObj, err := userHasPermissionToEdit(mapper, db, oid, scope, typeString, id)
 	if err != nil {
 		return nil, err
@@ -457,7 +452,7 @@ func (mapper *LinkTableMapper) PatchMany(db *gorm.DB, oid *datatypes.UUID, scope
 	for i, modelObj := range modelObjs {
 		id := modelObj.GetID()
 
-		_, err := userHasPermissionToEdit(mapper, db, oid, scope, typeString, *id)
+		_, err := userHasPermissionToEdit(mapper, db, oid, scope, typeString, id)
 		if err != nil {
 			return nil, err
 		}
@@ -480,7 +475,7 @@ func (mapper *LinkTableMapper) PatchMany(db *gorm.DB, oid *datatypes.UUID, scope
 	for _, modelObj := range modelObjs {
 		id := modelObj.GetID()
 
-		m, err := updateOneCore(mapper, db, oid, scope, typeString, modelObj, *id, models.UserRoleAny)
+		m, err := updateOneCore(mapper, db, oid, scope, typeString, modelObj, id, models.UserRoleAny)
 		if err != nil { // Error is "record not found" when not found
 			return nil, err
 		}
@@ -500,7 +495,7 @@ func (mapper *LinkTableMapper) PatchMany(db *gorm.DB, oid *datatypes.UUID, scope
 }
 
 // DeleteOneWithID delete the model
-func (mapper *LinkTableMapper) DeleteOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, id datatypes.UUID) (models.IModel, error) {
+func (mapper *LinkTableMapper) DeleteOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, id *datatypes.UUID) (models.IModel, error) {
 	modelObj, err := userHasPermissionToEdit(mapper, db, oid, scope, typeString, id)
 	if err != nil {
 		return nil, err
@@ -549,7 +544,7 @@ func (mapper *LinkTableMapper) DeleteMany(db *gorm.DB, oid *datatypes.UUID, scop
 
 	for i, modelObj := range modelObjs {
 		id := modelObj.GetID()
-		if modelObjs[i], err = userHasPermissionToEdit(mapper, db, oid, scope, typeString, *id); err != nil {
+		if modelObjs[i], err = userHasPermissionToEdit(mapper, db, oid, scope, typeString, id); err != nil {
 			// if modelObjs[i], err = loadAndCheckErrorBeforeModify(mapper, db, oid, scope, typeString, modelObj, *id, models.Admin); err != nil {
 			return nil, err
 		}

@@ -439,7 +439,7 @@ func ReadOneHandler(typeString string, mapper datamapper.IGetOneWithIDMapper) fu
 			}
 		}(tx)
 
-		modelObj, role, err := mapper.GetOneWithID(tx, ownerID, &scope, typeString, *id)
+		modelObj, role, err := mapper.GetOneWithID(tx, ownerID, &scope, typeString, id)
 
 		if err != nil {
 			tx.Rollback()
@@ -482,7 +482,7 @@ func UpdateOneHandler(typeString string, mapper datamapper.IUpdateOneWithIDMappe
 			}
 		}(tx)
 
-		modelObj, err := mapper.UpdateOneWithID(tx, ownerID, &scope, typeString, modelObj, *id)
+		modelObj, err := mapper.UpdateOneWithID(tx, ownerID, &scope, typeString, modelObj, id)
 		if err != nil {
 			tx.Rollback()
 			log.Println("Error in UpdateOneHandler ErrUpdate:", typeString, err)
@@ -570,7 +570,7 @@ func PatchOneHandler(typeString string, mapper datamapper.IPatchOneWithIDMapper)
 			}
 		}(tx)
 
-		modelObj, err := mapper.PatchOneWithID(tx, ownerID, &scope, typeString, jsonPatch, *id)
+		modelObj, err := mapper.PatchOneWithID(tx, ownerID, &scope, typeString, jsonPatch, id)
 		if err != nil {
 			tx.Rollback()
 			log.Println("Error in PatchOneHandler ErrUpdate:", typeString, err)
@@ -657,7 +657,7 @@ func DeleteOneHandler(typeString string, mapper datamapper.IDeleteOneWithID) fun
 			}
 		}(tx)
 
-		modelObj, err := mapper.DeleteOneWithID(tx, ownerID, &scope, typeString, *id)
+		modelObj, err := mapper.DeleteOneWithID(tx, ownerID, &scope, typeString, id)
 		if err != nil {
 			tx.Rollback()
 			log.Println("Error in DeleteOneHandler ErrDelete:", typeString, err)
@@ -746,7 +746,7 @@ func ChangeEmailPasswordHandler(typeString string, mapper datamapper.IChangeEmai
 			}
 		}(tx)
 
-		modelObj, err := mapper.ChangeEmailPasswordWithID(tx, ownerID, &scope, typeString, modelObj, *id)
+		modelObj, err := mapper.ChangeEmailPasswordWithID(tx, ownerID, &scope, typeString, modelObj, id)
 		if err != nil {
 			tx.Rollback()
 			log.Println("Error in ChangeEmailPasswordHandler ErrUpdate:", typeString, err)
