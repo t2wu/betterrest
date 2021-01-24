@@ -15,11 +15,15 @@ import (
 
 // ---------------------------------------
 
-func userHasAdminAccessToOriginalModel(db *gorm.DB, oid *datatypes.UUID, typeString string) error {
-	// We make sure we do not by checking the original model table
+func userHasAdminAccessToOriginalModel(db *gorm.DB, oid *datatypes.UUID, typeString string, id *datatypes.UUID) error {
+	// We need to find at least one role with the same model id
+	// where we're admin for
+
+	// We make sure we NOT by checking the original model table
 	// but check link table which we have admin access for
 	rtable := models.GetTableNameFromTypeString(typeString)
-	if err := db.Table(rtable).Where("user_id = ? and role = ?", oid, models.Admin).Error; err != nil {
+	if err := db.Table(rtable).Where("user_id = ? and role = ? and model_id = ?",
+		oid, models.Admin, id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errPermission
 		}
@@ -28,20 +32,28 @@ func userHasAdminAccessToOriginalModel(db *gorm.DB, oid *datatypes.UUID, typeStr
 	return nil
 }
 
-func userHasPermissionToEdit(mapper *LinkTableMapper, db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, id *datatypes.UUID) (models.IModel, error) {
+func userHasPermissionToEdit(mapper *LinkTableMapper, db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error) {
 	if id == nil || id.UUID.String() == "" {
-		return nil, errIDEmpty
+		return nil, models.Invalid, errIDEmpty
 	}
 
 	// Pull out entire modelObj
 	modelObj, _, err := mapper.getOneWithIDCore(db, oid, scope, typeString, id)
 	if err != nil { // Error is "record not found" when not found
-		return nil, err
+		return nil, models.Invalid, err
+	}
+
+	uuidVal := modelObj.GetID()
+	if uuidVal == nil || uuidVal.String() == "" {
+		// in case it's an empty string
+		return nil, models.Invalid, errIDEmpty
+	} else if uuidVal.String() != id.UUID.String() {
+		return nil, models.Invalid, errIDNotMatch
 	}
 
 	ownerModelObj, ok := modelObj.(models.IOwnership)
 	if !ok {
-		return nil, fmt.Errorf("model not an IOwnership object")
+		return nil, models.Invalid, fmt.Errorf("model not an IOwnership object")
 	}
 
 	// If you're admin to this model, you can only update/delete link data to other
@@ -53,19 +65,20 @@ func userHasPermissionToEdit(mapper *LinkTableMapper, db *gorm.DB, oid *datatype
 	res := result{}
 	if err := db.Table(rtable).Where("user_id = ? and model_id = ?", oid, ownerModelObj.GetModelID()).First(&res).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errPermission
+			return nil, models.Invalid, errPermission
 		}
-		return nil, err
+		return nil, models.Invalid, err
 	}
 
 	if res.Role == models.Admin && ownerModelObj.GetUserID().String() == oid.String() {
 		// You can remove other's relation, but not yours
-		return nil, errPermissionWrongEndPoint
+		return nil, res.Role, errPermissionWrongEndPoint
 	} else if res.Role != models.Admin && ownerModelObj.GetUserID().String() != oid.String() {
 		// not admin, only remove yourself
-		return nil, errPermission
+		return nil, res.Role, errPermission
 	}
-	return modelObj, nil
+
+	return modelObj, res.Role, nil
 }
 
 // ---------------------------------------
@@ -90,19 +103,20 @@ func SharedLinkTableMapper() *LinkTableMapper {
 // when creating, need to put yourself in OrganizationUser as well.
 // Well check this!!
 func (mapper *LinkTableMapper) CreateOne(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel) (models.IModel, error) {
+	ownerModelObj, ok := modelObj.(models.IOwnership)
+	if !ok {
+		return nil, fmt.Errorf("model not an IOwnership object")
+	}
+
+	// Might not need this
 	if modelObj.GetID() == nil {
 		modelObj.SetID(datatypes.NewUUID())
 	}
 
 	// You gotta have admin access to the model in order to create a relation
-	err := userHasAdminAccessToOriginalModel(db, oid, typeString)
+	err := userHasAdminAccessToOriginalModel(db, oid, typeString, ownerModelObj.GetModelID())
 	if err != nil {
 		return nil, err
-	}
-
-	ownerModelObj, ok := modelObj.(models.IOwnership)
-	if !ok {
-		return nil, fmt.Errorf("model not an IOwnership object")
 	}
 
 	userID := ownerModelObj.GetUserID()
@@ -120,63 +134,69 @@ func (mapper *LinkTableMapper) CreateOne(db *gorm.DB, oid *datatypes.UUID, scope
 		}
 	}
 
-	// Now, we create the object
-	// Use createOneCoreOrganization, organization one fit this need
-	// perhaps we should rename it. It differs from the ownership one
-	// in that it expect no ownership table we need to manually link
-	return createOneWithHooks(createOneCoreOrganization, db, oid, scope, typeString, modelObj)
+	var before func(hpdata models.HookPointData) error
+	var after func(hpdata models.HookPointData) error
+	if v, ok := modelObj.(models.IBeforeCreate); ok {
+		before = v.BeforeInsertDB
+	}
+	if v, ok := modelObj.(models.IAfterCreate); ok {
+		after = v.AfterInsertDB
+	}
+
+	j := opJob{
+		mapper:     mapper,
+		db:         db,
+		oid:        oid,
+		scope:      scope,
+		typeString: typeString,
+		// oldModelObj: oldModelObj,
+		modelObj: modelObj,
+	}
+	return opCore(before, after, j, createOneCoreBasic)
 }
 
 // CreateMany creates an instance of this model based on json and store it in db
 func (mapper *LinkTableMapper) CreateMany(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObjs []models.IModel) ([]models.IModel, error) {
-	retModels := make([]models.IModel, 0, 20)
-
-	cargo := models.BatchHookCargo{}
-	// Before batch inert hookpoint
-	if before := models.ModelRegistry[typeString].BeforeInsert; before != nil {
-		bhpData := models.BatchHookPointData{Ms: modelObjs, DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
-		if err := before(bhpData); err != nil {
-			return nil, err
+	for i, modelObj := range modelObjs {
+		ownerModelObj, ok := modelObj.(models.IOwnership)
+		if !ok {
+			return nil, fmt.Errorf("model not an IOwnership object")
 		}
-	}
 
-	for _, modelObj := range modelObjs {
+		// Probably not necessary
 		if modelObj.GetID() == nil {
-			modelObj.SetID(datatypes.NewUUID())
+			modelObjs[i].SetID(datatypes.NewUUID())
 		}
 
 		// You gotta have admin access to the model in order to create a relation
-		err := userHasAdminAccessToOriginalModel(db, oid, typeString)
+		err := userHasAdminAccessToOriginalModel(db, oid, typeString, ownerModelObj.GetModelID())
 		if err != nil {
-			return nil, err
-		}
-
-		m, err := createOneCoreOrganization(db, oid, typeString, modelObj)
-		if err != nil {
-			// That's weird. we have just inserted it.
-			return nil, err
-		}
-
-		retModels = append(retModels, m)
-	}
-
-	// After batch insert hookpoint
-	if after := models.ModelRegistry[typeString].AfterInsert; after != nil {
-		bhpData := models.BatchHookPointData{Ms: modelObjs, DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
-		if err := after(bhpData); err != nil {
 			return nil, err
 		}
 	}
 
-	return retModels, nil
+	before := models.ModelRegistry[typeString].BeforeInsert
+	after := models.ModelRegistry[typeString].AfterInsert
+	j := batchOpJob{
+		mapper:       mapper,
+		db:           db,
+		oid:          oid,
+		scope:        scope,
+		typeString:   typeString,
+		oldmodelObjs: nil,
+		modelObjs:    modelObjs,
+	}
+	return batchOpCore(j, before, after, createOneCoreBasic)
 }
 
 // GetOneWithID get one model object based on its type and its id string
 func (mapper *LinkTableMapper) GetOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error) {
-
-	modelObj, role, err := mapper.getOneWithIDCore(db, oid, scope, typeString, id)
+	// anyone permission can read as long as you are linked on db
+	// If you can  read your role to this model_id (YOUR role in the row, not in the row currently fetching)
+	// Then you have the link to this model, you can read it
+	modelObj, role, err := loadAndCheckErrorBeforeModify(mapper, db, oid, scope, typeString, nil, id, []models.UserRole{models.UserRoleAny})
 	if err != nil {
-		return nil, 0, err
+		return nil, models.Invalid, err
 	}
 
 	if m, ok := modelObj.(models.IAfterRead); ok {
@@ -187,35 +207,6 @@ func (mapper *LinkTableMapper) GetOneWithID(db *gorm.DB, oid *datatypes.UUID, sc
 	}
 
 	return modelObj, role, err
-}
-
-// getOneWithIDCore get one model object based on its type and its id string
-// since this is organizationMapper, need to make sure it's the same organization
-func (mapper *LinkTableMapper) getOneWithIDCore(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error) {
-	modelObj := models.NewFromTypeString(typeString)
-
-	// Check if link table
-	if _, ok := modelObj.(models.IOwnership); !ok {
-		log.Printf("%s not an IOwnership type\n", typeString)
-		return nil, models.Invalid, fmt.Errorf("%s not an IOwnership type", typeString)
-	}
-
-	rtable := models.GetTableNameFromIModel(modelObj)
-
-	// Subquery: find all models where user_id has ME in it, then find
-	// record where model_is from subquery and id matches the one we query for
-
-	// Specify user_id because you gotta own this or is a guest to this
-	subquery := fmt.Sprintf("model_id IN (select model_id from %s where user_id = ?)", rtable)
-
-	err := db.Table(rtable).Where(subquery, oid).Where("id = ?", &id).Find(modelObj).Error
-	// err := db.Table(rtable).Where(subquery, oid).Where("user_id = ?", &id).Find(modelObj).Error
-	if err != nil {
-		return nil, 0, err
-	}
-
-	// No roles for this table, because this IS the linking table
-	return modelObj, models.Invalid, err
 }
 
 // GetAll obtains a slice of models.DomainModel
@@ -295,129 +286,100 @@ func (mapper *LinkTableMapper) GetAll(db *gorm.DB, oid *datatypes.UUID, scope *s
 
 // UpdateOneWithID updates model based on this json
 func (mapper *LinkTableMapper) UpdateOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id *datatypes.UUID) (models.IModel, error) {
-	_, err := userHasPermissionToEdit(mapper, db, oid, scope, typeString, id)
+	oldModelObj, _, err := loadAndCheckErrorBeforeModify(mapper, db, oid, scope, typeString, modelObj, id, []models.UserRole{models.Admin})
 	if err != nil {
 		return nil, err
 	}
 
-	cargo := models.ModelCargo{}
-
-	// Before hook
+	var before func(hpdata models.HookPointData) error
+	var after func(hpdata models.HookPointData) error
 	if v, ok := modelObj.(models.IBeforeUpdate); ok {
-		hpdata := models.HookPointData{DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
-		if err := v.BeforeUpdateDB(hpdata); err != nil {
-			return nil, err
-		}
+		before = v.BeforeUpdateDB
+	}
+	if v, ok := modelObj.(models.IAfterUpdate); ok {
+		after = v.AfterUpdateDB
 	}
 
-	modelObj2, err := updateOneCore(mapper, db, oid, scope, typeString, modelObj, id, models.UserRoleAny)
-	if err != nil {
-		return nil, err
+	j := opJob{
+		mapper:      mapper,
+		db:          db,
+		oid:         oid,
+		scope:       scope,
+		typeString:  typeString,
+		oldModelObj: oldModelObj,
+		modelObj:    modelObj,
 	}
-
-	// After hook
-	if v, ok := modelObj2.(models.IAfterUpdate); ok {
-		hpdata := models.HookPointData{DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
-		if err = v.AfterUpdateDB(hpdata); err != nil {
-			return nil, err
-		}
-	}
-
-	return modelObj2, nil
+	return opCore(before, after, j, updateOneCore)
 }
 
 // UpdateMany updates multiple models
 func (mapper *LinkTableMapper) UpdateMany(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObjs []models.IModel) ([]models.IModel, error) {
-	ms := make([]models.IModel, 0, 0)
-	var err error
-	cargo := models.BatchHookCargo{}
-
-	for _, modelObj := range modelObjs {
+	// load old model data
+	ids := make([]*datatypes.UUID, len(modelObjs))
+	for i, modelObj := range modelObjs {
+		// Check error, make sure it has an id and not empty string (could potentially update all records!)
 		id := modelObj.GetID()
-		_, err := userHasPermissionToEdit(mapper, db, oid, scope, typeString, id)
-		if err != nil {
-			return nil, err
+		if id != nil && id.String() != "" {
+			return nil, errIDEmpty
 		}
+		ids[i] = id
 	}
 
-	// Before batch update hookpoint
-	if before := models.ModelRegistry[typeString].BeforeUpdate; before != nil {
-		bhpData := models.BatchHookPointData{Ms: modelObjs, DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
-		if err = before(bhpData); err != nil {
-			return nil, err
-		}
+	oldModelObjs, _, err := loadManyAndCheckBeforeModify(mapper, db, oid, scope, typeString, ids, []models.UserRole{models.Admin})
+	if err != nil {
+		return nil, err
 	}
 
-	for _, modelObj := range modelObjs {
-		id := modelObj.GetID()
-
-		// models.UserRoleAny because it's a complicated role which is already checked by userHasPermissionToEdit
-		m, err := updateOneCore(mapper, db, oid, scope, typeString, modelObj, id, models.UserRoleAny)
-		if err != nil { // Error is "record not found" when not found
-			return nil, err
-		}
-
-		ms = append(ms, m)
+	before := models.ModelRegistry[typeString].BeforeUpdate
+	after := models.ModelRegistry[typeString].AfterUpdate
+	j := batchOpJob{
+		mapper:       mapper,
+		db:           db,
+		oid:          oid,
+		scope:        scope,
+		typeString:   typeString,
+		oldmodelObjs: oldModelObjs,
+		modelObjs:    modelObjs,
 	}
-
-	// After batch update hookpoint
-	if after := models.ModelRegistry[typeString].AfterUpdate; after != nil {
-		bhpData := models.BatchHookPointData{Ms: modelObjs, DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
-		if err = after(bhpData); err != nil {
-			return nil, err
-		}
-	}
-
-	return ms, nil
+	return batchOpCore(j, before, after, updateOneCore)
 }
 
 // PatchOneWithID updates model based on this json
 func (mapper *LinkTableMapper) PatchOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, jsonPatch []byte, id *datatypes.UUID) (models.IModel, error) {
-	modelObj, err := userHasPermissionToEdit(mapper, db, oid, scope, typeString, id)
+	oldModelObj, _, err := loadAndCheckErrorBeforeModify(mapper, db, oid, scope, typeString, nil, id, []models.UserRole{models.Admin})
 	if err != nil {
 		return nil, err
 	}
 
 	// Apply patch operations
-	modelObj, err = patchOneCore(typeString, modelObj, jsonPatch)
+	modelObj, err := applyPatchCore(typeString, oldModelObj, jsonPatch)
 	if err != nil {
 		return nil, err
 	}
 
-	cargo := models.ModelCargo{}
-	// Before hook
-	// It is now expected that the hookpoint for before expect that the patch
-	// gets applied to the JSON, but not before actually updating to DB.
+	var before func(hpdata models.HookPointData) error
+	var after func(hpdata models.HookPointData) error
 	if v, ok := modelObj.(models.IBeforePatch); ok {
-		hpdata := models.HookPointData{DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
-		if err := v.BeforePatchDB(hpdata); err != nil {
-			return nil, err
-		}
+		before = v.BeforePatchDB
+	}
+	if v, ok := modelObj.(models.IAfterPatch); ok {
+		after = v.AfterPatchDB
 	}
 
-	// Now save it
-	modelObj2, err := updateOneCore(mapper, db, oid, scope, typeString, modelObj, id, models.UserRoleAny)
-	if err != nil {
-		return nil, err
+	j := opJob{
+		mapper:      mapper,
+		db:          db,
+		oid:         oid,
+		scope:       scope,
+		typeString:  typeString,
+		oldModelObj: oldModelObj,
+		modelObj:    modelObj,
 	}
-
-	// After hook
-	if v, ok := modelObj2.(models.IAfterPatch); ok {
-		hpdata := models.HookPointData{DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
-		if err = v.AfterPatchDB(hpdata); err != nil {
-			return nil, err
-		}
-	}
-
-	return modelObj2, nil
+	return opCore(before, after, j, updateOneCore)
 }
 
 // PatchMany updates models based on JSON
 func (mapper *LinkTableMapper) PatchMany(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, jsonIDPatches []models.JSONIDPatch) ([]models.IModel, error) {
-	ms := make([]models.IModel, 0, 0)
-	var err error
-	cargo := models.BatchHookCargo{}
-
 	// Load data, patch it, then send it to the hookpoint
 	// Load IDs
 	ids := make([]*datatypes.UUID, len(jsonIDPatches))
@@ -429,166 +391,177 @@ func (mapper *LinkTableMapper) PatchMany(db *gorm.DB, oid *datatypes.UUID, scope
 		ids[i] = jsonIDPatch.ID
 	}
 
-	rtable := models.GetTableNameFromTypeString(typeString)
-	subquery := fmt.Sprintf("model_id IN (select model_id from %s where user_id = ?)", rtable)
-	db2 := db.Table(rtable).Where(subquery, oid).Where("id in (?)", ids)
-	modelObjs, err := models.NewSliceFromDBByTypeString(typeString, db2.Set("gorm:auto_preload", true).Find)
-	if err != nil {
-		log.Println("calling NewSliceFromDBByTypeString err:", err)
-		return nil, err
-	}
+	oldModelObjs, _, err := loadManyAndCheckBeforeModify(mapper, db, oid, scope, typeString, ids, []models.UserRole{models.Admin})
 
-	// Just in case err didn't work (as in the case with IN clause NOT in the ID field, maybe Gorm bug)
-	if len(modelObjs) == 0 {
-		return nil, fmt.Errorf("not found")
-	}
-
-	if len(modelObjs) != len(jsonIDPatches) {
-		return nil, errBatchUpdateOrPatchOneNotFound
-	}
-
-	// Check if user has permission to edit it
-	// patch it if OK.
-	for i, modelObj := range modelObjs {
-		id := modelObj.GetID()
-
-		_, err := userHasPermissionToEdit(mapper, db, oid, scope, typeString, id)
-		if err != nil {
-			return nil, err
-		}
-
+	// Now patch it
+	modelObjs := make([]models.IModel, len(oldModelObjs))
+	for i, modelObj := range oldModelObjs {
 		// Apply patch operations
-		modelObjs[i], err = patchOneCore(typeString, modelObj, jsonIDPatches[i].Patch)
+		modelObjs[i], err = applyPatchCore(typeString, modelObj, jsonIDPatches[i].Patch)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	// Before batch update hookpoint
-	if before := models.ModelRegistry[typeString].BeforeUpdate; before != nil {
-		bhpData := models.BatchHookPointData{Ms: modelObjs, DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
-		if err = before(bhpData); err != nil {
-			return nil, err
-		}
+	before := models.ModelRegistry[typeString].BeforeUpdate
+	after := models.ModelRegistry[typeString].AfterUpdate
+	j := batchOpJob{
+		mapper:       mapper,
+		db:           db,
+		oid:          oid,
+		scope:        scope,
+		typeString:   typeString,
+		oldmodelObjs: oldModelObjs,
+		modelObjs:    modelObjs,
+		// roles:        roles,
 	}
-
-	for _, modelObj := range modelObjs {
-		id := modelObj.GetID()
-
-		m, err := updateOneCore(mapper, db, oid, scope, typeString, modelObj, id, models.UserRoleAny)
-		if err != nil { // Error is "record not found" when not found
-			return nil, err
-		}
-
-		ms = append(ms, m)
-	}
-
-	// After batch update hookpoint
-	if after := models.ModelRegistry[typeString].AfterUpdate; after != nil {
-		bhpData := models.BatchHookPointData{Ms: modelObjs, DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
-		if err = after(bhpData); err != nil {
-			return nil, err
-		}
-	}
-
-	return ms, nil
+	return batchOpCore(j, before, after, updateOneCore)
 }
 
 // DeleteOneWithID delete the model
 func (mapper *LinkTableMapper) DeleteOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, id *datatypes.UUID) (models.IModel, error) {
-	modelObj, err := userHasPermissionToEdit(mapper, db, oid, scope, typeString, id)
+	modelObj, _, err := loadAndCheckErrorBeforeModify(mapper, db, oid, scope, typeString, nil, id, []models.UserRole{models.Admin})
 	if err != nil {
 		return nil, err
 	}
-	// Now safe to delete no matter who you are
 
-	// You're admin, and the link is to someone else, that someone can also be an admin or not
-	cargo := models.ModelCargo{}
-
-	// Before delete hookpoint
+	var before func(hpdata models.HookPointData) error
+	var after func(hpdata models.HookPointData) error
 	if v, ok := modelObj.(models.IBeforeDelete); ok {
-		hpdata := models.HookPointData{DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
-		err = v.BeforeDeleteDB(hpdata)
-		if err != nil {
-			return nil, err
-		}
+		before = v.BeforeDeleteDB
 	}
-
-	// Unscoped() for REAL delete!
-	// Foreign key constraint works only on real delete
-	// Soft delete will take more work, have to verify myself manually
-	if modelNeedsRealDelete(modelObj) {
-		db = db.Unscoped()
-	}
-
-	err = db.Delete(modelObj).Error
-	if err != nil {
-		return nil, err
-	}
-
-	// After delete hookpoint
 	if v, ok := modelObj.(models.IAfterDelete); ok {
-		hpdata := models.HookPointData{DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
-		err = v.AfterDeleteDB(hpdata)
-		if err != nil {
-			return nil, err
-		}
+		after = v.AfterDeleteDB
 	}
 
-	return modelObj, nil
+	j := opJob{
+		mapper:     mapper,
+		db:         db,
+		oid:        oid,
+		scope:      scope,
+		typeString: typeString,
+		// oldModelObj: oldModelObj,
+		modelObj: modelObj,
+	}
+	return opCore(before, after, j, deleteOneCore)
 }
 
 // DeleteMany deletes multiple models
 func (mapper *LinkTableMapper) DeleteMany(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObjs []models.IModel) ([]models.IModel, error) {
-	var err error
-
+	// load old model data
+	ids := make([]*datatypes.UUID, len(modelObjs))
 	for i, modelObj := range modelObjs {
+		// Check error, make sure it has an id and not empty string (could potentially update all records!)
 		id := modelObj.GetID()
-		if modelObjs[i], err = userHasPermissionToEdit(mapper, db, oid, scope, typeString, id); err != nil {
-			// if modelObjs[i], err = loadAndCheckErrorBeforeModify(mapper, db, oid, scope, typeString, modelObj, *id, models.Admin); err != nil {
-			return nil, err
+		if id != nil && id.String() != "" {
+			return nil, errIDEmpty
 		}
+		ids[i] = id
 	}
 
-	// Before batch delete hookpoint
-	cargo := models.BatchHookCargo{}
-	if before := models.ModelRegistry[typeString].BeforeDelete; before != nil {
-		bhpData := models.BatchHookPointData{Ms: modelObjs, DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
-		if err = before(bhpData); err != nil {
-			return nil, err
-		}
+	modelObjs, _, err := loadManyAndCheckBeforeModify(mapper, db, oid, scope, typeString, ids, []models.UserRole{models.Admin})
+	if err != nil {
+		return nil, err
 	}
 
 	// Unscoped() for REAL delete!
 	// Foreign key constraint works only on real delete
 	// Soft delete will take more work, have to verify myself manually
 	if len(modelObjs) > 0 && modelNeedsRealDelete(modelObjs[0]) {
-		db = db.Unscoped()
+		db = db.Unscoped() // hookpoint will inherit this though
 	}
 
-	ms := make([]models.IModel, 0, 0)
-	for _, modelObj := range modelObjs {
-		err = db.Delete(modelObj).Error
-		// err = db.Delete(modelObj).Error
+	before := models.ModelRegistry[typeString].BeforeDelete
+	after := models.ModelRegistry[typeString].AfterDelete
+
+	j := batchOpJob{
+		mapper:     mapper,
+		db:         db,
+		oid:        oid,
+		scope:      scope,
+		typeString: typeString,
+		modelObjs:  modelObjs,
+		// roles:      roles,
+	}
+	return batchOpCore(j, before, after, deleteOneCore)
+}
+
+// ----------------------------------------------------------------------------------------
+
+// getOneWithIDCore get one model object based on its type and its id string
+// since this is organizationMapper, need to make sure it's the same organization
+func (mapper *LinkTableMapper) getOneWithIDCore(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error) {
+	modelObj := models.NewFromTypeString(typeString)
+
+	// Check if link table
+	if _, ok := modelObj.(models.IOwnership); !ok {
+		log.Printf("%s not an IOwnership type\n", typeString)
+		return nil, models.Invalid, fmt.Errorf("%s not an IOwnership type", typeString)
+	}
+
+	rtable := models.GetTableNameFromIModel(modelObj)
+
+	// Subquery: find all models where user_id has ME in it, then find
+	// record where model_is from subquery and id matches the one we query for
+
+	// Specify user_id because you gotta own this or is a guest to this
+	subquery := fmt.Sprintf("model_id IN (select model_id from %s where user_id = ?)", rtable)
+
+	err := db.Table(rtable).Where(subquery, oid).Where("id = ?", &id).Find(modelObj).Error
+	// err := db.Table(rtable).Where(subquery, oid).Where("user_id = ?", &id).Find(modelObj).Error
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// The role for this role is determined on the role of the row where the user_id is YOU
+	type result struct {
+		Role models.UserRole
+	}
+	res := result{}
+	if err := db.Table(rtable).Where("user_id = ? and role = ? and model_id = ?",
+		oid, models.Admin, id).Select("role").Scan(&res).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, models.Invalid, errPermission
+		}
+		return nil, models.Invalid, err // some other error
+	}
+
+	return modelObj, res.Role, err
+}
+
+func (mapper *LinkTableMapper) getManyWithIDsCore(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, ids []*datatypes.UUID) ([]models.IModel, []models.UserRole, error) {
+	rtable := models.GetTableNameFromTypeString(typeString)
+	subquery := fmt.Sprintf("model_id IN (select model_id from %s where user_id = ?)", rtable)
+	db2 := db.Table(rtable).Where(subquery, oid).Where("id in (?)", ids)
+	modelObjs, err := models.NewSliceFromDBByTypeString(typeString, db2.Set("gorm:auto_preload", true).Find)
+	if err != nil {
+		log.Println("calling NewSliceFromDBByTypeString err:", err)
+		return nil, nil, err
+	}
+
+	// Just in case err didn't work (as in the case with IN clause NOT in the ID field, maybe Gorm bug)
+	if len(modelObjs) == 0 {
+		return nil, nil, fmt.Errorf("not found")
+	}
+
+	if len(modelObjs) != len(ids) {
+		return nil, nil, errBatchUpdateOrPatchOneNotFound
+	}
+
+	// Role is more complicated. I need to find for each unique model_id, when I have a corresponding
+	// link to it, what role is it?
+	// So currently I only know how to fetch one by one
+	// I probably can do it in one go, need extra time.
+	// Probably using the query in the beginnign of the function but by selecting the Role column
+	// TODO
+	roles := make([]models.UserRole, len(modelObjs))
+	for i, modelObj := range modelObjs {
+		id := modelObj.GetID()
+		_, roles[i], err = userHasPermissionToEdit(mapper, db, oid, scope, typeString, id)
 		if err != nil {
-			return nil, err
-		}
-
-		err = removePeggedField(db, modelObj)
-		if err != nil {
-			return nil, err
-		}
-
-		ms = append(ms, modelObj)
-	}
-
-	// After batch delete hookpoint
-	if after := models.ModelRegistry[typeString].AfterDelete; after != nil {
-		bhpData := models.BatchHookPointData{Ms: modelObjs, DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
-		if err = after(bhpData); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 
-	return ms, nil
+	return modelObjs, roles, nil
 }

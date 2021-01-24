@@ -18,6 +18,7 @@ import (
 type UserRole int
 
 const (
+	// Negatives are not stored in DB
 	// UserRoleAny not for value in db, but for permission where any is fine (link table)
 	UserRoleAny UserRole = -2
 
@@ -194,8 +195,8 @@ type IAfterLoginFailed interface {
 	AfterLoginFailed(hpdata HookPointData) error
 }
 
-// IBeforeInsert supports method to be called before data is inserted (created) into the database
-type IBeforeInsert interface {
+// IBeforeCreate supports method to be called before data is inserted (created) into the database
+type IBeforeCreate interface {
 	BeforeInsertDB(hpdata HookPointData) error
 }
 
@@ -219,8 +220,8 @@ type IAfterRead interface {
 	AfterReadDB(hpdata HookPointData) error
 }
 
-// IAfterInsert supports method to be called after data is inserted (created) into the database
-type IAfterInsert interface {
+// IAfterCreate supports method to be called after data is inserted (created) into the database
+type IAfterCreate interface {
 	AfterInsertDB(hpdata HookPointData) error
 }
 

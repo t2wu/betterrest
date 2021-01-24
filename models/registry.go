@@ -82,9 +82,8 @@ type Reg struct {
 	BeforeUpdate func(bhpData BatchHookPointData) error
 	AfterUpdate  func(bhpData BatchHookPointData) error
 
-	// There is no batch patch yet
-	// BeforePatch  func(bhpData) error
-	// AfterPatch   func(bhpData) error
+	BeforePatch func(bhpData BatchHookPointData) error
+	AfterPatch  func(bhpData BatchHookPointData) error
 
 	BeforeDelete func(bhpData BatchHookPointData) error
 	AfterDelete  func(bhpData BatchHookPointData) error

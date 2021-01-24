@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"sync"
 
+	"github.com/t2wu/betterrest/datamapper/gormfixes"
 	"github.com/t2wu/betterrest/libs/datatypes"
 	"github.com/t2wu/betterrest/libs/security"
 	"github.com/t2wu/betterrest/models"
@@ -31,7 +32,7 @@ func createOneCoreUserMapper(db *gorm.DB, oid *datatypes.UUID, typeString string
 
 	// For pegassociated, the since we expect association_autoupdate:false
 	// need to manually create it
-	if err := createPeggedAssocFields(db, modelObj); err != nil {
+	if err := gormfixes.CreatePeggedAssocFields(db, modelObj); err != nil {
 		return nil, err
 	}
 
@@ -98,8 +99,26 @@ func (mapper *UserMapper) CreateOne(db *gorm.DB, oid *datatypes.UUID, scope *str
 
 	reflect.ValueOf(modelObj).Elem().FieldByName("PasswordHash").Set(reflect.ValueOf(hash))
 
-	// there isn't really an oid at this point
-	return createOneWithHooks(createOneCoreUserMapper, db, oid, scope, typeString, modelObj)
+	var before func(hpdata models.HookPointData) error
+	var after func(hpdata models.HookPointData) error
+	if v, ok := modelObj.(models.IBeforeCreate); ok {
+		before = v.BeforeInsertDB
+	}
+	if v, ok := modelObj.(models.IAfterCreate); ok {
+		after = v.AfterInsertDB
+	}
+	j := opJob{
+		mapper:     mapper,
+		db:         db,
+		oid:        oid,
+		scope:      scope,
+		typeString: typeString,
+		// oldModelObj: oldModelObj,
+		modelObj: modelObj,
+	}
+	return opCore(before, after, j, createOneCoreOwnership)
+	// // there isn't really an oid at this point
+	// return createOneWithHooks(createOneCoreUserMapper, db, oid, scope, typeString, modelObj)
 }
 
 // CreateMany is currently a dummy
@@ -150,15 +169,11 @@ func (mapper *UserMapper) getOneWithIDCore(db *gorm.DB, oid *datatypes.UUID, sco
 // Update password require special endpoint
 func (mapper *UserMapper) UpdateOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id *datatypes.UUID) (models.IModel, error) {
 	log.Println("userMapper's UpdateOneWithID called")
-	if _, err := loadAndCheckErrorBeforeModify(mapper, db, oid, scope, typeString, modelObj, id, models.Admin); err != nil {
+	oldModelObj, _, err := loadAndCheckErrorBeforeModify(mapper, db, oid, scope, typeString, modelObj, id, []models.UserRole{models.Admin})
+	if err != nil {
 		return nil, err
 	}
 
-	if oid.String() != id.String() {
-		return nil, errPermission
-	}
-
-	var err error
 	modelObj, err = preserveEmailPassword(db, oid, modelObj)
 	if err != nil {
 		return nil, err
@@ -174,7 +189,7 @@ func (mapper *UserMapper) UpdateOneWithID(db *gorm.DB, oid *datatypes.UUID, scop
 		}
 	}
 
-	modelObj2, err := updateOneCore(mapper, db, oid, scope, typeString, modelObj, id, models.Admin)
+	modelObj2, err := updateOneCore(mapper, db, oid, scope, typeString, modelObj, id, oldModelObj)
 	if err != nil {
 		return nil, err
 	}
@@ -249,12 +264,9 @@ func (mapper *UserMapper) DeleteOneWithID(db *gorm.DB, oid *datatypes.UUID, scop
 // ChangeEmailPasswordWithID changes email and/or password
 func (mapper *UserMapper) ChangeEmailPasswordWithID(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id *datatypes.UUID) (models.IModel, error) {
 	log.Println("userMapper's ChangeEmailPasswordWithID called")
-	if _, err := loadAndCheckErrorBeforeModify(mapper, db, oid, scope, typeString, modelObj, id, models.Admin); err != nil {
+	oldModelObj, _, err := loadAndCheckErrorBeforeModify(mapper, db, oid, scope, typeString, modelObj, id, []models.UserRole{models.Admin})
+	if err != nil {
 		return nil, err
-	}
-
-	if oid.String() != id.String() {
-		return nil, errPermission
 	}
 
 	// Verify the password in the current modelObj
@@ -273,12 +285,16 @@ func (mapper *UserMapper) ChangeEmailPasswordWithID(db *gorm.DB, oid *datatypes.
 
 	newEmail := reflect.ValueOf(modelObj).Elem().FieldByName(("NewEmail")).Interface().(string)
 
-	// Load the original model, then override email and password hash which we want to change
-	oldModel, _, err := mapper.getOneWithIDCore(db, oid, scope, typeString, id)
-	if err != nil {
-		return nil, err
-	}
-	modelObj = oldModel
+	// // Load the original model, then override email and password hash which we want to change
+	// oldModel, role, err := mapper.getOneWithIDCore(db, oid, scope, typeString, id)
+	// if err != nil {
+	// 	return nil, err
+	// }
+	// modelObj = oldModel
+
+	// if role != models.Admin {
+	// 	return nil, errPermission
+	// }
 
 	// Override email with newemail
 	reflect.ValueOf(modelObj).Elem().FieldByName("Email").Set(reflect.ValueOf(newEmail))
@@ -297,7 +313,7 @@ func (mapper *UserMapper) ChangeEmailPasswordWithID(db *gorm.DB, oid *datatypes.
 		}
 	}
 
-	modelObj2, err := updateOneCore(mapper, db, oid, scope, typeString, modelObj, id, models.Admin)
+	modelObj2, err := updateOneCore(mapper, db, oid, scope, typeString, modelObj, id, oldModelObj)
 	if err != nil {
 		return nil, err
 	}

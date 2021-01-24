@@ -7,30 +7,10 @@ import (
 	"time"
 
 	"github.com/jinzhu/gorm"
+	"github.com/t2wu/betterrest/datamapper/gormfixes"
 	"github.com/t2wu/betterrest/libs/datatypes"
 	"github.com/t2wu/betterrest/models"
 )
-
-// createOneCoreGlobalMapper creates a model
-func createOneCoreGlobalMapper(db *gorm.DB, oid *datatypes.UUID, typeString string, modelObj models.IModel) (models.IModel, error) {
-	if err := db.Create(modelObj).Error; err != nil {
-		return nil, err
-	}
-
-	// For pegassociated, the since we expect association_autoupdate:false
-	// need to manually create it
-	if err := createPeggedAssocFields(db, modelObj); err != nil {
-		return nil, err
-	}
-
-	// For table with trigger which update before insert, we need to load it again
-	if err := db.First(modelObj).Error; err != nil {
-		// That's weird. we just inserted it.
-		return nil, err
-	}
-
-	return modelObj, nil
-}
 
 // ---------------------------------------
 
@@ -58,54 +38,58 @@ func (mapper *GlobalMapper) CreateOne(db *gorm.DB, oid *datatypes.UUID, scope *s
 		modelObj.SetID(modelID)
 	}
 
-	return createOneWithHooks(createOneCoreGlobalMapper, db, oid, scope, typeString, modelObj)
+	var before func(hpdata models.HookPointData) error
+	var after func(hpdata models.HookPointData) error
+	if v, ok := modelObj.(models.IBeforeCreate); ok {
+		before = v.BeforeInsertDB
+	}
+	if v, ok := modelObj.(models.IAfterCreate); ok {
+		after = v.AfterInsertDB
+	}
+
+	j := opJob{
+		mapper:     mapper,
+		db:         db,
+		oid:        oid,
+		scope:      scope,
+		typeString: typeString,
+		// oldModelObj: oldModelObj,
+		modelObj: modelObj,
+	}
+	return opCore(before, after, j, createOneCoreBasic)
 }
 
 // CreateMany creates an instance of this model based on json and store it in db
 func (mapper *GlobalMapper) CreateMany(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObjs []models.IModel) ([]models.IModel, error) {
-	retModels := make([]models.IModel, 0, 20)
-
-	cargo := models.BatchHookCargo{}
-	// Before batch inert hookpoint
-	if before := models.ModelRegistry[typeString].BeforeInsert; before != nil {
-		bhpData := models.BatchHookPointData{Ms: modelObjs, DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
-		if err := before(bhpData); err != nil {
-			return nil, err
-		}
-	}
-
-	for _, modelObj := range modelObjs {
+	// This probably is not necessary
+	for i, modelObj := range modelObjs {
 		modelID := modelObj.GetID()
 		if modelID == nil {
 			modelID = datatypes.NewUUID()
 			modelObj.SetID(modelID)
 		}
-
-		m, err := createOneCoreGlobalMapper(db, oid, typeString, modelObj)
-		if err != nil {
-			return nil, err
-		}
-
-		retModels = append(retModels, m)
+		modelObjs[i] = modelObj
 	}
 
-	// After batch insert hookpoint
-	if after := models.ModelRegistry[typeString].AfterInsert; after != nil {
-		bhpData := models.BatchHookPointData{Ms: modelObjs, DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
-		if err := after(bhpData); err != nil {
-			return nil, err
-		}
+	before := models.ModelRegistry[typeString].BeforeInsert
+	after := models.ModelRegistry[typeString].AfterInsert
+	j := batchOpJob{
+		mapper:       mapper,
+		db:           db,
+		oid:          oid,
+		scope:        scope,
+		typeString:   typeString,
+		oldmodelObjs: nil,
+		modelObjs:    modelObjs,
 	}
-
-	return retModels, nil
+	return batchOpCore(j, before, after, createOneCoreBasic)
 }
 
 // GetOneWithID get one model object based on its type and its id string
 func (mapper *GlobalMapper) GetOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error) {
-
-	modelObj, role, err := mapper.getOneWithIDCore(db, oid, scope, typeString, id)
+	modelObj, role, err := loadAndCheckErrorBeforeModify(mapper, db, oid, scope, typeString, nil, id, []models.UserRole{models.UserRoleAny})
 	if err != nil {
-		return nil, 0, err
+		return nil, models.Invalid, err
 	}
 
 	if m, ok := modelObj.(models.IAfterRead); ok {
@@ -113,31 +97,6 @@ func (mapper *GlobalMapper) GetOneWithID(db *gorm.DB, oid *datatypes.UUID, scope
 		if err := m.AfterReadDB(hpdata); err != nil {
 			return nil, 0, err
 		}
-	}
-
-	return modelObj, role, err
-}
-
-// getOneWithIDCore get one model object based on its type and its id string
-func (mapper *GlobalMapper) getOneWithIDCore(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error) {
-	modelObj := models.NewFromTypeString(typeString)
-	modelObj.SetID(id)
-
-	db = db.Set("gorm:auto_preload", true)
-
-	// rtable := models.GetTableNameFromIModel(modelObj)
-
-	// Global object, everyone can find it, simply find it
-	err := db.Find(modelObj).Error
-	if err != nil {
-		return nil, 0, err
-	}
-
-	role := models.Public // just some default
-
-	err = loadManyToManyBecauseGormFailsWithID(db, modelObj)
-	if err != nil {
-		return nil, 0, err
 	}
 
 	return modelObj, role, err
@@ -194,7 +153,7 @@ func (mapper *GlobalMapper) GetAll(db *gorm.DB, oid *datatypes.UUID, scope *stri
 
 	// make many to many tag works
 	for _, m := range outmodels {
-		err = loadManyToManyBecauseGormFailsWithID(db2, m)
+		err = gormfixes.LoadManyToManyBecauseGormFailsWithID(db2, m)
 		if err != nil {
 			return nil, nil, nil, err
 		}
@@ -214,135 +173,104 @@ func (mapper *GlobalMapper) GetAll(db *gorm.DB, oid *datatypes.UUID, scope *stri
 // UpdateOneWithID updates model based on this json
 // This is the same as ownershipdata mapper (inheritance?)
 func (mapper *GlobalMapper) UpdateOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id *datatypes.UUID) (models.IModel, error) {
-	if _, err := loadAndCheckErrorBeforeModify(mapper, db, oid, scope, typeString, modelObj, id, models.Public); err != nil {
+	var oldModelObj models.IModel
+	var err error
+	if oldModelObj, _, err = loadAndCheckErrorBeforeModify(mapper, db, oid, scope, typeString, modelObj, id, []models.UserRole{models.UserRoleAny}); err != nil {
 		return nil, err
 	}
 
-	cargo := models.ModelCargo{}
-
-	// Before hook
+	var before func(hpdata models.HookPointData) error
+	var after func(hpdata models.HookPointData) error
 	if v, ok := modelObj.(models.IBeforeUpdate); ok {
-		hpdata := models.HookPointData{DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
-		if err := v.BeforeUpdateDB(hpdata); err != nil {
-			return nil, err
-		}
+		before = v.BeforeUpdateDB
+	}
+	if v, ok := modelObj.(models.IAfterUpdate); ok {
+		after = v.AfterUpdateDB
 	}
 
-	modelObj2, err := updateOneCore(mapper, db, oid, scope, typeString, modelObj, id, models.Public)
-	if err != nil {
-		return nil, err
+	j := opJob{
+		mapper:      mapper,
+		db:          db,
+		oid:         oid,
+		scope:       scope,
+		typeString:  typeString,
+		oldModelObj: oldModelObj,
+		modelObj:    modelObj,
 	}
-
-	// After hook
-	if v, ok := modelObj2.(models.IAfterUpdate); ok {
-		hpdata := models.HookPointData{DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
-		if err = v.AfterUpdateDB(hpdata); err != nil {
-			return nil, err
-		}
-	}
-
-	return modelObj2, nil
+	return opCore(before, after, j, updateOneCore)
 }
 
 // UpdateMany updates multiple models
 // This is the same as ownershipdata mapper (inheritance?)
 func (mapper *GlobalMapper) UpdateMany(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObjs []models.IModel) ([]models.IModel, error) {
-	ms := make([]models.IModel, 0, 0)
-	var err error
-	cargo := models.BatchHookCargo{}
-
-	for _, modelObj := range modelObjs {
+	// load old model data
+	ids := make([]*datatypes.UUID, len(modelObjs))
+	for i, modelObj := range modelObjs {
+		// Check error, make sure it has an id and not empty string (could potentially update all records!)
 		id := modelObj.GetID()
-		if _, err = loadAndCheckErrorBeforeModify(mapper, db, oid, scope, typeString, modelObj, id, models.Public); err != nil {
-			return nil, err
+		if id != nil && id.String() != "" {
+			return nil, errIDEmpty
 		}
+		ids[i] = id
 	}
 
-	// Before batch update hookpoint
-	if before := models.ModelRegistry[typeString].BeforeUpdate; before != nil {
-		bhpData := models.BatchHookPointData{Ms: modelObjs, DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
-		if err = before(bhpData); err != nil {
-			return nil, err
-		}
+	oldModelObjs, _, err := loadManyAndCheckBeforeModify(mapper, db, oid, scope, typeString, ids, []models.UserRole{models.UserRoleAny})
+	if err != nil {
+		return nil, err
 	}
 
-	for _, modelObj := range modelObjs {
-		id := modelObj.GetID()
-
-		m, err := updateOneCore(mapper, db, oid, scope, typeString, modelObj, id, models.Public)
-		if err != nil { // Error is "record not found" when not found
-			return nil, err
-		}
-
-		ms = append(ms, m)
+	before := models.ModelRegistry[typeString].BeforeUpdate
+	after := models.ModelRegistry[typeString].AfterUpdate
+	j := batchOpJob{
+		mapper:       mapper,
+		db:           db,
+		oid:          oid,
+		scope:        scope,
+		typeString:   typeString,
+		oldmodelObjs: oldModelObjs,
+		modelObjs:    modelObjs,
 	}
-
-	// After batch update hookpoint
-	if after := models.ModelRegistry[typeString].AfterUpdate; after != nil {
-		bhpData := models.BatchHookPointData{Ms: modelObjs, DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
-		if err = after(bhpData); err != nil {
-			return nil, err
-		}
-	}
-
-	return ms, nil
+	return batchOpCore(j, before, after, updateOneCore)
 }
 
 // PatchOneWithID updates model based on this json
 // This is the same as ownershipdata mapper (inheritance?)
 func (mapper *GlobalMapper) PatchOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, jsonPatch []byte, id *datatypes.UUID) (models.IModel, error) {
+	oldModelObj, _, err := loadAndCheckErrorBeforeModify(mapper, db, oid, scope, typeString, nil, id, []models.UserRole{models.UserRoleAny})
+	if err != nil {
+		return nil, err
+	}
+
 	var modelObj models.IModel
-	var err error
-	cargo := models.ModelCargo{}
-
-	// Check id error
-	if id == nil || id.UUID.String() == "" {
-		return nil, errIDEmpty
-	}
-
-	// role already chcked in loadAndCheckErrorBeforeModify
-	if modelObj, _, err = mapper.getOneWithIDCore(db, oid, scope, typeString, id); err != nil {
-		return nil, err
-	}
-
 	// Apply patch operations
-	modelObj, err = patchOneCore(typeString, modelObj, jsonPatch)
+	modelObj, err = applyPatchCore(typeString, oldModelObj, jsonPatch)
 	if err != nil {
 		return nil, err
 	}
 
-	// Before hook
-	// It is now expected that the hookpoint for before expect that the patch
-	// gets applied to the JSON, but not before actually updating to DB.
+	var before func(hpdata models.HookPointData) error
+	var after func(hpdata models.HookPointData) error
 	if v, ok := modelObj.(models.IBeforePatch); ok {
-		hpdata := models.HookPointData{DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
-		if err := v.BeforePatchDB(hpdata); err != nil {
-			return nil, err
-		}
+		before = v.BeforePatchDB
+	}
+	if v, ok := modelObj.(models.IAfterPatch); ok {
+		after = v.AfterPatchDB
 	}
 
-	// Now save it
-	modelObj2, err := updateOneCore(mapper, db, oid, scope, typeString, modelObj, id, models.Public)
-	if err != nil {
-		return nil, err
+	j := opJob{
+		mapper:      mapper,
+		db:          db,
+		oid:         oid,
+		scope:       scope,
+		typeString:  typeString,
+		oldModelObj: oldModelObj,
+		modelObj:    modelObj,
 	}
-
-	// After hook
-	if v, ok := modelObj2.(models.IAfterPatch); ok {
-		hpdata := models.HookPointData{DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
-		if err = v.AfterPatchDB(hpdata); err != nil {
-			return nil, err
-		}
-	}
-
-	return modelObj2, nil
+	return opCore(before, after, j, updateOneCore)
 }
 
 // PatchMany updates models based on JSON
 func (mapper *GlobalMapper) PatchMany(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, jsonIDPatches []models.JSONIDPatch) ([]models.IModel, error) {
-	ms := make([]models.IModel, 0, len(jsonIDPatches)) // len(ms)=0, cap(ms)=len(jsonIDPatches)
-	// var err error
-
 	// Load data, patch it, then send it to the hookpoint
 	// Load IDs
 	ids := make([]*datatypes.UUID, len(jsonIDPatches))
@@ -354,98 +282,45 @@ func (mapper *GlobalMapper) PatchMany(db *gorm.DB, oid *datatypes.UUID, scope *s
 		ids[i] = jsonIDPatch.ID
 	}
 
-	rtable := models.GetTableNameFromTypeString(typeString)
-	db2 := db.Table(rtable).Where(fmt.Sprintf("\"%s\".\"id\" IN (?)", rtable), ids).Set("gorm:auto_preload", true)
-
-	modelObjs, err := models.NewSliceFromDBByTypeString(typeString, db2.Set("gorm:auto_preload", true).Find)
+	oldModelObjs, _, err := loadManyAndCheckBeforeModify(mapper, db, oid, scope, typeString, ids, []models.UserRole{models.UserRoleAny})
 	if err != nil {
-		log.Println("calling NewSliceFromDBByTypeString err:", err)
 		return nil, err
 	}
 
-	// Just in case err didn't work (as in the case with IN clause NOT in the ID field, maybe Gorm bug)
-	if len(modelObjs) == 0 {
-		return nil, fmt.Errorf("not found")
-	}
-
-	if len(modelObjs) != len(jsonIDPatches) {
-		return nil, errBatchUpdateOrPatchOneNotFound
-	}
-
 	// Now patch it
+	modelObjs := make([]models.IModel, len(oldModelObjs))
 	for i, jsonIDPatch := range jsonIDPatches {
 		// Any one can patch is since it's global. If there should be restrictions, it should be done
 		// in hookpoints
 		// Apply patch operations
-		modelObjs[i], err = patchOneCore(typeString, modelObjs[i], []byte(jsonIDPatch.Patch))
+		modelObjs[i], err = applyPatchCore(typeString, oldModelObjs[i], []byte(jsonIDPatch.Patch))
 		if err != nil {
 			log.Println("patch error: ", err, string(jsonIDPatch.Patch))
 			return nil, err
 		}
 	}
 
-	cargo := models.BatchHookCargo{}
-	// Before batch update hookpoint
-	if before := models.ModelRegistry[typeString].BeforeUpdate; before != nil {
-		bhpData := models.BatchHookPointData{Ms: modelObjs, DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
-		if err = before(bhpData); err != nil {
-			return nil, err
-		}
+	before := models.ModelRegistry[typeString].BeforePatch
+	after := models.ModelRegistry[typeString].AfterPatch
+	j := batchOpJob{
+		mapper:       mapper,
+		db:           db,
+		oid:          oid,
+		scope:        scope,
+		typeString:   typeString,
+		oldmodelObjs: oldModelObjs,
+		modelObjs:    modelObjs,
+		// roles:        roles,
 	}
-
-	// TODO: Could update all at once, then load all at once again
-	for _, modelObj := range modelObjs {
-		id := modelObj.GetID()
-
-		m, err := updateOneCore(mapper, db, oid, scope, typeString, modelObj, id, models.Public)
-		if err != nil { // Error is "record not found" when not found
-			return nil, err
-		}
-
-		ms = append(ms, m)
-	}
-
-	// After batch update hookpoint
-	if after := models.ModelRegistry[typeString].AfterUpdate; after != nil {
-		bhpData := models.BatchHookPointData{Ms: ms, DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
-		if err = after(bhpData); err != nil {
-			return nil, err
-		}
-	}
-
-	return ms, nil
+	return batchOpCore(j, before, after, updateOneCore)
 }
 
 // DeleteOneWithID delete the model
 // TODO: delete the groups associated with this record?
 func (mapper *GlobalMapper) DeleteOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, id *datatypes.UUID) (models.IModel, error) {
-	if id == nil || id.UUID.String() == "" {
-		return nil, errIDEmpty
-	}
-
-	// check out
-	// https://stackoverflow.com/questions/52124137/cant-set-field-of-a-struct-that-is-typed-as-an-interface
-	/*
-		a := reflect.ValueOf(modelObj).Elem()
-		b := reflect.Indirect(a).FieldByName("ID")
-		b.Set(reflect.ValueOf(uint(id)))
-	*/
-
-	// Pull out entire modelObj
-	modelObj, _, err := mapper.getOneWithIDCore(db, oid, scope, typeString, id)
-	if err != nil { // Error is "record not found" when not found
+	modelObj, _, err := loadAndCheckErrorBeforeModify(mapper, db, oid, scope, typeString, nil, id, []models.UserRole{models.UserRoleAny})
+	if err != nil {
 		return nil, err
-	}
-
-	cargo := models.ModelCargo{}
-
-	// Before delete hookpoint
-	if v, ok := modelObj.(models.IBeforeDelete); ok {
-		hpdata := models.HookPointData{DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
-		err = v.BeforeDeleteDB(hpdata)
-		if err != nil {
-			return nil, err
-		}
 	}
 
 	// Unscoped() for REAL delete!
@@ -455,31 +330,25 @@ func (mapper *GlobalMapper) DeleteOneWithID(db *gorm.DB, oid *datatypes.UUID, sc
 		db = db.Unscoped()
 	}
 
-	err = db.Delete(modelObj).Error
-	if err != nil {
-		return nil, err
+	var before func(hpdata models.HookPointData) error
+	var after func(hpdata models.HookPointData) error
+	if v, ok := modelObj.(models.IBeforeDelete); ok {
+		before = v.BeforeDeleteDB
 	}
-
-	// Remove ownership
-	// modelObj.
-	// db.Model(modelObj).Association("Ownerships").Delete(modelObj.)
-	// c.DB.Model(&user).Association("Roles").Delete(&role)
-
-	err = removePeggedField(db, modelObj)
-	if err != nil {
-		return nil, err
-	}
-
-	// After delete hookpoint
 	if v, ok := modelObj.(models.IAfterDelete); ok {
-		hpdata := models.HookPointData{DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
-		err = v.AfterDeleteDB(hpdata)
-		if err != nil {
-			return nil, err
-		}
+		after = v.AfterDeleteDB
 	}
 
-	return modelObj, nil
+	j := opJob{
+		mapper:     mapper,
+		db:         db,
+		oid:        oid,
+		scope:      scope,
+		typeString: typeString,
+		// oldModelObj: oldModelObj,
+		modelObj: modelObj,
+	}
+	return opCore(before, after, j, deleteOneCore)
 }
 
 // DeleteMany deletes multiple models
@@ -487,26 +356,20 @@ func (mapper *GlobalMapper) DeleteMany(db *gorm.DB, oid *datatypes.UUID, scope *
 	// Since it's global, no permission to check here
 	// only need to check if id is empty
 
-	ids := make([]*datatypes.UUID, len(modelObjs), len(modelObjs))
-	var err error
-	cargo := models.BatchHookCargo{}
-	for i, v := range modelObjs {
-		id := v.GetID()
-		if id.String() == "" {
+	// load old model data
+	ids := make([]*datatypes.UUID, len(modelObjs))
+	for i, modelObj := range modelObjs {
+		// Check error, make sure it has an id and not empty string (could potentially update all records!)
+		id := modelObj.GetID()
+		if id != nil && id.String() != "" {
 			return nil, errIDEmpty
 		}
-
 		ids[i] = id
 	}
 
-	ms := make([]models.IModel, 0, 0)
-
-	// Before batch delete hookpoint
-	if before := models.ModelRegistry[typeString].BeforeDelete; before != nil {
-		bhpData := models.BatchHookPointData{Ms: modelObjs, DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
-		if err = before(bhpData); err != nil {
-			return nil, err
-		}
+	modelObjs, _, err := loadManyAndCheckBeforeModify(mapper, db, oid, scope, typeString, ids, []models.UserRole{models.UserRoleAny})
+	if err != nil {
+		return nil, err
 	}
 
 	// Unscoped() for REAL delete!
@@ -516,41 +379,66 @@ func (mapper *GlobalMapper) DeleteMany(db *gorm.DB, oid *datatypes.UUID, scope *
 		db = db.Unscoped()
 	}
 
-	for i, id := range ids {
-		// Pull out entire modelObj
-		modelObj, _, err := mapper.getOneWithIDCore(db, oid, scope, typeString, id)
-		if err != nil { // Error is "record not found" when not found
-			return nil, err
-		}
+	before := models.ModelRegistry[typeString].BeforeDelete
+	after := models.ModelRegistry[typeString].AfterDelete
 
-		// Unscoped() for REAL delete!
-		// Foreign key constraint works only on real delete
-		// Soft delete will take more work, have to verify myself manually
-		if modelNeedsRealDelete(modelObj) && i == 0 { // only do once
-			db = db.Unscoped()
-		}
+	j := batchOpJob{
+		mapper:     mapper,
+		db:         db,
+		oid:        oid,
+		scope:      scope,
+		typeString: typeString,
+		modelObjs:  modelObjs,
+		// roles:      roles,
+	}
+	return batchOpCore(j, before, after, deleteOneCore)
+}
 
-		err = db.Delete(modelObj).Error
-		// err = db.Delete(modelObj).Error
-		if err != nil {
-			return nil, err
-		}
+// ----------------------------------------------------------------------------------------
 
-		err = removePeggedField(db, modelObj)
-		if err != nil {
-			return nil, err
-		}
+// getOneWithIDCore get one model object based on its type and its id string
+func (mapper *GlobalMapper) getOneWithIDCore(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error) {
+	modelObj := models.NewFromTypeString(typeString)
+	modelObj.SetID(id)
 
-		ms = append(ms, modelObj)
+	db = db.Set("gorm:auto_preload", true)
+
+	// rtable := models.GetTableNameFromIModel(modelObj)
+
+	// Global object, everyone can find it, simply find it
+	err := db.Find(modelObj).Error
+	if err != nil {
+		return nil, 0, err
 	}
 
-	// After batch delete hookpoint
-	if after := models.ModelRegistry[typeString].AfterDelete; after != nil {
-		bhpData := models.BatchHookPointData{Ms: modelObjs, DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
-		if err = after(bhpData); err != nil {
-			return nil, err
-		}
+	role := models.Public // just some default
+
+	err = gormfixes.LoadManyToManyBecauseGormFailsWithID(db, modelObj)
+	if err != nil {
+		return nil, 0, err
 	}
 
-	return ms, nil
+	return modelObj, role, err
+}
+
+func (mapper *GlobalMapper) getManyWithIDsCore(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, ids []*datatypes.UUID) ([]models.IModel, []models.UserRole, error) {
+	rtable := models.GetTableNameFromTypeString(typeString)
+	db = db.Table(rtable).Where(fmt.Sprintf("\"%s\".\"id\" IN (?)", rtable), ids).Set("gorm:auto_preload", true)
+
+	modelObjs, err := models.NewSliceFromDBByTypeString(typeString, db.Set("gorm:auto_preload", true).Find)
+	if err != nil {
+		log.Println("calling NewSliceFromDBByTypeString err:", err)
+		return nil, nil, err
+	}
+
+	// Just in case err didn't work (as in the case with IN clause NOT in the ID field, maybe Gorm bug)
+	if len(modelObjs) == 0 {
+		return nil, nil, fmt.Errorf("not found")
+	}
+
+	if len(modelObjs) != len(ids) {
+		return nil, nil, errBatchUpdateOrPatchOneNotFound
+	}
+
+	return modelObjs, nil, nil
 }

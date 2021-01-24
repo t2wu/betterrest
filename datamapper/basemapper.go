@@ -38,6 +38,8 @@ type IGetOneWithIDMapper interface {
 type IGetAllMapper interface {
 	GetAll(db *gorm.DB, oid *datatypes.UUID, scope *string,
 		typeString string, options map[URLParam]interface{}) ([]models.IModel, []models.UserRole, *int, error)
+
+	getManyWithIDsCore(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, ids []*datatypes.UUID) ([]models.IModel, []models.UserRole, error)
 }
 
 // IUpdateOneWithIDMapper updates a record with the ID
