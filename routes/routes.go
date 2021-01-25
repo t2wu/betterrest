@@ -9,33 +9,33 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func addRoute(r *gin.Engine, typeString string, reg *models.Reg, mapper interface{}) {
+func addRoute(r *gin.Engine, typeString string, reg *models.Reg, mapper datamapper.IDataMapper) {
 	endpoint := strings.ToLower(typeString)
 	g := r.Group("/" + endpoint)
 	{
 		if strings.ContainsAny(reg.BatchEndpoints, "R") {
 			g.GET("", guardMiddleWare(typeString),
-				ReadAllHandler(typeString, mapper.(datamapper.IGetAllMapper))) // e.g. GET /devices
+				ReadAllHandler(typeString, mapper)) // e.g. GET /devices
 		}
 
 		if strings.ContainsAny(reg.BatchEndpoints, "C") {
 			g.POST("", guardMiddleWare(typeString),
-				CreateHandler(typeString, mapper.(datamapper.ICreateMapper)))
+				CreateHandler(typeString, mapper))
 		}
 
 		if strings.ContainsAny(reg.BatchEndpoints, "U") {
 			g.PUT("", guardMiddleWare(typeString),
-				UpdateManyHandler(typeString, mapper.(datamapper.IUpdateManyMapper)))
+				UpdateManyHandler(typeString, mapper))
 		}
 
 		if strings.ContainsAny(reg.BatchEndpoints, "P") {
 			g.PATCH("", guardMiddleWare(typeString),
-				PatchManyHandler(typeString, mapper.(datamapper.IPatchManyMapper)))
+				PatchManyHandler(typeString, mapper))
 		}
 
 		if strings.ContainsAny(reg.BatchEndpoints, "D") {
 			g.DELETE("", guardMiddleWare(typeString),
-				DeleteManyHandler(typeString, mapper.(datamapper.IDeleteMany)))
+				DeleteManyHandler(typeString, mapper))
 		}
 
 		n := g.Group("/:id")
@@ -43,22 +43,22 @@ func addRoute(r *gin.Engine, typeString string, reg *models.Reg, mapper interfac
 			if strings.ContainsAny(reg.IDEndPoints, "R") {
 				// r.Use(OneMiddleWare(typeString))
 				n.GET("", guardMiddleWare(typeString),
-					ReadOneHandler(typeString, mapper.(datamapper.IGetOneWithIDMapper))) // e.g. GET /model/123
+					ReadOneHandler(typeString, mapper)) // e.g. GET /model/123
 			}
 
 			if strings.ContainsAny(reg.IDEndPoints, "U") {
 				n.PUT("", guardMiddleWare(typeString),
-					UpdateOneHandler(typeString, mapper.(datamapper.IUpdateOneWithIDMapper))) // e.g. PUT /model/123
+					UpdateOneHandler(typeString, mapper)) // e.g. PUT /model/123
 			}
 
 			if strings.ContainsAny(reg.IDEndPoints, "P") {
 				n.PATCH("", guardMiddleWare(typeString),
-					PatchOneHandler(typeString, mapper.(datamapper.IPatchOneWithIDMapper))) // e.g. PATCH /model/123
+					PatchOneHandler(typeString, mapper)) // e.g. PATCH /model/123
 			}
 
 			if strings.ContainsAny(reg.IDEndPoints, "D") {
 				n.DELETE("", guardMiddleWare(typeString),
-					DeleteOneHandler(typeString, mapper.(datamapper.IDeleteOneWithID))) // e.g. DELETE /model/123
+					DeleteOneHandler(typeString, mapper)) // e.g. DELETE /model/123
 			}
 		}
 	}
@@ -68,7 +68,7 @@ func addRoute(r *gin.Engine, typeString string, reg *models.Reg, mapper interfac
 func AddRESTRoutes(r *gin.Engine) {
 	for typestring, reg := range models.ModelRegistry {
 		if typestring != "users" {
-			var dm interface{}
+			var dm datamapper.IDataMapper
 			switch reg.Mapper {
 			case models.MapperTypeGlobal:
 				dm = datamapper.SharedGlobalMapper()

@@ -100,11 +100,11 @@ func (mapper *UserMapper) CreateOne(db *gorm.DB, oid *datatypes.UUID, scope *str
 	// return createOneWithHooks(createOneCoreUserMapper, db, oid, scope, typeString, modelObj)
 }
 
-// CreateMany is currently a dummy
-func (mapper *UserMapper) CreateMany(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObjs []models.IModel) ([]models.IModel, error) {
-	// not really implemented
-	return nil, errors.New("not implemented")
-}
+// // CreateMany is currently a dummy
+// func (mapper *UserMapper) CreateMany(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObjs []models.IModel) ([]models.IModel, error) {
+// 	// not really implemented
+// 	return nil, errors.New("not implemented")
+// }
 
 // GetOneWithID get one model object based on its type and its id string
 func (mapper *UserMapper) GetOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error) {
@@ -313,4 +313,31 @@ func preserveEmailPassword(db *gorm.DB, oid *datatypes.UUID, modelObj models.IMo
 	reflect.ValueOf(modelObj).Elem().FieldByName("NewPassword").Set(reflect.ValueOf("")) // just in case
 
 	return modelObj, nil
+}
+
+func (mapper *UserMapper) CreateMany(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj []models.IModel) ([]models.IModel, error) {
+	return nil, fmt.Errorf("Not implemented")
+}
+
+func (mapper *UserMapper) GetAll(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, options map[URLParam]interface{}) ([]models.IModel, []models.UserRole, *int, error) {
+	return nil, nil, nil, fmt.Errorf("Not implemented")
+}
+
+func (mapper *UserMapper) UpdateMany(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObjs []models.IModel) ([]models.IModel, error) {
+	return nil, fmt.Errorf("Not implemented")
+}
+
+func (mapper *UserMapper) PatchMany(db *gorm.DB, oid *datatypes.UUID, scope *string,
+	typeString string, jsonIDPatches []models.JSONIDPatch) ([]models.IModel, error) {
+	return nil, fmt.Errorf("Not implemented")
+}
+
+func (mapper *UserMapper) DeleteMany(db *gorm.DB, oid *datatypes.UUID, scope *string,
+	typeString string, modelObjs []models.IModel) ([]models.IModel, error) {
+	return nil, fmt.Errorf("Not implemented")
+}
+
+func (mapper *UserMapper) PatchOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string,
+	typeString string, jsonPatch []byte, id *datatypes.UUID) (models.IModel, error) {
+	return nil, fmt.Errorf("Not implemented, todo")
 }

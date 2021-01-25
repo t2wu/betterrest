@@ -313,7 +313,7 @@ func getOptionByParsingURL(r *http.Request) (map[datamapper.URLParam]interface{}
 // https://stackoverflow.com/questions/23030884/is-there-a-way-to-create-an-instance-of-a-struct-from-a-string
 
 // ReadAllHandler returns a Gin handler which fetch multiple records of a resource
-func ReadAllHandler(typeString string, mapper datamapper.IGetAllMapper) func(c *gin.Context) {
+func ReadAllHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin.Context) {
 	return func(c *gin.Context) {
 		w, r := c.Writer, c.Request
 		var err error
@@ -354,7 +354,7 @@ func ReadAllHandler(typeString string, mapper datamapper.IGetAllMapper) func(c *
 }
 
 // CreateHandler creates a resource
-func CreateHandler(typeString string, mapper datamapper.ICreateMapper) func(c *gin.Context) {
+func CreateHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin.Context) {
 	return func(c *gin.Context) {
 		w, r := c.Writer, c.Request
 
@@ -416,7 +416,7 @@ func CreateHandler(typeString string, mapper datamapper.ICreateMapper) func(c *g
 }
 
 // ReadOneHandler returns a http.Handler which read one resource
-func ReadOneHandler(typeString string, mapper datamapper.IGetOneWithIDMapper) func(c *gin.Context) {
+func ReadOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin.Context) {
 	// return func(next http.Handler) http.Handler {
 	return func(c *gin.Context) {
 		w, r := c.Writer, c.Request
@@ -454,7 +454,7 @@ func ReadOneHandler(typeString string, mapper datamapper.IGetOneWithIDMapper) fu
 }
 
 // UpdateOneHandler returns a http.Handler which updates a resource
-func UpdateOneHandler(typeString string, mapper datamapper.IUpdateOneWithIDMapper) func(c *gin.Context) {
+func UpdateOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin.Context) {
 	return func(c *gin.Context) {
 		w, r := c.Writer, c.Request
 
@@ -497,7 +497,7 @@ func UpdateOneHandler(typeString string, mapper datamapper.IUpdateOneWithIDMappe
 }
 
 // UpdateManyHandler returns a Gin handler which updates many records
-func UpdateManyHandler(typeString string, mapper datamapper.IUpdateManyMapper) func(c *gin.Context) {
+func UpdateManyHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin.Context) {
 	return func(c *gin.Context) {
 		log.Println("UpdateManyHandler called")
 		w, r := c.Writer, c.Request
@@ -540,7 +540,7 @@ func UpdateManyHandler(typeString string, mapper datamapper.IUpdateManyMapper) f
 }
 
 // PatchOneHandler returns a Gin handler which patch (partial update) one record
-func PatchOneHandler(typeString string, mapper datamapper.IPatchOneWithIDMapper) func(c *gin.Context) {
+func PatchOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin.Context) {
 	return func(c *gin.Context) {
 		log.Println("PatchOneHandler")
 		w, r := c.Writer, c.Request
@@ -591,7 +591,7 @@ func PatchOneHandler(typeString string, mapper datamapper.IPatchOneWithIDMapper)
 }
 
 // PatchManyHandler returns a Gin handler which patch (partial update) many records
-func PatchManyHandler(typeString string, mapper datamapper.IPatchManyMapper) func(c *gin.Context) {
+func PatchManyHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin.Context) {
 	return func(c *gin.Context) {
 		log.Println("PatchManyHandler")
 		w, r := c.Writer, c.Request
@@ -634,7 +634,7 @@ func PatchManyHandler(typeString string, mapper datamapper.IPatchManyMapper) fun
 }
 
 // DeleteOneHandler returns a Gin handler which delete one record
-func DeleteOneHandler(typeString string, mapper datamapper.IDeleteOneWithID) func(c *gin.Context) {
+func DeleteOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin.Context) {
 	return func(c *gin.Context) {
 		log.Println("DeleteOneHandler")
 		w, r := c.Writer, c.Request
@@ -672,7 +672,7 @@ func DeleteOneHandler(typeString string, mapper datamapper.IDeleteOneWithID) fun
 }
 
 // DeleteManyHandler returns a Gin handler which delete many records
-func DeleteManyHandler(typeString string, mapper datamapper.IDeleteMany) func(c *gin.Context) {
+func DeleteManyHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin.Context) {
 	return func(c *gin.Context) {
 		w, r := c.Writer, c.Request
 		log.Println("DeleteManyHandler called")
