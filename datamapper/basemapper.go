@@ -12,8 +12,8 @@ import (
 // Error
 var errPermission = errors.New("permission denied")
 var errPermissionWrongEndPoint = errors.New("permission denied. Change it through the resource endpoint or unable to change your own role.")
-var errIDEmpty = errors.New("cannot update when ID is empty")
-var errIDNotMatch = errors.New("cannot update when ID in HTTP body and URL parameter not match")
+var errIDEmpty = errors.New("cannot operate when ID is empty")
+var errIDNotMatch = errors.New("cannot operate when ID in HTTP body and URL parameter not match")
 var errPatch = errors.New("patch syntax error")               // json: cannot unmarshal object into Go value of type jsonpatch.Patch
 var errNoOwnership = errors.New("model has no OwnershipType") // this is a programmatic error
 var errBatchUpdateOrPatchOneNotFound = errors.New("at least one not found")

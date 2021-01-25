@@ -293,7 +293,7 @@ func (mapper *OwnershipMapper) UpdateMany(db *gorm.DB, oid *datatypes.UUID, scop
 	for i, modelObj := range modelObjs {
 		// Check error, make sure it has an id and not empty string (could potentially update all records!)
 		id := modelObj.GetID()
-		if id != nil && id.String() != "" {
+		if id == nil || id.String() == "" {
 			return nil, errIDEmpty
 		}
 		ids[i] = id
@@ -453,7 +453,7 @@ func (mapper *OwnershipMapper) DeleteMany(db *gorm.DB, oid *datatypes.UUID, scop
 	for i, modelObj := range modelObjs {
 		// Check error, make sure it has an id and not empty string (could potentially update all records!)
 		id := modelObj.GetID()
-		if id != nil && id.String() != "" {
+		if id == nil || id.String() == "" {
 			return nil, errIDEmpty
 		}
 		ids[i] = id
