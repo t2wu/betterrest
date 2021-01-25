@@ -193,7 +193,13 @@ func batchOpCore(job batchOpJob,
 		id := modelObj.GetID()
 
 		// m, err := updateOneCore(mapper, db, oid, scope, typeString, modelObj, id)
-		m, err := taskFunc(mapper, db, oid, scope, typeString, modelObj, id, oldmodelObjs[i])
+		var m models.IModel
+		var err error
+		if oldmodelObjs == nil {
+			m, err = taskFunc(mapper, db, oid, scope, typeString, modelObj, id, nil)
+		} else {
+			m, err = taskFunc(mapper, db, oid, scope, typeString, modelObj, id, oldmodelObjs[i])
+		}
 		if err != nil { // Error is "record not found" when not found
 			return nil, err
 		}
