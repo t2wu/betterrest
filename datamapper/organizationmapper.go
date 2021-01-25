@@ -446,6 +446,13 @@ func (mapper *OrganizationMapper) DeleteOneWithID(db *gorm.DB, oid *datatypes.UU
 		return nil, err
 	}
 
+	// Unscoped() for REAL delete!
+	// Foreign key constraint works only on real delete
+	// Soft delete will take more work, have to verify myself manually
+	if modelNeedsRealDelete(modelObj) {
+		db = db.Unscoped()
+	}
+
 	var before func(hpdata models.HookPointData) error
 	var after func(hpdata models.HookPointData) error
 	if v, ok := modelObj.(models.IBeforeDelete); ok {
