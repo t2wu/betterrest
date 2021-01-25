@@ -1,13 +1,14 @@
 package datamapper
 
 import (
-	"fmt"
+	"errors"
 	"log"
 	"sync"
 	"time"
 
 	"github.com/jinzhu/gorm"
 	"github.com/t2wu/betterrest/datamapper/gormfixes"
+	"github.com/t2wu/betterrest/datamapper/service"
 	"github.com/t2wu/betterrest/libs/datatypes"
 	"github.com/t2wu/betterrest/models"
 )
@@ -19,12 +20,13 @@ var crudGlobal *GlobalMapper
 
 // GlobalMapper is a basic CRUD manager
 type GlobalMapper struct {
+	Service service.IService
 }
 
 // SharedGlobalMapper creats a singleton of Crud object
 func SharedGlobalMapper() *GlobalMapper {
 	onceGlobal.Do(func() {
-		crudGlobal = &GlobalMapper{}
+		crudGlobal = &GlobalMapper{Service: &service.GlobalService{}}
 	})
 
 	return crudGlobal
@@ -32,10 +34,9 @@ func SharedGlobalMapper() *GlobalMapper {
 
 // CreateOne creates an instance of this model based on json and store it in db
 func (mapper *GlobalMapper) CreateOne(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel) (models.IModel, error) {
-	modelID := modelObj.GetID()
-	if modelID == nil {
-		modelID = datatypes.NewUUID()
-		modelObj.SetID(modelID)
+	modelObj, err := mapper.Service.HookBeforeCreateOne(db, oid, scope, typeString, modelObj)
+	if err != nil {
+		return nil, err
 	}
 
 	var before func(hpdata models.HookPointData) error
@@ -48,7 +49,7 @@ func (mapper *GlobalMapper) CreateOne(db *gorm.DB, oid *datatypes.UUID, scope *s
 	}
 
 	j := opJob{
-		mapper:     mapper,
+		serv:       mapper.Service,
 		db:         db,
 		oid:        oid,
 		scope:      scope,
@@ -61,20 +62,15 @@ func (mapper *GlobalMapper) CreateOne(db *gorm.DB, oid *datatypes.UUID, scope *s
 
 // CreateMany creates an instance of this model based on json and store it in db
 func (mapper *GlobalMapper) CreateMany(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObjs []models.IModel) ([]models.IModel, error) {
-	// This probably is not necessary
-	for i, modelObj := range modelObjs {
-		modelID := modelObj.GetID()
-		if modelID == nil {
-			modelID = datatypes.NewUUID()
-			modelObj.SetID(modelID)
-		}
-		modelObjs[i] = modelObj
+	modelObjs, err := mapper.Service.HookBeforeCreateMany(db, oid, scope, typeString, modelObjs)
+	if err != nil {
+		return nil, err
 	}
 
 	before := models.ModelRegistry[typeString].BeforeInsert
 	after := models.ModelRegistry[typeString].AfterInsert
 	j := batchOpJob{
-		mapper:       mapper,
+		serv:         mapper.Service,
 		db:           db,
 		oid:          oid,
 		scope:        scope,
@@ -87,7 +83,7 @@ func (mapper *GlobalMapper) CreateMany(db *gorm.DB, oid *datatypes.UUID, scope *
 
 // GetOneWithID get one model object based on its type and its id string
 func (mapper *GlobalMapper) GetOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error) {
-	modelObj, role, err := loadAndCheckErrorBeforeModify(mapper, db, oid, scope, typeString, nil, id, []models.UserRole{models.UserRoleAny})
+	modelObj, role, err := loadAndCheckErrorBeforeModify(mapper.Service, db, oid, scope, typeString, nil, id, []models.UserRole{models.UserRoleAny})
 	if err != nil {
 		return nil, models.Invalid, err
 	}
@@ -110,13 +106,11 @@ func (mapper *GlobalMapper) GetAll(db *gorm.DB, oid *datatypes.UUID, scope *stri
 	offset, limit, cstart, cstop, order, latestn, totalcount := getOptions(options)
 
 	rtable := models.GetTableNameFromTypeString(typeString)
-
 	if cstart != nil && cstop != nil {
 		db = db.Where(rtable+".created_at BETWEEN ? AND ?", time.Unix(int64(*cstart), 0), time.Unix(int64(*cstop), 0))
 	}
 
 	var err error
-
 	db, err = constructInnerFieldParamQueries(db, typeString, options, latestn)
 	if err != nil {
 		return nil, nil, nil, err
@@ -137,18 +131,17 @@ func (mapper *GlobalMapper) GetAll(db *gorm.DB, oid *datatypes.UUID, scope *stri
 	}
 
 	if offset != nil && limit != nil {
-		// rows.Scan()
 		db = db.Offset(*offset).Limit(*limit)
-		// db2 = db2.Offset(*offset).Limit(*limit)
 	}
 
-	outmodels, err := models.NewSliceFromDBByTypeString(typeString, db.Find) // error from db is returned from here
+	outmodels, roles, err := mapper.Service.GetAllCore(db, oid, scope, typeString)
+	if err != nil {
+		return nil, nil, nil, err
+	}
 
-	// Don't know why this doesn't work
-	roles := make([]models.UserRole, len(outmodels), len(outmodels))
-
-	for i := range roles {
-		roles[i] = models.Public
+	// safeguard, Must be coded wrongly
+	if len(outmodels) != len(roles) {
+		return nil, nil, nil, errors.New("unknown query error")
 	}
 
 	// make many to many tag works
@@ -175,7 +168,7 @@ func (mapper *GlobalMapper) GetAll(db *gorm.DB, oid *datatypes.UUID, scope *stri
 func (mapper *GlobalMapper) UpdateOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id *datatypes.UUID) (models.IModel, error) {
 	var oldModelObj models.IModel
 	var err error
-	if oldModelObj, _, err = loadAndCheckErrorBeforeModify(mapper, db, oid, scope, typeString, modelObj, id, []models.UserRole{models.UserRoleAny}); err != nil {
+	if oldModelObj, _, err = loadAndCheckErrorBeforeModify(mapper.Service, db, oid, scope, typeString, modelObj, id, []models.UserRole{models.UserRoleAny}); err != nil {
 		return nil, err
 	}
 
@@ -189,7 +182,8 @@ func (mapper *GlobalMapper) UpdateOneWithID(db *gorm.DB, oid *datatypes.UUID, sc
 	}
 
 	j := opJob{
-		mapper:      mapper,
+		// mapper:      mapper,
+		serv:        mapper.Service,
 		db:          db,
 		oid:         oid,
 		scope:       scope,
@@ -209,12 +203,12 @@ func (mapper *GlobalMapper) UpdateMany(db *gorm.DB, oid *datatypes.UUID, scope *
 		// Check error, make sure it has an id and not empty string (could potentially update all records!)
 		id := modelObj.GetID()
 		if id == nil || id.String() == "" {
-			return nil, errIDEmpty
+			return nil, service.ErrIDEmpty
 		}
 		ids[i] = id
 	}
 
-	oldModelObjs, _, err := loadManyAndCheckBeforeModify(mapper, db, oid, scope, typeString, ids, []models.UserRole{models.UserRoleAny})
+	oldModelObjs, _, err := loadManyAndCheckBeforeModify(mapper.Service, db, oid, scope, typeString, ids, []models.UserRole{models.UserRoleAny})
 	if err != nil {
 		return nil, err
 	}
@@ -222,7 +216,7 @@ func (mapper *GlobalMapper) UpdateMany(db *gorm.DB, oid *datatypes.UUID, scope *
 	before := models.ModelRegistry[typeString].BeforeUpdate
 	after := models.ModelRegistry[typeString].AfterUpdate
 	j := batchOpJob{
-		mapper:       mapper,
+		serv:         mapper.Service,
 		db:           db,
 		oid:          oid,
 		scope:        scope,
@@ -236,7 +230,7 @@ func (mapper *GlobalMapper) UpdateMany(db *gorm.DB, oid *datatypes.UUID, scope *
 // PatchOneWithID updates model based on this json
 // This is the same as ownershipdata mapper (inheritance?)
 func (mapper *GlobalMapper) PatchOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, jsonPatch []byte, id *datatypes.UUID) (models.IModel, error) {
-	oldModelObj, _, err := loadAndCheckErrorBeforeModify(mapper, db, oid, scope, typeString, nil, id, []models.UserRole{models.UserRoleAny})
+	oldModelObj, _, err := loadAndCheckErrorBeforeModify(mapper.Service, db, oid, scope, typeString, nil, id, []models.UserRole{models.UserRoleAny})
 	if err != nil {
 		return nil, err
 	}
@@ -258,7 +252,7 @@ func (mapper *GlobalMapper) PatchOneWithID(db *gorm.DB, oid *datatypes.UUID, sco
 	}
 
 	j := opJob{
-		mapper:      mapper,
+		serv:        mapper.Service,
 		db:          db,
 		oid:         oid,
 		scope:       scope,
@@ -277,12 +271,12 @@ func (mapper *GlobalMapper) PatchMany(db *gorm.DB, oid *datatypes.UUID, scope *s
 	for i, jsonIDPatch := range jsonIDPatches {
 		// Check error, make sure it has an id and not empty string (could potentially update all records!)
 		if jsonIDPatch.ID.String() == "" {
-			return nil, errIDEmpty
+			return nil, service.ErrIDEmpty
 		}
 		ids[i] = jsonIDPatch.ID
 	}
 
-	oldModelObjs, _, err := loadManyAndCheckBeforeModify(mapper, db, oid, scope, typeString, ids, []models.UserRole{models.UserRoleAny})
+	oldModelObjs, _, err := loadManyAndCheckBeforeModify(mapper.Service, db, oid, scope, typeString, ids, []models.UserRole{models.UserRoleAny})
 	if err != nil {
 		return nil, err
 	}
@@ -291,7 +285,7 @@ func (mapper *GlobalMapper) PatchMany(db *gorm.DB, oid *datatypes.UUID, scope *s
 	modelObjs := make([]models.IModel, len(oldModelObjs))
 	for i, jsonIDPatch := range jsonIDPatches {
 		// Any one can patch is since it's global. If there should be restrictions, it should be done
-		// in hookpoints
+		// in model hookpoints
 		// Apply patch operations
 		modelObjs[i], err = applyPatchCore(typeString, oldModelObjs[i], []byte(jsonIDPatch.Patch))
 		if err != nil {
@@ -303,14 +297,13 @@ func (mapper *GlobalMapper) PatchMany(db *gorm.DB, oid *datatypes.UUID, scope *s
 	before := models.ModelRegistry[typeString].BeforePatch
 	after := models.ModelRegistry[typeString].AfterPatch
 	j := batchOpJob{
-		mapper:       mapper,
+		serv:         mapper.Service,
 		db:           db,
 		oid:          oid,
 		scope:        scope,
 		typeString:   typeString,
 		oldmodelObjs: oldModelObjs,
 		modelObjs:    modelObjs,
-		// roles:        roles,
 	}
 	return batchOpCore(j, before, after, updateOneCore)
 }
@@ -318,7 +311,7 @@ func (mapper *GlobalMapper) PatchMany(db *gorm.DB, oid *datatypes.UUID, scope *s
 // DeleteOneWithID delete the model
 // TODO: delete the groups associated with this record?
 func (mapper *GlobalMapper) DeleteOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, id *datatypes.UUID) (models.IModel, error) {
-	modelObj, _, err := loadAndCheckErrorBeforeModify(mapper, db, oid, scope, typeString, nil, id, []models.UserRole{models.UserRoleAny})
+	modelObj, _, err := loadAndCheckErrorBeforeModify(mapper.Service, db, oid, scope, typeString, nil, id, []models.UserRole{models.UserRoleAny})
 	if err != nil {
 		return nil, err
 	}
@@ -328,6 +321,11 @@ func (mapper *GlobalMapper) DeleteOneWithID(db *gorm.DB, oid *datatypes.UUID, sc
 	// Soft delete will take more work, have to verify myself manually
 	if modelNeedsRealDelete(modelObj) {
 		db = db.Unscoped()
+	}
+
+	modelObj, err = mapper.Service.HookBeforeDeleteOne(db, oid, scope, typeString, modelObj)
+	if err != nil {
+		return nil, err
 	}
 
 	var before func(hpdata models.HookPointData) error
@@ -340,7 +338,8 @@ func (mapper *GlobalMapper) DeleteOneWithID(db *gorm.DB, oid *datatypes.UUID, sc
 	}
 
 	j := opJob{
-		mapper:     mapper,
+		// mapper:     mapper,
+		serv:       mapper.Service,
 		db:         db,
 		oid:        oid,
 		scope:      scope,
@@ -362,12 +361,12 @@ func (mapper *GlobalMapper) DeleteMany(db *gorm.DB, oid *datatypes.UUID, scope *
 		// Check error, make sure it has an id and not empty string (could potentially update all records!)
 		id := modelObj.GetID()
 		if id == nil || id.String() == "" {
-			return nil, errIDEmpty
+			return nil, service.ErrIDEmpty
 		}
 		ids[i] = id
 	}
 
-	modelObjs, _, err := loadManyAndCheckBeforeModify(mapper, db, oid, scope, typeString, ids, []models.UserRole{models.UserRoleAny})
+	modelObjs, _, err := loadManyAndCheckBeforeModify(mapper.Service, db, oid, scope, typeString, ids, []models.UserRole{models.UserRoleAny})
 	if err != nil {
 		return nil, err
 	}
@@ -379,73 +378,23 @@ func (mapper *GlobalMapper) DeleteMany(db *gorm.DB, oid *datatypes.UUID, scope *
 		db = db.Unscoped()
 	}
 
+	modelObjs, err = mapper.Service.HookBeforeDeleteMany(db, oid, scope, typeString, modelObjs)
+	if err != nil {
+		return nil, err
+	}
+
 	before := models.ModelRegistry[typeString].BeforeDelete
 	after := models.ModelRegistry[typeString].AfterDelete
 
 	j := batchOpJob{
-		mapper:     mapper,
+		serv:       mapper.Service,
 		db:         db,
 		oid:        oid,
 		scope:      scope,
 		typeString: typeString,
 		modelObjs:  modelObjs,
-		// roles:      roles,
 	}
 	return batchOpCore(j, before, after, deleteOneCore)
 }
 
 // ----------------------------------------------------------------------------------------
-
-// getOneWithIDCore get one model object based on its type and its id string
-func (mapper *GlobalMapper) getOneWithIDCore(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error) {
-	modelObj := models.NewFromTypeString(typeString)
-	modelObj.SetID(id)
-
-	db = db.Set("gorm:auto_preload", true)
-
-	// rtable := models.GetTableNameFromIModel(modelObj)
-
-	// Global object, everyone can find it, simply find it
-	err := db.Find(modelObj).Error
-	if err != nil {
-		return nil, 0, err
-	}
-
-	role := models.Public // just some default
-
-	err = gormfixes.LoadManyToManyBecauseGormFailsWithID(db, modelObj)
-	if err != nil {
-		return nil, 0, err
-	}
-
-	return modelObj, role, err
-}
-
-func (mapper *GlobalMapper) getManyWithIDsCore(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, ids []*datatypes.UUID) ([]models.IModel, []models.UserRole, error) {
-	rtable := models.GetTableNameFromTypeString(typeString)
-	db = db.Table(rtable).Where(fmt.Sprintf("\"%s\".\"id\" IN (?)", rtable), ids).Set("gorm:auto_preload", true)
-
-	modelObjs, err := models.NewSliceFromDBByTypeString(typeString, db.Set("gorm:auto_preload", true).Find)
-	if err != nil {
-		log.Println("calling NewSliceFromDBByTypeString err:", err)
-		return nil, nil, err
-	}
-
-	// Just in case err didn't work (as in the case with IN clause NOT in the ID field, maybe Gorm bug)
-	if len(modelObjs) == 0 {
-		return nil, nil, fmt.Errorf("not found")
-	}
-
-	if len(modelObjs) != len(ids) {
-		return nil, nil, errBatchUpdateOrPatchOneNotFound
-	}
-
-	for _, modelObj := range modelObjs {
-		err = gormfixes.LoadManyToManyBecauseGormFailsWithID(db, modelObj)
-		if err != nil {
-			return nil, nil, err
-		}
-	}
-
-	return modelObjs, nil, nil
-}

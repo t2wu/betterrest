@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"strconv"
 
+	"github.com/t2wu/betterrest/datamapper/service"
 	"github.com/t2wu/betterrest/libs/datatypes"
 	"github.com/t2wu/betterrest/models"
 
@@ -69,14 +70,14 @@ func getOptions(options map[URLParam]interface{}) (offset *int, limit *int, csta
 	return offset, limit, cstart, cstop, order, latestn, hasTotalCount
 }
 
-func getModelTableNameAndJoinTableNameFromTypeString(typeString string) (string, string, error) {
-	modelObjOwnership, ok := models.NewFromTypeString(typeString).(models.IHasOwnershipLink)
-	if !ok {
-		return "", "", errNoOwnership
+// TODO: This method repeated twice, not sure where to put it
+func modelNeedsRealDelete(modelObj models.IModel) bool {
+	// real delete by default
+	realDelete := true
+	if modelObj2, ok := modelObj.(models.IDoRealDelete); ok {
+		realDelete = modelObj2.DoRealDelete()
 	}
-	joinTableName := models.GetJoinTableName(modelObjOwnership)
-	modelTableName := models.GetTableNameFromTypeString(typeString)
-	return modelTableName, joinTableName, nil
+	return realDelete
 }
 
 func getOwnershipModelTypeFromTypeString(typeString string) reflect.Type {
@@ -115,17 +116,17 @@ func constructOrderFieldQueries(db *gorm.DB, tableName string, order *string) *g
 	return db
 }
 
-func loadAndCheckErrorBeforeModify(mapper IGetOneWithIDMapper, db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id *datatypes.UUID, permittedRoles []models.UserRole) (models.IModel, models.UserRole, error) {
+func loadAndCheckErrorBeforeModify(serv service.IService, db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id *datatypes.UUID, permittedRoles []models.UserRole) (models.IModel, models.UserRole, error) {
 	if id == nil || id.UUID.String() == "" {
 		// in case it's an empty string
-		return nil, models.Invalid, errIDEmpty
+		return nil, models.Invalid, service.ErrIDEmpty
 	}
 
 	// Check if ID from URL and ID in object are the same (meaningful when it's not batch edit)
 	// modelObj is nil if it's a patch operation. In that case just here to load and check permission.
 	// it's also nil when it's a get one op
 	if modelObj != nil && modelObj.GetID().String() != id.String() {
-		return nil, models.Invalid, errIDNotMatch
+		return nil, models.Invalid, service.ErrIDNotMatch
 	}
 
 	// If you're able to read, you have the permission to update...
@@ -133,7 +134,7 @@ func loadAndCheckErrorBeforeModify(mapper IGetOneWithIDMapper, db *gorm.DB, oid 
 	// TODO: Is there a more efficient way?
 	// For ownership: role is the role of the model to the user
 	// for models under organization, the role is the role of the organization to the user
-	modelObj2, role, err := mapper.getOneWithIDCore(db, oid, scope, typeString, id)
+	modelObj2, role, err := serv.GetOneWithIDCore(db, oid, scope, typeString, id)
 	if err != nil { // Error is "record not found" when not found
 		return nil, models.Invalid, err
 	}
@@ -149,16 +150,16 @@ func loadAndCheckErrorBeforeModify(mapper IGetOneWithIDMapper, db *gorm.DB, oid 
 		}
 	}
 	if !permitted {
-		return nil, models.Invalid, errPermission
+		return nil, models.Invalid, service.ErrPermission
 	}
 
 	return modelObj2, role, nil
 }
 
 // db should already be set up for all the joins needed, if any
-func loadManyAndCheckBeforeModify(mapper IGetAllMapper, db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string,
+func loadManyAndCheckBeforeModify(serv service.IService, db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string,
 	ids []*datatypes.UUID, permittedRoles []models.UserRole) ([]models.IModel, []models.UserRole, error) {
-	modelObjs, roles, err := mapper.getManyWithIDsCore(db, oid, scope, typeString, ids)
+	modelObjs, roles, err := serv.GetManyWithIDsCore(db, oid, scope, typeString, ids)
 	if err != nil {
 		log.Println("calling getManyWithIDsCore err:", err)
 		return nil, nil, err
@@ -166,7 +167,7 @@ func loadManyAndCheckBeforeModify(mapper IGetAllMapper, db *gorm.DB, oid *dataty
 
 	for _, role := range roles {
 		if role != models.Admin {
-			return nil, nil, errPermission
+			return nil, nil, service.ErrPermission
 		}
 	}
 
@@ -182,7 +183,7 @@ func loadManyAndCheckBeforeModify(mapper IGetAllMapper, db *gorm.DB, oid *dataty
 			}
 		}
 		if !permitted {
-			return nil, nil, errPermission
+			return nil, nil, service.ErrPermission
 		}
 	}
 
@@ -196,7 +197,7 @@ func applyPatchCore(typeString string, modelObj models.IModel, jsonPatch []byte)
 	var modelInBytes []byte
 	modelInBytes, err = json.Marshal(modelObj)
 	if err != nil {
-		return nil, errPatch // the errors often not that helpful anyway
+		return nil, service.ErrPatch // the errors often not that helpful anyway
 	}
 
 	var patch jsonpatch.Patch
@@ -220,13 +221,4 @@ func applyPatchCore(typeString string, modelObj models.IModel, jsonPatch []byte)
 	}
 
 	return modelObj2, nil
-}
-
-func modelNeedsRealDelete(modelObj models.IModel) bool {
-	// real delete by default
-	realDelete := true
-	if modelObj2, ok := modelObj.(models.IDoRealDelete); ok {
-		realDelete = modelObj2.DoRealDelete()
-	}
-	return realDelete
 }

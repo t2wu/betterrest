@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/t2wu/betterrest/datamapper/gormfixes"
+	"github.com/t2wu/betterrest/datamapper/service"
 	"github.com/t2wu/betterrest/libs/datatypes"
 	"github.com/t2wu/betterrest/libs/security"
 	"github.com/t2wu/betterrest/models"
@@ -52,12 +53,13 @@ var usercrud *UserMapper
 
 // UserMapper is a User CRUD manager
 type UserMapper struct {
+	Service service.IService
 }
 
 // SharedUserMapper creats a singleton of Crud object
 func SharedUserMapper() *UserMapper {
 	onceUser.Do(func() {
-		usercrud = &UserMapper{}
+		usercrud = &UserMapper{Service: &service.UserService{}}
 	})
 
 	return usercrud
@@ -71,33 +73,10 @@ func SharedUserMapper() *UserMapper {
 // CreateOne creates an user model based on json and store it in db
 // Also creates a ownership with admin access
 func (mapper *UserMapper) CreateOne(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel) (models.IModel, error) {
-	// Special case, there is really no oid in this case, user doesn't exist yet
-
-	// modelObj is a a User struct, but we cannot do type assertion because library user
-	// should define it. If we make an interface with user.Ownership setter and getter,
-	// we need to ask library user to define a user.Ownership setter and getter, it's too
-	// much hassle
-	password := reflect.ValueOf(modelObj).Elem().FieldByName(("Password")).Interface().(string)
-
-	// Additional checking because password should not be blank with create
-	if password == "" {
-		log.Println("password should not be blank!!!")
-		return nil, fmt.Errorf("password should not be blank")
-	}
-
-	// field, _ := reflect.TypeOf(modelObj).Elem().FieldByName("Ownerships")
-	// ownershipType := field.Type
-
-	// ownership := reflect.ValueOf(modelObj).Elem().FieldByName("Ownerships")
-	// ownership.Set(reflect.MakeSlice(reflect.SliceOf(ownershipType), 1, 1))
-	// ownership.Index(0).Set(reflect.New(ownershipType).Elem())
-
-	hash, err := security.HashAndSalt(password)
+	modelObj, err := mapper.Service.HookBeforeCreateOne(db, oid, scope, typeString, modelObj)
 	if err != nil {
 		return nil, err
 	}
-
-	reflect.ValueOf(modelObj).Elem().FieldByName("PasswordHash").Set(reflect.ValueOf(hash))
 
 	var before func(hpdata models.HookPointData) error
 	var after func(hpdata models.HookPointData) error
@@ -108,7 +87,7 @@ func (mapper *UserMapper) CreateOne(db *gorm.DB, oid *datatypes.UUID, scope *str
 		after = v.AfterInsertDB
 	}
 	j := opJob{
-		mapper:     mapper,
+		serv:       mapper.Service,
 		db:         db,
 		oid:        oid,
 		scope:      scope,
@@ -129,7 +108,7 @@ func (mapper *UserMapper) CreateMany(db *gorm.DB, oid *datatypes.UUID, scope *st
 
 // GetOneWithID get one model object based on its type and its id string
 func (mapper *UserMapper) GetOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error) {
-	modelObj, role, err := mapper.getOneWithIDCore(db, oid, scope, typeString, id)
+	modelObj, role, err := mapper.Service.GetOneWithIDCore(db, oid, scope, typeString, id)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -144,32 +123,12 @@ func (mapper *UserMapper) GetOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *
 	return modelObj, role, nil
 }
 
-// getOneWithID get one model object based on its type and its id string without invoking read hookpoing
-func (mapper *UserMapper) getOneWithIDCore(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error) {
-	// TODO: Currently can only read ID from your own (not others in the admin group either)
-	db = db.Set("gorm:auto_preload", true)
-
-	// Todo: maybe guest shoud be able to read some fields
-	if id.String() != oid.String() {
-		return nil, 0, errPermission
-	}
-
-	modelObj := models.NewFromTypeString(typeString)
-	modelObj.SetID(oid)
-
-	if err := db.First(modelObj).Error; err != nil {
-		return nil, 0, err
-	}
-
-	return modelObj, models.Admin, nil
-}
-
 // UpdateOneWithID updates model based on this json
 // Update DOESN'T change password. It'll load up the password hash and save the same.
 // Update password require special endpoint
 func (mapper *UserMapper) UpdateOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id *datatypes.UUID) (models.IModel, error) {
 	log.Println("userMapper's UpdateOneWithID called")
-	oldModelObj, _, err := loadAndCheckErrorBeforeModify(mapper, db, oid, scope, typeString, modelObj, id, []models.UserRole{models.Admin})
+	oldModelObj, _, err := loadAndCheckErrorBeforeModify(mapper.Service, db, oid, scope, typeString, modelObj, id, []models.UserRole{models.Admin})
 	if err != nil {
 		return nil, err
 	}
@@ -189,7 +148,7 @@ func (mapper *UserMapper) UpdateOneWithID(db *gorm.DB, oid *datatypes.UUID, scop
 		}
 	}
 
-	modelObj2, err := updateOneCore(mapper, db, oid, scope, typeString, modelObj, id, oldModelObj)
+	modelObj2, err := updateOneCore(mapper.Service, db, oid, scope, typeString, modelObj, id, oldModelObj)
 	if err != nil {
 		return nil, err
 	}
@@ -208,7 +167,7 @@ func (mapper *UserMapper) UpdateOneWithID(db *gorm.DB, oid *datatypes.UUID, scop
 // DeleteOneWithID deletes the user with the ID
 func (mapper *UserMapper) DeleteOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, id *datatypes.UUID) (models.IModel, error) {
 	if id == nil || id.UUID.String() == "" {
-		return nil, errIDEmpty
+		return nil, service.ErrIDEmpty
 	}
 
 	// Pull out entire modelObj
@@ -264,7 +223,7 @@ func (mapper *UserMapper) DeleteOneWithID(db *gorm.DB, oid *datatypes.UUID, scop
 // ChangeEmailPasswordWithID changes email and/or password
 func (mapper *UserMapper) ChangeEmailPasswordWithID(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id *datatypes.UUID) (models.IModel, error) {
 	log.Println("userMapper's ChangeEmailPasswordWithID called")
-	oldModelObj, _, err := loadAndCheckErrorBeforeModify(mapper, db, oid, scope, typeString, modelObj, id, []models.UserRole{models.Admin})
+	oldModelObj, _, err := loadAndCheckErrorBeforeModify(mapper.Service, db, oid, scope, typeString, modelObj, id, []models.UserRole{models.Admin})
 	if err != nil {
 		return nil, err
 	}
@@ -313,7 +272,7 @@ func (mapper *UserMapper) ChangeEmailPasswordWithID(db *gorm.DB, oid *datatypes.
 		}
 	}
 
-	modelObj2, err := updateOneCore(mapper, db, oid, scope, typeString, modelObj, id, oldModelObj)
+	modelObj2, err := updateOneCore(mapper.Service, db, oid, scope, typeString, modelObj, id, oldModelObj)
 	if err != nil {
 		return nil, err
 	}

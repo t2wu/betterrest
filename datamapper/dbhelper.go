@@ -6,6 +6,7 @@ import (
 
 	"github.com/jinzhu/gorm"
 	"github.com/t2wu/betterrest/datamapper/gormfixes"
+	"github.com/t2wu/betterrest/datamapper/service"
 	"github.com/t2wu/betterrest/libs/datatypes"
 	"github.com/t2wu/betterrest/models"
 )
@@ -43,7 +44,7 @@ import (
 // }
 
 // createOneCoreOwnership creates a model
-func createOneCoreOwnership(mapper IGetOneWithIDMapper, db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObj models.IModel) (models.IModel, error) {
+func createOneCoreOwnership(serv service.IService, db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObj models.IModel) (models.IModel, error) {
 	// It looks like I need to explicitly call create here
 	o := reflect.ValueOf(modelObj).Elem().FieldByName("Ownerships")
 	g, _ := o.Index(0).Addr().Interface().(models.IOwnership)
@@ -74,7 +75,7 @@ func createOneCoreOwnership(mapper IGetOneWithIDMapper, db *gorm.DB, oid *dataty
 }
 
 // createOneCoreBasic creates a user
-func createOneCoreBasic(mapper IGetOneWithIDMapper, db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObj models.IModel) (models.IModel, error) {
+func createOneCoreBasic(serv service.IService, db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObj models.IModel) (models.IModel, error) {
 	// No need to check if primary key is blank.
 	// If it is it'll be created by Gorm's BeforeCreate hook
 	// (defined in base model)
@@ -102,7 +103,7 @@ func createOneCoreBasic(mapper IGetOneWithIDMapper, db *gorm.DB, oid *datatypes.
 
 // updateOneCore one, permissin should already be checked
 // called for patch operation as well (after patch has already applied)
-func updateOneCore(mapper IGetOneWithIDMapper, db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObj models.IModel) (modelObj2 models.IModel, err error) {
+func updateOneCore(serv service.IService, db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObj models.IModel) (modelObj2 models.IModel, err error) {
 	if modelNeedsRealDelete(oldModelObj) { // parent model
 		db = db.Unscoped()
 	}
@@ -131,7 +132,7 @@ func updateOneCore(mapper IGetOneWithIDMapper, db *gorm.DB, oid *datatypes.UUID,
 
 	// This loads the IDs
 	// This so we have the preloading.
-	modelObj2, _, err = mapper.getOneWithIDCore(db, oid, scope, typeString, id)
+	modelObj2, _, err = serv.GetOneWithIDCore(db, oid, scope, typeString, id)
 	if err != nil { // Error is "record not found" when not found
 		log.Println("Error:", err)
 		return nil, err
@@ -144,7 +145,7 @@ func updateOneCore(mapper IGetOneWithIDMapper, db *gorm.DB, oid *datatypes.UUID,
 	return modelObj2, nil
 }
 
-func deleteOneCore(mapper IGetOneWithIDMapper, db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObjs models.IModel) (models.IModel, error) {
+func deleteOneCore(serv service.IService, db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObjs models.IModel) (models.IModel, error) {
 	// Many field is not used, it's just used to conform the interface
 	if err := db.Delete(modelObj).Error; err != nil {
 		return nil, err
@@ -158,7 +159,8 @@ func deleteOneCore(mapper IGetOneWithIDMapper, db *gorm.DB, oid *datatypes.UUID,
 }
 
 type batchOpJob struct {
-	mapper       IGetOneWithIDMapper
+	// mapper       IGetOneWithIDMapper
+	serv         service.IService
 	db           *gorm.DB
 	oid          *datatypes.UUID
 	scope        *string
@@ -170,11 +172,11 @@ type batchOpJob struct {
 func batchOpCore(job batchOpJob,
 	before func(bhpData models.BatchHookPointData) error,
 	after func(bhpData models.BatchHookPointData) error,
-	taskFunc func(mapper IGetOneWithIDMapper, db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObj models.IModel) (models.IModel, error),
+	taskFunc func(serv service.IService, db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObj models.IModel) (models.IModel, error),
 ) ([]models.IModel, error) {
 
-	mapper, db, oid, scope, typeString, modelObjs, oldmodelObjs :=
-		job.mapper, job.db, job.oid, job.scope, job.typeString, job.modelObjs, job.oldmodelObjs
+	serv, db, oid, scope, typeString, modelObjs, oldmodelObjs :=
+		job.serv, job.db, job.oid, job.scope, job.typeString, job.modelObjs, job.oldmodelObjs
 
 	ms := make([]models.IModel, len(modelObjs))
 	cargo := models.BatchHookCargo{}
@@ -192,13 +194,13 @@ func batchOpCore(job batchOpJob,
 	for i, modelObj := range modelObjs {
 		id := modelObj.GetID()
 
-		// m, err := updateOneCore(mapper, db, oid, scope, typeString, modelObj, id)
+		// m, err := updateOneCore(serv, db, oid, scope, typeString, modelObj, id)
 		var m models.IModel
 		var err error
 		if oldmodelObjs == nil {
-			m, err = taskFunc(mapper, db, oid, scope, typeString, modelObj, id, nil)
+			m, err = taskFunc(serv, db, oid, scope, typeString, modelObj, id, nil)
 		} else {
-			m, err = taskFunc(mapper, db, oid, scope, typeString, modelObj, id, oldmodelObjs[i])
+			m, err = taskFunc(serv, db, oid, scope, typeString, modelObj, id, oldmodelObjs[i])
 		}
 		if err != nil { // Error is "record not found" when not found
 			return nil, err
@@ -220,7 +222,8 @@ func batchOpCore(job batchOpJob,
 }
 
 type opJob struct {
-	mapper      IGetOneWithIDMapper
+	// mapper      IGetOneWithIDMapper
+	serv        service.IService
 	db          *gorm.DB
 	oid         *datatypes.UUID
 	scope       *string
@@ -232,9 +235,9 @@ type opJob struct {
 func opCore(before func(hpdata models.HookPointData) error,
 	after func(hpdata models.HookPointData) error,
 	job opJob,
-	taskFun func(mapper IGetOneWithIDMapper, db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObj models.IModel) (models.IModel, error),
+	taskFun func(serv service.IService, db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObj models.IModel) (models.IModel, error),
 ) (models.IModel, error) {
-	mapper, db, oid, scope, typeString, oldModelObj, modelObj := job.mapper, job.db,
+	serv, db, oid, scope, typeString, oldModelObj, modelObj := job.serv, job.db,
 		job.oid, job.scope, job.typeString, job.oldModelObj, job.modelObj
 
 	cargo := models.ModelCargo{}
@@ -251,7 +254,7 @@ func opCore(before func(hpdata models.HookPointData) error,
 
 	// Now do the task
 	id := modelObj.GetID()
-	modelObj2, err := taskFun(mapper, db, oid, scope, typeString, modelObj, id, oldModelObj)
+	modelObj2, err := taskFun(serv, db, oid, scope, typeString, modelObj, id, oldModelObj)
 	if err != nil {
 		return nil, err
 	}
