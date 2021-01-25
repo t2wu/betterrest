@@ -440,5 +440,12 @@ func (mapper *GlobalMapper) getManyWithIDsCore(db *gorm.DB, oid *datatypes.UUID,
 		return nil, nil, errBatchUpdateOrPatchOneNotFound
 	}
 
+	for _, modelObj := range modelObjs {
+		err = gormfixes.LoadManyToManyBecauseGormFailsWithID(db, modelObj)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
 	return modelObjs, nil, nil
 }

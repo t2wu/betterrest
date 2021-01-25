@@ -619,5 +619,12 @@ func (mapper *OrganizationMapper) getManyWithIDsCore(db *gorm.DB, oid *datatypes
 		return nil, nil, err
 	}
 
+	for _, modelObj := range modelObjs {
+		err = gormfixes.LoadManyToManyBecauseGormFailsWithID(db, modelObj)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
 	return modelObjs, roles, nil
 }
