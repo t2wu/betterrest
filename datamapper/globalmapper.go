@@ -14,7 +14,7 @@ var crudGlobal IDataMapper
 // SharedGlobalMapper creats a singleton of Crud object
 func SharedGlobalMapper() IDataMapper {
 	onceGlobal.Do(func() {
-		crudGlobal = &BaseMapper{Service: &service.GlobalService{}}
+		crudGlobal = &BaseMapper{Service: &service.GlobalService{BaseService: service.BaseService{}}}
 	})
 
 	return crudGlobal

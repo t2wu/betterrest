@@ -59,7 +59,7 @@ type UserMapper struct {
 // SharedUserMapper creats a singleton of Crud object
 func SharedUserMapper() *UserMapper {
 	onceUser.Do(func() {
-		usercrud = &UserMapper{Service: &service.UserService{}}
+		usercrud = &UserMapper{Service: &service.UserService{BaseService: service.BaseService{}}}
 	})
 
 	return usercrud
@@ -95,7 +95,7 @@ func (mapper *UserMapper) CreateOne(db *gorm.DB, oid *datatypes.UUID, scope *str
 		// oldModelObj: oldModelObj,
 		modelObj: modelObj,
 	}
-	return opCore(before, after, j, createOneCoreOwnership)
+	return opCore(before, after, j, mapper.Service.CreateOneCore)
 	// // there isn't really an oid at this point
 	// return createOneWithHooks(createOneCoreUserMapper, db, oid, scope, typeString, modelObj)
 }
@@ -148,7 +148,7 @@ func (mapper *UserMapper) UpdateOneWithID(db *gorm.DB, oid *datatypes.UUID, scop
 		}
 	}
 
-	modelObj2, err := updateOneCore(mapper.Service, db, oid, scope, typeString, modelObj, id, oldModelObj)
+	modelObj2, err := mapper.Service.UpdateOneCore(db, oid, scope, typeString, modelObj, id, oldModelObj)
 	if err != nil {
 		return nil, err
 	}
@@ -272,7 +272,7 @@ func (mapper *UserMapper) ChangeEmailPasswordWithID(db *gorm.DB, oid *datatypes.
 		}
 	}
 
-	modelObj2, err := updateOneCore(mapper.Service, db, oid, scope, typeString, modelObj, id, oldModelObj)
+	modelObj2, err := mapper.Service.UpdateOneCore(db, oid, scope, typeString, modelObj, id, oldModelObj)
 	if err != nil {
 		return nil, err
 	}

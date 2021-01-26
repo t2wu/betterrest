@@ -14,7 +14,7 @@ var linkeTableMapper IDataMapper
 // SharedLinkTableMapper creats a singleton of Crud object
 func SharedLinkTableMapper() IDataMapper {
 	onceLinkTableMapper.Do(func() {
-		linkeTableMapper = &BaseMapper{Service: &service.LinkTableService{}}
+		linkeTableMapper = &BaseMapper{Service: &service.LinkTableService{BaseService: service.BaseService{}}}
 	})
 
 	return linkeTableMapper

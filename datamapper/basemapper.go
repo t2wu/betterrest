@@ -88,7 +88,7 @@ func (mapper *BaseMapper) CreateOne(db *gorm.DB, oid *datatypes.UUID, scope *str
 		// oldModelObj: oldModelObj,
 		modelObj: modelObj,
 	}
-	return opCore(before, after, j, createOneCoreOwnership)
+	return opCore(before, after, j, mapper.Service.CreateOneCore)
 }
 
 // CreateMany creates an instance of this model based on json and store it in db
@@ -109,7 +109,7 @@ func (mapper *BaseMapper) CreateMany(db *gorm.DB, oid *datatypes.UUID, scope *st
 		oldmodelObjs: nil,
 		modelObjs:    modelObjs,
 	}
-	return batchOpCore(j, before, after, createOneCoreOwnership)
+	return batchOpCore(j, before, after, mapper.Service.CreateOneCore)
 }
 
 // GetOneWithID get one model object based on its type and its id string
@@ -226,7 +226,7 @@ func (mapper *BaseMapper) UpdateOneWithID(db *gorm.DB, oid *datatypes.UUID, scop
 		oldModelObj: oldModelObj,
 		modelObj:    modelObj,
 	}
-	return opCore(before, after, j, updateOneCore)
+	return opCore(before, after, j, mapper.Service.UpdateOneCore)
 }
 
 // UpdateMany updates multiple models
@@ -258,7 +258,7 @@ func (mapper *BaseMapper) UpdateMany(db *gorm.DB, oid *datatypes.UUID, scope *st
 		oldmodelObjs: oldModelObjs,
 		modelObjs:    modelObjs,
 	}
-	return batchOpCore(j, before, after, updateOneCore)
+	return batchOpCore(j, before, after, mapper.Service.UpdateOneCore)
 }
 
 // PatchOneWithID updates model based on this json
@@ -293,7 +293,7 @@ func (mapper *BaseMapper) PatchOneWithID(db *gorm.DB, oid *datatypes.UUID, scope
 		oldModelObj: oldModelObj,
 		modelObj:    modelObj,
 	}
-	return opCore(before, after, j, updateOneCore)
+	return opCore(before, after, j, mapper.Service.UpdateOneCore)
 }
 
 // PatchMany patches multiple models
@@ -334,7 +334,7 @@ func (mapper *BaseMapper) PatchMany(db *gorm.DB, oid *datatypes.UUID, scope *str
 		oldmodelObjs: oldModelObjs,
 		modelObjs:    modelObjs,
 	}
-	return batchOpCore(j, before, after, updateOneCore)
+	return batchOpCore(j, before, after, mapper.Service.UpdateOneCore)
 }
 
 // DeleteOneWithID delete the model
@@ -375,7 +375,7 @@ func (mapper *BaseMapper) DeleteOneWithID(db *gorm.DB, oid *datatypes.UUID, scop
 		// oldModelObj: oldModelObj,
 		modelObj: modelObj,
 	}
-	return opCore(before, after, j, deleteOneCore)
+	return opCore(before, after, j, mapper.Service.DeleteOneCore)
 }
 
 // DeleteMany deletes multiple models
@@ -419,7 +419,7 @@ func (mapper *BaseMapper) DeleteMany(db *gorm.DB, oid *datatypes.UUID, scope *st
 		typeString: typeString,
 		modelObjs:  modelObjs,
 	}
-	return batchOpCore(j, before, after, deleteOneCore)
+	return batchOpCore(j, before, after, mapper.Service.DeleteOneCore)
 }
 
 // ----------------------------------------------------------------------------------------
