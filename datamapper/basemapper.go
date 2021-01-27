@@ -173,6 +173,8 @@ func (mapper *BaseMapper) GetAll(db *gorm.DB, oid *datatypes.UUID, scope *string
 	// chain offset and limit
 	if offset != nil && limit != nil {
 		db = db.Offset(*offset).Limit(*limit)
+	} else { // default to 100 maximum
+		db = db.Offset(0).Limit(100)
 	}
 
 	outmodels, err := models.NewSliceFromDBByTypeString(typeString, db.Find)
