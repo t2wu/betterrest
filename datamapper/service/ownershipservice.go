@@ -269,22 +269,28 @@ func (serv *OwnershipService) GetManyWithIDsCore(db *gorm.DB, oid *datatypes.UUI
 	return modelObjs, roles, nil
 }
 
-func (serv *OwnershipService) GetAllCore(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string) ([]models.IModel, []models.UserRole, error) {
+// GetAllQueryContructCore construct the meat of the query
+func (serv *OwnershipService) GetAllQueryContructCore(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string) (*gorm.DB, error) {
 	rtable, joinTableName, err := getModelTableNameAndJoinTableNameFromTypeString(typeString)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	firstJoin := fmt.Sprintf("INNER JOIN \"%s\" ON \"%s\".id = \"%s\".model_id", joinTableName, rtable, joinTableName)
 	secondJoin := fmt.Sprintf("INNER JOIN \"user\" ON \"user\".id = \"%s\".user_id AND \"%s\".user_id = ?", joinTableName, joinTableName)
 	db = db.Table(rtable).Joins(firstJoin).Joins(secondJoin, oid.String())
 
-	// db3 := db
-	roles := make([]models.UserRole, 0)
-	outmodels, err := models.NewSliceFromDBByTypeString(typeString, db.Find) // error from db is returned from here
+	return db, nil
+}
+
+// GetAllRolesCore gets all roles according to the criteria
+func (serv *OwnershipService) GetAllRolesCore(dbChained *gorm.DB, dbClean *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObjs []models.IModel) ([]models.UserRole, error) {
+	rtable, joinTableName, err := getModelTableNameAndJoinTableNameFromTypeString(typeString)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
+
+	roles := make([]models.UserRole, 0)
 
 	// ---------------------------
 	// ownershipModelTyp := getOwnershipModelTypeFromTypeString(typeString)
@@ -292,12 +298,12 @@ func (serv *OwnershipService) GetAllCore(db *gorm.DB, oid *datatypes.UUID, scope
 	// role := models.Admin // just some default
 	// The difference between this method and the find is that it's missing the
 	// WHERE "model"."deleted_at" IS NULL, so we need to add it
-	if err = db.Where(fmt.Sprintf("\"%s\".\"deleted_at\" IS NULL", rtable)).
+	if err = dbChained.Where(fmt.Sprintf("\"%s\".\"deleted_at\" IS NULL", rtable)).
 		Select(fmt.Sprintf("\"%s\".\"role\"", joinTableName)).Scan(&roles).Error; err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	return outmodels, roles, nil
+	return roles, nil
 }
 
 // UpdateOneCore one, permissin should already be checked

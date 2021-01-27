@@ -156,7 +156,8 @@ func (serv *LinkTableService) GetManyWithIDsCore(db *gorm.DB, oid *datatypes.UUI
 	return modelObjs, roles, nil
 }
 
-func (serv *LinkTableService) GetAllCore(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string) ([]models.IModel, []models.UserRole, error) {
+// GetAllQueryContructCore construct query core
+func (serv *LinkTableService) GetAllQueryContructCore(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string) (*gorm.DB, error) {
 	rtable := models.GetTableNameFromTypeString(typeString)
 
 	// Check if link table
@@ -164,7 +165,7 @@ func (serv *LinkTableService) GetAllCore(db *gorm.DB, oid *datatypes.UUID, scope
 	// IOwnership means link table
 	if _, ok := testModel.(models.IOwnership); !ok {
 		log.Printf("%s not an IOwnership type\n", typeString)
-		return nil, nil, fmt.Errorf("%s not an IOwnership type", typeString)
+		return nil, fmt.Errorf("%s not an IOwnership type", typeString)
 	}
 
 	// select * from rtable where model_id IN (select model_id from rtable where user_id = ?)
@@ -172,18 +173,18 @@ func (serv *LinkTableService) GetAllCore(db *gorm.DB, oid *datatypes.UUID, scope
 	subquery := fmt.Sprintf("model_id IN (select model_id from %s where user_id = ?)", rtable)
 	db = db.Table(rtable).Where(subquery, oid)
 
-	outmodels, err := models.NewSliceFromDBByTypeString(typeString, db.Find) // error from db is returned from here
-	if err != nil {
-		return nil, nil, err
-	}
+	return db, nil
+}
 
+// GetAllRolesCore gets all roles according to the criteria
+func (serv *LinkTableService) GetAllRolesCore(dbChained *gorm.DB, dbClean *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObjs []models.IModel) ([]models.UserRole, error) {
 	// No roles for this table, because this IS the linking table
-	roles := make([]models.UserRole, len(outmodels), len(outmodels))
+	roles := make([]models.UserRole, len(modelObjs), len(modelObjs))
 	for i := range roles {
 		roles[i] = models.Invalid // FIXME It shouldn't be Invaild, it should be the user's access to this
 	}
 
-	return outmodels, roles, nil
+	return roles, nil
 }
 
 func (serv *LinkTableService) userHasPermissionToEdit(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error) {

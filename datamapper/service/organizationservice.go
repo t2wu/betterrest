@@ -178,16 +178,15 @@ func (serv *OrganizationService) GetManyWithIDsCore(db *gorm.DB, oid *datatypes.
 	return modelObjs, roles, nil
 }
 
-func (serv *OrganizationService) GetAllCore(tx *gorm.DB, oid *datatypes.UUID, scope *string, typeString string) ([]models.IModel, []models.UserRole, error) {
-	// db2 := tx.Unscoped()
-
+// GetAllQueryContructCore construct query core
+func (serv *OrganizationService) GetAllQueryContructCore(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string) (*gorm.DB, error) {
 	// Graphically:
 	// Model -- Org -- Join Table -- User
 	// (Maybe organization should be defined in the library)
 	// And it's organizational type has a user which includes
 	modelObjHavingOrganization, ok := models.NewFromTypeString(typeString).(models.IHasOrganizationLink)
 	if !ok {
-		return nil, nil, fmt.Errorf("Model %s does not comform to IHasOrganizationLink", typeString)
+		return nil, fmt.Errorf("Model %s does not comform to IHasOrganizationLink", typeString)
 	}
 
 	rtable := models.GetTableNameFromTypeString(typeString)
@@ -201,24 +200,19 @@ func (serv *OrganizationService) GetAllCore(tx *gorm.DB, oid *datatypes.UUID, sc
 	// e.g. INNER JOIN \"user_owns_organization\" ON \"organization\".id = \"user_owns_organization\".model_id
 	secondJoin := fmt.Sprintf("INNER JOIN \"%s\" ON \"%s\".id = \"%s\".model_id", joinTableName, orgTableName, joinTableName)
 	thirdJoin := fmt.Sprintf("INNER JOIN \"user\" ON \"user\".id = \"%s\".user_id AND \"%s\".user_id = ?", joinTableName, joinTableName)
-	tx = tx.Table(rtable).Joins(firstJoin).Joins(secondJoin).Joins(thirdJoin, oid.String())
+	db = db.Table(rtable).Joins(firstJoin).Joins(secondJoin).Joins(thirdJoin, oid.String())
+	return db, nil
+}
 
-	outmodels, err := models.NewSliceFromDBByTypeString(typeString, tx.Find) // error from db is returned from here
+// GetAllRolesCore gets all roles according to the criteria
+func (serv *OrganizationService) GetAllRolesCore(dbChained *gorm.DB, dbClean *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObjs []models.IModel) ([]models.UserRole, error) {
+	modelObjHavingOrganization, _ := models.NewFromTypeString(typeString).(models.IHasOrganizationLink)
+	orgTable := reflect.New(modelObjHavingOrganization.OrganizationType()).Interface()
+	joinTableName := models.GetJoinTableName(orgTable.(models.IHasOwnershipLink))
 
-	// Now we need to fill in roles for each model. With regular ownershipmapper, the link table
-	// itself has role values and we need to query that
-	// But with OrganizationMapper, the role the user has to the organization is the role the user
-	// has to the model. We do the following:
-	// 1. We query all the organization this user belongs to, get the roles
-	// 2. With the models we have, we find the organization id, and match it to the organization in step 1,
-	// then fetch the role, which becomes the role for the model
-
-	// Get the roles for the organizations this user has access to
-	// stmt := fmt.Sprintf("SELECT model_id, role FROM %s WHERE user_id = ?", joinTableName)
-	// hackish by calling Shared()
 	rows, err := db.Shared().Table(joinTableName).Select("model_id, role").Where("user_id = ?", oid.String()).Rows()
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	thisRole := models.Guest              // just some default
@@ -226,14 +220,14 @@ func (serv *OrganizationService) GetAllCore(tx *gorm.DB, oid *datatypes.UUID, sc
 	orgIDToRoleMap := make(map[string]models.UserRole)
 	for rows.Next() {
 		if err = rows.Scan(organizationID, &thisRole); err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 
 		orgIDToRoleMap[organizationID.String()] = thisRole
 	}
 
 	roles := make([]models.UserRole, 0)
-	for _, outmodel := range outmodels {
+	for _, outmodel := range modelObjs {
 		o := outmodel.(models.IHasOrganizationLink)
 		orgID := o.GetOrganizationID().String()
 
@@ -241,7 +235,7 @@ func (serv *OrganizationService) GetAllCore(tx *gorm.DB, oid *datatypes.UUID, sc
 		roles = append(roles, role)
 	}
 
-	return outmodels, roles, nil
+	return roles, nil
 }
 
 // ---------------------------------------

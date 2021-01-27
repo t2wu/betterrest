@@ -138,7 +138,7 @@ func (mapper *BaseMapper) GetOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *
 // Cancel offset condition with -1
 //  db.Offset(10).Find(&users1).Offset(-1).Find(&users2)
 func (mapper *BaseMapper) GetAll(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, options map[URLParam]interface{}) ([]models.IModel, []models.UserRole, *int, error) {
-	db2 := db
+	dbClean := db
 	db = db.Set("gorm:auto_preload", true)
 
 	offset, limit, cstart, cstop, order, latestn, totalcount := getOptions(options)
@@ -155,6 +155,10 @@ func (mapper *BaseMapper) GetAll(db *gorm.DB, oid *datatypes.UUID, scope *string
 	}
 
 	db = constructOrderFieldQueries(db, rtable, order)
+	db, err = mapper.Service.GetAllQueryContructCore(db, oid, scope, typeString)
+	if err != nil {
+		return nil, nil, nil, err
+	}
 
 	var no *int
 	if totalcount {
@@ -166,11 +170,17 @@ func (mapper *BaseMapper) GetAll(db *gorm.DB, oid *datatypes.UUID, scope *string
 		}
 	}
 
+	// chain offset and limit
 	if offset != nil && limit != nil {
 		db = db.Offset(*offset).Limit(*limit)
 	}
 
-	outmodels, roles, err := mapper.Service.GetAllCore(db, oid, scope, typeString)
+	outmodels, err := models.NewSliceFromDBByTypeString(typeString, db.Find)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	roles, err := mapper.Service.GetAllRolesCore(db, dbClean, oid, scope, typeString, outmodels)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -182,15 +192,15 @@ func (mapper *BaseMapper) GetAll(db *gorm.DB, oid *datatypes.UUID, scope *string
 
 	// make many to many tag works
 	for _, m := range outmodels {
-		err = gormfixes.LoadManyToManyBecauseGormFailsWithID(db2, m)
+		err = gormfixes.LoadManyToManyBecauseGormFailsWithID(dbClean, m)
 		if err != nil {
 			return nil, nil, nil, err
 		}
 	}
 
-	// use db2 cuz it's not chained
+	// use dbClean cuz it's not chained
 	if after := models.ModelRegistry[typeString].AfterRead; after != nil {
-		bhpData := models.BatchHookPointData{Ms: outmodels, DB: db2, OID: oid, Scope: scope, TypeString: typeString, Roles: roles}
+		bhpData := models.BatchHookPointData{Ms: outmodels, DB: dbClean, OID: oid, Scope: scope, TypeString: typeString, Roles: roles}
 		if err = after(bhpData); err != nil {
 			return nil, nil, nil, err
 		}

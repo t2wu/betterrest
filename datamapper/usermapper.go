@@ -315,28 +315,34 @@ func preserveEmailPassword(db *gorm.DB, oid *datatypes.UUID, modelObj models.IMo
 	return modelObj, nil
 }
 
+// CreateMany :-
 func (mapper *UserMapper) CreateMany(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj []models.IModel) ([]models.IModel, error) {
 	return nil, fmt.Errorf("Not implemented")
 }
 
+// GetAll :-
 func (mapper *UserMapper) GetAll(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, options map[URLParam]interface{}) ([]models.IModel, []models.UserRole, *int, error) {
 	return nil, nil, nil, fmt.Errorf("Not implemented")
 }
 
+// UpdateMany :-
 func (mapper *UserMapper) UpdateMany(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObjs []models.IModel) ([]models.IModel, error) {
 	return nil, fmt.Errorf("Not implemented")
 }
 
+// PatchMany :-
 func (mapper *UserMapper) PatchMany(db *gorm.DB, oid *datatypes.UUID, scope *string,
 	typeString string, jsonIDPatches []models.JSONIDPatch) ([]models.IModel, error) {
 	return nil, fmt.Errorf("Not implemented")
 }
 
+// DeleteMany :-
 func (mapper *UserMapper) DeleteMany(db *gorm.DB, oid *datatypes.UUID, scope *string,
 	typeString string, modelObjs []models.IModel) ([]models.IModel, error) {
 	return nil, fmt.Errorf("Not implemented")
 }
 
+// PatchOneWithID :-
 func (mapper *UserMapper) PatchOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string,
 	typeString string, jsonPatch []byte, id *datatypes.UUID) (models.IModel, error) {
 	return nil, fmt.Errorf("Not implemented, todo")

@@ -86,8 +86,14 @@ func (serv *UserService) GetManyWithIDsCore(db *gorm.DB, oid *datatypes.UUID, sc
 	return nil, nil, fmt.Errorf("Not implemented")
 }
 
-func (serv *UserService) GetAllCore(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string) ([]models.IModel, []models.UserRole, error) {
-	return nil, nil, fmt.Errorf("Not implemented")
+// GetAllQueryContructCore :-
+func (serv *UserService) GetAllQueryContructCore(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string) (*gorm.DB, error) {
+	return nil, fmt.Errorf("Not implemented")
+}
+
+// GetAllRolesCore :-
+func (serv *UserService) GetAllRolesCore(dbChained *gorm.DB, dbClean *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObjs []models.IModel) ([]models.UserRole, error) {
+	return nil, fmt.Errorf("Not implemented")
 }
 
 // UpdateOneCore one, permissin should already be checked

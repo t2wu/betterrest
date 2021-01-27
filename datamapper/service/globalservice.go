@@ -98,20 +98,20 @@ func (service *GlobalService) GetManyWithIDsCore(db *gorm.DB, oid *datatypes.UUI
 	return modelObjs, nil, nil
 }
 
-func (service *GlobalService) GetAllCore(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string) ([]models.IModel, []models.UserRole, error) {
-	outmodels, err := models.NewSliceFromDBByTypeString(typeString, db.Find) // error from db is returned from here
-	if err != nil {
-		return nil, nil, err
-	}
+// GetAllQueryContructCore construct the meat of the query
+func (serv *GlobalService) GetAllQueryContructCore(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string) (*gorm.DB, error) {
+	return db, nil // that's it
+}
 
+// GetAllRolesCore gets all roles according to the criteria
+func (serv *GlobalService) GetAllRolesCore(dbChained *gorm.DB, dbClean *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObjs []models.IModel) ([]models.UserRole, error) {
 	// Don't know why this doesn't work
-	roles := make([]models.UserRole, len(outmodels), len(outmodels))
-
+	roles := make([]models.UserRole, len(modelObjs))
 	for i := range roles {
 		roles[i] = models.Public
 	}
 
-	return outmodels, roles, nil
+	return roles, nil
 }
 
 // UpdateOneCore one, permissin should already be checked
