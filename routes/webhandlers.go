@@ -660,7 +660,10 @@ func DeleteOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 		modelObj, err := mapper.DeleteOneWithID(tx, ownerID, &scope, typeString, id)
 		if err != nil {
 			tx.Rollback()
-			log.Println("Error in DeleteOneHandler ErrDelete:", typeString, err)
+			log.Printf("Error in DeleteOneHandler ErrDelete: %s %+v\n", typeString, err)
+			// if pqerr, ok := err.(*pq.Error); ok {
+			// 	log.Printf("Code: %s, Message: %s\n", pqerr.Code, pqerr.Message)
+			// }
 			render.Render(w, r, NewErrDelete(err))
 			return
 		}

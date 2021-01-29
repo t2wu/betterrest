@@ -185,6 +185,20 @@ func AddBatchUpdateBeforeAndAfterHookPoints(typeString string,
 	ModelRegistry[typeString].AfterUpdate = after
 }
 
+// AddBatchPatchBeforeAndAfterHookPoints adds hookpoints which are called before
+// and after batch update. Either one can be left as nil
+func AddBatchPatchBeforeAndAfterHookPoints(typeString string,
+	before func(bhpData BatchHookPointData) error,
+	after func(bhpData BatchHookPointData) error) {
+
+	if _, ok := ModelRegistry[typeString]; !ok {
+		ModelRegistry[typeString] = &Reg{}
+	}
+
+	ModelRegistry[typeString].BeforePatch = before
+	ModelRegistry[typeString].AfterPatch = after
+}
+
 // AddBatchDeleteBeforeAndAfterHookPoints adds hookpoints which are called before
 // and after batch delete. Either one can be left as nil
 func AddBatchDeleteBeforeAndAfterHookPoints(typeString string,
