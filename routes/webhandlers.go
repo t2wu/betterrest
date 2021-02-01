@@ -192,6 +192,7 @@ func UserLoginHandler(typeString string) func(c *gin.Context) {
 			if r := recover(); r != nil {
 				tx.Rollback()
 				debug.PrintStack()
+				render.Render(w, c.Request, NewErrInternalServerError(nil))
 				fmt.Println("Panic in UserLoginHandler", r)
 			}
 		}(tx)
@@ -335,6 +336,7 @@ func ReadAllHandler(typeString string, mapper datamapper.IDataMapper) func(c *gi
 			if r := recover(); r != nil {
 				tx.Rollback()
 				debug.PrintStack()
+				render.Render(w, c.Request, NewErrInternalServerError(nil))
 				fmt.Println("Panic in ReadAllHandler", r)
 			}
 		}(tx)
@@ -375,6 +377,7 @@ func CreateHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin
 			if r := recover(); r != nil {
 				tx.Rollback()
 				debug.PrintStack()
+				render.Render(w, c.Request, NewErrInternalServerError(nil))
 				fmt.Println("Panic in CreateHandler", r)
 			}
 		}(tx)
@@ -435,6 +438,7 @@ func ReadOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *gi
 			if r := recover(); r != nil {
 				tx.Rollback()
 				debug.PrintStack()
+				render.Render(w, c.Request, NewErrInternalServerError(nil))
 				fmt.Println("Panic in ReadOneHandler", r)
 			}
 		}(tx)
@@ -478,6 +482,7 @@ func UpdateOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 			if r := recover(); r != nil {
 				tx.Rollback()
 				debug.PrintStack()
+				render.Render(w, c.Request, NewErrInternalServerError(nil))
 				fmt.Println("Panic in UpdateOneHandler", r)
 			}
 		}(tx)
@@ -516,6 +521,7 @@ func UpdateManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 			if r := recover(); r != nil {
 				tx.Rollback()
 				debug.PrintStack()
+				render.Render(w, c.Request, NewErrInternalServerError(nil))
 				fmt.Println("Panic in UpdateManyHandler", r)
 			}
 		}(tx)
@@ -566,6 +572,7 @@ func PatchOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *g
 			if r := recover(); r != nil {
 				tx.Rollback()
 				debug.PrintStack()
+				render.Render(w, c.Request, NewErrInternalServerError(nil))
 				fmt.Println("Panic in PatchOneHandler", r)
 			}
 		}(tx)
@@ -610,6 +617,7 @@ func PatchManyHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 			if r := recover(); r != nil {
 				tx.Rollback()
 				debug.PrintStack()
+				render.Render(w, c.Request, NewErrInternalServerError(nil))
 				fmt.Println("Panic in PatchManyHandler", r)
 			}
 		}(tx)
@@ -653,6 +661,7 @@ func DeleteOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 			if r := recover(); r != nil {
 				tx.Rollback()
 				debug.PrintStack()
+				render.Render(w, c.Request, NewErrInternalServerError(nil))
 				fmt.Println("Panic in DeleteOneHandler", r)
 			}
 		}(tx)
@@ -696,6 +705,7 @@ func DeleteManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 			if r := recover(); r != nil {
 				tx.Rollback()
 				debug.PrintStack()
+				render.Render(w, c.Request, NewErrInternalServerError(nil))
 				fmt.Println("Panic in DeleteManyHandler", r)
 			}
 		}(tx)
@@ -745,6 +755,7 @@ func ChangeEmailPasswordHandler(typeString string, mapper datamapper.IChangeEmai
 			if r := recover(); r != nil {
 				tx.Rollback()
 				debug.PrintStack()
+				render.Render(w, c.Request, NewErrInternalServerError(nil))
 				fmt.Println("Panic in ChangePasswordHandler", r)
 			}
 		}(tx)
