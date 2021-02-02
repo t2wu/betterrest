@@ -476,6 +476,13 @@ func UpdateOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 			return
 		}
 
+		// Before validation this is a temporary check
+		// This traps the mistake if "content" and the array is included
+		if modelObj.GetID() == nil {
+			render.Render(w, r, NewErrValidation(fmt.Errorf("JSON format not expected")))
+			return
+		}
+
 		tx := db.Shared().Begin()
 
 		defer func(tx *gorm.DB) {
