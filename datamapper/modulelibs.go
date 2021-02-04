@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"net/url"
-	"reflect"
 	"strconv"
 
 	"github.com/t2wu/betterrest/datamapper/service"
@@ -78,11 +77,6 @@ func modelNeedsRealDelete(modelObj models.IModel) bool {
 		realDelete = modelObj2.DoRealDelete()
 	}
 	return realDelete
-}
-
-func getOwnershipModelTypeFromTypeString(typeString string) reflect.Type {
-	modelObjOwnership, _ := models.NewFromTypeString(typeString).(models.IHasOwnershipLink)
-	return modelObjOwnership.OwnershipType()
 }
 
 func constructInnerFieldParamQueries(db *gorm.DB, typeString string, options map[URLParam]interface{}, latestn *int) (*gorm.DB, error) {

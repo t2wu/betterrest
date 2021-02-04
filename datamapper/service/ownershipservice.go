@@ -32,12 +32,14 @@ func (serv *OwnershipService) HookBeforeCreateOne(db *gorm.DB, oid *datatypes.UU
 	// ownershipType := field.Type
 
 	// has to be true otherwise shouldn't use this mapper
-	modelObjOwnership, ok := modelObj.(models.IHasOwnershipLink)
-	if !ok {
-		return nil, ErrNoOwnership
-	}
+	// modelObjOwnership, ok := modelObj.(models.IHasOwnershipLink)
+	// if !ok {
+	// 	return nil, ErrNoOwnership
+	// }
 
-	ownershipType := modelObjOwnership.OwnershipType()
+	log.Println("typeString??", typeString)
+	// ownershipType := models.GetOwnershipModelTypeFromTypeString(typeString)
+	// ownershipType := modelObjOwnership.OwnershipType()
 
 	modelID := modelObj.GetID()
 	if modelID == nil {
@@ -46,7 +48,8 @@ func (serv *OwnershipService) HookBeforeCreateOne(db *gorm.DB, oid *datatypes.UU
 	}
 
 	// reflect.SliceOf
-	g := reflect.New(ownershipType).Interface().(models.IOwnership)
+	g := models.NewOwnershipModelFromOwnershipResourceTypeString(typeString).(models.IOwnership)
+	// g := reflect.New(ownershipType).Interface().(models.IOwnership)
 
 	g.SetUserID(oid)
 	g.SetModelID(modelID)
@@ -69,15 +72,17 @@ func (serv *OwnershipService) HookBeforeCreateMany(db *gorm.DB, oid *datatypes.U
 	// Get ownership type and creates it
 	// field, _ := reflect.TypeOf(modelObj).Elem().FieldByName("Ownerships")
 	// ownershipType := field.Type
-	modelObjOwnership, ok := modelObjs[0].(models.IHasOwnershipLink)
-	if !ok {
-		return nil, ErrNoOwnership
-	}
+	// modelObjOwnership, ok := modelObjs[0].(models.IHasOwnershipLink)
+	// if !ok {
+	// 	return nil, ErrNoOwnership
+	// }
 
-	ownershipType := modelObjOwnership.OwnershipType()
+	// ownershipType := models.GetOwnershipModelTypeFromTypeString(typeString)
+	// ownershipType := modelObjOwnership.OwnershipType()
 	for _, modelObj := range modelObjs {
 		// reflect.SliceOf
-		g := reflect.New(ownershipType).Interface().(models.IOwnership)
+		// g := reflect.New(ownershipType).Interface().(models.IOwnership)
+		g := models.NewOwnershipModelFromOwnershipResourceTypeString(typeString).(models.IOwnership)
 
 		modelID := modelObj.GetID()
 		if modelID == nil {
@@ -104,13 +109,10 @@ func (serv *OwnershipService) HookBeforeCreateMany(db *gorm.DB, oid *datatypes.U
 func (serv *OwnershipService) HookBeforeDeleteOne(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel) (models.IModel, error) {
 	// I'm removing stuffs from this link table, I cannot just remove myself from this. I have to remove
 	// everyone who is linked to this table!
-	modelObjOwnership, ok := modelObj.(models.IHasOwnershipLink)
-	if !ok {
-		return nil, ErrNoOwnership
-	}
 
 	// stmt := fmt.Sprintf("DELETE FROM %s WHERE user_id = ? AND model_id = ? AND role = ?", models.GetJoinTableName(modelObjOwnership))
-	stmt := fmt.Sprintf("DELETE FROM %s WHERE model_id = ?", models.GetJoinTableName(modelObjOwnership))
+	tableName := models.OwnershipModelNameFromOwnershipResourceTypeString(typeString)
+	stmt := fmt.Sprintf("DELETE FROM %s WHERE model_id = ?", tableName)
 
 	// Can't do db.Raw and db.Delete at the same time?!
 	db2 := db.Exec(stmt, modelObj.GetID().String())
@@ -121,15 +123,14 @@ func (serv *OwnershipService) HookBeforeDeleteOne(db *gorm.DB, oid *datatypes.UU
 	return modelObj, nil
 }
 
+// HookBeforeDeleteMany deletes link table because GORM isn't automatic here when we customize
+// it with UUID or when we have role
 func (serv *OwnershipService) HookBeforeDeleteMany(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObjs []models.IModel) ([]models.IModel, error) {
-	// Delete link table because GORM isn't automatic here when we customize it with UUID or when we have role
 	for _, modelObj := range modelObjs {
 		// Also remove entries from ownership table
-		modelObjOwnership, ok := modelObj.(models.IHasOwnershipLink)
-		if !ok {
-			return nil, ErrNoOwnership
-		}
-		stmt := fmt.Sprintf("DELETE FROM %s WHERE model_id = ?", models.GetJoinTableName(modelObjOwnership))
+		// Maybe getting table
+		tableName := models.OwnershipModelNameFromOwnershipResourceTypeString(typeString)
+		stmt := fmt.Sprintf("DELETE FROM %s WHERE model_id = ?", tableName)
 		db2 := db.Exec(stmt, modelObj.GetID().String())
 		if err := db2.Error; err != nil {
 			return nil, err
@@ -141,14 +142,8 @@ func (serv *OwnershipService) HookBeforeDeleteMany(db *gorm.DB, oid *datatypes.U
 // CreateOneCore creates the stuff
 func (serv *OwnershipService) CreateOneCore(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObj models.IModel) (models.IModel, error) {
 	// It looks like I need to explicitly call create here
-	log.Printf("createOneCoreOwnership 1: %+v ===\n", modelObj)
-	log.Printf("createOneCoreOwnership 2: %+v ===\n", reflect.ValueOf(modelObj))
-	log.Printf("createOneCoreOwnership 3: %+v ===\n", reflect.ValueOf(modelObj).Elem())
 	o := reflect.ValueOf(modelObj).Elem().FieldByName("Ownerships")
-	log.Printf("================================== 1")
-	log.Printf("================================== 1", o)
 	g, _ := o.Index(0).Addr().Interface().(models.IOwnership)
-	log.Printf("================================== 2")
 
 	// No need to check if primary key is blank.
 	// If it is it'll be created by Gorm's BeforeCreate hook
@@ -175,7 +170,7 @@ func (serv *OwnershipService) CreateOneCore(db *gorm.DB, oid *datatypes.UUID, sc
 	return modelObj, nil
 }
 
-// getOneWithIDCore get one model object based on its type and its id string
+// GetOneWithIDCore get one model object based on its type and its id string
 func (serv *OwnershipService) GetOneWithIDCore(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error) {
 	modelObj := models.NewFromTypeString(typeString)
 
@@ -189,41 +184,33 @@ func (serv *OwnershipService) GetOneWithIDCore(db *gorm.DB, oid *datatypes.UUID,
 		INNER JOIN user ON user.id = user_owns_somemodel.user_id AND user.id = UUID_TO_BIN(oid)
 	*/
 
-	modelObjOwnership, ok := modelObj.(models.IHasOwnershipLink)
-	if !ok {
-		return nil, 0, ErrNoOwnership
-	}
-
-	joinTableName := models.GetJoinTableName(modelObjOwnership)
+	joinTableName := models.OwnershipModelNameFromOwnershipResourceTypeString(typeString)
+	log.Println("joinTableName???", joinTableName)
+	// joinTableName := models.GetJoinTableName(modelObj)
 
 	firstJoin := fmt.Sprintf("INNER JOIN \"%s\" ON \"%s\".id = \"%s\".model_id AND \"%s\".id = ?", joinTableName, rtable, joinTableName, rtable)
 	secondJoin := fmt.Sprintf("INNER JOIN \"user\" ON \"user\".id = \"%s\".user_id AND \"%s\".user_id = ?", joinTableName, joinTableName)
-	// db2 := db
-
-	err := db.Table(rtable).Joins(firstJoin, id.String()).Joins(secondJoin, oid.String()).Find(modelObj).Error
-	if err != nil {
+	if err := db.Model(modelObj).Joins(firstJoin, id.String()).Joins(secondJoin, oid.String()).Find(modelObj).Error; err != nil {
 		return nil, 0, err
 	}
 
-	joinTable := reflect.New(modelObjOwnership.OwnershipType()).Interface()
-	role := models.UserRoleInvalid // just some default
-	stmt := fmt.Sprintf("SELECT * FROM %s WHERE user_id = ? AND model_id = ?", joinTableName)
-	if err2 := db.Raw(stmt, oid.String(), id.String()).Scan(joinTable).Error; err2 != nil {
-		return nil, 0, err2
-	}
-
-	if m, ok := joinTable.(models.IOwnership); ok {
-		role = m.GetRole()
-	}
-
-	err = gormfixes.LoadManyToManyBecauseGormFailsWithID(db, modelObj)
-	if err != nil {
+	if err := gormfixes.LoadManyToManyBecauseGormFailsWithID(db, modelObj); err != nil {
 		return nil, 0, err
 	}
 
-	return modelObj, role, err
+	// joinTableName = "user_owns_" + rtable
+	res := struct {
+		Role models.UserRole
+	}{Role: models.UserRoleInvalid}
+	if err := db.Table(joinTableName).Where("user_id = ? AND model_id = ?",
+		oid.String(), id.String()).Scan(&res).Error; err != nil {
+		return nil, 0, err
+	}
+
+	return modelObj, res.Role, nil
 }
 
+// GetManyWithIDsCore -
 func (serv *OwnershipService) GetManyWithIDsCore(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, ids []*datatypes.UUID) ([]models.IModel, []models.UserRole, error) {
 	// If I can load it, I have permission to edit it. So no need to call loadAndCheckErrorBeforeModify
 	// like when I do for update. Just get the role and check if it's admin

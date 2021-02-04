@@ -67,24 +67,29 @@ func addRoute(r *gin.Engine, typeString string, reg *models.Reg, mapper datamapp
 // AddRESTRoutes adds all routes
 func AddRESTRoutes(r *gin.Engine) {
 	for typestring, reg := range models.ModelRegistry {
-		if typestring != "users" {
-			var dm datamapper.IDataMapper
-			switch reg.Mapper {
-			case models.MapperTypeGlobal:
-				dm = datamapper.SharedGlobalMapper()
-				break
-			case models.MapperTypeViaOrganization:
-				dm = datamapper.SharedOrganizationMapper()
-				break
-			case models.MapperTypeLinkTable:
-				dm = datamapper.SharedLinkTableMapper()
-				break
-			case models.MapperTypeViaOwnership:
-				fallthrough
-			default:
-				dm = datamapper.SharedOwnershipMapper()
-			}
+		var dm datamapper.IDataMapper
+		switch reg.Mapper {
+		case models.MapperTypeGlobal:
+			dm = datamapper.SharedGlobalMapper()
 			addRoute(r, typestring, reg, dm)
+			break
+		case models.MapperTypeViaOrganization:
+			dm = datamapper.SharedOrganizationMapper()
+			addRoute(r, typestring, reg, dm)
+			break
+		case models.MapperTypeLinkTable:
+			dm = datamapper.SharedLinkTableMapper()
+			addRoute(r, typestring, reg, dm)
+			break
+		case models.MapperTypeViaOwnership:
+			dm = datamapper.SharedOwnershipMapper()
+			addRoute(r, typestring, reg, dm)
+			fallthrough
+		case models.MapperTypeUser:
+			// don't add user one
+			break
+		default:
+			panic("adding unknow mapper")
 		}
 	}
 }

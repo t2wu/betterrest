@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"reflect"
 	"strconv"
 
 	"github.com/jinzhu/gorm"
@@ -70,20 +69,28 @@ func (serv *OrganizationService) GetOneWithIDCore(db *gorm.DB, oid *datatypes.UU
 
 	db = db.Set("gorm:auto_preload", true)
 
-	var ok bool
-	var modelObjHavingOrganization models.IHasOrganizationLink
-	// (Maybe organization should be defined in the library)
-	// And it's organizational type has a user which includes
-	if modelObjHavingOrganization, ok = models.NewFromTypeString(typeString).(models.IHasOrganizationLink); !ok {
-		return nil, models.UserRoleGuest, fmt.Errorf("Model %s does not comform to IHasOrganizationLink", typeString)
-	}
+	// var ok bool
+	// var modelObjHavingOrganization models.IHasOrganizationLink
+	// // (Maybe organization should be defined in the library)
+	// // And it's organizational type has a user which includes
+	// if modelObjHavingOrganization, ok = models.NewFromTypeString(typeString).(models.IHasOrganizationLink); !ok {
+	// 	return nil, models.UserRoleGuest, fmt.Errorf("Model %s does not comform to IHasOrganizationLink", typeString)
+	// }
 
 	// Graphically:
 	// Model -- Org -- Join Table -- User
-	orgTableName := models.GetOrganizationTableName(modelObjHavingOrganization)
-	orgTable := reflect.New(modelObjHavingOrganization.OrganizationType()).Interface()
-	joinTableName := models.GetJoinTableName(orgTable.(models.IHasOwnershipLink))
-	orgFieldName := strcase.SnakeCase(modelObjHavingOrganization.GetOrganizationIDFieldName())
+	// orgTableName := models.GetOrganizationTableName(modelObjHavingOrganization)
+	// orgTable := reflect.New(modelObjHavingOrganization.OrganizationType()).Interface()
+	orgTableName := models.OrgModelNameFromOrgResourceTypeString(typeString)
+	// orgTableName := models.GetOrganizationalTableNameFromModelTypeString(typeString)
+
+	joinTableName := models.OrgOwnershipModelNameFromOrgResourceTypeString(typeString)
+	// orgTable, _ := reflect.New(models.GetOrganizationTypeFromTypeString(typeString)).Interface().(models.IModel)
+	// joinTableName := models.GetJoinTableName(orgTable)
+
+	orgIDFieldName := *models.GetFieldNameFromModelByTagKey(models.NewFromTypeString(typeString), "org")
+	orgFieldName := strcase.SnakeCase(orgIDFieldName)
+	// orgFieldName := strcase.SnakeCase(modelObjHavingOrganization.GetOrganizationIDFieldName())
 
 	rtable := models.GetTableNameFromIModel(modelObj)
 
@@ -98,10 +105,11 @@ func (serv *OrganizationService) GetOneWithIDCore(db *gorm.DB, oid *datatypes.UU
 		return nil, 0, err
 	}
 
-	joinTable := reflect.New(orgTable.(models.IHasOwnershipLink).OwnershipType()).Interface()
+	joinTable := models.NewOrgOwnershipModelFromOrgResourceTypeString(typeString)
 	role := models.UserRoleGuest // just some default
 
-	orgID := modelObj.(models.IHasOrganizationLink).GetOrganizationID().String()
+	orgID := models.GetFieldValueFromModelByTagKeyBetterRestAndValueKey(modelObj, "org").(*datatypes.UUID)
+	// orgID := modelObj.(models.IHasOrganizationLink).GetOrganizationID().String()
 
 	// Get the roles for the organizations this user has access to
 	if err2 := db.Table(joinTableName).Select("model_id, role").Where("user_id = ? AND model_id = ?", oid.String(),
@@ -122,19 +130,26 @@ func (serv *OrganizationService) GetOneWithIDCore(db *gorm.DB, oid *datatypes.UU
 }
 
 func (serv *OrganizationService) GetManyWithIDsCore(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, ids []*datatypes.UUID) ([]models.IModel, []models.UserRole, error) {
-	var ok bool
-	var modelObjHavingOrganization models.IHasOrganizationLink
-	if modelObjHavingOrganization, ok = models.NewFromTypeString(typeString).(models.IHasOrganizationLink); !ok {
-		return nil, nil, fmt.Errorf("Model %s does not comform to IHasOrganizationLink", typeString)
-	}
+	// var ok bool
+	// var modelObjHavingOrganization models.IHasOrganizationLink
+	// if modelObjHavingOrganization, ok = models.NewFromTypeString(typeString).(models.IHasOrganizationLink); !ok {
+	// 	return nil, nil, fmt.Errorf("Model %s does not comform to IHasOrganizationLink", typeString)
+	// }
 
 	// Graphically:
 	// Model -- Org -- Join Table -- User
 	rtable := models.GetTableNameFromTypeString(typeString)
-	orgTableName := models.GetOrganizationTableName(modelObjHavingOrganization)
-	orgTable := reflect.New(modelObjHavingOrganization.OrganizationType()).Interface()
-	joinTableName := models.GetJoinTableName(orgTable.(models.IHasOwnershipLink))
-	orgFieldName := strcase.SnakeCase(modelObjHavingOrganization.GetOrganizationIDFieldName())
+	// orgTableName := models.GetOrganizationTableName(modelObjHavingOrganization)
+	// orgTable := reflect.New(modelObjHavingOrganization.OrganizationType()).Interface()
+	orgTableName := models.OrgModelNameFromOrgResourceTypeString(typeString)
+	joinTableName := models.OrgOwnershipModelNameFromOrgResourceTypeString(typeString)
+	// orgTableName := models.GetOrganizationalTableNameFromModelTypeString(typeString)
+	// orgTable, _ := reflect.New(models.GetOrganizationTypeFromTypeString(typeString)).Interface().(models.IModel)
+	// joinTableName := models.GetJoinTableName(orgTable)
+
+	ofield := *models.GetFieldNameFromModelByTagKey(models.NewFromTypeString(typeString), "org")
+	orgFieldName := strcase.SnakeCase(ofield)
+	// orgFieldName := strcase.SnakeCase(modelObjHavingOrganization.GetOrganizationIDFieldName())
 
 	// e.g. INNER JOIN \"organization\" ON \"dock\".\"OrganizationID\" = \"organization\".id
 	firstJoin := fmt.Sprintf("INNER JOIN \"%s\" ON \"%s\".\"%s\" = \"%s\".id AND \"%s\".\"id\" IN (?)", orgTableName, rtable, orgFieldName, orgTableName, rtable)
@@ -183,16 +198,22 @@ func (serv *OrganizationService) GetAllQueryContructCore(db *gorm.DB, oid *datat
 	// Model -- Org -- Join Table -- User
 	// (Maybe organization should be defined in the library)
 	// And it's organizational type has a user which includes
-	modelObjHavingOrganization, ok := models.NewFromTypeString(typeString).(models.IHasOrganizationLink)
-	if !ok {
-		return nil, fmt.Errorf("Model %s does not comform to IHasOrganizationLink", typeString)
-	}
+	// modelObjHavingOrganization, ok := models.NewFromTypeString(typeString).(models.IHasOrganizationLink)
+	// if !ok {
+	// 	return nil, fmt.Errorf("Model %s does not comform to IHasOrganizationLink", typeString)
+	// }
 
 	rtable := models.GetTableNameFromTypeString(typeString)
-	orgTableName := models.GetOrganizationTableName(modelObjHavingOrganization)
-	orgTable := reflect.New(modelObjHavingOrganization.OrganizationType()).Interface()
-	joinTableName := models.GetJoinTableName(orgTable.(models.IHasOwnershipLink))
-	orgFieldName := strcase.SnakeCase(modelObjHavingOrganization.GetOrganizationIDFieldName())
+	// orgTableName := models.GetOrganizationTableName(modelObjHavingOrganization)
+	orgTableName := models.OrgModelNameFromOrgResourceTypeString(typeString)
+	joinTableName := models.OrgOwnershipModelNameFromOrgResourceTypeString(typeString)
+	// orgTableName := models.GetOrganizationalTableNameFromModelTypeString(typeString)
+	// // orgTable := reflect.New(modelObjHavingOrganization.OrganizationType()).Interface()
+	// orgTable := reflect.New(models.GetOrganizationTypeFromTypeString(typeString)).Interface().(models.IModel)
+	// joinTableName := models.GetJoinTableName(orgTable)
+
+	ofield := *models.GetFieldNameFromModelByTagKey(models.NewFromTypeString(typeString), "org")
+	orgFieldName := strcase.SnakeCase(ofield)
 
 	// e.g. INNER JOIN \"organization\" ON \"dock\".\"OrganizationID\" = \"organization\".id
 	firstJoin := fmt.Sprintf("INNER JOIN \"%s\" ON \"%s\".\"%s\" = \"%s\".id", orgTableName, rtable, orgFieldName, orgTableName)
@@ -205,9 +226,11 @@ func (serv *OrganizationService) GetAllQueryContructCore(db *gorm.DB, oid *datat
 
 // GetAllRolesCore gets all roles according to the criteria
 func (serv *OrganizationService) GetAllRolesCore(dbChained *gorm.DB, dbClean *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObjs []models.IModel) ([]models.UserRole, error) {
-	modelObjHavingOrganization, _ := models.NewFromTypeString(typeString).(models.IHasOrganizationLink)
-	orgTable := reflect.New(modelObjHavingOrganization.OrganizationType()).Interface()
-	joinTableName := models.GetJoinTableName(orgTable.(models.IHasOwnershipLink))
+	// modelObjHavingOrganization, _ := models.NewFromTypeString(typeString).(models.IHasOrganizationLink)
+	// orgTable := reflect.New(modelObjHavingOrganization.OrganizationType()).Interface()
+	// orgTable := reflect.New(models.GetOrganizationTypeFromTypeString(typeString)).Interface().(models.IModel)
+	// joinTableName := models.GetJoinTableName(orgTable)
+	joinTableName := models.OrgOwnershipModelNameFromOrgResourceTypeString(typeString)
 
 	rows, err := db.Shared().Table(joinTableName).Select("model_id, role").Where("user_id = ?", oid.String()).Rows()
 	if err != nil {
@@ -227,8 +250,10 @@ func (serv *OrganizationService) GetAllRolesCore(dbChained *gorm.DB, dbClean *go
 
 	roles := make([]models.UserRole, 0)
 	for _, outmodel := range modelObjs {
-		o := outmodel.(models.IHasOrganizationLink)
-		orgID := o.GetOrganizationID().String()
+		// o := outmodel.(models.IHasOrganizationLink)
+
+		orgID := models.GetFieldValueFromModelByTagKeyBetterRestAndValueKey(outmodel, "org").(*datatypes.UUID).String()
+		// orgID := o.GetOrganizationID().String()
 
 		role := orgIDToRoleMap[orgID]
 		roles = append(roles, role)
@@ -240,43 +265,23 @@ func (serv *OrganizationService) GetAllRolesCore(dbChained *gorm.DB, dbClean *go
 // ---------------------------------------
 // The model object should have link to the ownership object which has a linking table to the user
 func userHasRolesAccessToModelOrg(db *gorm.DB, oid *datatypes.UUID, typeString string, modelObj models.IModel, roles []models.UserRole) (bool, error) {
-	var modelObjHavingOrganization models.IHasOrganizationLink
-	var modelObjHavingOwnership models.IHasOwnershipLink
-	var ok bool
-
-	// Create one model (dock),
-	// Make sure oid has admin access to the organization it refers to
-
-	// (Maybe organization should be defined in the library)
-	// And it's organizational type has a user which includes
-
-	if modelObjHavingOrganization, ok = modelObj.(models.IHasOrganizationLink); !ok {
-		return false, fmt.Errorf("Model %s does not comform to IHasOrganizationLink", typeString)
-	}
-
-	organizationTableName := models.GetOrganizationTableName(modelObjHavingOrganization)
-	// organization := reflect.New(modelObj.OwnershipType()).Interface().(models.IModel)
-
-	if modelObjHavingOwnership, ok = reflect.New(modelObjHavingOrganization.OrganizationType()).Interface().(models.IHasOwnershipLink); !ok {
-		return false, fmt.Errorf("Model %s's organization table does not comform to IHasOwnershipLink", typeString)
-	}
-
-	// Get organization's join table name
-	organizationJoinTableName := models.GetJoinTableName(modelObjHavingOwnership) // join table (link table)
+	organizationTableName := models.OrgModelNameFromOrgResourceTypeString(typeString)
+	organizationJoinTableName := models.OrgOwnershipModelNameFromOrgResourceTypeString(typeString)
 
 	rolesQuery := strconv.Itoa(int(roles[0]))
 	for i := 1; i < len(roles); i++ {
 		rolesQuery += "," + strconv.Itoa(int(roles[i]))
 	}
 
-	organizationID := modelObjHavingOrganization.GetOrganizationID()
+	organizationID := models.GetFieldValueFromModelByTagKeyBetterRestAndValueKey(modelObj, "org").(*datatypes.UUID)
+
 	firstJoin := fmt.Sprintf("INNER JOIN \"%s\" ON \"%s\".id = \"%s\".model_id AND \"%s\".role IN (%s)", organizationJoinTableName, organizationTableName, organizationJoinTableName,
 		organizationJoinTableName, rolesQuery)
 	secondJoin := fmt.Sprintf("INNER JOIN \"user\" ON \"user\".id = \"%s\".user_id AND \"%s\".user_id = ?", organizationJoinTableName, organizationJoinTableName)
 	whereStmt := fmt.Sprintf("\"%s\".model_id = ?", organizationJoinTableName)
 	db = db.Table(organizationTableName).Joins(firstJoin).Joins(secondJoin, oid.String()).Where(whereStmt, organizationID)
 
-	organizations, err := models.NewSliceFromDBByType(modelObjHavingOrganization.OrganizationType(), db.Find)
+	organizations, err := models.NewSliceFromDBByType(models.OrgModelTypeFromOrgResourceTypeString(typeString), db.Find)
 	if err != nil {
 		return false, err
 	}

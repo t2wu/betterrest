@@ -2,6 +2,7 @@ package models
 
 import (
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"strings"
 	"time"
@@ -118,36 +119,95 @@ type JSONIDPatch struct {
 // IHasOwnershipLink has a function that returns the ownership table
 // usable for OwnershipMapper
 type IHasOwnershipLink interface {
-	OwnershipType() reflect.Type
+	OwnershipType() IOwnership
 }
 
-// IHasOrganizationLink has a function that returns the organization table
-// usable for OrganizationMapper
-type IHasOrganizationLink interface {
-	OrganizationType() reflect.Type
-	GetOrganizationID() *datatypes.UUID
-	GetOrganizationIDFieldName() string
-}
+// -------------------------
 
-// GetJoinTableName if comforms to IHasOwnershipLink
-func GetJoinTableName(modelObj IHasOwnershipLink) string {
-	if m, ok := reflect.New(modelObj.OwnershipType()).Interface().(IHasTableName); ok {
-		return m.TableName()
+// OrgModelTypeFromOrgResourceTypeString given org resource typeString
+// returns the reflect type of the organization
+func OrgModelTypeFromOrgResourceTypeString(typeString string) reflect.Type {
+	// if ModelRegistry[typeString].Mapper != MapperTypeViaOrganization {
+	// 	// Programming error
+	// 	panic(fmt.Sprintf("TypeString %s does not represents a resource under organization", typeString))
+	// }
+
+	// return reflect.TypeOf(NewOrgModelFromOrgResourceTypeString(typeString))
+
+	if ModelRegistry[typeString].Mapper != MapperTypeViaOrganization {
+		// Programming error
+		panic(fmt.Sprintf("TypeString %s does not represents a resource under organization", typeString))
 	}
 
-	typeName := modelObj.OwnershipType().Name()
-	return strcase.SnakeCase(typeName)
+	orgTypeString := ModelRegistry[typeString].OrgTypeString
+	return ModelRegistry[orgTypeString].Typ
 }
 
-// GetOrganizationTableName if comforms to IHasOrganizationLink
-func GetOrganizationTableName(modelObj IHasOrganizationLink) string {
-	if m, ok := reflect.New(modelObj.OrganizationType()).Interface().(IHasTableName); ok {
-		return m.TableName()
+// ----------------------------
+// The new models for all the link tables
+
+// NewOrgModelFromOrgResourceTypeString gets Organization object
+// If you're a resource under hooked up by Organization
+func NewOrgModelFromOrgResourceTypeString(typeString string) IModel {
+	if ModelRegistry[typeString].Mapper != MapperTypeViaOrganization {
+		// Programming error
+		panic(fmt.Sprintf("TypeString %s does not represents a resource under organization", typeString))
 	}
 
-	typeName := modelObj.OrganizationType().Name()
-	return strcase.SnakeCase(typeName)
+	orgTypeString := ModelRegistry[typeString].OrgTypeString
+	return reflect.New(ModelRegistry[orgTypeString].Typ).Interface().(IModel)
 }
+
+// NewOrgOwnershipModelFromOrgResourceTypeString gets the joining table from the resource's
+// organization model to the user
+func NewOrgOwnershipModelFromOrgResourceTypeString(typeString string) IModel {
+	if ModelRegistry[typeString].Mapper != MapperTypeViaOrganization {
+		// Programming error
+		panic(fmt.Sprintf("TypeString %s does not represents a resource under organization", typeString))
+	}
+
+	orgTypeString := ModelRegistry[typeString].OrgTypeString // org is an ownership resource
+	return NewOwnershipModelFromOwnershipResourceTypeString(orgTypeString)
+}
+
+// NewOwnershipModelFromOwnershipResourceTypeString returns the model object
+// of the ownership table (the table that links from this resource represented by the type string
+// to the user)
+func NewOwnershipModelFromOwnershipResourceTypeString(typeString string) IModel {
+	if ModelRegistry[typeString].Mapper != MapperTypeViaOwnership {
+		// Programming error
+		panic(fmt.Sprintf("TypeString %s does not represents a resource under organization", typeString))
+	}
+
+	m := reflect.New(ModelRegistry[typeString].Typ).Interface().(IHasOwnershipLink)
+	return m.OwnershipType().(IModel)
+}
+
+// ----------------------------
+// The new linking table names
+
+// OrgModelNameFromOrgResourceTypeString given org resource typeString,
+// returns organization table name
+func OrgModelNameFromOrgResourceTypeString(typeString string) string {
+	m := NewOrgModelFromOrgResourceTypeString(typeString)
+	return GetTableNameFromIModel(m)
+}
+
+// OrgOwnershipModelNameFromOrgResourceTypeString given org resource typeString,
+// returns name of organization table's linking table (ownership table) to user
+func OrgOwnershipModelNameFromOrgResourceTypeString(typeString string) string {
+	m := NewOrgOwnershipModelFromOrgResourceTypeString(typeString)
+	return GetTableNameFromIModel(m)
+}
+
+// OwnershipModelNameFromOwnershipResourceTypeString given ownership resource typeStirng
+// returns name of ownership table to the user
+func OwnershipModelNameFromOwnershipResourceTypeString(typeString string) string {
+	m := NewOwnershipModelFromOwnershipResourceTypeString(typeString)
+	return GetTableNameFromIModel(m)
+}
+
+// ----------------------------
 
 // IDoRealDelete is an interface to customize specification for real db delete
 type IDoRealDelete interface {
@@ -259,6 +319,7 @@ type IAfterPasswordUpdate interface {
 // ------------------------------------
 
 // IOwnership is what OwnershipModelBase tables should satisfy.
+// Except OwnershipType, that's for struct which embed OwnershipModelBase
 type IOwnership interface {
 	GetRole() UserRole
 	SetRole(UserRole)
@@ -271,9 +332,12 @@ type IOwnership interface {
 
 	GetID() *datatypes.UUID
 	SetID(*datatypes.UUID)
+
+	// OwnershipType() IOwnership
 }
 
-// OwnershipModelBase has a role
+// OwnershipModelBase has a role. Intended to be embedded
+// by table serving as link from resource to user
 type OwnershipModelBase struct {
 	ID *datatypes.UUID `gorm:"type:uuid;primary_key;" json:"id"`
 
@@ -387,4 +451,58 @@ func GetTableNameFromTypeString(typeString string) string {
 func GetTableNameFromType(typ reflect.Type) string {
 	model := reflect.New(typ).Interface().(IModel)
 	return GetTableNameFromIModel(model)
+}
+
+// ----------------
+
+func GetValueFromModelByTagKeyBetterRestAndValueKey(modelObj interface{}, valueKey string) *string {
+	v := reflect.Indirect(reflect.ValueOf(modelObj))
+	for i := 0; i < v.NumField(); i++ {
+		// t := v.Type().Field(i).Tag.Get(tag) // if no tag, empty string
+		if tagVal, ok := v.Type().Field(i).Tag.Lookup("betterrest"); ok {
+			pairs := strings.Split(tagVal, ";")
+			for _, pair := range pairs {
+				if strings.HasPrefix(pair, valueKey) {
+					return &pair
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// GetFieldNameFromModelByTagKey get's the name of the tagged field
+// If it's a slice, it returns the element type
+// It's an interface{} because it's not necessarily IModel
+func GetFieldNameFromModelByTagKey(modelObj interface{}, valueKey string) *string {
+	v := reflect.Indirect(reflect.ValueOf(modelObj))
+	for i := 0; i < v.NumField(); i++ {
+		if tagVal, ok := v.Type().Field(i).Tag.Lookup("betterrest"); ok {
+			pairs := strings.Split(tagVal, ";")
+			for _, pair := range pairs {
+				if strings.HasPrefix(pair, valueKey) {
+					s := v.Type().Field(i).Name
+					return &s
+				}
+			}
+
+		}
+	}
+	return nil
+}
+
+// GetFieldValueFromModelByTagKeyBetterRestAndValueKey fetches value of the variable tagged in tag
+func GetFieldValueFromModelByTagKeyBetterRestAndValueKey(modelObj IModel, valueKey string) interface{} {
+	v := reflect.Indirect(reflect.ValueOf(modelObj))
+	for i := 0; i < v.NumField(); i++ {
+		if tagVal, ok := v.Type().Field(i).Tag.Lookup("betterrest"); ok {
+			pairs := strings.Split(tagVal, ";")
+			for _, pair := range pairs {
+				if strings.HasPrefix(pair, valueKey) {
+					return v.Field(i).Interface()
+				}
+			}
+		}
+	}
+	return nil
 }

@@ -1,7 +1,9 @@
 package models
 
 import (
+	"fmt"
 	"reflect"
+	"strings"
 
 	"github.com/t2wu/betterrest/libs/datatypes"
 
@@ -29,8 +31,11 @@ var UserTyp reflect.Type
 type MapperType int
 
 const (
+	// MapperTypeUser is user itself
+	MapperTypeUser MapperType = iota
+
 	// MapperTypeViaOwnership is for type which user owns something
-	MapperTypeViaOwnership MapperType = iota
+	MapperTypeViaOwnership
 
 	// MapperTypeViaOrganization is for type where an organization owns something
 	MapperTypeViaOrganization
@@ -69,7 +74,16 @@ type BatchHookPointData struct {
 
 // Reg is a registry item
 type Reg struct {
-	Typ            reflect.Type
+	Typ reflect.Type
+
+	// If type is link to user type, store type of ownership table (the one
+	// that links to user)
+	OwnershipType reflect.Type
+
+	// OrgTypeString reflect.Type // If type has link to organization type, store organization type
+
+	OrgTypeString string // If type has link to organization type, store organization typestring
+
 	BatchEndpoints string     // Batch endpoints, "CRUD" for create, batch read, batch update, batch delete
 	IDEndPoints    string     //  ID end points, "RUD" for read one, update one, and delete one
 	Mapper         MapperType // Custmized mapper, default to datamapper.SharedOwnershipMapper
@@ -99,15 +113,17 @@ type Reg struct {
 // }
 
 // AddOwnerToModelRegistry adds a New function for an owner
-func AddOwnerToModelRegistry(typeString string, typ reflect.Type) {
-	AddModelRegistry(typeString, typ)
-	OwnerTyp = typ
+func AddOwnerToModelRegistry(typeString string, modelObj IModel) {
+	AddModelRegistry(typeString, modelObj)
+	OwnerTyp = reflect.TypeOf(modelObj)
 }
 
 // AddUserToModelRegistry adds a New function for a user
-func AddUserToModelRegistry(typeString string, typ reflect.Type) {
-	AddModelRegistry(typeString, typ)
-	UserTyp = typ
+func AddUserToModelRegistry(typeString string, modelObj IModel) {
+
+	options := ModelRegistryOptions{BatchEndpoints: "CRUPD", IDEndPoints: "RUPD", Mapper: MapperTypeUser}
+	AddModelRegistryWithOptions(typeString, modelObj, options)
+	UserTyp = reflect.TypeOf(modelObj).Elem()
 }
 
 // AddModelReg adds a New function for an IModel
@@ -116,33 +132,60 @@ func AddUserToModelRegistry(typeString string, typ reflect.Type) {
 // }
 
 // AddModelRegistry adds a New function for an IModel
-func AddModelRegistry(typeString string, typ reflect.Type) {
+func AddModelRegistry(typeString string, modelObj IModel) {
 	options := ModelRegistryOptions{BatchEndpoints: "CRUPD", IDEndPoints: "RUPD", Mapper: MapperTypeViaOwnership}
-	AddModelRegistryWithOptions(typeString, typ, options)
+	AddModelRegistryWithOptions(typeString, modelObj, options)
 }
 
 // AddModelRegistryWithOptions adds a New function for an IModel
-func AddModelRegistryWithOptions(typeString string, typ reflect.Type, options ModelRegistryOptions) {
-	// func AddModelRegistryWithOptions(typeString string, typ reflect.Type, batchEndpoints string, idEndPoints string) {
-	if _, ok := ModelRegistry[typeString]; !ok {
-		ModelRegistry[typeString] = &Reg{}
+func AddModelRegistryWithOptions(typeString string, modelObj IModel, options ModelRegistryOptions) {
+	if _, ok := ModelRegistry[typeString]; ok {
+		panic(fmt.Sprintf("%s should not register the same type string twice:", typeString))
 	}
 
-	ModelRegistry[typeString].Typ = typ
+	ModelRegistry[typeString] = &Reg{}
+
+	reg := ModelRegistry[typeString] // pointer type
+	reg.Typ = reflect.TypeOf(modelObj).Elem()
+
 	if options.BatchEndpoints == "" {
-		ModelRegistry[typeString].BatchEndpoints = "CRUPD"
+		reg.BatchEndpoints = "CRUPD"
 	} else {
-		ModelRegistry[typeString].BatchEndpoints = options.BatchEndpoints
+		reg.BatchEndpoints = options.BatchEndpoints
 	}
 
 	if options.IDEndPoints == "" {
-		ModelRegistry[typeString].IDEndPoints = "RUPD"
+		reg.IDEndPoints = "RUPD"
 	} else {
-		ModelRegistry[typeString].IDEndPoints = options.IDEndPoints
+		reg.IDEndPoints = options.IDEndPoints
 	}
 
 	// Default 0 is ownershipmapper
-	ModelRegistry[typeString].Mapper = options.Mapper
+	reg.Mapper = options.Mapper
+
+	switch options.Mapper {
+	case MapperTypeViaOwnership:
+		if m, ok := modelObj.(IHasOwnershipLink); !ok {
+			panic(fmt.Sprintf("struct for typeString %s does not comform to IOwnership", typeString))
+		} else {
+			reg.OwnershipType = reflect.TypeOf(m.OwnershipType())
+		}
+	case MapperTypeViaOrganization:
+		// We want the model type. So we get that by getting name first
+		// since the foreign key field name is always nameID
+		v := GetValueFromModelByTagKeyBetterRestAndValueKey(modelObj, "org")
+		if v == nil {
+			panic(fmt.Sprintf("%s missing betterrest:\"org:typeString\" tag", typeString))
+		}
+		val := *v
+		if !strings.Contains(val, "org:") {
+			panic(fmt.Sprintf("%s missing tag value for betterrest:\"org:typeString\"", typeString))
+		}
+
+		toks := strings.Split(val, "org:")
+		reg.OrgTypeString = toks[1]
+	}
+
 }
 
 // AddBatchInsertBeforeAndAfterHookPoints adds hookpoints which are called before
@@ -284,3 +327,5 @@ func NewSliceFromDBByType(modelType reflect.Type, f func(interface{}, ...interfa
 
 	return y, nil
 }
+
+// -------------------

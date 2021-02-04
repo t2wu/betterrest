@@ -365,9 +365,8 @@ func NewErrInternalServerError(err error) render.Renderer {
 		ErrResponse{
 			HTTPStatusCode: http.StatusInternalServerError,
 			Code:           500,
-
-			// This one is special.. we use error at the end
-			StatusText: errorToSensibleString(err),
+			StatusText:     "internal server error",
+			ErrorText:      errorToSensibleString(err),
 		},
 	}
 }
