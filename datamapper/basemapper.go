@@ -117,7 +117,7 @@ func (mapper *BaseMapper) GetOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *
 	// anyone permission can read as long as you are linked on db
 	modelObj, role, err := loadAndCheckErrorBeforeModify(mapper.Service, db, oid, scope, typeString, nil, id, []models.UserRole{models.UserRoleAny})
 	if err != nil {
-		return nil, models.Invalid, err
+		return nil, models.UserRoleInvalid, err
 	}
 
 	if m, ok := modelObj.(models.IAfterRead); ok {
@@ -213,7 +213,7 @@ func (mapper *BaseMapper) GetAll(db *gorm.DB, oid *datatypes.UUID, scope *string
 
 // UpdateOneWithID updates model based on this json
 func (mapper *BaseMapper) UpdateOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id *datatypes.UUID) (models.IModel, error) {
-	oldModelObj, _, err := loadAndCheckErrorBeforeModify(mapper.Service, db, oid, scope, typeString, modelObj, id, []models.UserRole{models.Admin})
+	oldModelObj, _, err := loadAndCheckErrorBeforeModify(mapper.Service, db, oid, scope, typeString, modelObj, id, []models.UserRole{models.UserRoleAdmin})
 	if err != nil {
 		return nil, err
 	}
@@ -254,7 +254,7 @@ func (mapper *BaseMapper) UpdateMany(db *gorm.DB, oid *datatypes.UUID, scope *st
 		ids[i] = id
 	}
 
-	oldModelObjs, _, err := loadManyAndCheckBeforeModify(mapper.Service, db, oid, scope, typeString, ids, []models.UserRole{models.Admin})
+	oldModelObjs, _, err := loadManyAndCheckBeforeModify(mapper.Service, db, oid, scope, typeString, ids, []models.UserRole{models.UserRoleAdmin})
 	if err != nil {
 		return nil, err
 	}
@@ -275,7 +275,7 @@ func (mapper *BaseMapper) UpdateMany(db *gorm.DB, oid *datatypes.UUID, scope *st
 
 // PatchOneWithID updates model based on this json
 func (mapper *BaseMapper) PatchOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, jsonPatch []byte, id *datatypes.UUID) (models.IModel, error) {
-	oldModelObj, _, err := loadAndCheckErrorBeforeModify(mapper.Service, db, oid, scope, typeString, nil, id, []models.UserRole{models.Admin})
+	oldModelObj, _, err := loadAndCheckErrorBeforeModify(mapper.Service, db, oid, scope, typeString, nil, id, []models.UserRole{models.UserRoleAdmin})
 	if err != nil {
 		return nil, err
 	}
@@ -321,7 +321,7 @@ func (mapper *BaseMapper) PatchMany(db *gorm.DB, oid *datatypes.UUID, scope *str
 		ids[i] = jsonIDPatch.ID
 	}
 
-	oldModelObjs, _, err := loadManyAndCheckBeforeModify(mapper.Service, db, oid, scope, typeString, ids, []models.UserRole{models.Admin})
+	oldModelObjs, _, err := loadManyAndCheckBeforeModify(mapper.Service, db, oid, scope, typeString, ids, []models.UserRole{models.UserRoleAdmin})
 
 	// Now patch it
 	modelObjs := make([]models.IModel, len(oldModelObjs))
@@ -352,7 +352,7 @@ func (mapper *BaseMapper) PatchMany(db *gorm.DB, oid *datatypes.UUID, scope *str
 // DeleteOneWithID delete the model
 // TODO: delete the groups associated with this record?
 func (mapper *BaseMapper) DeleteOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, id *datatypes.UUID) (models.IModel, error) {
-	modelObj, _, err := loadAndCheckErrorBeforeModify(mapper.Service, db, oid, scope, typeString, nil, id, []models.UserRole{models.Admin})
+	modelObj, _, err := loadAndCheckErrorBeforeModify(mapper.Service, db, oid, scope, typeString, nil, id, []models.UserRole{models.UserRoleAdmin})
 	if err != nil {
 		return nil, err
 	}
@@ -403,7 +403,7 @@ func (mapper *BaseMapper) DeleteMany(db *gorm.DB, oid *datatypes.UUID, scope *st
 		ids[i] = id
 	}
 
-	modelObjs, _, err := loadManyAndCheckBeforeModify(mapper.Service, db, oid, scope, typeString, ids, []models.UserRole{models.Admin})
+	modelObjs, _, err := loadManyAndCheckBeforeModify(mapper.Service, db, oid, scope, typeString, ids, []models.UserRole{models.UserRoleAdmin})
 	if err != nil {
 		return nil, err
 	}

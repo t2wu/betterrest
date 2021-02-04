@@ -19,20 +19,21 @@ type UserRole int
 
 const (
 	// Negatives are not stored in DB
+
 	// UserRoleAny not for value in db, but for permission where any is fine (link table)
 	UserRoleAny UserRole = -2
 
-	// Invalid for this resource
-	Invalid UserRole = -1
+	// UserRoleInvalid is invalid for this resource
+	UserRoleInvalid UserRole = -1
 
-	// Admin is admin UserRole
-	Admin UserRole = 0
+	// UserRoleAdmin is admin UserRole
+	UserRoleAdmin UserRole = 0
 
-	// Guest is guest UserRole (screw go-lint man)
-	Guest UserRole = 1
+	// UserRoleGuest is guest UserRole (screw go-lint man)
+	UserRoleGuest UserRole = 1
 
-	// Public to all (global object)
-	Public UserRole = 2
+	// UserRolePublic to all (global object)
+	UserRolePublic UserRole = 2
 )
 
 // BaseModel is the base class domain model which has standard ID

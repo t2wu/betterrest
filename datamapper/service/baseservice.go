@@ -118,5 +118,5 @@ func (serv *BaseService) DeleteOneCore(db *gorm.DB, oid *datatypes.UUID, scope *
 }
 
 func (serv *BaseService) GetOneWithIDCore(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error) {
-	return nil, models.Invalid, fmt.Errorf("GetOneWithIDCore to be overrridden shouldn't be called")
+	return nil, models.UserRoleInvalid, fmt.Errorf("GetOneWithIDCore to be overrridden shouldn't be called")
 }

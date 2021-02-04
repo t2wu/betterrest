@@ -85,7 +85,7 @@ func ModelOrModelsFromJSONBody(r *http.Request, typeString string, scope *string
 
 	canHaveCreatedAt := false
 	modelObj := models.NewFromTypeString(typeString)
-	if _, ok := modelObj.Permissions(models.Admin, scope)["createdAt"]; ok {
+	if _, ok := modelObj.Permissions(models.UserRoleAdmin, scope)["createdAt"]; ok {
 		canHaveCreatedAt = true
 	}
 
@@ -188,7 +188,7 @@ func ModelsFromJSONBody(r *http.Request, typeString string, scope *string) ([]mo
 
 	modelTest := models.NewFromTypeString(typeString)
 	removeCreated := false
-	if _, ok := modelTest.Permissions(models.Admin, scope)["createdAt"]; ok {
+	if _, ok := modelTest.Permissions(models.UserRoleAdmin, scope)["createdAt"]; ok {
 		// there is created_at field, so we remove it because it's suppose to be
 		// time object and I have int which is not unmarshable
 		removeCreated = true
@@ -243,7 +243,7 @@ func ModelFromJSONBody(r *http.Request, typeString string, scope *string) (model
 
 	modelObj := models.NewFromTypeString(typeString)
 
-	if _, ok := modelObj.Permissions(models.Admin, scope)["createdAt"]; ok {
+	if _, ok := modelObj.Permissions(models.UserRoleAdmin, scope)["createdAt"]; ok {
 		// there is created_at field, so we remove it because it's suppose to be
 		// time object and I have int which is not unmarshable
 		jsn2, err := removeCreatedAtFromModel(jsn)

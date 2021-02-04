@@ -59,7 +59,7 @@ func (service *GlobalService) GetOneWithIDCore(db *gorm.DB, oid *datatypes.UUID,
 		return nil, 0, err
 	}
 
-	role := models.Public // just some default
+	role := models.UserRolePublic // just some default
 
 	err = gormfixes.LoadManyToManyBecauseGormFailsWithID(db, modelObj)
 	if err != nil {
@@ -108,7 +108,7 @@ func (serv *GlobalService) GetAllRolesCore(dbChained *gorm.DB, dbClean *gorm.DB,
 	// Don't know why this doesn't work
 	roles := make([]models.UserRole, len(modelObjs))
 	for i := range roles {
-		roles[i] = models.Public
+		roles[i] = models.UserRolePublic
 	}
 
 	return roles, nil

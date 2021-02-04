@@ -86,7 +86,7 @@ func (service *LinkTableService) GetOneWithIDCore(db *gorm.DB, oid *datatypes.UU
 	// Check if link table
 	if _, ok := modelObj.(models.IOwnership); !ok {
 		log.Printf("%s not an IOwnership type\n", typeString)
-		return nil, models.Invalid, fmt.Errorf("%s not an IOwnership type", typeString)
+		return nil, models.UserRoleInvalid, fmt.Errorf("%s not an IOwnership type", typeString)
 	}
 
 	rtable := models.GetTableNameFromIModel(modelObj)
@@ -109,11 +109,11 @@ func (service *LinkTableService) GetOneWithIDCore(db *gorm.DB, oid *datatypes.UU
 	}
 	res := result{}
 	if err := db.Table(rtable).Where("user_id = ? and role = ? and model_id = ?",
-		oid, models.Admin, id).Select("role").Scan(&res).Error; err != nil {
+		oid, models.UserRoleAdmin, id).Select("role").Scan(&res).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, models.Invalid, ErrPermission
+			return nil, models.UserRoleInvalid, ErrPermission
 		}
-		return nil, models.Invalid, err // some other error
+		return nil, models.UserRoleInvalid, err // some other error
 	}
 
 	return modelObj, res.Role, err
@@ -181,7 +181,7 @@ func (serv *LinkTableService) GetAllRolesCore(dbChained *gorm.DB, dbClean *gorm.
 	// No roles for this table, because this IS the linking table
 	roles := make([]models.UserRole, len(modelObjs), len(modelObjs))
 	for i := range roles {
-		roles[i] = models.Invalid // FIXME It shouldn't be Invaild, it should be the user's access to this
+		roles[i] = models.UserRoleInvalid // FIXME It shouldn't be Invaild, it should be the user's access to this
 	}
 
 	return roles, nil
@@ -189,26 +189,26 @@ func (serv *LinkTableService) GetAllRolesCore(dbChained *gorm.DB, dbClean *gorm.
 
 func (serv *LinkTableService) userHasPermissionToEdit(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error) {
 	if id == nil || id.UUID.String() == "" {
-		return nil, models.Invalid, ErrIDEmpty
+		return nil, models.UserRoleInvalid, ErrIDEmpty
 	}
 
 	// Pull out entire modelObj
 	modelObj, _, err := serv.GetOneWithIDCore(db, oid, scope, typeString, id)
 	if err != nil { // Error is "record not found" when not found
-		return nil, models.Invalid, err
+		return nil, models.UserRoleInvalid, err
 	}
 
 	uuidVal := modelObj.GetID()
 	if uuidVal == nil || uuidVal.String() == "" {
 		// in case it's an empty string
-		return nil, models.Invalid, ErrIDEmpty
+		return nil, models.UserRoleInvalid, ErrIDEmpty
 	} else if uuidVal.String() != id.UUID.String() {
-		return nil, models.Invalid, ErrIDNotMatch
+		return nil, models.UserRoleInvalid, ErrIDNotMatch
 	}
 
 	ownerModelObj, ok := modelObj.(models.IOwnership)
 	if !ok {
-		return nil, models.Invalid, fmt.Errorf("model not an IOwnership object")
+		return nil, models.UserRoleInvalid, fmt.Errorf("model not an IOwnership object")
 	}
 
 	// If you're admin to this model, you can only update/delete link data to other
@@ -220,15 +220,15 @@ func (serv *LinkTableService) userHasPermissionToEdit(db *gorm.DB, oid *datatype
 	res := result{}
 	if err := db.Table(rtable).Where("user_id = ? and model_id = ?", oid, ownerModelObj.GetModelID()).First(&res).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, models.Invalid, ErrPermission
+			return nil, models.UserRoleInvalid, ErrPermission
 		}
-		return nil, models.Invalid, err
+		return nil, models.UserRoleInvalid, err
 	}
 
-	if res.Role == models.Admin && ownerModelObj.GetUserID().String() == oid.String() {
+	if res.Role == models.UserRoleAdmin && ownerModelObj.GetUserID().String() == oid.String() {
 		// You can remove other's relation, but not yours
 		return nil, res.Role, ErrPermissionWrongEndPoint
-	} else if res.Role != models.Admin && ownerModelObj.GetUserID().String() != oid.String() {
+	} else if res.Role != models.UserRoleAdmin && ownerModelObj.GetUserID().String() != oid.String() {
 		// not admin, only remove yourself
 		return nil, res.Role, ErrPermission
 	}
@@ -246,7 +246,7 @@ func userHasAdminAccessToOriginalModel(db *gorm.DB, oid *datatypes.UUID, typeStr
 	// but check link table which we have admin access for
 	rtable := models.GetTableNameFromTypeString(typeString)
 	if err := db.Table(rtable).Where("user_id = ? and role = ? and model_id = ?",
-		oid, models.Admin, id).Error; err != nil {
+		oid, models.UserRoleAdmin, id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return ErrPermission
 		}

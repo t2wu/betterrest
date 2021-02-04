@@ -397,7 +397,7 @@ func CreateHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin
 			// admin is 0 so it's ok
 			roles := make([]models.UserRole, 0, 20)
 			for i := 0; i < len(modelObjs); i++ {
-				roles = append(roles, models.Admin)
+				roles = append(roles, models.UserRoleAdmin)
 			}
 			renderModelSlice(w, r, typeString, modelObjs, roles, nil, &scope)
 		} else {
@@ -411,7 +411,7 @@ func CreateHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin
 			}
 
 			tx.Commit()
-			renderModel(w, r, typeString, modelObj, models.Admin, &scope)
+			renderModel(w, r, typeString, modelObj, models.UserRoleAdmin, &scope)
 		}
 
 		return
@@ -503,7 +503,7 @@ func UpdateOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 		}
 
 		tx.Commit()
-		renderModel(w, r, typeString, modelObj, models.Admin, &scope)
+		renderModel(w, r, typeString, modelObj, models.UserRoleAdmin, &scope)
 		return
 	}
 }
@@ -544,7 +544,7 @@ func UpdateManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 		tx.Commit()
 		roles := make([]models.UserRole, len(modelObjs), len(modelObjs))
 		for i := 0; i < len(roles); i++ {
-			roles[i] = models.Admin
+			roles[i] = models.UserRoleAdmin
 		}
 
 		renderModelSlice(w, r, typeString, modelObjs, roles, nil, &scope)
@@ -593,7 +593,7 @@ func PatchOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *g
 		}
 
 		tx.Commit()
-		renderModel(w, r, typeString, modelObj, models.Admin, &scope)
+		renderModel(w, r, typeString, modelObj, models.UserRoleAdmin, &scope)
 		return
 
 		// type JSONPatch struct {
@@ -640,7 +640,7 @@ func PatchManyHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 		tx.Commit()
 		roles := make([]models.UserRole, len(modelObjs), len(modelObjs))
 		for i := 0; i < len(roles); i++ {
-			roles[i] = models.Admin
+			roles[i] = models.UserRoleAdmin
 		}
 
 		renderModelSlice(w, r, typeString, modelObjs, roles, nil, &scope)
@@ -685,7 +685,7 @@ func DeleteOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 		}
 
 		tx.Commit()
-		renderModel(w, r, typeString, modelObj, models.Admin, &scope)
+		renderModel(w, r, typeString, modelObj, models.UserRoleAdmin, &scope)
 		return
 	}
 }
@@ -729,7 +729,7 @@ func DeleteManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 
 		roles := make([]models.UserRole, len(modelObjs), len(modelObjs))
 		for i := 0; i < len(roles); i++ {
-			roles[i] = models.Admin
+			roles[i] = models.UserRoleAdmin
 		}
 
 		renderModelSlice(w, r, typeString, modelObjs, roles, nil, &scope)
@@ -776,7 +776,7 @@ func ChangeEmailPasswordHandler(typeString string, mapper datamapper.IChangeEmai
 		}
 
 		tx.Commit()
-		renderModel(w, r, typeString, modelObj, models.Admin, &scope)
+		renderModel(w, r, typeString, modelObj, models.UserRoleAdmin, &scope)
 		return
 	}
 }

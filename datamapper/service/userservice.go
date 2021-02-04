@@ -79,7 +79,7 @@ func (serv *UserService) GetOneWithIDCore(db *gorm.DB, oid *datatypes.UUID, scop
 		return nil, 0, err
 	}
 
-	return modelObj, models.Admin, nil
+	return modelObj, models.UserRoleAdmin, nil
 }
 
 func (serv *UserService) GetManyWithIDsCore(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, ids []*datatypes.UUID) ([]models.IModel, []models.UserRole, error) {

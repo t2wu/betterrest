@@ -119,14 +119,14 @@ func constructOrderFieldQueries(db *gorm.DB, tableName string, order *string) *g
 func loadAndCheckErrorBeforeModify(serv service.IService, db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id *datatypes.UUID, permittedRoles []models.UserRole) (models.IModel, models.UserRole, error) {
 	if id == nil || id.UUID.String() == "" {
 		// in case it's an empty string
-		return nil, models.Invalid, service.ErrIDEmpty
+		return nil, models.UserRoleInvalid, service.ErrIDEmpty
 	}
 
 	// Check if ID from URL and ID in object are the same (meaningful when it's not batch edit)
 	// modelObj is nil if it's a patch operation. In that case just here to load and check permission.
 	// it's also nil when it's a get one op
 	if modelObj != nil && modelObj.GetID().String() != id.String() {
-		return nil, models.Invalid, service.ErrIDNotMatch
+		return nil, models.UserRoleInvalid, service.ErrIDNotMatch
 	}
 
 	// If you're able to read, you have the permission to update...
@@ -136,7 +136,7 @@ func loadAndCheckErrorBeforeModify(serv service.IService, db *gorm.DB, oid *data
 	// for models under organization, the role is the role of the organization to the user
 	modelObj2, role, err := serv.GetOneWithIDCore(db, oid, scope, typeString, id)
 	if err != nil { // Error is "record not found" when not found
-		return nil, models.Invalid, err
+		return nil, models.UserRoleInvalid, err
 	}
 
 	permitted := false
@@ -150,7 +150,7 @@ func loadAndCheckErrorBeforeModify(serv service.IService, db *gorm.DB, oid *data
 		}
 	}
 	if !permitted {
-		return nil, models.Invalid, service.ErrPermission
+		return nil, models.UserRoleInvalid, service.ErrPermission
 	}
 
 	return modelObj2, role, nil
@@ -166,7 +166,7 @@ func loadManyAndCheckBeforeModify(serv service.IService, db *gorm.DB, oid *datat
 	}
 
 	for _, role := range roles {
-		if role != models.Admin {
+		if role != models.UserRoleAdmin {
 			return nil, nil, service.ErrPermission
 		}
 	}

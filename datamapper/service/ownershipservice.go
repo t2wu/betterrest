@@ -50,7 +50,7 @@ func (serv *OwnershipService) HookBeforeCreateOne(db *gorm.DB, oid *datatypes.UU
 
 	g.SetUserID(oid)
 	g.SetModelID(modelID)
-	g.SetRole(models.Admin)
+	g.SetRole(models.UserRoleAdmin)
 
 	// ownerships := reflect.New(reflect.SliceOf(ownershipType))
 	// o.Set(reflect.Append(ownerships, reflect.ValueOf(g)))
@@ -87,7 +87,7 @@ func (serv *OwnershipService) HookBeforeCreateMany(db *gorm.DB, oid *datatypes.U
 
 		g.SetUserID(oid)
 		g.SetModelID(modelID)
-		g.SetRole(models.Admin)
+		g.SetRole(models.UserRoleAdmin)
 
 		// ownerships := reflect.New(reflect.SliceOf(ownershipType))
 		// o.Set(reflect.Append(ownerships, reflect.ValueOf(g)))
@@ -206,7 +206,7 @@ func (serv *OwnershipService) GetOneWithIDCore(db *gorm.DB, oid *datatypes.UUID,
 	}
 
 	joinTable := reflect.New(modelObjOwnership.OwnershipType()).Interface()
-	role := models.Invalid // just some default
+	role := models.UserRoleInvalid // just some default
 	stmt := fmt.Sprintf("SELECT * FROM %s WHERE user_id = ? AND model_id = ?", joinTableName)
 	if err2 := db.Raw(stmt, oid.String(), id.String()).Scan(joinTable).Error; err2 != nil {
 		return nil, 0, err2
@@ -295,7 +295,7 @@ func (serv *OwnershipService) GetAllRolesCore(dbChained *gorm.DB, dbClean *gorm.
 	// ---------------------------
 	// ownershipModelTyp := getOwnershipModelTypeFromTypeString(typeString)
 
-	// role := models.Admin // just some default
+	// role := models.UserRoleAdmin // just some default
 	// The difference between this method and the find is that it's missing the
 	// WHERE "model"."deleted_at" IS NULL, so we need to add it
 	if err = dbChained.Where(fmt.Sprintf("\"%s\".\"deleted_at\" IS NULL", rtable)).

@@ -128,7 +128,7 @@ func (mapper *UserMapper) GetOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *
 // Update password require special endpoint
 func (mapper *UserMapper) UpdateOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id *datatypes.UUID) (models.IModel, error) {
 	log.Println("userMapper's UpdateOneWithID called")
-	oldModelObj, _, err := loadAndCheckErrorBeforeModify(mapper.Service, db, oid, scope, typeString, modelObj, id, []models.UserRole{models.Admin})
+	oldModelObj, _, err := loadAndCheckErrorBeforeModify(mapper.Service, db, oid, scope, typeString, modelObj, id, []models.UserRole{models.UserRoleAdmin})
 	if err != nil {
 		return nil, err
 	}
@@ -175,7 +175,7 @@ func (mapper *UserMapper) DeleteOneWithID(db *gorm.DB, oid *datatypes.UUID, scop
 	if err != nil { // Error is "record not found" when not found
 		return nil, err
 	}
-	if role != models.Admin {
+	if role != models.UserRoleAdmin {
 		// even if found, not authorized, so return a not found
 		// but how do I do that here?
 		return nil, errors.New("not found")
@@ -223,7 +223,7 @@ func (mapper *UserMapper) DeleteOneWithID(db *gorm.DB, oid *datatypes.UUID, scop
 // ChangeEmailPasswordWithID changes email and/or password
 func (mapper *UserMapper) ChangeEmailPasswordWithID(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id *datatypes.UUID) (models.IModel, error) {
 	log.Println("userMapper's ChangeEmailPasswordWithID called")
-	oldModelObj, _, err := loadAndCheckErrorBeforeModify(mapper.Service, db, oid, scope, typeString, modelObj, id, []models.UserRole{models.Admin})
+	oldModelObj, _, err := loadAndCheckErrorBeforeModify(mapper.Service, db, oid, scope, typeString, modelObj, id, []models.UserRole{models.UserRoleAdmin})
 	if err != nil {
 		return nil, err
 	}
@@ -251,7 +251,7 @@ func (mapper *UserMapper) ChangeEmailPasswordWithID(db *gorm.DB, oid *datatypes.
 	// }
 	// modelObj = oldModel
 
-	// if role != models.Admin {
+	// if role != models.UserRoleAdmin {
 	// 	return nil, errPermission
 	// }
 

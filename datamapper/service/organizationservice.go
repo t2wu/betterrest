@@ -26,14 +26,13 @@ func (serv *OrganizationService) HookBeforeCreateOne(db *gorm.DB, oid *datatypes
 	}
 
 	// Make sure oid has admin access to this organization
-	hasAdminAccess, err := userHasRolesAccessToModelOrg(db, oid, typeString, modelObj, []models.UserRole{models.Admin})
+	hasAdminAccess, err := userHasRolesAccessToModelOrg(db, oid, typeString, modelObj, []models.UserRole{models.UserRoleAdmin})
 	if err != nil {
 		return nil, err
 	} else if !hasAdminAccess {
 		return nil, errors.New("user does not have admin access to the organization")
 	}
 
-	log.Printf("return from HookBeforeCreateOne: %+v\n", modelObj)
 	return modelObj, nil
 }
 
@@ -45,7 +44,7 @@ func (serv *OrganizationService) HookBeforeCreateMany(db *gorm.DB, oid *datatype
 		}
 
 		// Make sure oid has admin access to this organization
-		hasAdminAccess, err := userHasRolesAccessToModelOrg(db, oid, typeString, modelObj, []models.UserRole{models.Admin})
+		hasAdminAccess, err := userHasRolesAccessToModelOrg(db, oid, typeString, modelObj, []models.UserRole{models.UserRoleAdmin})
 		if err != nil {
 			return nil, err
 		} else if !hasAdminAccess {
@@ -76,7 +75,7 @@ func (serv *OrganizationService) GetOneWithIDCore(db *gorm.DB, oid *datatypes.UU
 	// (Maybe organization should be defined in the library)
 	// And it's organizational type has a user which includes
 	if modelObjHavingOrganization, ok = models.NewFromTypeString(typeString).(models.IHasOrganizationLink); !ok {
-		return nil, models.Guest, fmt.Errorf("Model %s does not comform to IHasOrganizationLink", typeString)
+		return nil, models.UserRoleGuest, fmt.Errorf("Model %s does not comform to IHasOrganizationLink", typeString)
 	}
 
 	// Graphically:
@@ -100,7 +99,7 @@ func (serv *OrganizationService) GetOneWithIDCore(db *gorm.DB, oid *datatypes.UU
 	}
 
 	joinTable := reflect.New(orgTable.(models.IHasOwnershipLink).OwnershipType()).Interface()
-	role := models.Guest // just some default
+	role := models.UserRoleGuest // just some default
 
 	orgID := modelObj.(models.IHasOrganizationLink).GetOrganizationID().String()
 
@@ -215,7 +214,7 @@ func (serv *OrganizationService) GetAllRolesCore(dbChained *gorm.DB, dbClean *go
 		return nil, err
 	}
 
-	thisRole := models.Guest              // just some default
+	thisRole := models.UserRoleGuest      // just some default
 	organizationID := datatypes.NewUUID() // just some default
 	orgIDToRoleMap := make(map[string]models.UserRole)
 	for rows.Next() {
