@@ -1,9 +1,7 @@
 package models
 
 import (
-	"fmt"
 	"reflect"
-	"strings"
 
 	"github.com/t2wu/betterrest/libs/datatypes"
 
@@ -47,11 +45,11 @@ const (
 	MapperTypeLinkTable
 )
 
-// ModelRegistryOptions is options when you want to add a model to registry
-type ModelRegistryOptions struct {
-	BatchEndpoints string // Batch endpoints, "CRUD" for create, batch read, batch update, batch delete
-	IDEndPoints    string //  ID end points, "RUD" for read one, update one, and delete one
-	Mapper         MapperType
+// RegOptions is options when you want to add a model to registry
+type RegOptions struct {
+	BatchMethods string // Batch endpoints, "CRUD" for create, batch read, batch update, batch delete
+	IdvMethods   string //  ID end points, "RUD" for read one, update one, and delete one
+	Mapper       MapperType
 }
 
 // BatchHookPointData is the data send to batch model hookpoints
@@ -74,7 +72,8 @@ type BatchHookPointData struct {
 
 // Reg is a registry item
 type Reg struct {
-	Typ reflect.Type
+	Typ       reflect.Type
+	CreateTyp interface{}
 
 	// If type is link to user type, store type of ownership table (the one
 	// that links to user)
@@ -84,9 +83,9 @@ type Reg struct {
 
 	OrgTypeString string // If type has link to organization type, store organization typestring
 
-	BatchEndpoints string     // Batch endpoints, "CRUD" for create, batch read, batch update, batch delete
-	IDEndPoints    string     //  ID end points, "RUD" for read one, update one, and delete one
-	Mapper         MapperType // Custmized mapper, default to datamapper.SharedOwnershipMapper
+	BatchMethods string     // Batch endpoints, "CRUD" for create, batch read, batch update, batch delete
+	IdvMethods   string     //  ID end points, "RUD" for read one, update one, and delete one
+	Mapper       MapperType // Custmized mapper, default to datamapper.SharedOwnershipMapper
 
 	AfterRead func(bhpData BatchHookPointData) error
 
@@ -101,159 +100,6 @@ type Reg struct {
 
 	BeforeDelete func(bhpData BatchHookPointData) error
 	AfterDelete  func(bhpData BatchHookPointData) error
-}
-
-/*
- * Registration
- */
-
-// RegisterOwnershipModel register the ownership table so the library can init base on it
-// func RegisterOwnershipModel(ownership reflect.Type) {
-// 	OwnershipTyp = ownership
-// }
-
-// AddOwnerToModelRegistry adds a New function for an owner
-func AddOwnerToModelRegistry(typeString string, modelObj IModel) {
-	AddModelRegistry(typeString, modelObj)
-	OwnerTyp = reflect.TypeOf(modelObj)
-}
-
-// AddUserToModelRegistry adds a New function for a user
-func AddUserToModelRegistry(typeString string, modelObj IModel) {
-
-	options := ModelRegistryOptions{BatchEndpoints: "CRUPD", IDEndPoints: "RUPD", Mapper: MapperTypeUser}
-	AddModelRegistryWithOptions(typeString, modelObj, options)
-	UserTyp = reflect.TypeOf(modelObj).Elem()
-}
-
-// AddModelReg adds a New function for an IModel
-// func AddModelReg(typeString string, Reg) {
-// 	AddModelRegistryWithOptions(typeString, typ, "CRUD", "RUPD")
-// }
-
-// AddModelRegistry adds a New function for an IModel
-func AddModelRegistry(typeString string, modelObj IModel) {
-	options := ModelRegistryOptions{BatchEndpoints: "CRUPD", IDEndPoints: "RUPD", Mapper: MapperTypeViaOwnership}
-	AddModelRegistryWithOptions(typeString, modelObj, options)
-}
-
-// AddModelRegistryWithOptions adds a New function for an IModel
-func AddModelRegistryWithOptions(typeString string, modelObj IModel, options ModelRegistryOptions) {
-	if _, ok := ModelRegistry[typeString]; ok {
-		panic(fmt.Sprintf("%s should not register the same type string twice:", typeString))
-	}
-
-	ModelRegistry[typeString] = &Reg{}
-
-	reg := ModelRegistry[typeString] // pointer type
-	reg.Typ = reflect.TypeOf(modelObj).Elem()
-
-	if options.BatchEndpoints == "" {
-		reg.BatchEndpoints = "CRUPD"
-	} else {
-		reg.BatchEndpoints = options.BatchEndpoints
-	}
-
-	if options.IDEndPoints == "" {
-		reg.IDEndPoints = "RUPD"
-	} else {
-		reg.IDEndPoints = options.IDEndPoints
-	}
-
-	// Default 0 is ownershipmapper
-	reg.Mapper = options.Mapper
-
-	switch options.Mapper {
-	case MapperTypeViaOwnership:
-		if m, ok := modelObj.(IHasOwnershipLink); !ok {
-			panic(fmt.Sprintf("struct for typeString %s does not comform to IOwnership", typeString))
-		} else {
-			reg.OwnershipType = reflect.TypeOf(m.OwnershipType())
-		}
-	case MapperTypeViaOrganization:
-		// We want the model type. So we get that by getting name first
-		// since the foreign key field name is always nameID
-		v := GetValueFromModelByTagKeyBetterRestAndValueKey(modelObj, "org")
-		if v == nil {
-			panic(fmt.Sprintf("%s missing betterrest:\"org:typeString\" tag", typeString))
-		}
-		val := *v
-		if !strings.Contains(val, "org:") {
-			panic(fmt.Sprintf("%s missing tag value for betterrest:\"org:typeString\"", typeString))
-		}
-
-		toks := strings.Split(val, "org:")
-		reg.OrgTypeString = toks[1]
-	}
-
-}
-
-// AddBatchInsertBeforeAndAfterHookPoints adds hookpoints which are called before
-// and after batch update. Either one can be left as nil
-func AddBatchInsertBeforeAndAfterHookPoints(typeString string,
-	before func(bhpData BatchHookPointData) error,
-	after func(bhpData BatchHookPointData) error) {
-
-	if _, ok := ModelRegistry[typeString]; !ok {
-		ModelRegistry[typeString] = &Reg{}
-	}
-
-	ModelRegistry[typeString].BeforeInsert = before
-	ModelRegistry[typeString].AfterInsert = after
-}
-
-// AddBatchReadAfterHookPoint adds hookpoints which are called after
-// and read, can be left as nil
-func AddBatchReadAfterHookPoint(typeString string,
-	after func(bhpData BatchHookPointData) error) {
-
-	if _, ok := ModelRegistry[typeString]; !ok {
-		ModelRegistry[typeString] = &Reg{}
-	}
-
-	ModelRegistry[typeString].AfterRead = after
-}
-
-// AddBatchUpdateBeforeAndAfterHookPoints adds hookpoints which are called before
-// and after batch update. Either one can be left as nil
-func AddBatchUpdateBeforeAndAfterHookPoints(typeString string,
-	before func(bhpData BatchHookPointData) error,
-	after func(bhpData BatchHookPointData) error) {
-
-	if _, ok := ModelRegistry[typeString]; !ok {
-		ModelRegistry[typeString] = &Reg{}
-	}
-
-	ModelRegistry[typeString].BeforeUpdate = before
-	ModelRegistry[typeString].AfterUpdate = after
-}
-
-// AddBatchPatchBeforeAndAfterHookPoints adds hookpoints which are called before
-// and after batch update. Either one can be left as nil
-func AddBatchPatchBeforeAndAfterHookPoints(typeString string,
-	before func(bhpData BatchHookPointData) error,
-	after func(bhpData BatchHookPointData) error) {
-
-	if _, ok := ModelRegistry[typeString]; !ok {
-		ModelRegistry[typeString] = &Reg{}
-	}
-
-	ModelRegistry[typeString].BeforePatch = before
-	ModelRegistry[typeString].AfterPatch = after
-}
-
-// AddBatchDeleteBeforeAndAfterHookPoints adds hookpoints which are called before
-// and after batch delete. Either one can be left as nil
-func AddBatchDeleteBeforeAndAfterHookPoints(typeString string,
-	before func(bhpData BatchHookPointData) error,
-	after func(bhpData BatchHookPointData) error) {
-
-	if _, ok := ModelRegistry[typeString]; !ok {
-		ModelRegistry[typeString] = &Reg{}
-	}
-
-	ModelRegistry[typeString].BeforeDelete = before
-	ModelRegistry[typeString].AfterDelete = after
 }
 
 // func (g *Gateway) AfterInsertDB(db *gorm.DB, typeString string) error {

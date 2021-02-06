@@ -13,50 +13,50 @@ func addRoute(r *gin.Engine, typeString string, reg *models.Reg, mapper datamapp
 	endpoint := strings.ToLower(typeString)
 	g := r.Group("/" + endpoint)
 	{
-		if strings.ContainsAny(reg.BatchEndpoints, "R") {
+		if strings.ContainsAny(reg.BatchMethods, "R") {
 			g.GET("", guardMiddleWare(typeString),
 				ReadAllHandler(typeString, mapper)) // e.g. GET /devices
 		}
 
-		if strings.ContainsAny(reg.BatchEndpoints, "C") {
+		if strings.ContainsAny(reg.BatchMethods, "C") {
 			g.POST("", guardMiddleWare(typeString),
 				CreateHandler(typeString, mapper))
 		}
 
-		if strings.ContainsAny(reg.BatchEndpoints, "U") {
+		if strings.ContainsAny(reg.BatchMethods, "U") {
 			g.PUT("", guardMiddleWare(typeString),
 				UpdateManyHandler(typeString, mapper))
 		}
 
-		if strings.ContainsAny(reg.BatchEndpoints, "P") {
+		if strings.ContainsAny(reg.BatchMethods, "P") {
 			g.PATCH("", guardMiddleWare(typeString),
 				PatchManyHandler(typeString, mapper))
 		}
 
-		if strings.ContainsAny(reg.BatchEndpoints, "D") {
+		if strings.ContainsAny(reg.BatchMethods, "D") {
 			g.DELETE("", guardMiddleWare(typeString),
 				DeleteManyHandler(typeString, mapper))
 		}
 
 		n := g.Group("/:id")
 		{
-			if strings.ContainsAny(reg.IDEndPoints, "R") {
+			if strings.ContainsAny(reg.IdvMethods, "R") {
 				// r.Use(OneMiddleWare(typeString))
 				n.GET("", guardMiddleWare(typeString),
 					ReadOneHandler(typeString, mapper)) // e.g. GET /model/123
 			}
 
-			if strings.ContainsAny(reg.IDEndPoints, "U") {
+			if strings.ContainsAny(reg.IdvMethods, "U") {
 				n.PUT("", guardMiddleWare(typeString),
 					UpdateOneHandler(typeString, mapper)) // e.g. PUT /model/123
 			}
 
-			if strings.ContainsAny(reg.IDEndPoints, "P") {
+			if strings.ContainsAny(reg.IdvMethods, "P") {
 				n.PATCH("", guardMiddleWare(typeString),
 					PatchOneHandler(typeString, mapper)) // e.g. PATCH /model/123
 			}
 
-			if strings.ContainsAny(reg.IDEndPoints, "D") {
+			if strings.ContainsAny(reg.IdvMethods, "D") {
 				n.DELETE("", guardMiddleWare(typeString),
 					DeleteOneHandler(typeString, mapper)) // e.g. DELETE /model/123
 			}
