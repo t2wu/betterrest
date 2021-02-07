@@ -72,16 +72,25 @@ type BatchHookPointData struct {
 
 // Reg is a registry item
 type Reg struct {
-	Typ       reflect.Type
-	CreateTyp interface{}
+	Typ reflect.Type
 
 	// If type is link to user type, store type of ownership table (the one
 	// that links to user)
-	OwnershipType reflect.Type
+	OwnershipType      reflect.Type
+	OwnershipTableName *string
+	// If custom ownership table is registered, store here
+	OwnershipModelObjPtr IModel
 
 	// OrgTypeString reflect.Type // If type has link to organization type, store organization type
 
 	OrgTypeString string // If type has link to organization type, store organization typestring
+
+	// CreateObj is by default the one passed in when calling RegModel*
+	// It could be overriden with RegCustomCreate()
+	CreateObj IModel
+
+	// CreateMethod can be defined with RegCustomCreate()
+	CreateMethod func(db *gorm.DB) (*gorm.DB, error)
 
 	BatchMethods string     // Batch endpoints, "CRUD" for create, batch read, batch update, batch delete
 	IdvMethods   string     //  ID end points, "RUD" for read one, update one, and delete one

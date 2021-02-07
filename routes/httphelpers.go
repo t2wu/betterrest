@@ -85,8 +85,10 @@ func ModelOrModelsFromJSONBody(r *http.Request, typeString string, scope *string
 
 	canHaveCreatedAt := false
 	modelObj := models.NewFromTypeString(typeString)
-	if _, ok := modelObj.Permissions(models.UserRoleAdmin, scope)["createdAt"]; ok {
-		canHaveCreatedAt = true
+	if modelObjPerm, ok := modelObj.(models.IHasPermissions); ok {
+		if _, ok := modelObjPerm.Permissions(models.UserRoleAdmin, scope)["createdAt"]; ok {
+			canHaveCreatedAt = true
+		}
 	}
 
 	err = json.Unmarshal(jsn, &jcmodel)
@@ -188,10 +190,12 @@ func ModelsFromJSONBody(r *http.Request, typeString string, scope *string) ([]mo
 
 	modelTest := models.NewFromTypeString(typeString)
 	removeCreated := false
-	if _, ok := modelTest.Permissions(models.UserRoleAdmin, scope)["createdAt"]; ok {
-		// there is created_at field, so we remove it because it's suppose to be
-		// time object and I have int which is not unmarshable
-		removeCreated = true
+	if modelObjPerm, ok := modelTest.(models.IHasPermissions); ok {
+		if _, ok := modelObjPerm.Permissions(models.UserRoleAdmin, scope)["createdAt"]; ok {
+			// there is created_at field, so we remove it because it's suppose to be
+			// time object and I have int which is not unmarshable
+			removeCreated = true
+		}
 	}
 
 	for _, jsnModel := range jcmodel.Content {
@@ -243,13 +247,15 @@ func ModelFromJSONBody(r *http.Request, typeString string, scope *string) (model
 
 	modelObj := models.NewFromTypeString(typeString)
 
-	if _, ok := modelObj.Permissions(models.UserRoleAdmin, scope)["createdAt"]; ok {
-		// there is created_at field, so we remove it because it's suppose to be
-		// time object and I have int which is not unmarshable
-		jsn2, err := removeCreatedAtFromModel(jsn)
-		// ignore error, so if there is no createdAt in the field it will be fine, too
-		if err == nil {
-			jsn = jsn2
+	if modelObjPerm, ok := modelObj.(models.IHasPermissions); ok {
+		if _, ok := modelObjPerm.Permissions(models.UserRoleAdmin, scope)["createdAt"]; ok {
+			// there is created_at field, so we remove it because it's suppose to be
+			// time object and I have int which is not unmarshable
+			jsn2, err := removeCreatedAtFromModel(jsn)
+			// ignore error, so if there is no createdAt in the field it will be fine, too
+			if err == nil {
+				jsn = jsn2
+			}
 		}
 	}
 

@@ -3,6 +3,7 @@ package models
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"reflect"
 	"strings"
 	"time"
@@ -89,12 +90,17 @@ func (b *BaseModel) Validate() error {
 
 // IModel is the interface for all domain models
 type IModel interface {
-	Permissions(r UserRole, scope *string) jsontransform.JSONFields
-	// CherryPickFields(r UserRole) jsontransform.JSONFields
+	// Permissions(r UserRole, scope *string) jsontransform.JSONFields
 
 	// The following two avoids having to use reflection to access ID
 	GetID() *datatypes.UUID
 	SetID(id *datatypes.UUID)
+}
+
+// IHasPermissions is for IModel with a custom permission field to cherry pick json fields
+// default is to return all but the dates
+type IHasPermissions interface {
+	Permissions(r UserRole, scope *string) jsontransform.JSONFields
 }
 
 // Inside content is an array of JSONIDPatch
@@ -114,12 +120,6 @@ type IModel interface {
 type JSONIDPatch struct {
 	ID    *datatypes.UUID `json:"id"`
 	Patch json.RawMessage `json:"patch"` // json.RawMessage is actually just typedefed to []byte
-}
-
-// IHasOwnershipLink has a function that returns the ownership table
-// usable for OwnershipMapper
-type IHasOwnershipLink interface {
-	OwnershipType() IOwnership
 }
 
 // -------------------------
@@ -179,8 +179,17 @@ func NewOwnershipModelFromOwnershipResourceTypeString(typeString string) IModel 
 		panic(fmt.Sprintf("TypeString %s does not represents a resource under organization", typeString))
 	}
 
-	m := reflect.New(ModelRegistry[typeString].Typ).Interface().(IHasOwnershipLink)
-	return m.OwnershipType().(IModel)
+	// Either custom one or the default one
+	typ := ModelRegistry[typeString].OwnershipType
+	// if typ == nil {
+	// 	m := &OwnershipModelWithIDBase{}
+	// 	log.Println("&OwnershipModelWithIDBase{}.GetID:", m.GetID())
+	// 	return &OwnershipModelWithIDBase{}
+	// }
+	log.Println("typestring, typ:", typeString, typ)
+	log.Printf("==> %+v", reflect.New(typ).Interface().(IModel))
+
+	return reflect.New(typ).Interface().(IModel)
 }
 
 // ----------------------------
@@ -200,11 +209,22 @@ func OrgOwnershipModelNameFromOrgResourceTypeString(typeString string) string {
 	return GetTableNameFromIModel(m)
 }
 
-// OwnershipModelNameFromOwnershipResourceTypeString given ownership resource typeStirng
+// OwnershipTableNameFromOwnershipResourceTypeString given ownership resource typeStirng
 // returns name of ownership table to the user
-func OwnershipModelNameFromOwnershipResourceTypeString(typeString string) string {
-	m := NewOwnershipModelFromOwnershipResourceTypeString(typeString)
-	return GetTableNameFromIModel(m)
+func OwnershipTableNameFromOwnershipResourceTypeString(typeString string) string {
+	// m := NewOwnershipModelFromOwnershipResourceTypeString(typeString)
+
+	// Either custom one or the default one
+
+	return *ModelRegistry[typeString].OwnershipTableName
+	// if typ == nil {
+	// 	m := &OwnershipModelWithIDBase{}.(IModel)
+	// 	return GetTableNameFromIModel(m)
+	// }
+
+	// return reflect.New(typ).Interface().(IModel)
+
+	// return GetTableNameFromIModel(m)
 }
 
 // ----------------------------
@@ -389,6 +409,18 @@ type OwnershipModelWithIDBase struct {
 	ModelID *datatypes.UUID `json:"modelID"`
 }
 
+// To comform to IModel, embedding functions don't work
+
+// GetID Get the ID field of the model (useful when using interface)
+func (o *OwnershipModelWithIDBase) GetID() *datatypes.UUID {
+	return o.ID
+}
+
+// SetID Set the ID field of the model (useful when using interface)
+func (o *OwnershipModelWithIDBase) SetID(id *datatypes.UUID) {
+	o.ID = id
+}
+
 // GetUserID gets the user id of the model, comforms to IOwnership
 func (o *OwnershipModelWithIDBase) GetUserID() *datatypes.UUID {
 	return o.UserID
@@ -409,6 +441,12 @@ func (o *OwnershipModelWithIDBase) SetModelID(id *datatypes.UUID) {
 // GetModelID gets the id of the model, comforms to IOwnership
 func (o *OwnershipModelWithIDBase) GetModelID() *datatypes.UUID {
 	return o.ModelID
+}
+
+// Permissions return permission for the role given
+// TODO: default permission
+func (o *OwnershipModelWithIDBase) Permissions(r UserRole, scope *string) jsontransform.JSONFields {
+	return jsontransform.JSONFields{} // actually irrelevant
 }
 
 // ---------------
@@ -500,6 +538,29 @@ func GetFieldValueFromModelByTagKeyBetterRestAndValueKey(modelObj IModel, valueK
 			for _, pair := range pairs {
 				if strings.HasPrefix(pair, valueKey) {
 					return v.Field(i).Interface()
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// GetFieldTypeFromModelByTagKeyBetterRestAndValueKey fetches the datatype of the variable tagged in tag
+func GetFieldTypeFromModelByTagKeyBetterRestAndValueKey(modelObj IModel, valueKey string) reflect.Type {
+	v := reflect.Indirect(reflect.ValueOf(modelObj))
+	for i := 0; i < v.NumField(); i++ {
+		if tagVal, ok := v.Type().Field(i).Tag.Lookup("betterrest"); ok {
+			pairs := strings.Split(tagVal, ";")
+			for _, pair := range pairs {
+				if strings.HasPrefix(pair, valueKey) {
+					fieldVal := v.Field(i)
+					switch fieldVal.Kind() {
+					case reflect.Slice:
+						return v.Type().Field(i).Type.Elem() // This work even when slice is empty
+					default:
+						// return fieldVal.Type()
+						return v.Type().Field(i).Type
+					}
 				}
 			}
 		}

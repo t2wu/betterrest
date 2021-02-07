@@ -12,7 +12,7 @@ func modelNeedsRealDelete(modelObj models.IModel) bool {
 }
 
 func getModelTableNameAndJoinTableNameFromTypeString(typeString string) (string, string, error) {
-	joinTableName := models.OwnershipModelNameFromOwnershipResourceTypeString(typeString)
+	joinTableName := models.OwnershipTableNameFromOwnershipResourceTypeString(typeString)
 	// joinTableName := models.GetJoinTableNameFromTypeString(typeString)
 	modelTableName := models.GetTableNameFromTypeString(typeString)
 	return modelTableName, joinTableName, nil

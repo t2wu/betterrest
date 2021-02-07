@@ -25,32 +25,13 @@ type OwnershipService struct {
 }
 
 func (serv *OwnershipService) HookBeforeCreateOne(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel) (models.IModel, error) {
-	// db.Model(&u).Association("Ownerships")
-
-	// Get ownership type and creates it
-	// field, _ := reflect.TypeOf(modelObj).Elem().FieldByName("Ownerships")
-	// ownershipType := field.Type
-
-	// has to be true otherwise shouldn't use this mapper
-	// modelObjOwnership, ok := modelObj.(models.IHasOwnershipLink)
-	// if !ok {
-	// 	return nil, ErrNoOwnership
-	// }
-
-	log.Println("typeString??", typeString)
-	// ownershipType := models.GetOwnershipModelTypeFromTypeString(typeString)
-	// ownershipType := modelObjOwnership.OwnershipType()
-
 	modelID := modelObj.GetID()
 	if modelID == nil {
 		modelID = datatypes.NewUUID()
 		modelObj.SetID(modelID)
 	}
 
-	// reflect.SliceOf
 	g := models.NewOwnershipModelFromOwnershipResourceTypeString(typeString).(models.IOwnership)
-	// g := reflect.New(ownershipType).Interface().(models.IOwnership)
-
 	g.SetUserID(oid)
 	g.SetModelID(modelID)
 	g.SetRole(models.UserRoleAdmin)
@@ -67,18 +48,6 @@ func (serv *OwnershipService) HookBeforeCreateOne(db *gorm.DB, oid *datatypes.UU
 }
 
 func (serv *OwnershipService) HookBeforeCreateMany(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObjs []models.IModel) ([]models.IModel, error) {
-	// db.Model(&u).Association("Ownerships")
-
-	// Get ownership type and creates it
-	// field, _ := reflect.TypeOf(modelObj).Elem().FieldByName("Ownerships")
-	// ownershipType := field.Type
-	// modelObjOwnership, ok := modelObjs[0].(models.IHasOwnershipLink)
-	// if !ok {
-	// 	return nil, ErrNoOwnership
-	// }
-
-	// ownershipType := models.GetOwnershipModelTypeFromTypeString(typeString)
-	// ownershipType := modelObjOwnership.OwnershipType()
 	for _, modelObj := range modelObjs {
 		// reflect.SliceOf
 		// g := reflect.New(ownershipType).Interface().(models.IOwnership)
@@ -111,7 +80,7 @@ func (serv *OwnershipService) HookBeforeDeleteOne(db *gorm.DB, oid *datatypes.UU
 	// everyone who is linked to this table!
 
 	// stmt := fmt.Sprintf("DELETE FROM %s WHERE user_id = ? AND model_id = ? AND role = ?", models.GetJoinTableName(modelObjOwnership))
-	tableName := models.OwnershipModelNameFromOwnershipResourceTypeString(typeString)
+	tableName := models.OwnershipTableNameFromOwnershipResourceTypeString(typeString)
 	stmt := fmt.Sprintf("DELETE FROM %s WHERE model_id = ?", tableName)
 
 	// Can't do db.Raw and db.Delete at the same time?!
@@ -129,7 +98,7 @@ func (serv *OwnershipService) HookBeforeDeleteMany(db *gorm.DB, oid *datatypes.U
 	for _, modelObj := range modelObjs {
 		// Also remove entries from ownership table
 		// Maybe getting table
-		tableName := models.OwnershipModelNameFromOwnershipResourceTypeString(typeString)
+		tableName := models.OwnershipTableNameFromOwnershipResourceTypeString(typeString)
 		stmt := fmt.Sprintf("DELETE FROM %s WHERE model_id = ?", tableName)
 		db2 := db.Exec(stmt, modelObj.GetID().String())
 		if err := db2.Error; err != nil {
@@ -149,10 +118,14 @@ func (serv *OwnershipService) CreateOneCore(db *gorm.DB, oid *datatypes.UUID, sc
 	// If it is it'll be created by Gorm's BeforeCreate hook
 	// (defined in base model)
 	// if dbc := db.Create(modelObj); dbc.Error != nil {
-	if dbc := db.Create(modelObj).Create(g); dbc.Error != nil {
-		// create failed: UNIQUE constraint failed: user.email
-		// It looks like this error may be dependent on the type of database we use
-		return nil, dbc.Error
+	if err := db.Create(modelObj).Error; err != nil {
+		return nil, err
+	}
+
+	// Create ownership table
+	tableName := models.OwnershipTableNameFromOwnershipResourceTypeString(typeString)
+	if err := db.Table(tableName).Create(g).Error; err != nil {
+		return nil, err
 	}
 
 	// For pegassociated, the since we expect association_autoupdate:false
@@ -184,7 +157,7 @@ func (serv *OwnershipService) GetOneWithIDCore(db *gorm.DB, oid *datatypes.UUID,
 		INNER JOIN user ON user.id = user_owns_somemodel.user_id AND user.id = UUID_TO_BIN(oid)
 	*/
 
-	joinTableName := models.OwnershipModelNameFromOwnershipResourceTypeString(typeString)
+	joinTableName := models.OwnershipTableNameFromOwnershipResourceTypeString(typeString)
 	log.Println("joinTableName???", joinTableName)
 	// joinTableName := models.GetJoinTableName(modelObj)
 

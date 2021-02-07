@@ -16,8 +16,13 @@ func ToJSON(typeString string, v models.IModel, r models.UserRole, scope *string
 		return j, err
 	}
 
-	fields := v.Permissions(r, scope)
-	return jsontransform.Transform(j, &fields)
+	if modelObjPerm, ok := v.(models.IHasPermissions); ok {
+		fields := modelObjPerm.Permissions(r, scope)
+		return jsontransform.Transform(j, &fields)
+	}
+
+	panic("Haven't implement default permission function yet")
+	// return jsontransform.Transform(j, &fields)
 }
 
 // FromJSON unpacks json into this struct
