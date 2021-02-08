@@ -221,11 +221,11 @@ func (mapper *BaseMapper) UpdateOneWithID(db *gorm.DB, oid *datatypes.UUID, scop
 
 	// TODO: Huh? How do we do validation here?!
 	var before, after *string
-	if _, ok := modelObj.(models.IBeforeCreate); ok {
+	if _, ok := modelObj.(models.IBeforeUpdate); ok {
 		b := "BeforeUpdateDB"
 		before = &b
 	}
-	if _, ok := modelObj.(models.IAfterCreate); ok {
+	if _, ok := modelObj.(models.IBeforeUpdate); ok {
 		a := "AfterUpdateDB"
 		after = &a
 	}
@@ -289,11 +289,11 @@ func (mapper *BaseMapper) PatchOneWithID(db *gorm.DB, oid *datatypes.UUID, scope
 
 	// TODO: Huh? How do we do validation here?!
 	var before, after *string
-	if _, ok := modelObj.(models.IBeforeCreate); ok {
+	if _, ok := modelObj.(models.IBeforePatch); ok {
 		b := "BeforePatchDB"
 		before = &b
 	}
-	if _, ok := modelObj.(models.IAfterCreate); ok {
+	if _, ok := modelObj.(models.IAfterPatch); ok {
 		a := "AfterPatchDB"
 		after = &a
 	}
@@ -372,11 +372,11 @@ func (mapper *BaseMapper) DeleteOneWithID(db *gorm.DB, oid *datatypes.UUID, scop
 	}
 
 	var before, after *string
-	if _, ok := modelObj.(models.IBeforeCreate); ok {
+	if _, ok := modelObj.(models.IBeforeDelete); ok {
 		b := "BeforeDeleteDB"
 		before = &b
 	}
-	if _, ok := modelObj.(models.IAfterCreate); ok {
+	if _, ok := modelObj.(models.IAfterDelete); ok {
 		a := "AfterDeleteDB"
 		after = &a
 	}
