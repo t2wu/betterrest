@@ -78,13 +78,12 @@ func (mapper *UserMapper) CreateOne(db *gorm.DB, oid *datatypes.UUID, scope *str
 		return nil, err
 	}
 
-	var before func(hpdata models.HookPointData) error
-	var after func(hpdata models.HookPointData) error
-	if v, ok := modelObj.(models.IBeforeCreate); ok {
-		before = v.BeforeInsertDB
+	var before, after *string
+	if _, ok := modelObj.(models.IBeforeCreate); ok {
+		*before = "BeforeInsertDB"
 	}
-	if v, ok := modelObj.(models.IAfterCreate); ok {
-		after = v.AfterInsertDB
+	if _, ok := modelObj.(models.IAfterCreate); ok {
+		*after = "AfterInsertDB"
 	}
 	j := opJob{
 		serv:       mapper.Service,
