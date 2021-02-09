@@ -326,10 +326,10 @@ type IAfterCRUPD interface {
 	AfterCRUPD(hpdata HookPointData, op CRUPDOp) error
 }
 
-// IBeforeCRUPD supprots method to be called before data is after all CRUPD operations
+// IBeforeCUPD supprots method to be called before data is after all CRUPD operations
 // This is called before the individual ops
-type IBeforeCRUPD interface {
-	BeforeCRUPD(hpdata HookPointData, op CRUPDOp) error
+type IBeforeCUPD interface {
+	BeforeCUPD(hpdata HookPointData, op CRUPDOp) error
 }
 
 // IValidate supports validation with govalidator
