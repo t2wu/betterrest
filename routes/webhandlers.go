@@ -186,7 +186,7 @@ func UserLoginHandler(typeString string) func(c *gin.Context) {
 
 		who := models.Who{
 			// Oid: logged in yet
-			Client: &client,
+			Client: client,
 			Scope:  &scope,
 		}
 

@@ -227,7 +227,7 @@ type IDoRealDelete interface {
 
 // IGuardAPIEntry supports method which guard access to API based on scope
 type IGuardAPIEntry interface {
-	GuardAPIEntry(scope *string, endpoint string, method string) bool
+	GuardAPIEntry(models Who, endpoint string, method string) bool
 }
 
 // ModelCargo is payload between hookpoints
@@ -334,7 +334,7 @@ type IBeforeCUPD interface {
 
 // IValidate supports validation with govalidator
 type IValidate interface {
-	Validate(scope *string, endpoint string, method string) error
+	Validate(who Who, endpoint string, method string) error
 }
 
 // IBeforePasswordUpdate supports method to be called before data is updated in the database

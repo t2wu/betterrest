@@ -19,18 +19,18 @@ import (
 func WhoFromContext(r *http.Request) models.Who {
 	ownerID, scope, client := OwnerIDFromContext(r), ScopeFromContext(r), ClientFromContext(r)
 	return models.Who{
-		Client: &client,
+		Client: client,
 		Oid:    ownerID,
-		Scope:  &scope,
+		Scope:  scope,
 	}
 }
 
 // ClientFromContext gets Client from context
-func ClientFromContext(r *http.Request) models.Client {
-	var client models.Client
+func ClientFromContext(r *http.Request) *models.Client {
+	var client *models.Client
 	item := r.Context().Value(ContextKeyClient)
 	if item != nil {
-		client = item.(models.Client)
+		*client = item.(models.Client)
 	}
 	return client
 }
@@ -46,11 +46,11 @@ func OwnerIDFromContext(r *http.Request) *datatypes.UUID {
 }
 
 // ScopeFromContext gets scope from context
-func ScopeFromContext(r *http.Request) string {
-	var scope string
+func ScopeFromContext(r *http.Request) *string {
+	var scope *string
 	item := r.Context().Value(ContextKeyScope)
 	if item != nil {
-		scope = item.(string)
+		*scope = item.(string)
 	}
 	return scope
 }
@@ -140,8 +140,8 @@ func ModelOrModelsFromJSONBody(r *http.Request, typeString string, who models.Wh
 		}
 
 		if v, ok := modelObj.(models.IValidate); ok {
-			scope, path, method := ScopeFromContext(r), r.URL.Path, r.Method
-			if err := v.Validate(&scope, path, method); err != nil {
+			who, path, method := WhoFromContext(r), r.URL.Path, r.Method
+			if err := v.Validate(who, path, method); err != nil {
 				return nil, nil, NewErrValidation(err)
 			}
 		}
@@ -173,8 +173,8 @@ func ModelOrModelsFromJSONBody(r *http.Request, typeString string, who models.Wh
 		// }
 
 		if v, ok := modelObj.(models.IValidate); ok {
-			scope, path, method := ScopeFromContext(r), r.URL.Path, r.Method
-			if err := v.Validate(&scope, path, method); err != nil {
+			who, path, method := WhoFromContext(r), r.URL.Path, r.Method
+			if err := v.Validate(who, path, method); err != nil {
 				return nil, nil, NewErrValidation(err)
 			}
 		}
@@ -240,8 +240,8 @@ func ModelsFromJSONBody(r *http.Request, typeString string, who models.Who) ([]m
 		// }
 
 		if v, ok := modelObj.(models.IValidate); ok {
-			scope, path, method := ScopeFromContext(r), r.URL.Path, r.Method
-			if err := v.Validate(&scope, path, method); err != nil {
+			who, path, method := WhoFromContext(r), r.URL.Path, r.Method
+			if err := v.Validate(who, path, method); err != nil {
 				return nil, NewErrValidation(err)
 			}
 		}
@@ -285,8 +285,8 @@ func ModelFromJSONBody(r *http.Request, typeString string, who models.Who) (mode
 	}
 
 	if v, ok := modelObj.(models.IValidate); ok {
-		scope, path, method := ScopeFromContext(r), r.URL.Path, r.Method
-		if err := v.Validate(&scope, path, method); err != nil {
+		who, path, method := WhoFromContext(r), r.URL.Path, r.Method
+		if err := v.Validate(who, path, method); err != nil {
 			return nil, NewErrValidation(err)
 		}
 	}
@@ -328,8 +328,8 @@ func JSONPatchesFromJSONBody(r *http.Request) ([]models.JSONIDPatch, render.Rend
 	}
 
 	// if v, ok := modelObj.(models.IValidate); ok {
-	// 	scope, path, method := ScopeFromContext(r), r.URL.Path, r.Method
-	// 	if err := v.Validate(&scope, path, method); err != nil {
+	// 	who, path, method := WhoFromContext(r), r.URL.Path, r.Method
+	// 	if err := v.Validate(who, path, method); err != nil {
 	// 		return nil, NewErrValidation(err)
 	// 	}
 	// }
