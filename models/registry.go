@@ -110,7 +110,7 @@ type Reg struct {
 	AfterDelete  func(bhpData BatchHookPointData) error
 }
 
-// func (g *Gateway) AfterInsertDB(db *gorm.DB, typeString string) error {
+// func (g *Gateway) AfterCreateDB(db *gorm.DB, typeString string) error {
 
 /*
  * New*() functions

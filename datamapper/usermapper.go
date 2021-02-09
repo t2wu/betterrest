@@ -49,10 +49,10 @@ func (mapper *UserMapper) CreateOne(db *gorm.DB, who models.Who, typeString stri
 
 	var before, after *string
 	if _, ok := modelObj.(models.IBeforeCreate); ok {
-		*before = "BeforeInsertDB"
+		*before = "BeforeCreateDB"
 	}
 	if _, ok := modelObj.(models.IAfterCreate); ok {
-		*after = "AfterInsertDB"
+		*after = "AfterCreateDB"
 	}
 	j := opJob{
 		serv:       mapper.Service,

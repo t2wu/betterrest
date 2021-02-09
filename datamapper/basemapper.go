@@ -72,11 +72,11 @@ func (mapper *BaseMapper) CreateOne(db *gorm.DB, who models.Who, typeString stri
 
 	var before, after *string
 	if _, ok := modelObj.(models.IBeforeCreate); ok {
-		b := "BeforeInsertDB"
+		b := "BeforeCreateDB"
 		before = &b
 	}
 	if _, ok := modelObj.(models.IAfterCreate); ok {
-		a := "AfterInsertDB"
+		a := "AfterCreateDB"
 		after = &a
 	}
 

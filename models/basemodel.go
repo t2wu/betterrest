@@ -283,7 +283,7 @@ type IAfterLoginFailed interface {
 
 // IBeforeCreate supports method to be called before data is inserted (created) into the database
 type IBeforeCreate interface {
-	BeforeInsertDB(hpdata HookPointData) error
+	BeforeCreateDB(hpdata HookPointData) error
 }
 
 // IBeforeUpdate supports method to be called before data is updated in the database
@@ -308,7 +308,7 @@ type IAfterRead interface {
 
 // IAfterCreate supports method to be called after data is inserted (created) into the database
 type IAfterCreate interface {
-	AfterInsertDB(hpdata HookPointData) error
+	AfterCreateDB(hpdata HookPointData) error
 }
 
 // IAfterUpdate supports method to be called after data is updated in the database
