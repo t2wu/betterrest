@@ -99,7 +99,7 @@ type IModel interface {
 // IHasPermissions is for IModel with a custom permission field to cherry pick json fields
 // default is to return all but the dates
 type IHasPermissions interface {
-	Permissions(r UserRole, scope *string) jsontransform.JSONFields
+	Permissions(r UserRole, who Who) jsontransform.JSONFields
 }
 
 // Inside content is an array of JSONIDPatch

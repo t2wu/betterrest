@@ -106,7 +106,7 @@ func ModelOrModelsFromJSONBody(r *http.Request, typeString string, who models.Wh
 	canHaveCreatedAt := false
 	modelObj := models.NewFromTypeString(typeString)
 	if modelObjPerm, ok := modelObj.(models.IHasPermissions); ok {
-		if _, ok := modelObjPerm.Permissions(models.UserRoleAdmin, who.Scope)["createdAt"]; ok {
+		if _, ok := modelObjPerm.Permissions(models.UserRoleAdmin, who)["createdAt"]; ok {
 			canHaveCreatedAt = true
 		}
 	}
@@ -211,7 +211,7 @@ func ModelsFromJSONBody(r *http.Request, typeString string, who models.Who) ([]m
 	modelTest := models.NewFromTypeString(typeString)
 	removeCreated := false
 	if modelObjPerm, ok := modelTest.(models.IHasPermissions); ok {
-		if _, ok := modelObjPerm.Permissions(models.UserRoleAdmin, who.Scope)["createdAt"]; ok {
+		if _, ok := modelObjPerm.Permissions(models.UserRoleAdmin, who)["createdAt"]; ok {
 			// there is created_at field, so we remove it because it's suppose to be
 			// time object and I have int which is not unmarshable
 			removeCreated = true
@@ -268,7 +268,7 @@ func ModelFromJSONBody(r *http.Request, typeString string, who models.Who) (mode
 	modelObj := models.NewFromTypeString(typeString)
 
 	if modelObjPerm, ok := modelObj.(models.IHasPermissions); ok {
-		if _, ok := modelObjPerm.Permissions(models.UserRoleAdmin, who.Scope)["createdAt"]; ok {
+		if _, ok := modelObjPerm.Permissions(models.UserRoleAdmin, who)["createdAt"]; ok {
 			// there is created_at field, so we remove it because it's suppose to be
 			// time object and I have int which is not unmarshable
 			jsn2, err := removeCreatedAtFromModel(jsn)

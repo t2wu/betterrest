@@ -17,7 +17,7 @@ func ToJSON(typeString string, v models.IModel, r models.UserRole, who models.Wh
 	}
 
 	if modelObjPerm, ok := v.(models.IHasPermissions); ok {
-		fields := modelObjPerm.Permissions(r, who.Scope)
+		fields := modelObjPerm.Permissions(r, who)
 		return jsontransform.Transform(j, &fields)
 	}
 
