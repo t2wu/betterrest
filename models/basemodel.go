@@ -180,7 +180,7 @@ func NewOwnershipModelFromOwnershipResourceTypeString(typeString string) IModel 
 	}
 
 	// Either custom one or the default one
-	typ := ModelRegistry[typeString].OwnershipType
+	typ := ModelRegistry[typeString].OwnershipType //Tim
 	// if typ == nil {
 	// 	m := &OwnershipModelWithIDBase{}
 	// 	log.Println("&OwnershipModelWithIDBase{}.GetID:", m.GetID())
@@ -216,15 +216,14 @@ func OwnershipTableNameFromOwnershipResourceTypeString(typeString string) string
 
 	// Either custom one or the default one
 
-	return *ModelRegistry[typeString].OwnershipTableName
-	// if typ == nil {
-	// 	m := &OwnershipModelWithIDBase{}.(IModel)
-	// 	return GetTableNameFromIModel(m)
-	// }
+	tableName := *ModelRegistry[typeString].OwnershipTableName
 
-	// return reflect.New(typ).Interface().(IModel)
+	if tableName == "ownership_model_with_id_base" {
+		m := reflect.New(ModelRegistry[typeString].Typ).Interface().(IModel)
+		tableName = "user_owns_" + GetTableNameFromIModel(m)
+	}
 
-	// return GetTableNameFromIModel(m)
+	return tableName
 }
 
 // ----------------------------

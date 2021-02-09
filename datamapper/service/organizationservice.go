@@ -84,7 +84,7 @@ func (serv *OrganizationService) GetOneWithIDCore(db *gorm.DB, oid *datatypes.UU
 	orgTableName := models.OrgModelNameFromOrgResourceTypeString(typeString)
 	// orgTableName := models.GetOrganizationalTableNameFromModelTypeString(typeString)
 
-	joinTableName := models.OrgOwnershipModelNameFromOrgResourceTypeString(typeString)
+	joinTableName := orgJoinTableName(typeString)
 	// orgTable, _ := reflect.New(models.GetOrganizationTypeFromTypeString(typeString)).Interface().(models.IModel)
 	// joinTableName := models.GetJoinTableName(orgTable)
 
@@ -142,7 +142,8 @@ func (serv *OrganizationService) GetManyWithIDsCore(db *gorm.DB, oid *datatypes.
 	// orgTableName := models.GetOrganizationTableName(modelObjHavingOrganization)
 	// orgTable := reflect.New(modelObjHavingOrganization.OrganizationType()).Interface()
 	orgTableName := models.OrgModelNameFromOrgResourceTypeString(typeString)
-	joinTableName := models.OrgOwnershipModelNameFromOrgResourceTypeString(typeString)
+	joinTableName := orgJoinTableName(typeString)
+
 	// orgTableName := models.GetOrganizationalTableNameFromModelTypeString(typeString)
 	// orgTable, _ := reflect.New(models.GetOrganizationTypeFromTypeString(typeString)).Interface().(models.IModel)
 	// joinTableName := models.GetJoinTableName(orgTable)
@@ -206,7 +207,15 @@ func (serv *OrganizationService) GetAllQueryContructCore(db *gorm.DB, oid *datat
 	rtable := models.GetTableNameFromTypeString(typeString)
 	// orgTableName := models.GetOrganizationTableName(modelObjHavingOrganization)
 	orgTableName := models.OrgModelNameFromOrgResourceTypeString(typeString)
-	joinTableName := models.OrgOwnershipModelNameFromOrgResourceTypeString(typeString)
+
+	joinTableName := orgJoinTableName(typeString)
+
+	// This is the go to class for join. So if they use this it's a different
+	// join table name from main resource name (org table)
+	if joinTableName == "ownership_model_with_id_base" {
+		joinTableName = "user_owns_" + orgTableName
+	}
+
 	// orgTableName := models.GetOrganizationalTableNameFromModelTypeString(typeString)
 	// // orgTable := reflect.New(modelObjHavingOrganization.OrganizationType()).Interface()
 	// orgTable := reflect.New(models.GetOrganizationTypeFromTypeString(typeString)).Interface().(models.IModel)
@@ -230,7 +239,7 @@ func (serv *OrganizationService) GetAllRolesCore(dbChained *gorm.DB, dbClean *go
 	// orgTable := reflect.New(modelObjHavingOrganization.OrganizationType()).Interface()
 	// orgTable := reflect.New(models.GetOrganizationTypeFromTypeString(typeString)).Interface().(models.IModel)
 	// joinTableName := models.GetJoinTableName(orgTable)
-	joinTableName := models.OrgOwnershipModelNameFromOrgResourceTypeString(typeString)
+	joinTableName := orgJoinTableName(typeString)
 
 	rows, err := db.Shared().Table(joinTableName).Select("model_id, role").Where("user_id = ?", oid.String()).Rows()
 	if err != nil {
@@ -266,7 +275,7 @@ func (serv *OrganizationService) GetAllRolesCore(dbChained *gorm.DB, dbClean *go
 // The model object should have link to the ownership object which has a linking table to the user
 func userHasRolesAccessToModelOrg(db *gorm.DB, oid *datatypes.UUID, typeString string, modelObj models.IModel, roles []models.UserRole) (bool, error) {
 	organizationTableName := models.OrgModelNameFromOrgResourceTypeString(typeString)
-	organizationJoinTableName := models.OrgOwnershipModelNameFromOrgResourceTypeString(typeString)
+	organizationJoinTableName := orgJoinTableName(typeString)
 
 	rolesQuery := strconv.Itoa(int(roles[0]))
 	for i := 1; i < len(roles); i++ {
@@ -348,4 +357,19 @@ func (serv *OrganizationService) UpdateOneCore(db *gorm.DB, oid *datatypes.UUID,
 	gormfixes.FixManyToMany(modelObj, modelObj2)
 
 	return modelObj2, nil
+}
+
+// ----------------------------------------
+
+func orgJoinTableName(typeString string) string {
+	joinTableName := models.OrgOwnershipModelNameFromOrgResourceTypeString(typeString)
+
+	// This is the go to class for join. So if they use this it's a different
+	// join table name from main resource name (org table)
+	if joinTableName == "ownership_model_with_id_base" {
+		orgTableName := models.OrgModelNameFromOrgResourceTypeString(typeString)
+		joinTableName = "user_owns_" + orgTableName
+	}
+
+	return joinTableName
 }
