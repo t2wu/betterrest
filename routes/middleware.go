@@ -128,14 +128,10 @@ func BearerAuthMiddleware() gin.HandlerFunc {
 
 		// var scope string
 		if scope, ok := (*claims)["scope"].(string); ok {
-			if err != nil {
-				render.Render(w, r, NewErrTokenInvalid(err))
-				c.Abort()
-				return
+			if scope != "" {
+				ctx := context.WithValue(c.Request.Context(), ContextKeyScope, scope)
+				c.Request = c.Request.WithContext(ctx)
 			}
-
-			ctx := context.WithValue(c.Request.Context(), ContextKeyScope, scope)
-			c.Request = c.Request.WithContext(ctx)
 		} else {
 			render.Render(w, r, NewErrTokenInvalid(errors.New("getting ISS from token error")))
 			c.Abort()
@@ -143,12 +139,6 @@ func BearerAuthMiddleware() gin.HandlerFunc {
 		}
 
 		if iat, ok := (*claims)["iat"].(float64); ok {
-			if err != nil {
-				render.Render(w, r, NewErrTokenInvalid(err))
-				c.Abort()
-				return
-			}
-
 			ctx := context.WithValue(c.Request.Context(), ContextKeyIat, iat)
 			c.Request = c.Request.WithContext(ctx)
 		} else {

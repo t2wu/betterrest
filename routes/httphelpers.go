@@ -30,7 +30,7 @@ func ClientFromContext(r *http.Request) *models.Client {
 	var client *models.Client
 	item := r.Context().Value(ContextKeyClient)
 	if item != nil {
-		*client = item.(models.Client)
+		client = item.(*models.Client)
 	}
 	return client
 }
@@ -50,7 +50,8 @@ func ScopeFromContext(r *http.Request) *string {
 	var scope *string
 	item := r.Context().Value(ContextKeyScope)
 	if item != nil {
-		*scope = item.(string)
+		s := item.(string)
+		scope = &s
 	}
 	return scope
 }

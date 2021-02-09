@@ -44,9 +44,9 @@ type BaseModel struct {
 
 	// For Postgres
 	ID        *datatypes.UUID `gorm:"type:uuid;primary_key;" json:"id"`
-	CreatedAt time.Time       `sql:"index" json:"createdAt"`
-	UpdatedAt time.Time
-	DeletedAt *time.Time `sql:"index"`
+	CreatedAt time.Time       `sql:"index" json:"createdAt" json:"createdAt"`
+	UpdatedAt time.Time       `json:"updatedAt"`
+	DeletedAt *time.Time      `sql:"index" json:"deletedAt"`
 
 	// Ownership with the most previledged permission can delete the device and see every field.
 	// So there can be an ownership number, say 3, and that maps to a permission type
@@ -378,9 +378,9 @@ type IOwnership interface {
 type OwnershipModelBase struct {
 	ID *datatypes.UUID `gorm:"type:uuid;primary_key;" json:"id"`
 
-	CreatedAt time.Time
-	UpdatedAt time.Time
-	DeletedAt *time.Time `sql:"index"`
+	CreatedAt time.Time  `json:"createdAt"`
+	UpdatedAt time.Time  `json:"updatedAt"`
+	DeletedAt *time.Time `sql:"index" json:"deletedAt"`
 
 	Role UserRole `json:"role"` // an int
 }
@@ -458,12 +458,6 @@ func (o *OwnershipModelWithIDBase) SetModelID(id *datatypes.UUID) {
 // GetModelID gets the id of the model, comforms to IOwnership
 func (o *OwnershipModelWithIDBase) GetModelID() *datatypes.UUID {
 	return o.ModelID
-}
-
-// Permissions return permission for the role given
-// TODO: default permission
-func (o *OwnershipModelWithIDBase) Permissions(r UserRole, scope *string) jsontransform.JSONFields {
-	return jsontransform.JSONFields{} // actually irrelevant
 }
 
 // ---------------
