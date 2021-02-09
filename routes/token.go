@@ -14,7 +14,7 @@ import (
 )
 
 type tokenRefresh struct {
-	RefreshToken string `json:"refresh_token"`
+	RefreshToken string `json:"refreshToken"`
 }
 
 // Token handles refresh token

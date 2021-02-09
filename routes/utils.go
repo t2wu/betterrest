@@ -13,7 +13,7 @@ import (
 
 // createTokenPayloadForScope creates token JSON payload
 // Follow oauth's
-// { acceess_token: acces_token, token_type: "Bearer", refresh_token: refresh_token, scope: ""}
+// { acceess_token: acces_token, token_type: "Bearer", refresh_token: refreshToken, scope: ""}
 func createTokenPayloadForScope(id *datatypes.UUID, scope *string, tokenHours *float64) (map[string]interface{}, error) {
 	var accessToken, refreshToken string
 	var err error
