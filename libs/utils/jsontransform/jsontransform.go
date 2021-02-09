@@ -49,6 +49,54 @@ func Transform(j []byte, f *JSONFields) ([]byte, error) {
 	return j, nil
 }
 
+// TransformByHidingDateFields output everything in JSON except date fields
+func TransformByHidingDateFields(j []byte) (jret []byte, err error) {
+	var dat map[string]interface{}
+
+	if err = json.Unmarshal(j, &dat); err != nil {
+		return nil, err
+	}
+
+	datPicked := make(map[string]interface{})
+
+	// Now traverse the map all the way through
+	filterOutDateFields(dat, datPicked)
+
+	if jret, err = json.Marshal(datPicked); err != nil {
+		return nil, err
+	}
+
+	return jret, nil
+}
+
+// ---------------------------------------------
+func filterOutDateFields(dat map[string]interface{}, datPicked map[string]interface{}) {
+	for key, val := range dat {
+		if key == "createdAt" || key == "updatedAt" || key == "deletedAt" {
+			continue // skip these fields
+		}
+
+		// Struct
+		if valTyped, ok := val.(map[string]interface{}); ok {
+			embeddedStruct := make(map[string]interface{})
+			// nested struct
+			filterOutDateFields(valTyped, embeddedStruct)
+			datPicked[key] = embeddedStruct
+		} else if valTyped, ok := val.([]interface{}); ok { // slice
+			nextLevelPicked := make([]map[string]interface{}, len(valTyped))
+			for i, val2 := range valTyped { // loop the slice
+				nextLevelDat := make(map[string]interface{})
+				filterOutDateFields(val2.(map[string]interface{}), nextLevelDat)
+				nextLevelPicked[i] = nextLevelDat
+			}
+			datPicked[key] = nextLevelPicked
+		} else {
+			datPicked[key] = dat[key]
+		}
+	}
+
+}
+
 func cherryPickCore(dat map[string]interface{}, f *JSONFields, datPicked map[string]interface{}) {
 	// Traverse through the fields and pick only those we need
 	fi := *f

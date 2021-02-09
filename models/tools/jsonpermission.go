@@ -20,9 +20,8 @@ func ToJSON(typeString string, v models.IModel, r models.UserRole, who models.Wh
 		fields := modelObjPerm.Permissions(r, who)
 		return jsontransform.Transform(j, &fields)
 	}
-
-	panic("Haven't implement default permission function yet")
-	// return jsontransform.Transform(j, &fields)
+	// By default just hide all date fields and return everything else
+	return jsontransform.TransformByHidingDateFields(j)
 }
 
 // FromJSON unpacks json into this struct
