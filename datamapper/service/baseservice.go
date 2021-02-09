@@ -12,20 +12,20 @@ import (
 
 // IService provice basic data fetch for various type of table to user relationships
 type IService interface {
-	HookBeforeCreateOne(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel) (models.IModel, error)
-	HookBeforeCreateMany(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObjs []models.IModel) ([]models.IModel, error)
-	HookBeforeDeleteOne(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel) (models.IModel, error)
-	HookBeforeDeleteMany(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObjs []models.IModel) ([]models.IModel, error)
+	HookBeforeCreateOne(db *gorm.DB, who models.Who, typeString string, modelObj models.IModel) (models.IModel, error)
+	HookBeforeCreateMany(db *gorm.DB, who models.Who, typeString string, modelObjs []models.IModel) ([]models.IModel, error)
+	HookBeforeDeleteOne(db *gorm.DB, who models.Who, typeString string, modelObj models.IModel) (models.IModel, error)
+	HookBeforeDeleteMany(db *gorm.DB, who models.Who, typeString string, modelObjs []models.IModel) ([]models.IModel, error)
 
-	CreateOneCore(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObj models.IModel) (models.IModel, error)
-	UpdateOneCore(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObj models.IModel) (modelObj2 models.IModel, err error)
-	DeleteOneCore(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObjs models.IModel) (models.IModel, error)
+	CreateOneCore(db *gorm.DB, who models.Who, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObj models.IModel) (models.IModel, error)
+	UpdateOneCore(db *gorm.DB, who models.Who, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObj models.IModel) (modelObj2 models.IModel, err error)
+	DeleteOneCore(db *gorm.DB, who models.Who, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObjs models.IModel) (models.IModel, error)
 
-	GetOneWithIDCore(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error)
-	GetManyWithIDsCore(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, ids []*datatypes.UUID) ([]models.IModel, []models.UserRole, error)
+	GetOneWithIDCore(db *gorm.DB, who models.Who, typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error)
+	GetManyWithIDsCore(db *gorm.DB, who models.Who, typeString string, ids []*datatypes.UUID) ([]models.IModel, []models.UserRole, error)
 
-	GetAllQueryContructCore(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string) (*gorm.DB, error)
-	GetAllRolesCore(dbChained *gorm.DB, dbClean *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObjs []models.IModel) ([]models.UserRole, error)
+	GetAllQueryContructCore(db *gorm.DB, who models.Who, typeString string) (*gorm.DB, error)
+	GetAllRolesCore(dbChained *gorm.DB, dbClean *gorm.DB, who models.Who, typeString string, modelObjs []models.IModel) ([]models.UserRole, error)
 }
 
 // BaseService is the superclass of all services
@@ -33,7 +33,7 @@ type BaseService struct {
 }
 
 // CreateOneCoreBasic create something
-func (serv *BaseService) CreateOneCore(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObj models.IModel) (models.IModel, error) {
+func (serv *BaseService) CreateOneCore(db *gorm.DB, who models.Who, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObj models.IModel) (models.IModel, error) {
 	// No need to check if primary key is blank.
 	// If it is it'll be created by Gorm's BeforeCreate hook
 	// (defined in base model)
@@ -62,7 +62,7 @@ func (serv *BaseService) CreateOneCore(db *gorm.DB, oid *datatypes.UUID, scope *
 // UpdateOneCore one, permissin should already be checked
 // called for patch operation as well (after patch has already applied)
 // Fuck, repeat the following code for now (you can't call the overriding method from the non-overriding one)
-func (serv *BaseService) UpdateOneCore(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObj models.IModel) (modelObj2 models.IModel, err error) {
+func (serv *BaseService) UpdateOneCore(db *gorm.DB, who models.Who, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObj models.IModel) (modelObj2 models.IModel, err error) {
 	if modelNeedsRealDelete(oldModelObj) { // parent model
 		db = db.Unscoped()
 	}
@@ -91,7 +91,7 @@ func (serv *BaseService) UpdateOneCore(db *gorm.DB, oid *datatypes.UUID, scope *
 
 	// This loads the IDs
 	// This so we have the preloading.
-	modelObj2, _, err = serv.GetOneWithIDCore(db, oid, scope, typeString, id)
+	modelObj2, _, err = serv.GetOneWithIDCore(db, who, typeString, id)
 	if err != nil { // Error is "record not found" when not found
 		log.Println("Error:", err)
 		return nil, err
@@ -104,7 +104,7 @@ func (serv *BaseService) UpdateOneCore(db *gorm.DB, oid *datatypes.UUID, scope *
 	return modelObj2, nil
 }
 
-func (serv *BaseService) DeleteOneCore(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObjs models.IModel) (models.IModel, error) {
+func (serv *BaseService) DeleteOneCore(db *gorm.DB, who models.Who, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObjs models.IModel) (models.IModel, error) {
 	// Many field is not used, it's just used to conform the interface
 	if err := db.Delete(modelObj).Error; err != nil {
 		return nil, err
@@ -117,6 +117,6 @@ func (serv *BaseService) DeleteOneCore(db *gorm.DB, oid *datatypes.UUID, scope *
 	return modelObj, nil
 }
 
-func (serv *BaseService) GetOneWithIDCore(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error) {
+func (serv *BaseService) GetOneWithIDCore(db *gorm.DB, who models.Who, typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error) {
 	return nil, models.UserRoleInvalid, fmt.Errorf("GetOneWithIDCore to be overrridden shouldn't be called")
 }

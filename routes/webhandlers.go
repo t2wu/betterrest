@@ -122,10 +122,10 @@ func hasTotalCountFromQueryString(values *url.Values) bool {
 	return false
 }
 
-func modelObjsToJSON(typeString string, modelObjs []models.IModel, roles []models.UserRole, scope *string) (string, error) {
+func modelObjsToJSON(typeString string, modelObjs []models.IModel, roles []models.UserRole, who models.Who) (string, error) {
 	arr := make([]string, len(modelObjs))
 	for i, v := range modelObjs {
-		if j, err := tools.ToJSON(typeString, v, roles[i], scope); err != nil {
+		if j, err := tools.ToJSON(typeString, v, roles[i], who); err != nil {
 			return "", err
 		} else {
 			arr[i] = string(j)
@@ -136,9 +136,9 @@ func modelObjsToJSON(typeString string, modelObjs []models.IModel, roles []model
 	return content, nil
 }
 
-func renderModel(w http.ResponseWriter, r *http.Request, typeString string, modelObj models.IModel, role models.UserRole, scope *string) {
+func renderModel(w http.ResponseWriter, r *http.Request, typeString string, modelObj models.IModel, role models.UserRole, who models.Who) {
 	// render.JSON(w, r, modelObj) // cannot use this since no picking the field we need
-	jsonBytes, err := tools.ToJSON(typeString, modelObj, role, scope)
+	jsonBytes, err := tools.ToJSON(typeString, modelObj, role, who)
 	if err != nil {
 		log.Println("Error in renderModel:", err)
 		render.Render(w, r, NewErrGenJSON(err))
@@ -151,8 +151,8 @@ func renderModel(w http.ResponseWriter, r *http.Request, typeString string, mode
 	w.Write([]byte(content))
 }
 
-func renderModelSlice(w http.ResponseWriter, r *http.Request, typeString string, modelObjs []models.IModel, roles []models.UserRole, total *int, scope *string) {
-	jsonString, err := modelObjsToJSON(typeString, modelObjs, roles, scope)
+func renderModelSlice(w http.ResponseWriter, r *http.Request, typeString string, modelObjs []models.IModel, roles []models.UserRole, total *int, who models.Who) {
+	jsonString, err := modelObjsToJSON(typeString, modelObjs, roles, who)
 	if err != nil {
 		log.Println("Error in renderModelSlice:", err)
 		render.Render(w, r, NewErrGenJSON(err))
@@ -180,8 +180,17 @@ func UserLoginHandler(typeString string) func(c *gin.Context) {
 		w, r := c.Writer, c.Request
 
 		tokenHours := TokenHoursFromContext(r)
+
+		client := ClientFromContext(r)
 		scope := "owner"
-		m, httperr := ModelFromJSONBody(r, "users", &scope) // m is models.IModel
+
+		who := models.Who{
+			// Oid: logged in yet
+			Client: &client,
+			Scope:  &scope,
+		}
+
+		m, httperr := ModelFromJSONBody(r, "users", who) // m is models.IModel
 		if httperr != nil {
 			render.Render(w, r, httperr)
 			return
@@ -200,7 +209,7 @@ func UserLoginHandler(typeString string) func(c *gin.Context) {
 		cargo := models.ModelCargo{}
 		// Before hook
 		if v, ok := m.(models.IBeforeLogin); ok {
-			hpdata := models.HookPointData{DB: tx, Scope: &scope, TypeString: typeString, Cargo: &cargo}
+			hpdata := models.HookPointData{DB: tx, Who: who, TypeString: typeString, Cargo: &cargo}
 			if err := v.BeforeLogin(hpdata); err != nil {
 				render.Render(w, r, NewErrInternalServerError(err))
 				return
@@ -211,8 +220,8 @@ func UserLoginHandler(typeString string) func(c *gin.Context) {
 		if verifyUserResult == security.VerifyUserResultPasswordNotMatch {
 			// User hookpoing after login
 			if v, ok := authUserModel.(models.IAfterLoginFailed); ok {
-				oid := authUserModel.GetID()
-				hpdata := models.HookPointData{DB: tx, OID: oid, Scope: &scope, TypeString: typeString, Cargo: &cargo}
+				who.Oid = authUserModel.GetID()
+				hpdata := models.HookPointData{DB: tx, Who: who, TypeString: typeString, Cargo: &cargo}
 				if err := v.AfterLoginFailed(hpdata); err != nil {
 					// tx.Rollback() // no rollback!!, actually. commit!
 					tx.Commit()
@@ -248,8 +257,8 @@ func UserLoginHandler(typeString string) func(c *gin.Context) {
 
 		// User hookpoing after login
 		if v, ok := authUserModel.(models.IAfterLogin); ok {
-			oid := authUserModel.GetID()
-			hpdata := models.HookPointData{DB: tx, OID: oid, Scope: &scope, TypeString: typeString, Cargo: &cargo}
+			who.Oid = authUserModel.GetID()
+			hpdata := models.HookPointData{DB: tx, Who: who, TypeString: typeString, Cargo: &cargo}
 			payload, err = v.AfterLogin(hpdata, payload)
 			if err != nil {
 				// tx.Rollback() no rollback, actually, commit!
@@ -319,7 +328,7 @@ func ReadAllHandler(typeString string, mapper datamapper.IDataMapper) func(c *gi
 		w, r := c.Writer, c.Request
 		var err error
 
-		ownerID, scope := OwnerIDFromContext(r), ScopeFromContext(r)
+		who := WhoFromContext(r)
 
 		var modelObjs []models.IModel
 		options := make(map[datamapper.URLParam]interface{})
@@ -342,7 +351,7 @@ func ReadAllHandler(typeString string, mapper datamapper.IDataMapper) func(c *gi
 		}(tx)
 
 		var no *int
-		if modelObjs, roles, no, err = mapper.GetAll(tx, ownerID, &scope, typeString, options); err != nil {
+		if modelObjs, roles, no, err = mapper.GetAll(tx, who, typeString, options); err != nil {
 			tx.Rollback()
 			log.Println("Error in ReadAllHandler ErrNotFound:", typeString, err)
 			render.Render(w, r, NewErrNotFound(err))
@@ -350,7 +359,7 @@ func ReadAllHandler(typeString string, mapper datamapper.IDataMapper) func(c *gi
 		}
 
 		tx.Commit()
-		renderModelSlice(w, r, typeString, modelObjs, roles, no, &scope)
+		renderModelSlice(w, r, typeString, modelObjs, roles, no, who)
 		return
 	}
 }
@@ -363,9 +372,9 @@ func CreateHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin
 		var err error
 		var modelObj models.IModel
 
-		ownerID, scope := OwnerIDFromContext(r), ScopeFromContext(r)
+		who := WhoFromContext(r)
 
-		modelObjs, isBatch, httperr := ModelOrModelsFromJSONBody(r, typeString, &scope)
+		modelObjs, isBatch, httperr := ModelOrModelsFromJSONBody(r, typeString, who)
 		if httperr != nil {
 			render.Render(w, r, httperr)
 			return
@@ -383,7 +392,7 @@ func CreateHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin
 		}(tx)
 
 		if *isBatch {
-			if modelObjs, err = mapper.CreateMany(tx, ownerID, &scope, typeString, modelObjs); err != nil {
+			if modelObjs, err = mapper.CreateMany(tx, who, typeString, modelObjs); err != nil {
 				// FIXME, there is more than one type of error here
 				// How do I output more detailed messages by inspecting error?
 				tx.Rollback()
@@ -399,9 +408,9 @@ func CreateHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin
 			for i := 0; i < len(modelObjs); i++ {
 				roles = append(roles, models.UserRoleAdmin)
 			}
-			renderModelSlice(w, r, typeString, modelObjs, roles, nil, &scope)
+			renderModelSlice(w, r, typeString, modelObjs, roles, nil, who)
 		} else {
-			if modelObj, err = mapper.CreateOne(tx, ownerID, &scope, typeString, modelObjs[0]); err != nil {
+			if modelObj, err = mapper.CreateOne(tx, who, typeString, modelObjs[0]); err != nil {
 				// FIXME, there is more than one type of error here
 				// How do I output more detailed messages by inspecting error?
 				tx.Rollback()
@@ -411,7 +420,7 @@ func CreateHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin
 			}
 
 			tx.Commit()
-			renderModel(w, r, typeString, modelObj, models.UserRoleAdmin, &scope)
+			renderModel(w, r, typeString, modelObj, models.UserRoleAdmin, who)
 		}
 
 		return
@@ -430,7 +439,7 @@ func ReadOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *gi
 			return
 		}
 
-		ownerID, scope := OwnerIDFromContext(r), ScopeFromContext(r)
+		who := WhoFromContext(r)
 
 		tx := db.Shared().Begin()
 
@@ -443,7 +452,7 @@ func ReadOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *gi
 			}
 		}(tx)
 
-		modelObj, role, err := mapper.GetOneWithID(tx, ownerID, &scope, typeString, id)
+		modelObj, role, err := mapper.GetOneWithID(tx, who, typeString, id)
 
 		if err != nil {
 			tx.Rollback()
@@ -452,7 +461,7 @@ func ReadOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *gi
 			return
 		}
 		tx.Commit()
-		renderModel(w, r, typeString, modelObj, role, &scope)
+		renderModel(w, r, typeString, modelObj, role, who)
 		return
 	}
 }
@@ -468,9 +477,9 @@ func UpdateOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 			return
 		}
 
-		ownerID, scope := OwnerIDFromContext(r), ScopeFromContext(r)
+		who := WhoFromContext(r)
 
-		modelObj, httperr := ModelFromJSONBody(r, typeString, &scope)
+		modelObj, httperr := ModelFromJSONBody(r, typeString, who)
 		if httperr != nil {
 			render.Render(w, r, httperr)
 			return
@@ -494,7 +503,7 @@ func UpdateOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 			}
 		}(tx)
 
-		modelObj, err := mapper.UpdateOneWithID(tx, ownerID, &scope, typeString, modelObj, id)
+		modelObj, err := mapper.UpdateOneWithID(tx, who, typeString, modelObj, id)
 		if err != nil {
 			tx.Rollback()
 			log.Println("Error in UpdateOneHandler ErrUpdate:", typeString, err)
@@ -503,7 +512,7 @@ func UpdateOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 		}
 
 		tx.Commit()
-		renderModel(w, r, typeString, modelObj, models.UserRoleAdmin, &scope)
+		renderModel(w, r, typeString, modelObj, models.UserRoleAdmin, who)
 		return
 	}
 }
@@ -513,9 +522,9 @@ func UpdateManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 	return func(c *gin.Context) {
 		log.Println("UpdateManyHandler called")
 		w, r := c.Writer, c.Request
-		ownerID, scope := OwnerIDFromContext(r), ScopeFromContext(r)
+		who := WhoFromContext(r)
 
-		modelObjs, httperr := ModelsFromJSONBody(r, typeString, &scope)
+		modelObjs, httperr := ModelsFromJSONBody(r, typeString, who)
 		if httperr != nil {
 			log.Println("Error in ModelsFromJSONBody:", typeString, httperr)
 			render.Render(w, r, httperr)
@@ -533,7 +542,7 @@ func UpdateManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 			}
 		}(tx)
 
-		modelObjs, err := mapper.UpdateMany(tx, ownerID, &scope, typeString, modelObjs)
+		modelObjs, err := mapper.UpdateMany(tx, who, typeString, modelObjs)
 		if err != nil {
 			tx.Rollback()
 			log.Println("Error in UpdateManyHandler ErrUpdate:", typeString, err)
@@ -547,7 +556,7 @@ func UpdateManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 			roles[i] = models.UserRoleAdmin
 		}
 
-		renderModelSlice(w, r, typeString, modelObjs, roles, nil, &scope)
+		renderModelSlice(w, r, typeString, modelObjs, roles, nil, who)
 		return
 	}
 }
@@ -571,7 +580,7 @@ func PatchOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *g
 			return
 		}
 
-		ownerID, scope := OwnerIDFromContext(r), ScopeFromContext(r)
+		who := WhoFromContext(r)
 
 		tx := db.Shared().Begin()
 
@@ -584,7 +593,7 @@ func PatchOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *g
 			}
 		}(tx)
 
-		modelObj, err := mapper.PatchOneWithID(tx, ownerID, &scope, typeString, jsonPatch, id)
+		modelObj, err := mapper.PatchOneWithID(tx, who, typeString, jsonPatch, id)
 		if err != nil {
 			tx.Rollback()
 			log.Println("Error in PatchOneHandler ErrUpdate:", typeString, err)
@@ -593,7 +602,7 @@ func PatchOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *g
 		}
 
 		tx.Commit()
-		renderModel(w, r, typeString, modelObj, models.UserRoleAdmin, &scope)
+		renderModel(w, r, typeString, modelObj, models.UserRoleAdmin, who)
 		return
 
 		// type JSONPatch struct {
@@ -609,7 +618,7 @@ func PatchManyHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 	return func(c *gin.Context) {
 		log.Println("PatchManyHandler")
 		w, r := c.Writer, c.Request
-		ownerID, scope := OwnerIDFromContext(r), ScopeFromContext(r)
+		who := WhoFromContext(r)
 
 		jsonIDPatches, httperr := JSONPatchesFromJSONBody(r)
 		if httperr != nil {
@@ -629,7 +638,7 @@ func PatchManyHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 			}
 		}(tx)
 
-		modelObjs, err := mapper.PatchMany(tx, ownerID, &scope, typeString, jsonIDPatches)
+		modelObjs, err := mapper.PatchMany(tx, who, typeString, jsonIDPatches)
 		if err != nil {
 			tx.Rollback()
 			log.Println("Error in PatchManyHandler ErrUpdate:", typeString, err)
@@ -643,7 +652,7 @@ func PatchManyHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 			roles[i] = models.UserRoleAdmin
 		}
 
-		renderModelSlice(w, r, typeString, modelObjs, roles, nil, &scope)
+		renderModelSlice(w, r, typeString, modelObjs, roles, nil, who)
 		return
 	}
 }
@@ -660,7 +669,7 @@ func DeleteOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 			return
 		}
 
-		ownerID, scope := OwnerIDFromContext(r), ScopeFromContext(r)
+		who := WhoFromContext(r)
 
 		tx := db.Shared().Begin()
 
@@ -673,7 +682,7 @@ func DeleteOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 			}
 		}(tx)
 
-		modelObj, err := mapper.DeleteOneWithID(tx, ownerID, &scope, typeString, id)
+		modelObj, err := mapper.DeleteOneWithID(tx, who, typeString, id)
 		if err != nil {
 			tx.Rollback()
 			log.Printf("Error in DeleteOneHandler ErrDelete: %s %+v\n", typeString, err)
@@ -685,7 +694,7 @@ func DeleteOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 		}
 
 		tx.Commit()
-		renderModel(w, r, typeString, modelObj, models.UserRoleAdmin, &scope)
+		renderModel(w, r, typeString, modelObj, models.UserRoleAdmin, who)
 		return
 	}
 }
@@ -697,9 +706,9 @@ func DeleteManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 		log.Println("DeleteManyHandler called")
 		var err error
 
-		ownerID, scope := OwnerIDFromContext(r), ScopeFromContext(r)
+		who := WhoFromContext(r)
 
-		modelObjs, httperr := ModelsFromJSONBody(r, typeString, &scope)
+		modelObjs, httperr := ModelsFromJSONBody(r, typeString, who)
 		if httperr != nil {
 			log.Println("Error in ModelsFromJSONBody:", typeString, httperr)
 			render.Render(w, r, httperr)
@@ -717,7 +726,7 @@ func DeleteManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 			}
 		}(tx)
 
-		modelObjs, err = mapper.DeleteMany(tx, ownerID, &scope, typeString, modelObjs)
+		modelObjs, err = mapper.DeleteMany(tx, who, typeString, modelObjs)
 		if err != nil {
 			tx.Rollback()
 			log.Println("Error in DeleteOneHandler ErrDelete:", typeString, err)
@@ -732,7 +741,7 @@ func DeleteManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 			roles[i] = models.UserRoleAdmin
 		}
 
-		renderModelSlice(w, r, typeString, modelObjs, roles, nil, &scope)
+		renderModelSlice(w, r, typeString, modelObjs, roles, nil, who)
 		return
 	}
 }
@@ -748,9 +757,9 @@ func ChangeEmailPasswordHandler(typeString string, mapper datamapper.IChangeEmai
 			return
 		}
 
-		ownerID, scope := OwnerIDFromContext(r), ScopeFromContext(r)
+		who := WhoFromContext(r)
 
-		modelObj, httperr := ModelFromJSONBody(r, typeString, &scope)
+		modelObj, httperr := ModelFromJSONBody(r, typeString, who)
 		if httperr != nil {
 			render.Render(w, r, httperr)
 			return
@@ -767,7 +776,7 @@ func ChangeEmailPasswordHandler(typeString string, mapper datamapper.IChangeEmai
 			}
 		}(tx)
 
-		modelObj, err := mapper.ChangeEmailPasswordWithID(tx, ownerID, &scope, typeString, modelObj, id)
+		modelObj, err := mapper.ChangeEmailPasswordWithID(tx, who, typeString, modelObj, id)
 		if err != nil {
 			tx.Rollback()
 			log.Println("Error in ChangeEmailPasswordHandler ErrUpdate:", typeString, err)
@@ -776,7 +785,7 @@ func ChangeEmailPasswordHandler(typeString string, mapper datamapper.IChangeEmai
 		}
 
 		tx.Commit()
-		renderModel(w, r, typeString, modelObj, models.UserRoleAdmin, &scope)
+		renderModel(w, r, typeString, modelObj, models.UserRoleAdmin, who)
 		return
 	}
 }

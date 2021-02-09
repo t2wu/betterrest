@@ -110,7 +110,7 @@ func constructOrderFieldQueries(db *gorm.DB, tableName string, order *string) *g
 	return db
 }
 
-func loadAndCheckErrorBeforeModify(serv service.IService, db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id *datatypes.UUID, permittedRoles []models.UserRole) (models.IModel, models.UserRole, error) {
+func loadAndCheckErrorBeforeModify(serv service.IService, db *gorm.DB, who models.Who, typeString string, modelObj models.IModel, id *datatypes.UUID, permittedRoles []models.UserRole) (models.IModel, models.UserRole, error) {
 	if id == nil || id.UUID.String() == "" {
 		// in case it's an empty string
 		return nil, models.UserRoleInvalid, service.ErrIDEmpty
@@ -128,7 +128,7 @@ func loadAndCheckErrorBeforeModify(serv service.IService, db *gorm.DB, oid *data
 	// TODO: Is there a more efficient way?
 	// For ownership: role is the role of the model to the user
 	// for models under organization, the role is the role of the organization to the user
-	modelObj2, role, err := serv.GetOneWithIDCore(db, oid, scope, typeString, id)
+	modelObj2, role, err := serv.GetOneWithIDCore(db, who, typeString, id)
 	if err != nil { // Error is "record not found" when not found
 		return nil, models.UserRoleInvalid, err
 	}
@@ -151,9 +151,9 @@ func loadAndCheckErrorBeforeModify(serv service.IService, db *gorm.DB, oid *data
 }
 
 // db should already be set up for all the joins needed, if any
-func loadManyAndCheckBeforeModify(serv service.IService, db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string,
+func loadManyAndCheckBeforeModify(serv service.IService, db *gorm.DB, who models.Who, typeString string,
 	ids []*datatypes.UUID, permittedRoles []models.UserRole) ([]models.IModel, []models.UserRole, error) {
-	modelObjs, roles, err := serv.GetManyWithIDsCore(db, oid, scope, typeString, ids)
+	modelObjs, roles, err := serv.GetManyWithIDsCore(db, who, typeString, ids)
 	if err != nil {
 		log.Println("calling getManyWithIDsCore err:", err)
 		return nil, nil, err

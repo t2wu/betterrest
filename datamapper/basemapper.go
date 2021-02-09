@@ -15,32 +15,32 @@ import (
 
 // IDataMapper has all the crud interfaces
 type IDataMapper interface {
-	CreateOne(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel) (models.IModel, error)
+	CreateOne(db *gorm.DB, who models.Who, typeString string, modelObj models.IModel) (models.IModel, error)
 
-	CreateMany(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj []models.IModel) ([]models.IModel, error)
+	CreateMany(db *gorm.DB, who models.Who, typeString string, modelObj []models.IModel) ([]models.IModel, error)
 
-	GetOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string,
+	GetOneWithID(db *gorm.DB, who models.Who,
 		typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error)
 
-	GetAll(db *gorm.DB, oid *datatypes.UUID, scope *string,
+	GetAll(db *gorm.DB, who models.Who,
 		typeString string, options map[URLParam]interface{}) ([]models.IModel, []models.UserRole, *int, error)
 
-	UpdateOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string,
+	UpdateOneWithID(db *gorm.DB, who models.Who,
 		typeString string, modelobj models.IModel, id *datatypes.UUID) (models.IModel, error)
 
-	UpdateMany(db *gorm.DB, oid *datatypes.UUID, scope *string,
+	UpdateMany(db *gorm.DB, who models.Who,
 		typeString string, modelObjs []models.IModel) ([]models.IModel, error)
 
-	PatchOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string,
+	PatchOneWithID(db *gorm.DB, who models.Who,
 		typeString string, jsonPatch []byte, id *datatypes.UUID) (models.IModel, error)
 
-	PatchMany(db *gorm.DB, oid *datatypes.UUID, scope *string,
+	PatchMany(db *gorm.DB, who models.Who,
 		typeString string, jsonIDPatches []models.JSONIDPatch) ([]models.IModel, error)
 
-	DeleteOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string,
+	DeleteOneWithID(db *gorm.DB, who models.Who,
 		typeString string, id *datatypes.UUID) (models.IModel, error)
 
-	DeleteMany(db *gorm.DB, oid *datatypes.UUID, scope *string,
+	DeleteMany(db *gorm.DB, who models.Who,
 		typeString string, modelObjs []models.IModel) ([]models.IModel, error)
 }
 
@@ -50,7 +50,7 @@ type IDataMapper interface {
 
 // IChangeEmailPasswordMapper changes email and password
 type IChangeEmailPasswordMapper interface {
-	ChangeEmailPasswordWithID(db *gorm.DB, oid *datatypes.UUID, scope *string,
+	ChangeEmailPasswordWithID(db *gorm.DB, who models.Who,
 		typeString string, modelobj models.IModel, id *datatypes.UUID) (models.IModel, error)
 }
 
@@ -64,8 +64,8 @@ type BaseMapper struct {
 }
 
 // CreateOne creates an instance of this model based on json and store it in db
-func (mapper *BaseMapper) CreateOne(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel) (models.IModel, error) {
-	modelObj, err := mapper.Service.HookBeforeCreateOne(db, oid, scope, typeString, modelObj)
+func (mapper *BaseMapper) CreateOne(db *gorm.DB, who models.Who, typeString string, modelObj models.IModel) (models.IModel, error) {
+	modelObj, err := mapper.Service.HookBeforeCreateOne(db, who, typeString, modelObj)
 	if err != nil {
 		return nil, err
 	}
@@ -83,8 +83,7 @@ func (mapper *BaseMapper) CreateOne(db *gorm.DB, oid *datatypes.UUID, scope *str
 	j := opJob{
 		serv:       mapper.Service,
 		db:         db,
-		oid:        oid,
-		scope:      scope,
+		who:        who,
 		typeString: typeString,
 		// oldModelObj: oldModelObj,
 		modelObj: modelObj,
@@ -94,8 +93,8 @@ func (mapper *BaseMapper) CreateOne(db *gorm.DB, oid *datatypes.UUID, scope *str
 }
 
 // CreateMany creates an instance of this model based on json and store it in db
-func (mapper *BaseMapper) CreateMany(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObjs []models.IModel) ([]models.IModel, error) {
-	modelObjs, err := mapper.Service.HookBeforeCreateMany(db, oid, scope, typeString, modelObjs)
+func (mapper *BaseMapper) CreateMany(db *gorm.DB, who models.Who, typeString string, modelObjs []models.IModel) ([]models.IModel, error) {
+	modelObjs, err := mapper.Service.HookBeforeCreateMany(db, who, typeString, modelObjs)
 	if err != nil {
 		return nil, err
 	}
@@ -105,8 +104,7 @@ func (mapper *BaseMapper) CreateMany(db *gorm.DB, oid *datatypes.UUID, scope *st
 	j := batchOpJob{
 		serv:         mapper.Service,
 		db:           db,
-		oid:          oid,
-		scope:        scope,
+		who:          who,
 		typeString:   typeString,
 		oldmodelObjs: nil,
 		modelObjs:    modelObjs,
@@ -116,22 +114,22 @@ func (mapper *BaseMapper) CreateMany(db *gorm.DB, oid *datatypes.UUID, scope *st
 }
 
 // GetOneWithID get one model object based on its type and its id string
-func (mapper *BaseMapper) GetOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error) {
+func (mapper *BaseMapper) GetOneWithID(db *gorm.DB, who models.Who, typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error) {
 	// anyone permission can read as long as you are linked on db
-	modelObj, role, err := loadAndCheckErrorBeforeModify(mapper.Service, db, oid, scope, typeString, nil, id, []models.UserRole{models.UserRoleAny})
+	modelObj, role, err := loadAndCheckErrorBeforeModify(mapper.Service, db, who, typeString, nil, id, []models.UserRole{models.UserRoleAny})
 	if err != nil {
 		return nil, models.UserRoleInvalid, err
 	}
 
 	// After CRUPD hook
 	if m, ok := modelObj.(models.IAfterCRUPD); ok {
-		hpdata := models.HookPointData{DB: db, OID: oid, Scope: scope, TypeString: typeString, Role: &role}
+		hpdata := models.HookPointData{DB: db, Who: who, TypeString: typeString, Role: &role}
 		m.AfterCRUPD(hpdata, models.CRUPDOpRead)
 	}
 
 	// AfterRead hook
 	if m, ok := modelObj.(models.IAfterRead); ok {
-		hpdata := models.HookPointData{DB: db, OID: oid, Scope: scope, TypeString: typeString, Role: &role}
+		hpdata := models.HookPointData{DB: db, Who: who, TypeString: typeString, Role: &role}
 		if err := m.AfterReadDB(hpdata); err != nil {
 			return nil, 0, err
 		}
@@ -147,7 +145,7 @@ func (mapper *BaseMapper) GetOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *
 // How does Gorm do the following? Might want to check out its source code.
 // Cancel offset condition with -1
 //  db.Offset(10).Find(&users1).Offset(-1).Find(&users2)
-func (mapper *BaseMapper) GetAll(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, options map[URLParam]interface{}) ([]models.IModel, []models.UserRole, *int, error) {
+func (mapper *BaseMapper) GetAll(db *gorm.DB, who models.Who, typeString string, options map[URLParam]interface{}) ([]models.IModel, []models.UserRole, *int, error) {
 	dbClean := db
 	db = db.Set("gorm:auto_preload", true)
 
@@ -165,7 +163,7 @@ func (mapper *BaseMapper) GetAll(db *gorm.DB, oid *datatypes.UUID, scope *string
 	}
 
 	db = constructOrderFieldQueries(db, rtable, order)
-	db, err = mapper.Service.GetAllQueryContructCore(db, oid, scope, typeString)
+	db, err = mapper.Service.GetAllQueryContructCore(db, who, typeString)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -192,7 +190,7 @@ func (mapper *BaseMapper) GetAll(db *gorm.DB, oid *datatypes.UUID, scope *string
 		return nil, nil, nil, err
 	}
 
-	roles, err := mapper.Service.GetAllRolesCore(db, dbClean, oid, scope, typeString, outmodels)
+	roles, err := mapper.Service.GetAllRolesCore(db, dbClean, who, typeString, outmodels)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -213,7 +211,7 @@ func (mapper *BaseMapper) GetAll(db *gorm.DB, oid *datatypes.UUID, scope *string
 	// the AfterCRUPD hookpoint
 	// use dbClean cuz it's not chained
 	if after := models.ModelRegistry[typeString].AfterCRUPD; after != nil {
-		bhpData := models.BatchHookPointData{Ms: outmodels, DB: dbClean, OID: oid, Scope: scope, TypeString: typeString, Roles: roles}
+		bhpData := models.BatchHookPointData{Ms: outmodels, DB: dbClean, Who: who, TypeString: typeString, Roles: roles}
 		if err = after(bhpData, models.CRUPDOpRead); err != nil {
 			return nil, nil, nil, err
 		}
@@ -222,7 +220,7 @@ func (mapper *BaseMapper) GetAll(db *gorm.DB, oid *datatypes.UUID, scope *string
 	// AfterRead hookpoint
 	// use dbClean cuz it's not chained
 	if after := models.ModelRegistry[typeString].AfterRead; after != nil {
-		bhpData := models.BatchHookPointData{Ms: outmodels, DB: dbClean, OID: oid, Scope: scope, TypeString: typeString, Roles: roles}
+		bhpData := models.BatchHookPointData{Ms: outmodels, DB: dbClean, Who: who, TypeString: typeString, Roles: roles}
 		if err = after(bhpData); err != nil {
 			return nil, nil, nil, err
 		}
@@ -232,8 +230,8 @@ func (mapper *BaseMapper) GetAll(db *gorm.DB, oid *datatypes.UUID, scope *string
 }
 
 // UpdateOneWithID updates model based on this json
-func (mapper *BaseMapper) UpdateOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id *datatypes.UUID) (models.IModel, error) {
-	oldModelObj, _, err := loadAndCheckErrorBeforeModify(mapper.Service, db, oid, scope, typeString, modelObj, id, []models.UserRole{models.UserRoleAdmin})
+func (mapper *BaseMapper) UpdateOneWithID(db *gorm.DB, who models.Who, typeString string, modelObj models.IModel, id *datatypes.UUID) (models.IModel, error) {
+	oldModelObj, _, err := loadAndCheckErrorBeforeModify(mapper.Service, db, who, typeString, modelObj, id, []models.UserRole{models.UserRoleAdmin})
 	if err != nil {
 		return nil, err
 	}
@@ -252,8 +250,7 @@ func (mapper *BaseMapper) UpdateOneWithID(db *gorm.DB, oid *datatypes.UUID, scop
 	j := opJob{
 		serv:        mapper.Service,
 		db:          db,
-		oid:         oid,
-		scope:       scope,
+		who:         who,
 		typeString:  typeString,
 		oldModelObj: oldModelObj,
 		modelObj:    modelObj,
@@ -263,7 +260,7 @@ func (mapper *BaseMapper) UpdateOneWithID(db *gorm.DB, oid *datatypes.UUID, scop
 }
 
 // UpdateMany updates multiple models
-func (mapper *BaseMapper) UpdateMany(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObjs []models.IModel) ([]models.IModel, error) {
+func (mapper *BaseMapper) UpdateMany(db *gorm.DB, who models.Who, typeString string, modelObjs []models.IModel) ([]models.IModel, error) {
 	// load old model data
 	ids := make([]*datatypes.UUID, len(modelObjs))
 	for i, modelObj := range modelObjs {
@@ -275,7 +272,7 @@ func (mapper *BaseMapper) UpdateMany(db *gorm.DB, oid *datatypes.UUID, scope *st
 		ids[i] = id
 	}
 
-	oldModelObjs, _, err := loadManyAndCheckBeforeModify(mapper.Service, db, oid, scope, typeString, ids, []models.UserRole{models.UserRoleAdmin})
+	oldModelObjs, _, err := loadManyAndCheckBeforeModify(mapper.Service, db, who, typeString, ids, []models.UserRole{models.UserRoleAdmin})
 	if err != nil {
 		return nil, err
 	}
@@ -285,8 +282,7 @@ func (mapper *BaseMapper) UpdateMany(db *gorm.DB, oid *datatypes.UUID, scope *st
 	j := batchOpJob{
 		serv:         mapper.Service,
 		db:           db,
-		oid:          oid,
-		scope:        scope,
+		who:          who,
 		typeString:   typeString,
 		oldmodelObjs: oldModelObjs,
 		modelObjs:    modelObjs,
@@ -296,8 +292,8 @@ func (mapper *BaseMapper) UpdateMany(db *gorm.DB, oid *datatypes.UUID, scope *st
 }
 
 // PatchOneWithID updates model based on this json
-func (mapper *BaseMapper) PatchOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, jsonPatch []byte, id *datatypes.UUID) (models.IModel, error) {
-	oldModelObj, _, err := loadAndCheckErrorBeforeModify(mapper.Service, db, oid, scope, typeString, nil, id, []models.UserRole{models.UserRoleAdmin})
+func (mapper *BaseMapper) PatchOneWithID(db *gorm.DB, who models.Who, typeString string, jsonPatch []byte, id *datatypes.UUID) (models.IModel, error) {
+	oldModelObj, _, err := loadAndCheckErrorBeforeModify(mapper.Service, db, who, typeString, nil, id, []models.UserRole{models.UserRoleAdmin})
 	if err != nil {
 		return nil, err
 	}
@@ -322,8 +318,7 @@ func (mapper *BaseMapper) PatchOneWithID(db *gorm.DB, oid *datatypes.UUID, scope
 	j := opJob{
 		serv:        mapper.Service,
 		db:          db,
-		oid:         oid,
-		scope:       scope,
+		who:         who,
 		typeString:  typeString,
 		oldModelObj: oldModelObj,
 		modelObj:    modelObj,
@@ -333,7 +328,7 @@ func (mapper *BaseMapper) PatchOneWithID(db *gorm.DB, oid *datatypes.UUID, scope
 }
 
 // PatchMany patches multiple models
-func (mapper *BaseMapper) PatchMany(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, jsonIDPatches []models.JSONIDPatch) ([]models.IModel, error) {
+func (mapper *BaseMapper) PatchMany(db *gorm.DB, who models.Who, typeString string, jsonIDPatches []models.JSONIDPatch) ([]models.IModel, error) {
 	// Load data, patch it, then send it to the hookpoint
 	// Load IDs
 	ids := make([]*datatypes.UUID, len(jsonIDPatches))
@@ -345,7 +340,7 @@ func (mapper *BaseMapper) PatchMany(db *gorm.DB, oid *datatypes.UUID, scope *str
 		ids[i] = jsonIDPatch.ID
 	}
 
-	oldModelObjs, _, err := loadManyAndCheckBeforeModify(mapper.Service, db, oid, scope, typeString, ids, []models.UserRole{models.UserRoleAdmin})
+	oldModelObjs, _, err := loadManyAndCheckBeforeModify(mapper.Service, db, who, typeString, ids, []models.UserRole{models.UserRoleAdmin})
 
 	// Now patch it
 	modelObjs := make([]models.IModel, len(oldModelObjs))
@@ -364,8 +359,7 @@ func (mapper *BaseMapper) PatchMany(db *gorm.DB, oid *datatypes.UUID, scope *str
 	j := batchOpJob{
 		serv:         mapper.Service,
 		db:           db,
-		oid:          oid,
-		scope:        scope,
+		who:          who,
 		typeString:   typeString,
 		oldmodelObjs: oldModelObjs,
 		modelObjs:    modelObjs,
@@ -376,8 +370,8 @@ func (mapper *BaseMapper) PatchMany(db *gorm.DB, oid *datatypes.UUID, scope *str
 
 // DeleteOneWithID delete the model
 // TODO: delete the groups associated with this record?
-func (mapper *BaseMapper) DeleteOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, id *datatypes.UUID) (models.IModel, error) {
-	modelObj, _, err := loadAndCheckErrorBeforeModify(mapper.Service, db, oid, scope, typeString, nil, id, []models.UserRole{models.UserRoleAdmin})
+func (mapper *BaseMapper) DeleteOneWithID(db *gorm.DB, who models.Who, typeString string, id *datatypes.UUID) (models.IModel, error) {
+	modelObj, _, err := loadAndCheckErrorBeforeModify(mapper.Service, db, who, typeString, nil, id, []models.UserRole{models.UserRoleAdmin})
 	if err != nil {
 		return nil, err
 	}
@@ -389,7 +383,7 @@ func (mapper *BaseMapper) DeleteOneWithID(db *gorm.DB, oid *datatypes.UUID, scop
 		db = db.Unscoped()
 	}
 
-	modelObj, err = mapper.Service.HookBeforeDeleteOne(db, oid, scope, typeString, modelObj)
+	modelObj, err = mapper.Service.HookBeforeDeleteOne(db, who, typeString, modelObj)
 	if err != nil {
 		return nil, err
 	}
@@ -407,8 +401,7 @@ func (mapper *BaseMapper) DeleteOneWithID(db *gorm.DB, oid *datatypes.UUID, scop
 	j := opJob{
 		serv:       mapper.Service,
 		db:         db,
-		oid:        oid,
-		scope:      scope,
+		who:        who,
 		typeString: typeString,
 		// oldModelObj: oldModelObj,
 		modelObj: modelObj,
@@ -418,7 +411,7 @@ func (mapper *BaseMapper) DeleteOneWithID(db *gorm.DB, oid *datatypes.UUID, scop
 }
 
 // DeleteMany deletes multiple models
-func (mapper *BaseMapper) DeleteMany(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObjs []models.IModel) ([]models.IModel, error) {
+func (mapper *BaseMapper) DeleteMany(db *gorm.DB, who models.Who, typeString string, modelObjs []models.IModel) ([]models.IModel, error) {
 	// load old model data
 	ids := make([]*datatypes.UUID, len(modelObjs))
 	for i, modelObj := range modelObjs {
@@ -430,7 +423,7 @@ func (mapper *BaseMapper) DeleteMany(db *gorm.DB, oid *datatypes.UUID, scope *st
 		ids[i] = id
 	}
 
-	modelObjs, _, err := loadManyAndCheckBeforeModify(mapper.Service, db, oid, scope, typeString, ids, []models.UserRole{models.UserRoleAdmin})
+	modelObjs, _, err := loadManyAndCheckBeforeModify(mapper.Service, db, who, typeString, ids, []models.UserRole{models.UserRoleAdmin})
 	if err != nil {
 		return nil, err
 	}
@@ -442,7 +435,7 @@ func (mapper *BaseMapper) DeleteMany(db *gorm.DB, oid *datatypes.UUID, scope *st
 		db = db.Unscoped() // hookpoint will inherit this though
 	}
 
-	modelObjs, err = mapper.Service.HookBeforeDeleteMany(db, oid, scope, typeString, modelObjs)
+	modelObjs, err = mapper.Service.HookBeforeDeleteMany(db, who, typeString, modelObjs)
 	if err != nil {
 		return nil, err
 	}
@@ -453,8 +446,7 @@ func (mapper *BaseMapper) DeleteMany(db *gorm.DB, oid *datatypes.UUID, scope *st
 	j := batchOpJob{
 		serv:       mapper.Service,
 		db:         db,
-		oid:        oid,
-		scope:      scope,
+		who:        who,
 		typeString: typeString,
 		modelObjs:  modelObjs,
 		crupdOp:    models.CRUPDOpDelete,

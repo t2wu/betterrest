@@ -15,7 +15,7 @@ type LinkTableService struct {
 	BaseService
 }
 
-func (serv *LinkTableService) HookBeforeCreateOne(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel) (models.IModel, error) {
+func (serv *LinkTableService) HookBeforeCreateOne(db *gorm.DB, who models.Who, typeString string, modelObj models.IModel) (models.IModel, error) {
 	ownerModelObj, ok := modelObj.(models.IOwnership)
 	if !ok {
 		return nil, fmt.Errorf("model not an IOwnership object")
@@ -27,7 +27,7 @@ func (serv *LinkTableService) HookBeforeCreateOne(db *gorm.DB, oid *datatypes.UU
 	}
 
 	// You gotta have admin access to the model in order to create a relation
-	err := userHasAdminAccessToOriginalModel(db, oid, typeString, ownerModelObj.GetModelID())
+	err := userHasAdminAccessToOriginalModel(db, who.Oid, typeString, ownerModelObj.GetModelID())
 	if err != nil {
 		return nil, err
 	}
@@ -49,7 +49,7 @@ func (serv *LinkTableService) HookBeforeCreateOne(db *gorm.DB, oid *datatypes.UU
 	return modelObj, nil
 }
 
-func (serv *LinkTableService) HookBeforeCreateMany(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObjs []models.IModel) ([]models.IModel, error) {
+func (serv *LinkTableService) HookBeforeCreateMany(db *gorm.DB, who models.Who, typeString string, modelObjs []models.IModel) ([]models.IModel, error) {
 	for i, modelObj := range modelObjs {
 		ownerModelObj, ok := modelObj.(models.IOwnership)
 		if !ok {
@@ -62,7 +62,7 @@ func (serv *LinkTableService) HookBeforeCreateMany(db *gorm.DB, oid *datatypes.U
 		}
 
 		// You gotta have admin access to the model in order to create a relation
-		err := userHasAdminAccessToOriginalModel(db, oid, typeString, ownerModelObj.GetModelID())
+		err := userHasAdminAccessToOriginalModel(db, who.Oid, typeString, ownerModelObj.GetModelID())
 		if err != nil {
 			return nil, err
 		}
@@ -70,17 +70,17 @@ func (serv *LinkTableService) HookBeforeCreateMany(db *gorm.DB, oid *datatypes.U
 	return modelObjs, nil
 }
 
-func (serv *LinkTableService) HookBeforeDeleteOne(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel) (models.IModel, error) {
+func (serv *LinkTableService) HookBeforeDeleteOne(db *gorm.DB, who models.Who, typeString string, modelObj models.IModel) (models.IModel, error) {
 	return modelObj, nil
 }
 
-func (serv *LinkTableService) HookBeforeDeleteMany(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObjs []models.IModel) ([]models.IModel, error) {
+func (serv *LinkTableService) HookBeforeDeleteMany(db *gorm.DB, who models.Who, typeString string, modelObjs []models.IModel) ([]models.IModel, error) {
 	return modelObjs, nil
 }
 
 // getOneWithIDCore get one model object based on its type and its id string
 // since this is organizationMapper, need to make sure it's the same organization
-func (service *LinkTableService) GetOneWithIDCore(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error) {
+func (service *LinkTableService) GetOneWithIDCore(db *gorm.DB, who models.Who, typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error) {
 	modelObj := models.NewFromTypeString(typeString)
 
 	// Check if link table
@@ -97,7 +97,7 @@ func (service *LinkTableService) GetOneWithIDCore(db *gorm.DB, oid *datatypes.UU
 	// Specify user_id because you gotta own this or is a guest to this
 	subquery := fmt.Sprintf("model_id IN (select model_id from %s where user_id = ?)", rtable)
 
-	err := db.Table(rtable).Where(subquery, oid).Where("id = ?", &id).Find(modelObj).Error
+	err := db.Table(rtable).Where(subquery, who.Oid).Where("id = ?", &id).Find(modelObj).Error
 	// err := db.Table(rtable).Where(subquery, oid).Where("user_id = ?", &id).Find(modelObj).Error
 	if err != nil {
 		return nil, 0, err
@@ -109,7 +109,7 @@ func (service *LinkTableService) GetOneWithIDCore(db *gorm.DB, oid *datatypes.UU
 	}
 	res := result{}
 	if err := db.Table(rtable).Where("user_id = ? and role = ? and model_id = ?",
-		oid, models.UserRoleAdmin, id).Select("role").Scan(&res).Error; err != nil {
+		who.Oid, models.UserRoleAdmin, id).Select("role").Scan(&res).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, models.UserRoleInvalid, ErrPermission
 		}
@@ -119,10 +119,10 @@ func (service *LinkTableService) GetOneWithIDCore(db *gorm.DB, oid *datatypes.UU
 	return modelObj, res.Role, err
 }
 
-func (serv *LinkTableService) GetManyWithIDsCore(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, ids []*datatypes.UUID) ([]models.IModel, []models.UserRole, error) {
+func (serv *LinkTableService) GetManyWithIDsCore(db *gorm.DB, who models.Who, typeString string, ids []*datatypes.UUID) ([]models.IModel, []models.UserRole, error) {
 	rtable := models.GetTableNameFromTypeString(typeString)
 	subquery := fmt.Sprintf("model_id IN (select model_id from %s where user_id = ?)", rtable)
-	db2 := db.Table(rtable).Where(subquery, oid).Where("id in (?)", ids)
+	db2 := db.Table(rtable).Where(subquery, who.Oid).Where("id in (?)", ids)
 	modelObjs, err := models.NewSliceFromDBByTypeString(typeString, db2.Set("gorm:auto_preload", true).Find)
 	if err != nil {
 		log.Println("calling NewSliceFromDBByTypeString err:", err)
@@ -147,7 +147,7 @@ func (serv *LinkTableService) GetManyWithIDsCore(db *gorm.DB, oid *datatypes.UUI
 	roles := make([]models.UserRole, len(modelObjs))
 	for i, modelObj := range modelObjs {
 		id := modelObj.GetID()
-		_, roles[i], err = serv.userHasPermissionToEdit(db, oid, scope, typeString, id)
+		_, roles[i], err = serv.userHasPermissionToEdit(db, who, typeString, id)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -157,7 +157,7 @@ func (serv *LinkTableService) GetManyWithIDsCore(db *gorm.DB, oid *datatypes.UUI
 }
 
 // GetAllQueryContructCore construct query core
-func (serv *LinkTableService) GetAllQueryContructCore(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string) (*gorm.DB, error) {
+func (serv *LinkTableService) GetAllQueryContructCore(db *gorm.DB, who models.Who, typeString string) (*gorm.DB, error) {
 	rtable := models.GetTableNameFromTypeString(typeString)
 
 	// Check if link table
@@ -171,13 +171,13 @@ func (serv *LinkTableService) GetAllQueryContructCore(db *gorm.DB, oid *datatype
 	// select * from rtable where model_id IN (select model_id from rtable where user_id = ?)
 	// subquery := db.Where("user_id = ?", oid).Table(rtable)
 	subquery := fmt.Sprintf("model_id IN (select model_id from %s where user_id = ?)", rtable)
-	db = db.Table(rtable).Where(subquery, oid)
+	db = db.Table(rtable).Where(subquery, who.Oid)
 
 	return db, nil
 }
 
 // GetAllRolesCore gets all roles according to the criteria
-func (serv *LinkTableService) GetAllRolesCore(dbChained *gorm.DB, dbClean *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObjs []models.IModel) ([]models.UserRole, error) {
+func (serv *LinkTableService) GetAllRolesCore(dbChained *gorm.DB, dbClean *gorm.DB, who models.Who, typeString string, modelObjs []models.IModel) ([]models.UserRole, error) {
 	// No roles for this table, because this IS the linking table
 	roles := make([]models.UserRole, len(modelObjs), len(modelObjs))
 	for i := range roles {
@@ -187,13 +187,13 @@ func (serv *LinkTableService) GetAllRolesCore(dbChained *gorm.DB, dbClean *gorm.
 	return roles, nil
 }
 
-func (serv *LinkTableService) userHasPermissionToEdit(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error) {
+func (serv *LinkTableService) userHasPermissionToEdit(db *gorm.DB, who models.Who, typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error) {
 	if id == nil || id.UUID.String() == "" {
 		return nil, models.UserRoleInvalid, ErrIDEmpty
 	}
 
 	// Pull out entire modelObj
-	modelObj, _, err := serv.GetOneWithIDCore(db, oid, scope, typeString, id)
+	modelObj, _, err := serv.GetOneWithIDCore(db, who, typeString, id)
 	if err != nil { // Error is "record not found" when not found
 		return nil, models.UserRoleInvalid, err
 	}
@@ -218,17 +218,17 @@ func (serv *LinkTableService) userHasPermissionToEdit(db *gorm.DB, oid *datatype
 		Role models.UserRole
 	}
 	res := result{}
-	if err := db.Table(rtable).Where("user_id = ? and model_id = ?", oid, ownerModelObj.GetModelID()).First(&res).Error; err != nil {
+	if err := db.Table(rtable).Where("user_id = ? and model_id = ?", who.Oid, ownerModelObj.GetModelID()).First(&res).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, models.UserRoleInvalid, ErrPermission
 		}
 		return nil, models.UserRoleInvalid, err
 	}
 
-	if res.Role == models.UserRoleAdmin && ownerModelObj.GetUserID().String() == oid.String() {
+	if res.Role == models.UserRoleAdmin && ownerModelObj.GetUserID().String() == who.Oid.String() {
 		// You can remove other's relation, but not yours
 		return nil, res.Role, ErrPermissionWrongEndPoint
-	} else if res.Role != models.UserRoleAdmin && ownerModelObj.GetUserID().String() != oid.String() {
+	} else if res.Role != models.UserRoleAdmin && ownerModelObj.GetUserID().String() != who.Oid.String() {
 		// not admin, only remove yourself
 		return nil, res.Role, ErrPermission
 	}
@@ -258,7 +258,7 @@ func userHasAdminAccessToOriginalModel(db *gorm.DB, oid *datatypes.UUID, typeStr
 // UpdateOneCore one, permissin should already be checked
 // called for patch operation as well (after patch has already applied)
 // Fuck, repeat the following code for now (you can't call the overriding method from the non-overriding one)
-func (serv *LinkTableService) UpdateOneCore(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObj models.IModel) (modelObj2 models.IModel, err error) {
+func (serv *LinkTableService) UpdateOneCore(db *gorm.DB, who models.Who, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObj models.IModel) (modelObj2 models.IModel, err error) {
 	if modelNeedsRealDelete(oldModelObj) { // parent model
 		db = db.Unscoped()
 	}
@@ -287,7 +287,7 @@ func (serv *LinkTableService) UpdateOneCore(db *gorm.DB, oid *datatypes.UUID, sc
 
 	// This loads the IDs
 	// This so we have the preloading.
-	modelObj2, _, err = serv.GetOneWithIDCore(db, oid, scope, typeString, id)
+	modelObj2, _, err = serv.GetOneWithIDCore(db, who, typeString, id)
 	if err != nil { // Error is "record not found" when not found
 		log.Println("Error:", err)
 		return nil, err

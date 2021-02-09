@@ -7,7 +7,6 @@ import (
 	"reflect"
 	"sync"
 
-	"github.com/t2wu/betterrest/datamapper/gormfixes"
 	"github.com/t2wu/betterrest/datamapper/service"
 	"github.com/t2wu/betterrest/libs/datatypes"
 	"github.com/t2wu/betterrest/libs/security"
@@ -15,36 +14,6 @@ import (
 
 	"github.com/jinzhu/gorm"
 )
-
-// ---------------------------------------
-
-// createOneCoreUserMapper creates a user
-func createOneCoreUserMapper(db *gorm.DB, oid *datatypes.UUID, typeString string, modelObj models.IModel) (models.IModel, error) {
-	// No need to check if primary key is blank.
-	// If it is it'll be created by Gorm's BeforeCreate hook
-	// (defined in base model)
-	// if dbc := db.Create(modelObj); dbc.Error != nil {
-
-	if dbc := db.Create(modelObj); dbc.Error != nil {
-		// create failed: UNIQUE constraint failed: user.email
-		// It looks like this error may be dependent on the type of database we use
-		return nil, dbc.Error
-	}
-
-	// For pegassociated, the since we expect association_autoupdate:false
-	// need to manually create it
-	if err := gormfixes.CreatePeggedAssocFields(db, modelObj); err != nil {
-		return nil, err
-	}
-
-	// For table with trigger which update before insert, we need to load it again
-	if err := db.First(modelObj).Error; err != nil {
-		// That's weird. we just inserted it.
-		return nil, err
-	}
-
-	return modelObj, nil
-}
 
 // ---------------------------------------
 
@@ -72,8 +41,8 @@ func SharedUserMapper() *UserMapper {
 
 // CreateOne creates an user model based on json and store it in db
 // Also creates a ownership with admin access
-func (mapper *UserMapper) CreateOne(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel) (models.IModel, error) {
-	modelObj, err := mapper.Service.HookBeforeCreateOne(db, oid, scope, typeString, modelObj)
+func (mapper *UserMapper) CreateOne(db *gorm.DB, who models.Who, typeString string, modelObj models.IModel) (models.IModel, error) {
+	modelObj, err := mapper.Service.HookBeforeCreateOne(db, who, typeString, modelObj)
 	if err != nil {
 		return nil, err
 	}
@@ -88,32 +57,29 @@ func (mapper *UserMapper) CreateOne(db *gorm.DB, oid *datatypes.UUID, scope *str
 	j := opJob{
 		serv:       mapper.Service,
 		db:         db,
-		oid:        oid,
-		scope:      scope,
+		who:        who,
 		typeString: typeString,
 		// oldModelObj: oldModelObj,
 		modelObj: modelObj,
 	}
 	return opCore(before, after, j, mapper.Service.CreateOneCore)
-	// // there isn't really an oid at this point
-	// return createOneWithHooks(createOneCoreUserMapper, db, oid, scope, typeString, modelObj)
 }
 
 // // CreateMany is currently a dummy
-// func (mapper *UserMapper) CreateMany(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObjs []models.IModel) ([]models.IModel, error) {
+// func (mapper *UserMapper) CreateMany(db *gorm.DB, who models.Who, typeString string, modelObjs []models.IModel) ([]models.IModel, error) {
 // 	// not really implemented
 // 	return nil, errors.New("not implemented")
 // }
 
 // GetOneWithID get one model object based on its type and its id string
-func (mapper *UserMapper) GetOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error) {
-	modelObj, role, err := mapper.Service.GetOneWithIDCore(db, oid, scope, typeString, id)
+func (mapper *UserMapper) GetOneWithID(db *gorm.DB, who models.Who, typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error) {
+	modelObj, role, err := mapper.Service.GetOneWithIDCore(db, who, typeString, id)
 	if err != nil {
 		return nil, 0, err
 	}
 
 	if m, ok := modelObj.(models.IAfterRead); ok {
-		hpdata := models.HookPointData{DB: db, OID: oid, Scope: scope, TypeString: typeString, Role: &role}
+		hpdata := models.HookPointData{DB: db, Who: who, TypeString: typeString, Role: &role}
 		if err := m.AfterReadDB(hpdata); err != nil {
 			return nil, 0, err
 		}
@@ -125,14 +91,14 @@ func (mapper *UserMapper) GetOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *
 // UpdateOneWithID updates model based on this json
 // Update DOESN'T change password. It'll load up the password hash and save the same.
 // Update password require special endpoint
-func (mapper *UserMapper) UpdateOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id *datatypes.UUID) (models.IModel, error) {
+func (mapper *UserMapper) UpdateOneWithID(db *gorm.DB, who models.Who, typeString string, modelObj models.IModel, id *datatypes.UUID) (models.IModel, error) {
 	log.Println("userMapper's UpdateOneWithID called")
-	oldModelObj, _, err := loadAndCheckErrorBeforeModify(mapper.Service, db, oid, scope, typeString, modelObj, id, []models.UserRole{models.UserRoleAdmin})
+	oldModelObj, _, err := loadAndCheckErrorBeforeModify(mapper.Service, db, who, typeString, modelObj, id, []models.UserRole{models.UserRoleAdmin})
 	if err != nil {
 		return nil, err
 	}
 
-	modelObj, err = preserveEmailPassword(db, oid, modelObj)
+	modelObj, err = preserveEmailPassword(db, who.Oid, modelObj)
 	if err != nil {
 		return nil, err
 	}
@@ -141,20 +107,20 @@ func (mapper *UserMapper) UpdateOneWithID(db *gorm.DB, oid *datatypes.UUID, scop
 
 	// Before hook
 	if v, ok := modelObj.(models.IBeforeUpdate); ok {
-		hpdata := models.HookPointData{DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
+		hpdata := models.HookPointData{DB: db, Who: who, TypeString: typeString, Cargo: &cargo}
 		if err := v.BeforeUpdateDB(hpdata); err != nil {
 			return nil, err
 		}
 	}
 
-	modelObj2, err := mapper.Service.UpdateOneCore(db, oid, scope, typeString, modelObj, id, oldModelObj)
+	modelObj2, err := mapper.Service.UpdateOneCore(db, who, typeString, modelObj, id, oldModelObj)
 	if err != nil {
 		return nil, err
 	}
 
 	// After hook
 	if v, ok := modelObj2.(models.IAfterUpdate); ok {
-		hpdata := models.HookPointData{DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
+		hpdata := models.HookPointData{DB: db, Who: who, TypeString: typeString, Cargo: &cargo}
 		if err = v.AfterUpdateDB(hpdata); err != nil {
 			return nil, err
 		}
@@ -164,13 +130,13 @@ func (mapper *UserMapper) UpdateOneWithID(db *gorm.DB, oid *datatypes.UUID, scop
 }
 
 // DeleteOneWithID deletes the user with the ID
-func (mapper *UserMapper) DeleteOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, id *datatypes.UUID) (models.IModel, error) {
+func (mapper *UserMapper) DeleteOneWithID(db *gorm.DB, who models.Who, typeString string, id *datatypes.UUID) (models.IModel, error) {
 	if id == nil || id.UUID.String() == "" {
 		return nil, service.ErrIDEmpty
 	}
 
 	// Pull out entire modelObj
-	modelObj, role, err := mapper.GetOneWithID(db, oid, scope, typeString, id)
+	modelObj, role, err := mapper.GetOneWithID(db, who, typeString, id)
 	if err != nil { // Error is "record not found" when not found
 		return nil, err
 	}
@@ -184,7 +150,7 @@ func (mapper *UserMapper) DeleteOneWithID(db *gorm.DB, oid *datatypes.UUID, scop
 
 	// Before delete hookpoint
 	if v, ok := modelObj.(models.IBeforeDelete); ok {
-		hpdata := models.HookPointData{DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
+		hpdata := models.HookPointData{DB: db, Who: who, TypeString: typeString, Cargo: &cargo}
 		err = v.BeforeDeleteDB(hpdata)
 		if err != nil {
 			return nil, err
@@ -209,7 +175,7 @@ func (mapper *UserMapper) DeleteOneWithID(db *gorm.DB, oid *datatypes.UUID, scop
 
 	// After delete hookpoint
 	if v, ok := modelObj.(models.IAfterDelete); ok {
-		hpdata := models.HookPointData{DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
+		hpdata := models.HookPointData{DB: db, Who: who, TypeString: typeString, Cargo: &cargo}
 		err = v.AfterDeleteDB(hpdata)
 		if err != nil {
 			return nil, err
@@ -220,9 +186,9 @@ func (mapper *UserMapper) DeleteOneWithID(db *gorm.DB, oid *datatypes.UUID, scop
 }
 
 // ChangeEmailPasswordWithID changes email and/or password
-func (mapper *UserMapper) ChangeEmailPasswordWithID(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id *datatypes.UUID) (models.IModel, error) {
+func (mapper *UserMapper) ChangeEmailPasswordWithID(db *gorm.DB, who models.Who, typeString string, modelObj models.IModel, id *datatypes.UUID) (models.IModel, error) {
 	log.Println("userMapper's ChangeEmailPasswordWithID called")
-	oldModelObj, _, err := loadAndCheckErrorBeforeModify(mapper.Service, db, oid, scope, typeString, modelObj, id, []models.UserRole{models.UserRoleAdmin})
+	oldModelObj, _, err := loadAndCheckErrorBeforeModify(mapper.Service, db, who, typeString, modelObj, id, []models.UserRole{models.UserRoleAdmin})
 	if err != nil {
 		return nil, err
 	}
@@ -265,20 +231,20 @@ func (mapper *UserMapper) ChangeEmailPasswordWithID(db *gorm.DB, oid *datatypes.
 
 	// Before hook
 	if v, ok := modelObj.(models.IBeforePasswordUpdate); ok {
-		hpdata := models.HookPointData{DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
+		hpdata := models.HookPointData{DB: db, Who: who, TypeString: typeString, Cargo: &cargo}
 		if err := v.BeforePasswordUpdateDB(hpdata); err != nil {
 			return nil, err
 		}
 	}
 
-	modelObj2, err := mapper.Service.UpdateOneCore(db, oid, scope, typeString, modelObj, id, oldModelObj)
+	modelObj2, err := mapper.Service.UpdateOneCore(db, who, typeString, modelObj, id, oldModelObj)
 	if err != nil {
 		return nil, err
 	}
 
 	// After hook
 	if v, ok := modelObj2.(models.IAfterPasswordUpdate); ok {
-		hpdata := models.HookPointData{DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
+		hpdata := models.HookPointData{DB: db, Who: who, TypeString: typeString, Cargo: &cargo}
 		if err = v.AfterPasswordUpdateDB(hpdata); err != nil {
 			return nil, err
 		}
@@ -315,34 +281,34 @@ func preserveEmailPassword(db *gorm.DB, oid *datatypes.UUID, modelObj models.IMo
 }
 
 // CreateMany :-
-func (mapper *UserMapper) CreateMany(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj []models.IModel) ([]models.IModel, error) {
+func (mapper *UserMapper) CreateMany(db *gorm.DB, who models.Who, typeString string, modelObj []models.IModel) ([]models.IModel, error) {
 	return nil, fmt.Errorf("Not implemented")
 }
 
 // GetAll :-
-func (mapper *UserMapper) GetAll(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, options map[URLParam]interface{}) ([]models.IModel, []models.UserRole, *int, error) {
+func (mapper *UserMapper) GetAll(db *gorm.DB, who models.Who, typeString string, options map[URLParam]interface{}) ([]models.IModel, []models.UserRole, *int, error) {
 	return nil, nil, nil, fmt.Errorf("Not implemented")
 }
 
 // UpdateMany :-
-func (mapper *UserMapper) UpdateMany(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObjs []models.IModel) ([]models.IModel, error) {
+func (mapper *UserMapper) UpdateMany(db *gorm.DB, who models.Who, typeString string, modelObjs []models.IModel) ([]models.IModel, error) {
 	return nil, fmt.Errorf("Not implemented")
 }
 
 // PatchMany :-
-func (mapper *UserMapper) PatchMany(db *gorm.DB, oid *datatypes.UUID, scope *string,
+func (mapper *UserMapper) PatchMany(db *gorm.DB, who models.Who,
 	typeString string, jsonIDPatches []models.JSONIDPatch) ([]models.IModel, error) {
 	return nil, fmt.Errorf("Not implemented")
 }
 
 // DeleteMany :-
-func (mapper *UserMapper) DeleteMany(db *gorm.DB, oid *datatypes.UUID, scope *string,
+func (mapper *UserMapper) DeleteMany(db *gorm.DB, who models.Who,
 	typeString string, modelObjs []models.IModel) ([]models.IModel, error) {
 	return nil, fmt.Errorf("Not implemented")
 }
 
 // PatchOneWithID :-
-func (mapper *UserMapper) PatchOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *string,
+func (mapper *UserMapper) PatchOneWithID(db *gorm.DB, who models.Who,
 	typeString string, jsonPatch []byte, id *datatypes.UUID) (models.IModel, error) {
 	return nil, fmt.Errorf("Not implemented, todo")
 }

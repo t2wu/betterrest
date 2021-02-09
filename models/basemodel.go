@@ -250,11 +250,8 @@ const (
 type HookPointData struct {
 	// DB handle
 	DB *gorm.DB
-	// OID is owner ID, the user accessing the API right now
-	// Not available in BeforeLogin
-	OID *datatypes.UUID
-	// Scope included in the token who is accessing right now
-	Scope *string
+	// Who is the user information, who is operating this CRUPD right now
+	Who Who
 	// TypeString is the typeString (model string) of this model
 	TypeString string
 	// Cargo between Before and After hookpoints (not used in IAfterRead since there is no IBeforeRead.)

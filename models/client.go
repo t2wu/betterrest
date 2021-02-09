@@ -1,6 +1,9 @@
 package models
 
-import "github.com/jinzhu/gorm"
+import (
+	"github.com/jinzhu/gorm"
+	"github.com/t2wu/betterrest/libs/datatypes"
+)
 
 // Client is the program that makes request to the API
 // So iOS would be one client, android would be another
@@ -13,4 +16,11 @@ type Client struct {
 	Name        string
 	Secret      string `gorm:"not null" json:"-"`
 	RedirectURI string // TODO: RedirectURI can be multiples
+}
+
+// Who is the information about the client or the user
+type Who struct {
+	Client *Client
+	Oid    *datatypes.UUID // ownerid
+	Scope  *string
 }

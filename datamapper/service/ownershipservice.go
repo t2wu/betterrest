@@ -24,7 +24,7 @@ type OwnershipService struct {
 	BaseService
 }
 
-func (serv *OwnershipService) HookBeforeCreateOne(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel) (models.IModel, error) {
+func (serv *OwnershipService) HookBeforeCreateOne(db *gorm.DB, who models.Who, typeString string, modelObj models.IModel) (models.IModel, error) {
 	modelID := modelObj.GetID()
 	if modelID == nil {
 		modelID = datatypes.NewUUID()
@@ -32,7 +32,7 @@ func (serv *OwnershipService) HookBeforeCreateOne(db *gorm.DB, oid *datatypes.UU
 	}
 
 	g := models.NewOwnershipModelFromOwnershipResourceTypeString(typeString).(models.IOwnership)
-	g.SetUserID(oid)
+	g.SetUserID(who.Oid)
 	g.SetModelID(modelID)
 	g.SetRole(models.UserRoleAdmin)
 
@@ -47,7 +47,7 @@ func (serv *OwnershipService) HookBeforeCreateOne(db *gorm.DB, oid *datatypes.UU
 	return modelObj, nil
 }
 
-func (serv *OwnershipService) HookBeforeCreateMany(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObjs []models.IModel) ([]models.IModel, error) {
+func (serv *OwnershipService) HookBeforeCreateMany(db *gorm.DB, who models.Who, typeString string, modelObjs []models.IModel) ([]models.IModel, error) {
 	for _, modelObj := range modelObjs {
 		// reflect.SliceOf
 		// g := reflect.New(ownershipType).Interface().(models.IOwnership)
@@ -59,7 +59,7 @@ func (serv *OwnershipService) HookBeforeCreateMany(db *gorm.DB, oid *datatypes.U
 			modelObj.SetID(modelID)
 		}
 
-		g.SetUserID(oid)
+		g.SetUserID(who.Oid)
 		g.SetModelID(modelID)
 		g.SetRole(models.UserRoleAdmin)
 
@@ -75,7 +75,7 @@ func (serv *OwnershipService) HookBeforeCreateMany(db *gorm.DB, oid *datatypes.U
 	return modelObjs, nil
 }
 
-func (serv *OwnershipService) HookBeforeDeleteOne(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel) (models.IModel, error) {
+func (serv *OwnershipService) HookBeforeDeleteOne(db *gorm.DB, who models.Who, typeString string, modelObj models.IModel) (models.IModel, error) {
 	// I'm removing stuffs from this link table, I cannot just remove myself from this. I have to remove
 	// everyone who is linked to this table!
 
@@ -94,7 +94,7 @@ func (serv *OwnershipService) HookBeforeDeleteOne(db *gorm.DB, oid *datatypes.UU
 
 // HookBeforeDeleteMany deletes link table because GORM isn't automatic here when we customize
 // it with UUID or when we have role
-func (serv *OwnershipService) HookBeforeDeleteMany(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObjs []models.IModel) ([]models.IModel, error) {
+func (serv *OwnershipService) HookBeforeDeleteMany(db *gorm.DB, who models.Who, typeString string, modelObjs []models.IModel) ([]models.IModel, error) {
 	for _, modelObj := range modelObjs {
 		// Also remove entries from ownership table
 		// Maybe getting table
@@ -109,7 +109,7 @@ func (serv *OwnershipService) HookBeforeDeleteMany(db *gorm.DB, oid *datatypes.U
 }
 
 // CreateOneCore creates the stuff
-func (serv *OwnershipService) CreateOneCore(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObj models.IModel) (models.IModel, error) {
+func (serv *OwnershipService) CreateOneCore(db *gorm.DB, who models.Who, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObj models.IModel) (models.IModel, error) {
 	// It looks like I need to explicitly call create here
 	o := reflect.ValueOf(modelObj).Elem().FieldByName("Ownerships")
 	g, _ := o.Index(0).Addr().Interface().(models.IOwnership)
@@ -144,7 +144,7 @@ func (serv *OwnershipService) CreateOneCore(db *gorm.DB, oid *datatypes.UUID, sc
 }
 
 // GetOneWithIDCore get one model object based on its type and its id string
-func (serv *OwnershipService) GetOneWithIDCore(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error) {
+func (serv *OwnershipService) GetOneWithIDCore(db *gorm.DB, who models.Who, typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error) {
 	modelObj := models.NewFromTypeString(typeString)
 
 	db = db.Set("gorm:auto_preload", true)
@@ -163,7 +163,7 @@ func (serv *OwnershipService) GetOneWithIDCore(db *gorm.DB, oid *datatypes.UUID,
 
 	firstJoin := fmt.Sprintf("INNER JOIN \"%s\" ON \"%s\".id = \"%s\".model_id AND \"%s\".id = ?", joinTableName, rtable, joinTableName, rtable)
 	secondJoin := fmt.Sprintf("INNER JOIN \"user\" ON \"user\".id = \"%s\".user_id AND \"%s\".user_id = ?", joinTableName, joinTableName)
-	if err := db.Model(modelObj).Joins(firstJoin, id.String()).Joins(secondJoin, oid.String()).Find(modelObj).Error; err != nil {
+	if err := db.Model(modelObj).Joins(firstJoin, id.String()).Joins(secondJoin, who.Oid.String()).Find(modelObj).Error; err != nil {
 		return nil, 0, err
 	}
 
@@ -176,7 +176,7 @@ func (serv *OwnershipService) GetOneWithIDCore(db *gorm.DB, oid *datatypes.UUID,
 		Role models.UserRole
 	}{Role: models.UserRoleInvalid}
 	if err := db.Table(joinTableName).Where("user_id = ? AND model_id = ?",
-		oid.String(), id.String()).Scan(&res).Error; err != nil {
+		who.Oid.String(), id.String()).Scan(&res).Error; err != nil {
 		return nil, 0, err
 	}
 
@@ -184,7 +184,7 @@ func (serv *OwnershipService) GetOneWithIDCore(db *gorm.DB, oid *datatypes.UUID,
 }
 
 // GetManyWithIDsCore -
-func (serv *OwnershipService) GetManyWithIDsCore(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, ids []*datatypes.UUID) ([]models.IModel, []models.UserRole, error) {
+func (serv *OwnershipService) GetManyWithIDsCore(db *gorm.DB, who models.Who, typeString string, ids []*datatypes.UUID) ([]models.IModel, []models.UserRole, error) {
 	// If I can load it, I have permission to edit it. So no need to call loadAndCheckErrorBeforeModify
 	// like when I do for update. Just get the role and check if it's admin
 	rtable, joinTableName, err := getModelTableNameAndJoinTableNameFromTypeString(typeString)
@@ -195,7 +195,7 @@ func (serv *OwnershipService) GetManyWithIDsCore(db *gorm.DB, oid *datatypes.UUI
 	firstJoin := fmt.Sprintf("INNER JOIN \"%s\" ON \"%s\".id = \"%s\".model_id AND \"%s\".id IN (?)", joinTableName, rtable, joinTableName, rtable)
 	secondJoin := fmt.Sprintf("INNER JOIN \"user\" ON \"user\".id = \"%s\".user_id AND \"%s\".user_id = ?", joinTableName, joinTableName)
 
-	db2 := db.Table(rtable).Joins(firstJoin, ids).Joins(secondJoin, oid)
+	db2 := db.Table(rtable).Joins(firstJoin, ids).Joins(secondJoin, who.Oid)
 	modelObjs, err := models.NewSliceFromDBByTypeString(typeString, db2.Set("gorm:auto_preload", true).Find)
 	if err != nil {
 		log.Println("calling NewSliceFromDBByTypeString err:", err)
@@ -230,7 +230,7 @@ func (serv *OwnershipService) GetManyWithIDsCore(db *gorm.DB, oid *datatypes.UUI
 }
 
 // GetAllQueryContructCore construct the meat of the query
-func (serv *OwnershipService) GetAllQueryContructCore(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string) (*gorm.DB, error) {
+func (serv *OwnershipService) GetAllQueryContructCore(db *gorm.DB, who models.Who, typeString string) (*gorm.DB, error) {
 	rtable, joinTableName, err := getModelTableNameAndJoinTableNameFromTypeString(typeString)
 	if err != nil {
 		return nil, err
@@ -238,13 +238,13 @@ func (serv *OwnershipService) GetAllQueryContructCore(db *gorm.DB, oid *datatype
 
 	firstJoin := fmt.Sprintf("INNER JOIN \"%s\" ON \"%s\".id = \"%s\".model_id", joinTableName, rtable, joinTableName)
 	secondJoin := fmt.Sprintf("INNER JOIN \"user\" ON \"user\".id = \"%s\".user_id AND \"%s\".user_id = ?", joinTableName, joinTableName)
-	db = db.Table(rtable).Joins(firstJoin).Joins(secondJoin, oid.String())
+	db = db.Table(rtable).Joins(firstJoin).Joins(secondJoin, who.Oid.String())
 
 	return db, nil
 }
 
 // GetAllRolesCore gets all roles according to the criteria
-func (serv *OwnershipService) GetAllRolesCore(dbChained *gorm.DB, dbClean *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObjs []models.IModel) ([]models.UserRole, error) {
+func (serv *OwnershipService) GetAllRolesCore(dbChained *gorm.DB, dbClean *gorm.DB, who models.Who, typeString string, modelObjs []models.IModel) ([]models.UserRole, error) {
 	rtable, joinTableName, err := getModelTableNameAndJoinTableNameFromTypeString(typeString)
 	if err != nil {
 		return nil, err
@@ -269,7 +269,7 @@ func (serv *OwnershipService) GetAllRolesCore(dbChained *gorm.DB, dbClean *gorm.
 // UpdateOneCore one, permissin should already be checked
 // called for patch operation as well (after patch has already applied)
 // Fuck, repeat the following code for now (you can't call the overriding method from the non-overriding one)
-func (serv *OwnershipService) UpdateOneCore(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObj models.IModel) (modelObj2 models.IModel, err error) {
+func (serv *OwnershipService) UpdateOneCore(db *gorm.DB, who models.Who, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObj models.IModel) (modelObj2 models.IModel, err error) {
 	if modelNeedsRealDelete(oldModelObj) { // parent model
 		db = db.Unscoped()
 	}
@@ -298,7 +298,7 @@ func (serv *OwnershipService) UpdateOneCore(db *gorm.DB, oid *datatypes.UUID, sc
 
 	// This loads the IDs
 	// This so we have the preloading.
-	modelObj2, _, err = serv.GetOneWithIDCore(db, oid, scope, typeString, id)
+	modelObj2, _, err = serv.GetOneWithIDCore(db, who, typeString, id)
 	if err != nil { // Error is "record not found" when not found
 		log.Println("Error:", err)
 		return nil, err

@@ -17,7 +17,7 @@ type UserService struct {
 	BaseService
 }
 
-func (serv *UserService) HookBeforeCreateOne(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel) (models.IModel, error) {
+func (serv *UserService) HookBeforeCreateOne(db *gorm.DB, who models.Who, typeString string, modelObj models.IModel) (models.IModel, error) {
 	// Special case, there is really no oid in this case, user doesn't exist yet
 
 	// modelObj is a a User struct, but we cannot do type assertion because library user
@@ -49,31 +49,31 @@ func (serv *UserService) HookBeforeCreateOne(db *gorm.DB, oid *datatypes.UUID, s
 	return modelObj, nil
 }
 
-func (serv *UserService) HookBeforeCreateMany(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObjs []models.IModel) ([]models.IModel, error) {
+func (serv *UserService) HookBeforeCreateMany(db *gorm.DB, who models.Who, typeString string, modelObjs []models.IModel) ([]models.IModel, error) {
 	return nil, errors.New("not implemented")
 }
 
-func (serv *UserService) HookBeforeDeleteOne(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel) (models.IModel, error) {
+func (serv *UserService) HookBeforeDeleteOne(db *gorm.DB, who models.Who, typeString string, modelObj models.IModel) (models.IModel, error) {
 	return nil, errors.New("not implemented") // probably can
 }
 
-func (serv *UserService) HookBeforeDeleteMany(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObjs []models.IModel) ([]models.IModel, error) {
+func (serv *UserService) HookBeforeDeleteMany(db *gorm.DB, who models.Who, typeString string, modelObjs []models.IModel) ([]models.IModel, error) {
 	return nil, errors.New("not implemented")
 }
 
 // GetOneWithIDCore get one model object based on its type and its id string
 // getOneWithID get one model object based on its type and its id string without invoking read hookpoing
-func (serv *UserService) GetOneWithIDCore(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error) {
+func (serv *UserService) GetOneWithIDCore(db *gorm.DB, who models.Who, typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error) {
 	// TODO: Currently can only read ID from your own (not others in the admin group either)
 	db = db.Set("gorm:auto_preload", true)
 
 	// Todo: maybe guest shoud be able to read some fields
-	if id.String() != oid.String() {
+	if id.String() != who.Oid.String() {
 		return nil, 0, ErrPermission
 	}
 
 	modelObj := models.NewFromTypeString(typeString)
-	modelObj.SetID(oid)
+	modelObj.SetID(who.Oid)
 
 	if err := db.First(modelObj).Error; err != nil {
 		return nil, 0, err
@@ -82,24 +82,24 @@ func (serv *UserService) GetOneWithIDCore(db *gorm.DB, oid *datatypes.UUID, scop
 	return modelObj, models.UserRoleAdmin, nil
 }
 
-func (serv *UserService) GetManyWithIDsCore(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, ids []*datatypes.UUID) ([]models.IModel, []models.UserRole, error) {
+func (serv *UserService) GetManyWithIDsCore(db *gorm.DB, who models.Who, typeString string, ids []*datatypes.UUID) ([]models.IModel, []models.UserRole, error) {
 	return nil, nil, fmt.Errorf("Not implemented")
 }
 
 // GetAllQueryContructCore :-
-func (serv *UserService) GetAllQueryContructCore(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string) (*gorm.DB, error) {
+func (serv *UserService) GetAllQueryContructCore(db *gorm.DB, who models.Who, typeString string) (*gorm.DB, error) {
 	return nil, fmt.Errorf("Not implemented")
 }
 
 // GetAllRolesCore :-
-func (serv *UserService) GetAllRolesCore(dbChained *gorm.DB, dbClean *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObjs []models.IModel) ([]models.UserRole, error) {
+func (serv *UserService) GetAllRolesCore(dbChained *gorm.DB, dbClean *gorm.DB, who models.Who, typeString string, modelObjs []models.IModel) ([]models.UserRole, error) {
 	return nil, fmt.Errorf("Not implemented")
 }
 
 // UpdateOneCore one, permissin should already be checked
 // called for patch operation as well (after patch has already applied)
 // Fuck, repeat the following code for now (you can't call the overriding method from the non-overriding one)
-func (serv *UserService) UpdateOneCore(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObj models.IModel) (modelObj2 models.IModel, err error) {
+func (serv *UserService) UpdateOneCore(db *gorm.DB, who models.Who, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObj models.IModel) (modelObj2 models.IModel, err error) {
 	if modelNeedsRealDelete(oldModelObj) { // parent model
 		db = db.Unscoped()
 	}
@@ -128,7 +128,7 @@ func (serv *UserService) UpdateOneCore(db *gorm.DB, oid *datatypes.UUID, scope *
 
 	// This loads the IDs
 	// This so we have the preloading.
-	modelObj2, _, err = serv.GetOneWithIDCore(db, oid, scope, typeString, id)
+	modelObj2, _, err = serv.GetOneWithIDCore(db, who, typeString, id)
 	if err != nil { // Error is "record not found" when not found
 		log.Println("Error:", err)
 		return nil, err

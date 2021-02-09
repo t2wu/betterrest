@@ -15,6 +15,26 @@ import (
 	uuid "github.com/satori/go.uuid"
 )
 
+// WhoFromContext fetches struct Who from request context
+func WhoFromContext(r *http.Request) models.Who {
+	ownerID, scope, client := OwnerIDFromContext(r), ScopeFromContext(r), ClientFromContext(r)
+	return models.Who{
+		Client: &client,
+		Oid:    ownerID,
+		Scope:  &scope,
+	}
+}
+
+// ClientFromContext gets Client from context
+func ClientFromContext(r *http.Request) models.Client {
+	var client models.Client
+	item := r.Context().Value(ContextKeyClient)
+	if item != nil {
+		client = item.(models.Client)
+	}
+	return client
+}
+
 // OwnerIDFromContext gets id from context
 func OwnerIDFromContext(r *http.Request) *datatypes.UUID {
 	var ownerID *datatypes.UUID
@@ -72,7 +92,7 @@ type JSONBodyWithContent struct {
 
 // ModelOrModelsFromJSONBody parses JSON body into array of models
 // It take care where the case when it is not even an array and there is a "content" in there
-func ModelOrModelsFromJSONBody(r *http.Request, typeString string, scope *string) ([]models.IModel, *bool, render.Renderer) {
+func ModelOrModelsFromJSONBody(r *http.Request, typeString string, who models.Who) ([]models.IModel, *bool, render.Renderer) {
 	defer r.Body.Close()
 	var jsn []byte
 	var modelObjs []models.IModel
@@ -86,7 +106,7 @@ func ModelOrModelsFromJSONBody(r *http.Request, typeString string, scope *string
 	canHaveCreatedAt := false
 	modelObj := models.NewFromTypeString(typeString)
 	if modelObjPerm, ok := modelObj.(models.IHasPermissions); ok {
-		if _, ok := modelObjPerm.Permissions(models.UserRoleAdmin, scope)["createdAt"]; ok {
+		if _, ok := modelObjPerm.Permissions(models.UserRoleAdmin, who.Scope)["createdAt"]; ok {
 			canHaveCreatedAt = true
 		}
 	}
@@ -168,7 +188,7 @@ func ModelOrModelsFromJSONBody(r *http.Request, typeString string, scope *string
 }
 
 // ModelsFromJSONBody parses JSON body into array of models
-func ModelsFromJSONBody(r *http.Request, typeString string, scope *string) ([]models.IModel, render.Renderer) {
+func ModelsFromJSONBody(r *http.Request, typeString string, who models.Who) ([]models.IModel, render.Renderer) {
 	defer r.Body.Close()
 	var jsn []byte
 	var modelObjs []models.IModel
@@ -191,7 +211,7 @@ func ModelsFromJSONBody(r *http.Request, typeString string, scope *string) ([]mo
 	modelTest := models.NewFromTypeString(typeString)
 	removeCreated := false
 	if modelObjPerm, ok := modelTest.(models.IHasPermissions); ok {
-		if _, ok := modelObjPerm.Permissions(models.UserRoleAdmin, scope)["createdAt"]; ok {
+		if _, ok := modelObjPerm.Permissions(models.UserRoleAdmin, who.Scope)["createdAt"]; ok {
 			// there is created_at field, so we remove it because it's suppose to be
 			// time object and I have int which is not unmarshable
 			removeCreated = true
@@ -236,7 +256,7 @@ func ModelsFromJSONBody(r *http.Request, typeString string, scope *string) ([]mo
 // FIXME:
 // Validation should not be done here because empty field does not pass validation,
 // but sometimes we need empty fields such as patch
-func ModelFromJSONBody(r *http.Request, typeString string, scope *string) (models.IModel, render.Renderer) {
+func ModelFromJSONBody(r *http.Request, typeString string, who models.Who) (models.IModel, render.Renderer) {
 	defer r.Body.Close()
 	var jsn []byte
 	var err error
@@ -248,7 +268,7 @@ func ModelFromJSONBody(r *http.Request, typeString string, scope *string) (model
 	modelObj := models.NewFromTypeString(typeString)
 
 	if modelObjPerm, ok := modelObj.(models.IHasPermissions); ok {
-		if _, ok := modelObjPerm.Permissions(models.UserRoleAdmin, scope)["createdAt"]; ok {
+		if _, ok := modelObjPerm.Permissions(models.UserRoleAdmin, who.Scope)["createdAt"]; ok {
 			// there is created_at field, so we remove it because it's suppose to be
 			// time object and I have int which is not unmarshable
 			jsn2, err := removeCreatedAtFromModel(jsn)

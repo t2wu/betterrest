@@ -3,8 +3,6 @@ package models
 import (
 	"reflect"
 
-	"github.com/t2wu/betterrest/libs/datatypes"
-
 	"github.com/jinzhu/gorm"
 )
 
@@ -58,10 +56,8 @@ type BatchHookPointData struct {
 	Ms []IModel
 	// DB is the DB handle
 	DB *gorm.DB
-	// OID is owner ID, the user accessing the API right now
-	OID *datatypes.UUID
-	// Scope included in the token who is accessing right now
-	Scope *string
+	// Who is operating this CRUPD right now
+	Who Who
 	// Scope included in the token who is accessing right now
 	TypeString string
 	// Cargo between Before and After hookpoints (not used in AfterRead since there is before read hookpoint.)
