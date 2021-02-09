@@ -3,7 +3,6 @@ package models
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"reflect"
 	"strings"
 	"time"
@@ -180,14 +179,7 @@ func NewOwnershipModelFromOwnershipResourceTypeString(typeString string) IModel 
 	}
 
 	// Either custom one or the default one
-	typ := ModelRegistry[typeString].OwnershipType //Tim
-	// if typ == nil {
-	// 	m := &OwnershipModelWithIDBase{}
-	// 	log.Println("&OwnershipModelWithIDBase{}.GetID:", m.GetID())
-	// 	return &OwnershipModelWithIDBase{}
-	// }
-	log.Println("typestring, typ:", typeString, typ)
-	log.Printf("==> %+v", reflect.New(typ).Interface().(IModel))
+	typ := ModelRegistry[typeString].OwnershipType
 
 	return reflect.New(typ).Interface().(IModel)
 }
@@ -242,6 +234,17 @@ type IGuardAPIEntry interface {
 type ModelCargo struct {
 	Payload interface{}
 }
+
+// CRUPDOp designates the type of operations for BeforeCRUPD and AfterCRUPD hookpoints
+type CRUPDOp int
+
+const (
+	CRUPDOpRead CRUPDOp = iota
+	CRUPDOpCreate
+	CRUPDOpUpdate
+	CRUPDOpPatch
+	CRUPDOpDelete
+)
 
 // HookPointData is the data send to single model hookpoints
 type HookPointData struct {
@@ -318,6 +321,18 @@ type IAfterPatch interface {
 // IAfterDelete supports method to be called after data is deleted from the database
 type IAfterDelete interface {
 	AfterDeleteDB(hpdata HookPointData) error
+}
+
+// IAfterCRUPD supprots method to be called after data is after all CRUPD operations
+// This is called before the individual ops
+type IAfterCRUPD interface {
+	AfterCRUPD(hpdata HookPointData, op CRUPDOp) error
+}
+
+// IBeforeCRUPD supprots method to be called before data is after all CRUPD operations
+// This is called before the individual ops
+type IBeforeCRUPD interface {
+	BeforeCRUPD(hpdata HookPointData, op CRUPDOp) error
 }
 
 // IValidate supports validation with govalidator

@@ -159,6 +159,20 @@ func RegCustomCreate(typeString string, modelObj models.IModel, f func(db *gorm.
 	reg.CreateMethod = f
 }
 
+// RegBatchCRUPDHooks adds hookpoints which are called before
+// CUPD (no read) and after batch CRUPD. Either one can be left as nil
+func RegBatchCRUPDHooks(typeString string,
+	before func(bhpData models.BatchHookPointData, crupdOp models.CRUPDOp) error,
+	after func(bhpData models.BatchHookPointData, crupdOp models.CRUPDOp) error) {
+
+	if _, ok := models.ModelRegistry[typeString]; !ok {
+		models.ModelRegistry[typeString] = &models.Reg{}
+	}
+
+	models.ModelRegistry[typeString].BeforeCUPD = before
+	models.ModelRegistry[typeString].AfterCRUPD = after
+}
+
 // RegBatchInsertHooks adds hookpoints which are called before
 // and after batch update. Either one can be left as nil
 func RegBatchInsertHooks(typeString string,

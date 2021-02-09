@@ -88,6 +88,7 @@ func (mapper *BaseMapper) CreateOne(db *gorm.DB, oid *datatypes.UUID, scope *str
 		typeString: typeString,
 		// oldModelObj: oldModelObj,
 		modelObj: modelObj,
+		crupdOp:  models.CRUPDOpCreate,
 	}
 	return opCore(before, after, j, mapper.Service.CreateOneCore)
 }
@@ -109,6 +110,7 @@ func (mapper *BaseMapper) CreateMany(db *gorm.DB, oid *datatypes.UUID, scope *st
 		typeString:   typeString,
 		oldmodelObjs: nil,
 		modelObjs:    modelObjs,
+		crupdOp:      models.CRUPDOpCreate,
 	}
 	return batchOpCore(j, before, after, mapper.Service.CreateOneCore)
 }
@@ -121,6 +123,13 @@ func (mapper *BaseMapper) GetOneWithID(db *gorm.DB, oid *datatypes.UUID, scope *
 		return nil, models.UserRoleInvalid, err
 	}
 
+	// After CRUPD hook
+	if m, ok := modelObj.(models.IAfterCRUPD); ok {
+		hpdata := models.HookPointData{DB: db, OID: oid, Scope: scope, TypeString: typeString, Role: &role}
+		m.AfterCRUPD(hpdata, models.CRUPDOpRead)
+	}
+
+	// AfterRead hook
 	if m, ok := modelObj.(models.IAfterRead); ok {
 		hpdata := models.HookPointData{DB: db, OID: oid, Scope: scope, TypeString: typeString, Role: &role}
 		if err := m.AfterReadDB(hpdata); err != nil {
@@ -201,6 +210,16 @@ func (mapper *BaseMapper) GetAll(db *gorm.DB, oid *datatypes.UUID, scope *string
 		}
 	}
 
+	// the AfterCRUPD hookpoint
+	// use dbClean cuz it's not chained
+	if after := models.ModelRegistry[typeString].AfterCRUPD; after != nil {
+		bhpData := models.BatchHookPointData{Ms: outmodels, DB: dbClean, OID: oid, Scope: scope, TypeString: typeString, Roles: roles}
+		if err = after(bhpData, models.CRUPDOpRead); err != nil {
+			return nil, nil, nil, err
+		}
+	}
+
+	// AfterRead hookpoint
 	// use dbClean cuz it's not chained
 	if after := models.ModelRegistry[typeString].AfterRead; after != nil {
 		bhpData := models.BatchHookPointData{Ms: outmodels, DB: dbClean, OID: oid, Scope: scope, TypeString: typeString, Roles: roles}
@@ -225,7 +244,7 @@ func (mapper *BaseMapper) UpdateOneWithID(db *gorm.DB, oid *datatypes.UUID, scop
 		b := "BeforeUpdateDB"
 		before = &b
 	}
-	if _, ok := modelObj.(models.IBeforeUpdate); ok {
+	if _, ok := modelObj.(models.IAfterUpdate); ok {
 		a := "AfterUpdateDB"
 		after = &a
 	}
@@ -238,6 +257,7 @@ func (mapper *BaseMapper) UpdateOneWithID(db *gorm.DB, oid *datatypes.UUID, scop
 		typeString:  typeString,
 		oldModelObj: oldModelObj,
 		modelObj:    modelObj,
+		crupdOp:     models.CRUPDOpUpdate,
 	}
 	return opCore(before, after, j, mapper.Service.UpdateOneCore)
 }
@@ -270,6 +290,7 @@ func (mapper *BaseMapper) UpdateMany(db *gorm.DB, oid *datatypes.UUID, scope *st
 		typeString:   typeString,
 		oldmodelObjs: oldModelObjs,
 		modelObjs:    modelObjs,
+		crupdOp:      models.CRUPDOpUpdate,
 	}
 	return batchOpCore(j, before, after, mapper.Service.UpdateOneCore)
 }
@@ -306,6 +327,7 @@ func (mapper *BaseMapper) PatchOneWithID(db *gorm.DB, oid *datatypes.UUID, scope
 		typeString:  typeString,
 		oldModelObj: oldModelObj,
 		modelObj:    modelObj,
+		crupdOp:     models.CRUPDOpPatch,
 	}
 	return opCore(before, after, j, mapper.Service.UpdateOneCore)
 }
@@ -347,6 +369,7 @@ func (mapper *BaseMapper) PatchMany(db *gorm.DB, oid *datatypes.UUID, scope *str
 		typeString:   typeString,
 		oldmodelObjs: oldModelObjs,
 		modelObjs:    modelObjs,
+		crupdOp:      models.CRUPDOpPatch,
 	}
 	return batchOpCore(j, before, after, mapper.Service.UpdateOneCore)
 }
@@ -389,6 +412,7 @@ func (mapper *BaseMapper) DeleteOneWithID(db *gorm.DB, oid *datatypes.UUID, scop
 		typeString: typeString,
 		// oldModelObj: oldModelObj,
 		modelObj: modelObj,
+		crupdOp:  models.CRUPDOpDelete,
 	}
 	return opCore(before, after, j, mapper.Service.DeleteOneCore)
 }
@@ -433,6 +457,7 @@ func (mapper *BaseMapper) DeleteMany(db *gorm.DB, oid *datatypes.UUID, scope *st
 		scope:      scope,
 		typeString: typeString,
 		modelObjs:  modelObjs,
+		crupdOp:    models.CRUPDOpDelete,
 	}
 	return batchOpCore(j, before, after, mapper.Service.DeleteOneCore)
 }

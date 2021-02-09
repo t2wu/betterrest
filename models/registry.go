@@ -96,6 +96,9 @@ type Reg struct {
 	IdvMethods   string     //  ID end points, "RUD" for read one, update one, and delete one
 	Mapper       MapperType // Custmized mapper, default to datamapper.SharedOwnershipMapper
 
+	BeforeCUPD func(bhpData BatchHookPointData, crupdOp CRUPDOp) error // no R since model doens't exist yet
+	AfterCRUPD func(bhpData BatchHookPointData, crupdOp CRUPDOp) error
+
 	AfterRead func(bhpData BatchHookPointData) error
 
 	BeforeInsert func(bhpData BatchHookPointData) error
