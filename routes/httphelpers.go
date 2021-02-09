@@ -140,8 +140,9 @@ func ModelOrModelsFromJSONBody(r *http.Request, typeString string, who models.Wh
 		}
 
 		if v, ok := modelObj.(models.IValidate); ok {
-			who, path, method := WhoFromContext(r), r.URL.Path, r.Method
-			if err := v.Validate(who, path, method); err != nil {
+			who := WhoFromContext(r)
+			http := models.HTTP{Endpoint: r.URL.Path, Method: r.Method}
+			if err := v.Validate(who, http); err != nil {
 				return nil, nil, NewErrValidation(err)
 			}
 		}
@@ -173,8 +174,9 @@ func ModelOrModelsFromJSONBody(r *http.Request, typeString string, who models.Wh
 		// }
 
 		if v, ok := modelObj.(models.IValidate); ok {
-			who, path, method := WhoFromContext(r), r.URL.Path, r.Method
-			if err := v.Validate(who, path, method); err != nil {
+			who := WhoFromContext(r)
+			http := models.HTTP{Endpoint: r.URL.Path, Method: r.Method}
+			if err := v.Validate(who, http); err != nil {
 				return nil, nil, NewErrValidation(err)
 			}
 		}
@@ -240,8 +242,9 @@ func ModelsFromJSONBody(r *http.Request, typeString string, who models.Who) ([]m
 		// }
 
 		if v, ok := modelObj.(models.IValidate); ok {
-			who, path, method := WhoFromContext(r), r.URL.Path, r.Method
-			if err := v.Validate(who, path, method); err != nil {
+			who := WhoFromContext(r)
+			http := models.HTTP{Endpoint: r.URL.Path, Method: r.Method}
+			if err := v.Validate(who, http); err != nil {
 				return nil, NewErrValidation(err)
 			}
 		}
@@ -285,8 +288,9 @@ func ModelFromJSONBody(r *http.Request, typeString string, who models.Who) (mode
 	}
 
 	if v, ok := modelObj.(models.IValidate); ok {
-		who, path, method := WhoFromContext(r), r.URL.Path, r.Method
-		if err := v.Validate(who, path, method); err != nil {
+		who := WhoFromContext(r)
+		http := models.HTTP{Endpoint: r.URL.Path, Method: r.Method}
+		if err := v.Validate(who, http); err != nil {
 			return nil, NewErrValidation(err)
 		}
 	}

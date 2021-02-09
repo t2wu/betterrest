@@ -63,7 +63,8 @@ func guardMiddleWare(typeString string) func(c *gin.Context) {
 		modelObj := models.NewFromTypeString(typeString)
 		if m, ok := modelObj.(models.IGuardAPIEntry); ok {
 			who := WhoFromContext(r)
-			if !m.GuardAPIEntry(who, r.URL.Path, r.Method) {
+			http := models.HTTP{Endpoint: r.URL.Path, Method: r.Method}
+			if !m.GuardAPIEntry(who, http) {
 				render.Render(w, r, NewErrPermissionDeniedForAPIEndpoint(nil))
 				c.Abort() // abort
 				return
