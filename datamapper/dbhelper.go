@@ -1,6 +1,8 @@
 package datamapper
 
 import (
+	"reflect"
+
 	"github.com/jinzhu/gorm"
 	"github.com/t2wu/betterrest/datamapper/service"
 	"github.com/t2wu/betterrest/libs/datatypes"
@@ -112,8 +114,13 @@ type opJob struct {
 	modelObj    models.IModel // current field value from the user if update, or from the loaded field if delete
 }
 
-func opCore(before func(hpdata models.HookPointData) error,
-	after func(hpdata models.HookPointData) error,
+// before and after are strings, because once we load it from the DB the hooks
+// should be the new one. (at least for after)
+func opCore(
+	beforeFuncName *string,
+	afterFuncName *string,
+	// before func(hpdata models.HookPointData) error,
+	// after func(hpdata models.HookPointData) error,
 	job opJob,
 	taskFun func(db *gorm.DB, oid *datatypes.UUID, scope *string, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObj models.IModel) (models.IModel, error),
 ) (models.IModel, error) {
@@ -125,27 +132,29 @@ func opCore(before func(hpdata models.HookPointData) error,
 	// Before hook
 	// It is now expected that the hookpoint for before expect that the patch
 	// gets applied to the JSON, but not before actually updating to DB.
-	if before != nil {
+	if beforeFuncName != nil {
 		hpdata := models.HookPointData{DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
-		if err := before(hpdata); err != nil {
+		result := reflect.ValueOf(modelObj).MethodByName(*beforeFuncName).Call([]reflect.Value{reflect.ValueOf(hpdata)})
+		if err, ok := result[0].Interface().(error); ok {
 			return nil, err
 		}
 	}
 
 	// Now do the task
 	id := modelObj.GetID()
-	modelObj2, err := taskFun(db, oid, scope, typeString, modelObj, id, oldModelObj)
+	modelObjReloaded, err := taskFun(db, oid, scope, typeString, modelObj, id, oldModelObj)
 	if err != nil {
 		return nil, err
 	}
 
 	// After hook
-	if after != nil {
+	if afterFuncName != nil {
 		hpdata := models.HookPointData{DB: db, OID: oid, Scope: scope, TypeString: typeString, Cargo: &cargo}
-		if err = after(hpdata); err != nil {
+		result := reflect.ValueOf(modelObjReloaded).MethodByName(*afterFuncName).Call([]reflect.Value{reflect.ValueOf(hpdata)})
+		if err, ok := result[0].Interface().(error); ok {
 			return nil, err
 		}
 	}
 
-	return modelObj2, nil
+	return modelObjReloaded, nil
 }

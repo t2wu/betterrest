@@ -70,13 +70,14 @@ func (mapper *BaseMapper) CreateOne(db *gorm.DB, oid *datatypes.UUID, scope *str
 		return nil, err
 	}
 
-	var before func(hpdata models.HookPointData) error
-	var after func(hpdata models.HookPointData) error
-	if v, ok := modelObj.(models.IBeforeCreate); ok {
-		before = v.BeforeInsertDB
+	var before, after *string
+	if _, ok := modelObj.(models.IBeforeCreate); ok {
+		b := "BeforeInsertDB"
+		before = &b
 	}
-	if v, ok := modelObj.(models.IAfterCreate); ok {
-		after = v.AfterInsertDB
+	if _, ok := modelObj.(models.IAfterCreate); ok {
+		a := "AfterInsertDB"
+		after = &a
 	}
 
 	j := opJob{
@@ -219,14 +220,14 @@ func (mapper *BaseMapper) UpdateOneWithID(db *gorm.DB, oid *datatypes.UUID, scop
 	}
 
 	// TODO: Huh? How do we do validation here?!
-
-	var before func(hpdata models.HookPointData) error
-	var after func(hpdata models.HookPointData) error
-	if v, ok := modelObj.(models.IBeforeUpdate); ok {
-		before = v.BeforeUpdateDB
+	var before, after *string
+	if _, ok := modelObj.(models.IBeforeUpdate); ok {
+		b := "BeforeUpdateDB"
+		before = &b
 	}
-	if v, ok := modelObj.(models.IAfterUpdate); ok {
-		after = v.AfterUpdateDB
+	if _, ok := modelObj.(models.IBeforeUpdate); ok {
+		a := "AfterUpdateDB"
+		after = &a
 	}
 
 	j := opJob{
@@ -287,13 +288,14 @@ func (mapper *BaseMapper) PatchOneWithID(db *gorm.DB, oid *datatypes.UUID, scope
 	}
 
 	// TODO: Huh? How do we do validation here?!
-	var before func(hpdata models.HookPointData) error
-	var after func(hpdata models.HookPointData) error
-	if v, ok := modelObj.(models.IBeforePatch); ok {
-		before = v.BeforePatchDB
+	var before, after *string
+	if _, ok := modelObj.(models.IBeforePatch); ok {
+		b := "BeforePatchDB"
+		before = &b
 	}
-	if v, ok := modelObj.(models.IAfterPatch); ok {
-		after = v.AfterPatchDB
+	if _, ok := modelObj.(models.IAfterPatch); ok {
+		a := "AfterPatchDB"
+		after = &a
 	}
 
 	j := opJob{
@@ -369,13 +371,14 @@ func (mapper *BaseMapper) DeleteOneWithID(db *gorm.DB, oid *datatypes.UUID, scop
 		return nil, err
 	}
 
-	var before func(hpdata models.HookPointData) error
-	var after func(hpdata models.HookPointData) error
-	if v, ok := modelObj.(models.IBeforeDelete); ok {
-		before = v.BeforeDeleteDB
+	var before, after *string
+	if _, ok := modelObj.(models.IBeforeDelete); ok {
+		b := "BeforeDeleteDB"
+		before = &b
 	}
-	if v, ok := modelObj.(models.IAfterDelete); ok {
-		after = v.AfterDeleteDB
+	if _, ok := modelObj.(models.IAfterDelete); ok {
+		a := "AfterDeleteDB"
+		after = &a
 	}
 
 	j := opJob{
