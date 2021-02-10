@@ -137,6 +137,11 @@ func modelObjsToJSON(typeString string, modelObjs []models.IModel, roles []model
 }
 
 func renderModel(w http.ResponseWriter, r *http.Request, typeString string, modelObj models.IModel, role models.UserRole, who models.Who) {
+	if mrender, ok := modelObj.(models.IHasRenderer); ok {
+		w.Write(mrender.Render(role, who))
+		return
+	}
+
 	// render.JSON(w, r, modelObj) // cannot use this since no picking the field we need
 	jsonBytes, err := tools.ToJSON(typeString, modelObj, role, who)
 	if err != nil {
@@ -152,6 +157,11 @@ func renderModel(w http.ResponseWriter, r *http.Request, typeString string, mode
 }
 
 func renderModelSlice(w http.ResponseWriter, r *http.Request, typeString string, modelObjs []models.IModel, roles []models.UserRole, total *int, who models.Who) {
+	if models.ModelRegistry[typeString].BatchRenderer != nil {
+		w.Write(models.ModelRegistry[typeString].BatchRenderer(roles, who, modelObjs))
+		return
+	}
+
 	jsonString, err := modelObjsToJSON(typeString, modelObjs, roles, who)
 	if err != nil {
 		log.Println("Error in renderModelSlice:", err)

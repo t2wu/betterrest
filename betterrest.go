@@ -248,6 +248,15 @@ func RegBatchDeleteHooks(typeString string,
 	models.ModelRegistry[typeString].AfterDelete = after
 }
 
+// RegBatchRenderer register custom batch renderer (do your own output, not necessarily JSON)
+func RegBatchRenderer(typeString string, renderer func(roles []models.UserRole, who models.Who, modelObj []models.IModel) []byte) {
+	if _, ok := models.ModelRegistry[typeString]; !ok {
+		models.ModelRegistry[typeString] = &models.Reg{}
+	}
+
+	models.ModelRegistry[typeString].BatchRenderer = renderer
+}
+
 // AutoMigrate all dbs
 // Commented out because I haven't figure out about how to handle
 // primary key dependencies yet. Or does Gorm do it in a newer version

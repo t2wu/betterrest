@@ -108,6 +108,8 @@ type Reg struct {
 
 	BeforeDelete func(bhpData BatchHookPointData) error
 	AfterDelete  func(bhpData BatchHookPointData) error
+
+	BatchRenderer func(roles []UserRole, who Who, modelObj []IModel) []byte
 }
 
 // func (g *Gateway) AfterCreateDB(db *gorm.DB, typeString string) error {

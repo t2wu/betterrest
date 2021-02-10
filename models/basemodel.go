@@ -89,7 +89,7 @@ func (b *BaseModel) Validate() error {
 
 // IModel is the interface for all domain models
 type IModel interface {
-	// Permissions(r UserRole, scope *string) jsontrans.JSONFields
+	// Permissions(role UserRole, scope *string) jsontrans.JSONFields
 
 	// The following two avoids having to use reflection to access ID
 	GetID() *datatypes.UUID
@@ -99,8 +99,22 @@ type IModel interface {
 // IHasPermissions is for IModel with a custom permission field to cherry pick json fields
 // default is to return all but the dates
 type IHasPermissions interface {
-	Permissions(r UserRole, who Who) (jsontrans.Permission, jsontrans.JSONFields)
+	Permissions(role UserRole, who Who) (jsontrans.Permission, jsontrans.JSONFields)
 }
+
+// IHasRenderer is for formatting IModel with a custom function
+// basically do your own custom output
+// For batch renderer, register a Render(r UserRole, who Who, modelObjs []IModel) []byte
+type IHasRenderer interface {
+	Render(role UserRole, who Who) []byte
+}
+
+// This is registered
+// // IHasBatchRender is for formatting []IModel with a custom function
+// // basically do your own custom output
+// type IHasBatchRender interface {
+// 	Render(r UserRole, who Who, modelObjs []IModel) []byte
+// }
 
 // Inside content is an array of JSONIDPatch
 // {
