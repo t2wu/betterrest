@@ -1,6 +1,7 @@
 package jsontrans
 
 import (
+	"encoding/json"
 	"log"
 	"reflect"
 	"strings"
@@ -170,7 +171,7 @@ func TransFromByHidingDateFieldsFromIModel(v reflect.Value, includeCUDDates bool
 
 	for i := 0; i < v.NumField(); i++ {
 		nameOfField := v.Type().Field(i).Name
-		typeOfField := v.Type().Field(i).Type
+		// typeOfField := v.Type().Field(i).Type
 
 		if unicode.IsLower(rune(nameOfField[0])) {
 			// Not exported, don't bother. (If I process it I need unsafe pointer too otherwise it'l panic)
@@ -202,9 +203,9 @@ func TransFromByHidingDateFieldsFromIModel(v reflect.Value, includeCUDDates bool
 		case reflect.Struct:
 			// Traverse into the struct
 
-			// If it's anything from datatypes. We do not walk into it
-			// We use the one from json.Marshal
-			if strings.HasPrefix(typeOfField.String(), "datatypes") {
+			// If comfirm to the Marshaler interface, let the JSON handles it
+			// No need to walk further in, expect JSON marshal to take care of it later
+			if _, ok := v.Field(i).Addr().Interface().(json.Marshaler); ok {
 				if unicode.IsUpper(rune(nameOfField[0])) { // Exported (public)
 					dataPicked[jsonTag] = v.Field(i).Interface()
 				}
@@ -235,9 +236,9 @@ func TransFromByHidingDateFieldsFromIModel(v reflect.Value, includeCUDDates bool
 		case reflect.Ptr:
 			inside := v.Field(i).Elem()
 			if inside.Kind() == reflect.Struct {
-				// If it's anything from datatypes. We do not walk into it
-				// We just put into dataPicked and expect JSON marshal to take care of it later
-				if strings.HasPrefix(typeOfField.String(), "*datatypes") {
+				// If comfirm to the Marshaler interface, let the JSON handles it
+				// No need to walk further in, expect JSON marshal to take care of it later
+				if _, ok := v.Field(i).Interface().(json.Marshaler); ok {
 					if !isOmitEmpty || !isEmptyValue(v.Field(i)) {
 						dataPicked[jsonTag] = v.Field(i).Interface()
 					}

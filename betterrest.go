@@ -30,7 +30,7 @@ func RegModel(typeString string, modelObj models.IModel) {
 // RegModelWithOption adds a New function for an models.IModel
 func RegModelWithOption(typeString string, modelObj models.IModel, options models.RegOptions) {
 	if _, ok := models.ModelRegistry[typeString]; ok {
-		panic(fmt.Sprintf("%s should not register the same type string twice:", typeString))
+		panic(fmt.Sprintf("%s should not be registered to the same type string twice:", typeString))
 	}
 
 	models.ModelRegistry[typeString] = &models.Reg{}
