@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/t2wu/betterrest/libs/datatypes"
+	"github.com/t2wu/betterrest/libs/utils/jsontrans"
 	"github.com/t2wu/betterrest/models"
 
 	"github.com/gin-gonic/gin"
@@ -107,8 +108,17 @@ func ModelOrModelsFromJSONBody(r *http.Request, typeString string, who models.Wh
 	canHaveCreatedAt := false
 	modelObj := models.NewFromTypeString(typeString)
 	if modelObjPerm, ok := modelObj.(models.IHasPermissions); ok {
-		if _, ok := modelObjPerm.Permissions(models.UserRoleAdmin, who)["createdAt"]; ok {
-			canHaveCreatedAt = true
+		perm, fields := modelObjPerm.Permissions(models.UserRoleAdmin, who)
+		if perm == jsontrans.PermissionWhiteList {
+			if _, ok := fields["createdAt"]; ok {
+				canHaveCreatedAt = true
+			}
+		} else {
+			// when black list is used and createdAt is there, block it
+			// (black list is not supported yet, but maybe this will work in the future)
+			if _, ok := fields["createdAt"]; ok {
+				canHaveCreatedAt = false
+			}
 		}
 	}
 
@@ -214,10 +224,19 @@ func ModelsFromJSONBody(r *http.Request, typeString string, who models.Who) ([]m
 	modelTest := models.NewFromTypeString(typeString)
 	removeCreated := false
 	if modelObjPerm, ok := modelTest.(models.IHasPermissions); ok {
-		if _, ok := modelObjPerm.Permissions(models.UserRoleAdmin, who)["createdAt"]; ok {
-			// there is created_at field, so we remove it because it's suppose to be
-			// time object and I have int which is not unmarshable
-			removeCreated = true
+		perm, fields := modelObjPerm.Permissions(models.UserRoleAdmin, who)
+		if perm == jsontrans.PermissionWhiteList {
+			if _, ok := fields["createdAt"]; ok {
+				// there is created_at field, so we remove it because it's suppose to be
+				// time object and I have int which is not unmarshable
+				removeCreated = true
+			}
+		} else {
+			// when black list is used and createdAt is there, block it
+			// (black list is not supported yet, but maybe this will work in the future)
+			if _, ok := fields["createdAt"]; ok {
+				removeCreated = false
+			}
 		}
 	}
 
@@ -272,7 +291,23 @@ func ModelFromJSONBody(r *http.Request, typeString string, who models.Who) (mode
 	modelObj := models.NewFromTypeString(typeString)
 
 	if modelObjPerm, ok := modelObj.(models.IHasPermissions); ok {
-		if _, ok := modelObjPerm.Permissions(models.UserRoleAdmin, who)["createdAt"]; ok {
+		removeCreated := false
+		perm, fields := modelObjPerm.Permissions(models.UserRoleAdmin, who)
+		if perm == jsontrans.PermissionWhiteList {
+			if _, ok := fields["createdAt"]; ok {
+				// there is created_at field, so we remove it because it's suppose to be
+				// time object and I have int which is not unmarshable
+				removeCreated = true
+			}
+		} else {
+			// when black list is used and createdAt is there, block it
+			// (black list is not supported yet, but maybe this will work in the future)
+			if _, ok := fields["createdAt"]; ok {
+				removeCreated = false
+			}
+		}
+
+		if removeCreated {
 			// there is created_at field, so we remove it because it's suppose to be
 			// time object and I have int which is not unmarshable
 			jsn2, err := removeCreatedAtFromModel(jsn)

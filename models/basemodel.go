@@ -9,7 +9,7 @@ import (
 
 	"github.com/stoewer/go-strcase"
 	"github.com/t2wu/betterrest/libs/datatypes"
-	"github.com/t2wu/betterrest/libs/utils/jsontransform"
+	"github.com/t2wu/betterrest/libs/utils/jsontrans"
 
 	"github.com/asaskevich/govalidator"
 	"github.com/jinzhu/gorm"
@@ -89,7 +89,7 @@ func (b *BaseModel) Validate() error {
 
 // IModel is the interface for all domain models
 type IModel interface {
-	// Permissions(r UserRole, scope *string) jsontransform.JSONFields
+	// Permissions(r UserRole, scope *string) jsontrans.JSONFields
 
 	// The following two avoids having to use reflection to access ID
 	GetID() *datatypes.UUID
@@ -99,7 +99,7 @@ type IModel interface {
 // IHasPermissions is for IModel with a custom permission field to cherry pick json fields
 // default is to return all but the dates
 type IHasPermissions interface {
-	Permissions(r UserRole, who Who) jsontransform.JSONFields
+	Permissions(r UserRole, who Who) (jsontrans.Permission, jsontrans.JSONFields)
 }
 
 // Inside content is an array of JSONIDPatch

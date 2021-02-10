@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/jinzhu/gorm"
+	"github.com/t2wu/betterrest/libs/utils/jsontrans"
 	"github.com/t2wu/betterrest/models"
 )
 
@@ -13,14 +14,14 @@ import (
  * Registration
  */
 
-// RegUserModel register the user model
+// RegUserModel register the user model (convenient function of RegModelWithOption)
 func RegUserModel(typeString string, modelObj models.IModel) {
 	options := models.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: models.MapperTypeUser}
 	RegModelWithOption(typeString, modelObj, options)
 	models.UserTyp = reflect.TypeOf(modelObj).Elem()
 }
 
-// RegModel adds a New function for an models.IModel
+// RegModel adds a New function for an models.IModel (convenient function of RegModelWithOption)
 func RegModel(typeString string, modelObj models.IModel) {
 	options := models.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: models.MapperTypeViaOwnership}
 	RegModelWithOption(typeString, modelObj, options)
@@ -33,6 +34,12 @@ func RegModelWithOption(typeString string, modelObj models.IModel, options model
 	}
 
 	models.ModelRegistry[typeString] = &models.Reg{}
+
+	// For JSON href
+	jsontrans.ModelNameToTypeStringMapping[reflect.TypeOf(modelObj).String()] = typeString
+	jsontrans.ModelNameToTypeStringMapping[reflect.TypeOf(modelObj).Elem().String()] = typeString
+
+	// structNameToTypeStringMapping[reflect.TypeOf(modelObj).Name()] =
 
 	reg := models.ModelRegistry[typeString] // pointer type
 	reg.Typ = reflect.TypeOf(modelObj).Elem()
