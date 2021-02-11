@@ -1,6 +1,7 @@
 package betterrest
 
 import (
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"strings"
@@ -84,7 +85,8 @@ func RegModelWithOption(typeString string, modelObj models.IModel, options model
 	case models.MapperTypeViaOwnership:
 		fallthrough
 	default:
-		typ := models.GetFieldTypeFromModelByTagKeyBetterRestAndValueKey(modelObj, "ownership")
+		recursiveIntoEmbedded := true
+		typ := models.GetFieldTypeFromModelByTagKeyBetterRestAndValueKey(modelObj, "ownership", recursiveIntoEmbedded)
 		if typ == nil {
 			panic(fmt.Sprintf("%s missing betterrest:\"ownership\" tag", typeString))
 		}
@@ -99,14 +101,16 @@ func RegModelWithOption(typeString string, modelObj models.IModel, options model
 	// Traverse through the tree
 
 	checked := make(map[string]bool)
-	checkAllFieldsForBetterTags(modelObj, checked)
+	checkFieldsThatAreStructsForBetterTags(modelObj, checked)
 
 	// panic(fmt.Sprintf("all checked %+v", checked))
 
 }
 
-// checked is needed because it can be recursive in a pegassoc-manytomany
-func checkAllFieldsForBetterTags(modelObj models.IModel, checked map[string]bool) {
+// If within the model there is a struct that doesn't implement marshaler (which is considered "atomic"),
+// it needs to be labeled in one of the ownership models
+// checked slice is needed because it can be recursive in a pegassoc-manytomany
+func checkFieldsThatAreStructsForBetterTags(modelObj models.IModel, checked map[string]bool) {
 	modelName := reflect.TypeOf(modelObj).Elem().Name()
 	if _, ok := checked[modelName]; ok { // if already checked
 		return
@@ -116,47 +120,52 @@ func checkAllFieldsForBetterTags(modelObj models.IModel, checked map[string]bool
 	v := reflect.Indirect(reflect.ValueOf(modelObj))
 	for i := 0; i < v.NumField(); i++ {
 		fieldName := v.Type().Field(i).Name
-		if fieldName != "BaseModel" && fieldName != "OwnershipModelBase" && fieldName != "OwnershipModelWithIDBase" {
-			var nextType reflect.Type
-			switch v.Field(i).Kind() {
-			case reflect.Ptr: // if it's datatypes.UUID you don't dig further
-				nextType = v.Type().Field(i).Type.Elem()
-				// if UUID, no need to traverse more
-				if nextType.String() == "datatypes.UUID" {
-					continue
-				}
-				// Then only check if it's a struct
-				if nextType.Kind() == reflect.Struct {
-					tagVal := v.Type().Field(i).Tag.Get("betterrest")
-					checkTagValue(tagVal, fieldName, modelName)
-				}
-				// log.Println("fieldName:", fieldName)
-				// nextType = v.Type().Field(i).Type.Elem()
-			case reflect.Struct:
-				tagVal := v.Type().Field(i).Tag.Get("betterrest")
-				checkTagValue(tagVal, fieldName, modelName)
 
-				nextType = v.Type().Field(i).Type
-			case reflect.Slice:
-				tagVal := v.Type().Field(i).Tag.Get("betterrest")
-				checkTagValue(tagVal, fieldName, modelName)
+		var nextType reflect.Type
+		switch v.Field(i).Kind() {
+		case reflect.Ptr:
+			// if it's datatypes.UUID or any other which comforms to json.Marshaler
+			// you don't dig further
+			if _, ok := v.Field(i).Interface().(json.Marshaler); ok {
+				continue
+			}
+			nextType = v.Type().Field(i).Type.Elem()
 
-				nextType = v.Type().Field(i).Type.Elem()
+			// Then only check if it's a struct
+			if nextType.Kind() == reflect.Struct {
+				tagVal := v.Type().Field(i).Tag.Get("betterrest")
+				checkBetterTagValueIsValid(tagVal, fieldName, modelName)
+			}
+		case reflect.Struct:
+			// if it's datatypes.UUID or any other which comforms to json.Marshaler
+			// you don't dig further
+			if _, ok := v.Field(i).Addr().Interface().(json.Marshaler); ok {
+				continue
+			}
+			if !v.Type().Field(i).Anonymous { // ignore fields that are anonymous
+				tagVal := v.Type().Field(i).Tag.Get("betterrest")
+				checkBetterTagValueIsValid(tagVal, fieldName, modelName)
 			}
 
-			// TrackerClassPredicateAction
-			if nextType != nil {
-				// only array []*model will work, what now? if it's not array?
-				if nextModel, ok := reflect.New(nextType).Interface().(models.IModel); ok {
-					checkAllFieldsForBetterTags(nextModel, checked) // how to get the name of struct
-				}
+			nextType = v.Type().Field(i).Type
+		case reflect.Slice:
+			tagVal := v.Type().Field(i).Tag.Get("betterrest")
+			checkBetterTagValueIsValid(tagVal, fieldName, modelName)
+
+			nextType = v.Type().Field(i).Type.Elem()
+		}
+
+		if nextType != nil {
+			// only array []*model will work, what now? if it's not array?
+			if nextModel, ok := reflect.New(nextType).Interface().(models.IModel); ok {
+				checkFieldsThatAreStructsForBetterTags(nextModel, checked) // how to get the name of struct
 			}
 		}
 	}
 	// return nil
 }
 
-func checkTagValue(tagVal, fieldName, modelName string) {
+func checkBetterTagValueIsValid(tagVal, fieldName, modelName string) {
 	pairs := strings.Split(tagVal, ";")
 	for _, pair := range pairs {
 		if pair != "peg" && !strings.HasPrefix(pair, "pegassoc") &&

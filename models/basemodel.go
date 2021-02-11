@@ -87,6 +87,16 @@ func (b *BaseModel) Validate() error {
 	return nil
 }
 
+// ModelHasOwnership is the standard domain model to embed when creating
+// an ownership type. If you need a customized linking table,
+// Embed a BaseModel instead, and define a gorm "PRELOAD:false", json "-",
+// and betterrest:"ownership"
+type ModelHasOwnership struct {
+	BaseModel
+
+	Ownerships []OwnershipModelWithIDBase `gorm:"PRELOAD:false" json:"-" betterrest:"ownership"`
+}
+
 // IModel is the interface for all domain models
 type IModel interface {
 	// Permissions(role UserRole, scope *string) jsontrans.JSONFields
@@ -571,10 +581,20 @@ func GetFieldValueFromModelByTagKeyBetterRestAndValueKey(modelObj IModel, valueK
 }
 
 // GetFieldTypeFromModelByTagKeyBetterRestAndValueKey fetches the datatype of the variable tagged in tag
-func GetFieldTypeFromModelByTagKeyBetterRestAndValueKey(modelObj IModel, valueKey string) reflect.Type {
+func GetFieldTypeFromModelByTagKeyBetterRestAndValueKey(modelObj IModel, valueKey string, recurseIntoEmbedded bool) reflect.Type {
 	v := reflect.Indirect(reflect.ValueOf(modelObj))
+	return getFieldTypeFromModelByTagKeyBetterRestAndValueKeyCore(v, valueKey, recurseIntoEmbedded)
+}
+
+func getFieldTypeFromModelByTagKeyBetterRestAndValueKeyCore(v reflect.Value, valueKey string, recurseIntoEmbedded bool) reflect.Type {
 	for i := 0; i < v.NumField(); i++ {
-		if tagVal, ok := v.Type().Field(i).Tag.Lookup("betterrest"); ok {
+		if v.Type().Field(i).Anonymous && recurseIntoEmbedded {
+			embeddedModel := v.Field(i)
+			ret := getFieldTypeFromModelByTagKeyBetterRestAndValueKeyCore(embeddedModel, valueKey, recurseIntoEmbedded)
+			if ret != nil {
+				return ret
+			} // else continues
+		} else if tagVal, ok := v.Type().Field(i).Tag.Lookup("betterrest"); ok {
 			pairs := strings.Split(tagVal, ";")
 			for _, pair := range pairs {
 				if strings.HasPrefix(pair, valueKey) {
