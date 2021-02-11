@@ -61,15 +61,6 @@ func RegModelWithOption(typeString string, modelObj models.IModel, options model
 	reg.Mapper = options.Mapper
 
 	switch options.Mapper {
-	case models.MapperTypeViaOwnership:
-		typ := models.GetFieldTypeFromModelByTagKeyBetterRestAndValueKey(modelObj, "ownership")
-		if typ == nil {
-			panic(fmt.Sprintf("%s missing betterrest:\"ownership\" tag", typeString))
-		}
-		m := reflect.New(typ).Interface().(models.IModel)
-		s := models.GetTableNameFromIModel(m)
-		reg.OwnershipTableName = &s
-		reg.OwnershipType = typ
 	case models.MapperTypeViaOrganization:
 		// We want the model type. So we get that by getting name first
 		// since the foreign key field name is always nameID
@@ -84,6 +75,23 @@ func RegModelWithOption(typeString string, modelObj models.IModel, options model
 
 		toks := strings.Split(val, "org:")
 		reg.OrgTypeString = toks[1]
+	case models.MapperTypeGlobal:
+		// do nothing
+	case models.MapperTypeLinkTable:
+		// do nothing
+	case models.MapperTypeUser:
+		// do nothing
+	case models.MapperTypeViaOwnership:
+		fallthrough
+	default:
+		typ := models.GetFieldTypeFromModelByTagKeyBetterRestAndValueKey(modelObj, "ownership")
+		if typ == nil {
+			panic(fmt.Sprintf("%s missing betterrest:\"ownership\" tag", typeString))
+		}
+		m := reflect.New(typ).Interface().(models.IModel)
+		s := models.GetTableNameFromIModel(m)
+		reg.OwnershipTableName = &s
+		reg.OwnershipType = typ
 	}
 
 	// Check if there is any struct or element of IModel which has no betterrest:"peg" or "peg-associate"
