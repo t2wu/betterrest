@@ -110,7 +110,8 @@ func (serv *BaseService) DeleteOneCore(db *gorm.DB, who models.Who, typeString s
 		return nil, err
 	}
 
-	if err := gormfixes.RemovePeggedField(db, modelObj); err != nil {
+	if err := gormfixes.DeleteModelFixManyToManyAndPeg(db, modelObj); err != nil {
+		// if err := gormfixes.RemovePeggedField(db, modelObj); err != nil {
 		return nil, err
 	}
 

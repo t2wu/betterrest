@@ -528,7 +528,7 @@ func GetTableNameFromType(typ reflect.Type) string {
 
 // ----------------
 
-func GetValueFromModelByTagKeyBetterRestAndValueKey(modelObj interface{}, valueKey string) *string {
+func GetTagValueFromModelByTagKeyBetterRestAndValueKey(modelObj interface{}, valueKey string) *string {
 	v := reflect.Indirect(reflect.ValueOf(modelObj))
 	for i := 0; i < v.NumField(); i++ {
 		// t := v.Type().Field(i).Tag.Get(tag) // if no tag, empty string

@@ -65,7 +65,7 @@ func RegModelWithOption(typeString string, modelObj models.IModel, options model
 	case models.MapperTypeViaOrganization:
 		// We want the model type. So we get that by getting name first
 		// since the foreign key field name is always nameID
-		v := models.GetValueFromModelByTagKeyBetterRestAndValueKey(modelObj, "org")
+		v := models.GetTagValueFromModelByTagKeyBetterRestAndValueKey(modelObj, "org")
 		if v == nil {
 			panic(fmt.Sprintf("%s missing betterrest:\"org:typeString\" tag", typeString))
 		}
