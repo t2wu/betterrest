@@ -24,15 +24,6 @@ func (serv *GlobalService) HookBeforeCreateOne(db *gorm.DB, who models.Who, type
 }
 
 func (serv *GlobalService) HookBeforeCreateMany(db *gorm.DB, who models.Who, typeString string, modelObjs []models.IModel) ([]models.IModel, error) {
-	// This probably is not necessary
-	for i, modelObj := range modelObjs {
-		modelID := modelObj.GetID()
-		if modelID == nil {
-			modelID = datatypes.NewUUID()
-			modelObj.SetID(modelID)
-		}
-		modelObjs[i] = modelObj
-	}
 	return modelObjs, nil
 }
 

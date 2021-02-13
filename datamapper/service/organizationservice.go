@@ -37,10 +37,6 @@ func (serv *OrganizationService) HookBeforeCreateOne(db *gorm.DB, who models.Who
 func (serv *OrganizationService) HookBeforeCreateMany(db *gorm.DB, who models.Who, typeString string, modelObjs []models.IModel) ([]models.IModel, error) {
 	// Check ownership permission
 	for _, modelObj := range modelObjs {
-		if modelObj.GetID() == nil {
-			modelObj.SetID(datatypes.NewUUID())
-		}
-
 		// Make sure oid has admin access to this organization
 		hasAdminAccess, err := userHasRolesAccessToModelOrg(db, who, typeString, modelObj, []models.UserRole{models.UserRoleAdmin})
 		if err != nil {

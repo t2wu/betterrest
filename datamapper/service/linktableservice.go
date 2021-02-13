@@ -50,15 +50,10 @@ func (serv *LinkTableService) HookBeforeCreateOne(db *gorm.DB, who models.Who, t
 }
 
 func (serv *LinkTableService) HookBeforeCreateMany(db *gorm.DB, who models.Who, typeString string, modelObjs []models.IModel) ([]models.IModel, error) {
-	for i, modelObj := range modelObjs {
+	for _, modelObj := range modelObjs {
 		ownerModelObj, ok := modelObj.(models.IOwnership)
 		if !ok {
 			return nil, fmt.Errorf("model not an IOwnership object")
-		}
-
-		// Probably not necessary
-		if modelObj.GetID() == nil {
-			modelObjs[i].SetID(datatypes.NewUUID())
 		}
 
 		// You gotta have admin access to the model in order to create a relation

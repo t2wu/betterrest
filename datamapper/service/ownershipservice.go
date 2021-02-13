@@ -53,6 +53,7 @@ func (serv *OwnershipService) HookBeforeCreateMany(db *gorm.DB, who models.Who, 
 		// g := reflect.New(ownershipType).Interface().(models.IOwnership)
 		g := models.NewOwnershipModelFromOwnershipResourceTypeString(typeString).(models.IOwnership)
 
+		// Since I need to create a user_owns join table, I need to create ID now
 		modelID := modelObj.GetID()
 		if modelID == nil {
 			modelID = datatypes.NewUUID()
