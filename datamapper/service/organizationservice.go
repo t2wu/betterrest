@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"strconv"
 
 	"github.com/jinzhu/gorm"
 	"github.com/stoewer/go-strcase"
@@ -277,18 +276,13 @@ func userHasRolesAccessToModelOrg(db *gorm.DB, who models.Who, typeString string
 	organizationTableName := models.OrgModelNameFromOrgResourceTypeString(typeString)
 	organizationJoinTableName := orgJoinTableName(typeString)
 
-	rolesQuery := strconv.Itoa(int(roles[0]))
-	for i := 1; i < len(roles); i++ {
-		rolesQuery += "," + strconv.Itoa(int(roles[i]))
-	}
-
 	organizationID := models.GetFieldValueFromModelByTagKeyBetterRestAndValueKey(modelObj, "org").(*datatypes.UUID)
 
-	firstJoin := fmt.Sprintf("INNER JOIN \"%s\" ON \"%s\".id = \"%s\".model_id AND \"%s\".role IN (%s)", organizationJoinTableName, organizationTableName, organizationJoinTableName,
-		organizationJoinTableName, rolesQuery)
+	firstJoin := fmt.Sprintf("INNER JOIN \"%s\" ON \"%s\".id = \"%s\".model_id AND \"%s\".role IN (?)", organizationJoinTableName, organizationTableName, organizationJoinTableName,
+		organizationJoinTableName)
 	secondJoin := fmt.Sprintf("INNER JOIN \"user\" ON \"user\".id = \"%s\".user_id AND \"%s\".user_id = ?", organizationJoinTableName, organizationJoinTableName)
 	whereStmt := fmt.Sprintf("\"%s\".model_id = ?", organizationJoinTableName)
-	db = db.Table(organizationTableName).Joins(firstJoin).Joins(secondJoin, who.Oid.String()).Where(whereStmt, organizationID)
+	db = db.Table(organizationTableName).Joins(firstJoin, roles).Joins(secondJoin, who.Oid.String()).Where(whereStmt, organizationID)
 
 	organizations, err := models.NewSliceFromDBByType(models.OrgModelTypeFromOrgResourceTypeString(typeString), db.Find)
 	if err != nil {

@@ -122,7 +122,7 @@ func (service *LinkTableService) GetOneWithIDCore(db *gorm.DB, who models.Who, t
 func (serv *LinkTableService) GetManyWithIDsCore(db *gorm.DB, who models.Who, typeString string, ids []*datatypes.UUID) ([]models.IModel, []models.UserRole, error) {
 	rtable := models.GetTableNameFromTypeString(typeString)
 	subquery := fmt.Sprintf("model_id IN (select model_id from %s where user_id = ?)", rtable)
-	db2 := db.Table(rtable).Where(subquery, who.Oid).Where("id in (?)", ids)
+	db2 := db.Table(rtable).Where(subquery, who.Oid).Where("id IN (?)", ids)
 	modelObjs, err := models.NewSliceFromDBByTypeString(typeString, db2.Set("gorm:auto_preload", true).Find)
 	if err != nil {
 		log.Println("calling NewSliceFromDBByTypeString err:", err)
