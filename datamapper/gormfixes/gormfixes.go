@@ -159,7 +159,7 @@ func removeManyToManyAssociationTableElem(db *gorm.DB, modelObj models.IModel) e
 					allIds = append(allIds, idToDel.String())
 				}
 
-				stmt := fmt.Sprintf("DELETE FROM \"%s\" WHERE \"%s\" = ? AND \"%s\" IN (%s)",
+				stmt := fmt.Sprintf("DELETE FROM \"%s\" WHERE \"%s\" = ? AND \"%s\" IN (?)",
 					linkTableName, selfTableName+"_id", fieldTableName+"_id", uuidStmts)
 				err := db.Exec(stmt, allIds...).Error
 				if err != nil {
@@ -275,8 +275,12 @@ func UpdatePeggedFields(db *gorm.DB, oldModelObj models.IModel, newModelObj mode
 				modelToDel := m[uuid]
 
 				if tag == "peg" {
-					err = db.Delete(modelToDel).Error
-					if err != nil {
+					if err := db.Delete(modelToDel).Error; err != nil {
+						return err
+					}
+					// Similar to directly deleting the model,
+					// just deleting it won't work, need to traverse down the chain
+					if err := DeleteModelFixManyToManyAndPeg(db, modelToDel.(models.IModel)); err != nil {
 						return err
 					}
 				} else if tag == "pegassoc" {
