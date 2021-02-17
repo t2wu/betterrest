@@ -15,24 +15,39 @@ import (
  * Registration
  */
 
-// RegUserModel register the user model (convenient function of RegModelWithOption)
-func RegUserModel(typeString string, modelObj models.IModel) {
-	options := models.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: models.MapperTypeUser}
-	RegModelWithOption(typeString, modelObj, options)
-	models.UserTyp = reflect.TypeOf(modelObj).Elem()
+// Registrar has registration methods for models
+type Registrar struct {
+	currentTypeString string
 }
 
-// RegModel adds a New function for an models.IModel (convenient function of RegModelWithOption)
-func RegModel(typeString string, modelObj models.IModel) {
-	options := models.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: models.MapperTypeViaOwnership}
-	RegModelWithOption(typeString, modelObj, options)
-}
-
-// RegModelWithOption adds a New function for an models.IModel
-func RegModelWithOption(typeString string, modelObj models.IModel, options models.RegOptions) {
-	if _, ok := models.ModelRegistry[typeString]; ok {
-		panic(fmt.Sprintf("%s should not be registered to the same type string twice:", typeString))
+// For set the current registering typeString
+func For(typeString string) *Registrar {
+	r := &Registrar{}
+	r.currentTypeString = typeString
+	if _, ok := models.ModelRegistry[typeString]; !ok {
+		models.ModelRegistry[typeString] = &models.Reg{}
 	}
+	return r
+}
+
+// UserModel set the IModel type
+func (r *Registrar) UserModel(modelObj models.IModel) *Registrar {
+	options := models.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: models.MapperTypeUser}
+	// Always override as there is only ONE user type
+	models.UserTyp = reflect.TypeOf(modelObj).Elem()
+
+	return r.ModelWithOption(modelObj, options)
+}
+
+// Model adds a New function for an models.IModel (convenient function of RegModelWithOption)
+func (r *Registrar) Model(modelObj models.IModel) *Registrar {
+	options := models.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: models.MapperTypeViaOwnership}
+	return r.ModelWithOption(modelObj, options)
+}
+
+// ModelWithOption adds a New function for an models.IModel
+func (r *Registrar) ModelWithOption(modelObj models.IModel, options models.RegOptions) *Registrar {
+	typeString := r.currentTypeString
 
 	models.ModelRegistry[typeString] = &models.Reg{}
 
@@ -44,6 +59,7 @@ func RegModelWithOption(typeString string, modelObj models.IModel, options model
 
 	reg := models.ModelRegistry[typeString] // pointer type
 	reg.Typ = reflect.TypeOf(modelObj).Elem()
+	// reg.TypVersion = version
 	reg.CreateObj = modelObj
 
 	if options.BatchMethods == "" {
@@ -103,8 +119,7 @@ func RegModelWithOption(typeString string, modelObj models.IModel, options model
 	checked := make(map[string]bool)
 	checkFieldsThatAreStructsForBetterTags(modelObj, checked)
 
-	// panic(fmt.Sprintf("all checked %+v", checked))
-
+	return r
 }
 
 // If within the model there is a struct that doesn't implement marshaler (which is considered "atomic"),
@@ -176,18 +191,24 @@ func checkBetterTagValueIsValid(tagVal, fieldName, modelName string) {
 	}
 }
 
-// RegCustomCreate register custom create table funtion
-func RegCustomCreate(typeString string, modelObj models.IModel, f func(db *gorm.DB) (*gorm.DB, error)) {
-	reg := models.ModelRegistry[typeString] // pointer type
+// CustomCreate register custom create table funtion
+func (r *Registrar) CustomCreate(modelObj models.IModel, f func(db *gorm.DB) (*gorm.DB, error)) *Registrar {
+	reg := models.ModelRegistry[r.currentTypeString] // pointer type
 	reg.CreateObj = modelObj
 	reg.CreateMethod = f
+	return r
 }
 
-// RegBatchCRUPDHooks adds hookpoints which are called before
+// ----------------------------------
+// Batch hooks
+// ----------------------------------
+
+// BatchCRUPDHooks adds hookpoints which are called before
 // CUPD (no read) and after batch CRUPD. Either one can be left as nil
-func RegBatchCRUPDHooks(typeString string,
-	before func(bhpData models.BatchHookPointData, crupdOp models.CRUPDOp) error,
-	after func(bhpData models.BatchHookPointData, crupdOp models.CRUPDOp) error) {
+func (r *Registrar) BatchCRUPDHooks(
+	before func(bhpData models.BatchHookPointData, op models.CRUPDOp) error,
+	after func(bhpData models.BatchHookPointData, op models.CRUPDOp) error) *Registrar {
+	typeString := r.currentTypeString
 
 	if _, ok := models.ModelRegistry[typeString]; !ok {
 		models.ModelRegistry[typeString] = &models.Reg{}
@@ -195,39 +216,45 @@ func RegBatchCRUPDHooks(typeString string,
 
 	models.ModelRegistry[typeString].BeforeCUPD = before
 	models.ModelRegistry[typeString].AfterCRUPD = after
+
+	return r
 }
 
-// RegBatchInsertHooks adds hookpoints which are called before
+// BatchCreateHooks adds hookpoints which are called before
 // and after batch update. Either one can be left as nil
-func RegBatchInsertHooks(typeString string,
+func (r *Registrar) BatchCreateHooks(
 	before func(bhpData models.BatchHookPointData) error,
-	after func(bhpData models.BatchHookPointData) error) {
+	after func(bhpData models.BatchHookPointData) error) *Registrar {
+	typeString := r.currentTypeString
 
 	if _, ok := models.ModelRegistry[typeString]; !ok {
 		models.ModelRegistry[typeString] = &models.Reg{}
 	}
 
-	models.ModelRegistry[typeString].BeforeInsert = before
-	models.ModelRegistry[typeString].AfterInsert = after
+	models.ModelRegistry[typeString].BeforeCreate = before
+	models.ModelRegistry[typeString].AfterCreate = after
+	return r
 }
 
-// RegBatchReadHooks adds hookpoints which are called after
+// BatchReadHooks adds hookpoints which are called after
 // and read, can be left as nil
-func RegBatchReadHooks(typeString string,
-	after func(bhpData models.BatchHookPointData) error) {
+func (r *Registrar) BatchReadHooks(after func(bhpData models.BatchHookPointData) error) *Registrar {
+	typeString := r.currentTypeString
 
 	if _, ok := models.ModelRegistry[typeString]; !ok {
 		models.ModelRegistry[typeString] = &models.Reg{}
 	}
 
 	models.ModelRegistry[typeString].AfterRead = after
+	return r
 }
 
-// RegBatchUpdateHooks adds hookpoints which are called before
+// BatchUpdateHooks adds hookpoints which are called before
 // and after batch update. Either one can be left as nil
-func RegBatchUpdateHooks(typeString string,
+func (r *Registrar) BatchUpdateHooks(
 	before func(bhpData models.BatchHookPointData) error,
-	after func(bhpData models.BatchHookPointData) error) {
+	after func(bhpData models.BatchHookPointData) error) *Registrar {
+	typeString := r.currentTypeString
 
 	if _, ok := models.ModelRegistry[typeString]; !ok {
 		models.ModelRegistry[typeString] = &models.Reg{}
@@ -235,13 +262,16 @@ func RegBatchUpdateHooks(typeString string,
 
 	models.ModelRegistry[typeString].BeforeUpdate = before
 	models.ModelRegistry[typeString].AfterUpdate = after
+	return r
 }
 
-// RegBatchPatchHooks adds hookpoints which are called before
+// BatchPatchHooks adds hookpoints which are called before
 // and after batch update. Either one can be left as nil
-func RegBatchPatchHooks(typeString string,
+func (r *Registrar) BatchPatchHooks(
 	before func(bhpData models.BatchHookPointData) error,
-	after func(bhpData models.BatchHookPointData) error) {
+	after func(bhpData models.BatchHookPointData) error) *Registrar {
+
+	typeString := r.currentTypeString
 
 	if _, ok := models.ModelRegistry[typeString]; !ok {
 		models.ModelRegistry[typeString] = &models.Reg{}
@@ -249,13 +279,16 @@ func RegBatchPatchHooks(typeString string,
 
 	models.ModelRegistry[typeString].BeforePatch = before
 	models.ModelRegistry[typeString].AfterPatch = after
+	return r
 }
 
-// RegBatchDeleteHooks adds hookpoints which are called before
+// BatchDeleteHooks adds hookpoints which are called before
 // and after batch delete. Either one can be left as nil
-func RegBatchDeleteHooks(typeString string,
+func (r *Registrar) BatchDeleteHooks(
 	before func(bhpData models.BatchHookPointData) error,
-	after func(bhpData models.BatchHookPointData) error) {
+	after func(bhpData models.BatchHookPointData) error) *Registrar {
+
+	typeString := r.currentTypeString
 
 	if _, ok := models.ModelRegistry[typeString]; !ok {
 		models.ModelRegistry[typeString] = &models.Reg{}
@@ -263,15 +296,19 @@ func RegBatchDeleteHooks(typeString string,
 
 	models.ModelRegistry[typeString].BeforeDelete = before
 	models.ModelRegistry[typeString].AfterDelete = after
+	return r
 }
 
-// RegBatchRenderer register custom batch renderer (do your own output, not necessarily JSON)
-func RegBatchRenderer(typeString string, renderer func(roles []models.UserRole, who models.Who, modelObj []models.IModel) []byte) {
+// BatchRenderer register custom batch renderer (do your own output, not necessarily JSON)
+func (r *Registrar) BatchRenderer(renderer func(roles []models.UserRole, who models.Who, modelObj []models.IModel) []byte) *Registrar {
+	typeString := r.currentTypeString
+
 	if _, ok := models.ModelRegistry[typeString]; !ok {
 		models.ModelRegistry[typeString] = &models.Reg{}
 	}
 
 	models.ModelRegistry[typeString].BatchRenderer = renderer
+	return r
 }
 
 // AutoMigrate all dbs

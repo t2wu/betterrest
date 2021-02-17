@@ -99,8 +99,8 @@ func (mapper *BaseMapper) CreateMany(db *gorm.DB, who models.Who, typeString str
 		return nil, err
 	}
 
-	before := models.ModelRegistry[typeString].BeforeInsert
-	after := models.ModelRegistry[typeString].AfterInsert
+	before := models.ModelRegistry[typeString].BeforeCreate
+	after := models.ModelRegistry[typeString].AfterCreate
 	j := batchOpJob{
 		serv:         mapper.Service,
 		db:           db,
@@ -124,7 +124,7 @@ func (mapper *BaseMapper) GetOneWithID(db *gorm.DB, who models.Who, typeString s
 	// After CRUPD hook
 	if m, ok := modelObj.(models.IAfterCRUPD); ok {
 		hpdata := models.HookPointData{DB: db, Who: who, TypeString: typeString, Role: &role}
-		m.AfterCRUPD(hpdata, models.CRUPDOpRead)
+		m.AfterCRUPDDB(hpdata, models.CRUPDOpRead)
 	}
 
 	// AfterRead hook

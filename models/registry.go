@@ -68,7 +68,11 @@ type BatchHookPointData struct {
 
 // Reg is a registry item
 type Reg struct {
-	Typ reflect.Type
+	Typ        reflect.Type
+	TypVersion string // TypVersion is the Version of this model
+	// CreateObj is by default the one passed in when calling RegModel*
+	// It could be overriden with RegCustomCreate()
+	CreateObj IModel
 
 	// If type is link to user type, store type of ownership table (the one
 	// that links to user)
@@ -81,10 +85,6 @@ type Reg struct {
 
 	OrgTypeString string // If type has link to organization type, store organization typestring
 
-	// CreateObj is by default the one passed in when calling RegModel*
-	// It could be overriden with RegCustomCreate()
-	CreateObj IModel
-
 	// CreateMethod can be defined with RegCustomCreate()
 	CreateMethod func(db *gorm.DB) (*gorm.DB, error)
 
@@ -92,13 +92,13 @@ type Reg struct {
 	IdvMethods   string     //  ID end points, "RUD" for read one, update one, and delete one
 	Mapper       MapperType // Custmized mapper, default to datamapper.SharedOwnershipMapper
 
-	BeforeCUPD func(bhpData BatchHookPointData, crupdOp CRUPDOp) error // no R since model doens't exist yet
-	AfterCRUPD func(bhpData BatchHookPointData, crupdOp CRUPDOp) error
+	BeforeCUPD func(bhpData BatchHookPointData, op CRUPDOp) error // no R since model doens't exist yet
+	AfterCRUPD func(bhpData BatchHookPointData, op CRUPDOp) error
 
 	AfterRead func(bhpData BatchHookPointData) error
 
-	BeforeInsert func(bhpData BatchHookPointData) error
-	AfterInsert  func(bhpData BatchHookPointData) error
+	BeforeCreate func(bhpData BatchHookPointData) error
+	AfterCreate  func(bhpData BatchHookPointData) error
 
 	BeforeUpdate func(bhpData BatchHookPointData) error
 	AfterUpdate  func(bhpData BatchHookPointData) error

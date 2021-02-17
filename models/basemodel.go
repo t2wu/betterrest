@@ -350,16 +350,16 @@ type IAfterDelete interface {
 	AfterDeleteDB(hpdata HookPointData) error
 }
 
-// IAfterCRUPD supprots method to be called after data is after all CRUPD operations
-// This is called before the individual ops
-type IAfterCRUPD interface {
-	AfterCRUPD(hpdata HookPointData, op CRUPDOp) error
-}
-
 // IBeforeCUPD supprots method to be called before data is after all CRUPD operations
 // This is called before the individual ops
 type IBeforeCUPD interface {
-	BeforeCUPD(hpdata HookPointData, op CRUPDOp) error
+	BeforeCUPDDB(hpdata HookPointData, op CRUPDOp) error
+}
+
+// IAfterCRUPD supprots method to be called after data is after all CRUPD operations
+// This is called before the individual ops
+type IAfterCRUPD interface {
+	AfterCRUPDDB(hpdata HookPointData, op CRUPDOp) error
 }
 
 // IValidate supports validation with govalidator

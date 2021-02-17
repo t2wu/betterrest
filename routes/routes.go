@@ -66,6 +66,7 @@ func addRoute(r *gin.Engine, typeString string, reg *models.Reg, mapper datamapp
 
 // AddRESTRoutes adds all routes
 func AddRESTRoutes(r *gin.Engine) {
+	models.CreateBetterRESTTable()
 	for typestring, reg := range models.ModelRegistry {
 		var dm datamapper.IDataMapper
 		switch reg.Mapper {
@@ -86,7 +87,7 @@ func AddRESTRoutes(r *gin.Engine) {
 			addRoute(r, typestring, reg, dm)
 			fallthrough
 		case models.MapperTypeUser:
-			// don't add user one
+			// don't add the user one
 			break
 		default:
 			panic("adding unknow mapper")

@@ -118,7 +118,7 @@ func opCore(
 	// Before CRUPD hook
 	if m, ok := modelObj.(models.IBeforeCUPD); ok {
 		hpdata := models.HookPointData{DB: db, Who: who, TypeString: typeString, Cargo: &cargo}
-		if err := m.BeforeCUPD(hpdata, crupdOp); err != nil {
+		if err := m.BeforeCUPDDB(hpdata, crupdOp); err != nil {
 			return nil, err
 		}
 	}
@@ -144,7 +144,7 @@ func opCore(
 	// After CRUPD hook
 	if m, ok := modelObjReloaded.(models.IAfterCRUPD); ok {
 		hpdata := models.HookPointData{DB: db, Who: who, TypeString: typeString, Cargo: &cargo}
-		if err := m.AfterCRUPD(hpdata, crupdOp); err != nil {
+		if err := m.AfterCRUPDDB(hpdata, crupdOp); err != nil {
 			return nil, err
 		}
 		modelObjReloaded = m.(models.IModel)
