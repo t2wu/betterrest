@@ -159,7 +159,7 @@ func removeManyToManyAssociationTableElem(db *gorm.DB, modelObj models.IModel) e
 					allIds = append(allIds, idToDel.String())
 				}
 
-				stmt := fmt.Sprintf("DELETE FROM \"%s\" WHERE \"%s\" = ? AND \"%s\" IN (?)",
+				stmt := fmt.Sprintf("DELETE FROM \"%s\" WHERE \"%s\" = ? AND \"%s\" IN (%s)",
 					linkTableName, selfTableName+"_id", fieldTableName+"_id", uuidStmts)
 				err := db.Exec(stmt, allIds...).Error
 				if err != nil {
