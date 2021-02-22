@@ -236,6 +236,8 @@ func (mapper *BaseMapper) UpdateOneWithID(db *gorm.DB, who models.Who, typeStrin
 		return nil, err
 	}
 
+	log.Printf("oldMoelObj: %+v", oldModelObj)
+
 	// TODO: Huh? How do we do validation here?!
 	var before, after *string
 	if _, ok := modelObj.(models.IBeforeUpdate); ok {
@@ -298,6 +300,14 @@ func (mapper *BaseMapper) PatchOneWithID(db *gorm.DB, who models.Who, typeString
 		return nil, err
 	}
 
+	cargo := models.ModelCargo{}
+	if m, ok := oldModelObj.(models.IBeforePatchApply); ok {
+		hpdata := models.HookPointData{DB: db, Who: who, TypeString: typeString, Cargo: &cargo}
+		if err := m.BeforePatchApplyDB(hpdata); err != nil {
+			return nil, err
+		}
+	}
+
 	// Apply patch operations
 	modelObj, err := applyPatchCore(typeString, oldModelObj, jsonPatch)
 	if err != nil {
@@ -310,6 +320,7 @@ func (mapper *BaseMapper) PatchOneWithID(db *gorm.DB, who models.Who, typeString
 		b := "BeforePatchDB"
 		before = &b
 	}
+
 	if _, ok := modelObj.(models.IAfterPatch); ok {
 		a := "AfterPatchDB"
 		after = &a
@@ -323,6 +334,7 @@ func (mapper *BaseMapper) PatchOneWithID(db *gorm.DB, who models.Who, typeString
 		oldModelObj: oldModelObj,
 		modelObj:    modelObj,
 		crupdOp:     models.CRUPDOpPatch,
+		cargo:       &cargo,
 	}
 	return opCore(before, after, j, mapper.Service.UpdateOneCore)
 }
@@ -341,6 +353,17 @@ func (mapper *BaseMapper) PatchMany(db *gorm.DB, who models.Who, typeString stri
 	}
 
 	oldModelObjs, _, err := loadManyAndCheckBeforeModify(mapper.Service, db, who, typeString, ids, []models.UserRole{models.UserRoleAdmin})
+
+	// Hookpoint BEFORE BeforeCRUD and BeforePatch
+	// This is called BEFORE the actual patch
+	cargo := models.BatchHookCargo{}
+	beforeApply := models.ModelRegistry[typeString].BeforePatchApply
+	if beforeApply != nil {
+		bhpData := models.BatchHookPointData{Ms: oldModelObjs, DB: db, Who: who, TypeString: typeString, Cargo: &cargo}
+		if err := beforeApply(bhpData); err != nil {
+			return nil, err
+		}
+	}
 
 	// Now patch it
 	modelObjs := make([]models.IModel, len(oldModelObjs))
@@ -364,6 +387,7 @@ func (mapper *BaseMapper) PatchMany(db *gorm.DB, who models.Who, typeString stri
 		oldmodelObjs: oldModelObjs,
 		modelObjs:    modelObjs,
 		crupdOp:      models.CRUPDOpPatch,
+		cargo:        &cargo,
 	}
 	return batchOpCore(j, before, after, mapper.Service.UpdateOneCore)
 }

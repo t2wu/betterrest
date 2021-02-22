@@ -22,6 +22,7 @@ func NewEWKBPoint(coords []float64) *EWKBPoint {
 }
 
 // EWKBPoint encapsulate Point and handles value and scanners to work with Gorm
+// Fetch by .Point.X(), .Point.Y()
 type EWKBPoint struct {
 	Point wkb.Point
 }

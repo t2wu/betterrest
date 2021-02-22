@@ -268,6 +268,7 @@ func (r *Registrar) BatchUpdateHooks(
 // BatchPatchHooks adds hookpoints which are called before
 // and after batch update. Either one can be left as nil
 func (r *Registrar) BatchPatchHooks(
+	beforeApply func(bhpData models.BatchHookPointData) error,
 	before func(bhpData models.BatchHookPointData) error,
 	after func(bhpData models.BatchHookPointData) error) *Registrar {
 
@@ -277,6 +278,7 @@ func (r *Registrar) BatchPatchHooks(
 		models.ModelRegistry[typeString] = &models.Reg{}
 	}
 
+	models.ModelRegistry[typeString].BeforePatchApply = beforeApply
 	models.ModelRegistry[typeString].BeforePatch = before
 	models.ModelRegistry[typeString].AfterPatch = after
 	return r

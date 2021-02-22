@@ -20,6 +20,7 @@ type batchOpJob struct {
 	typeString   string
 	oldmodelObjs []models.IModel // use for update (need to load and override for pegged fields)
 	modelObjs    []models.IModel // current field value from the user if update, or from the loaded field if delete
+	cargo        *models.BatchHookCargo
 	crupdOp      models.CRUPDOp
 }
 
@@ -29,14 +30,18 @@ func batchOpCore(job batchOpJob,
 	taskFunc func(db *gorm.DB, who models.Who, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObj models.IModel) (models.IModel, error),
 ) ([]models.IModel, error) {
 
-	db, who, typeString, modelObjs, oldmodelObjs, crupdOp := job.db, job.who, job.typeString, job.modelObjs, job.oldmodelObjs, job.crupdOp
+	db, who, typeString, modelObjs, oldmodelObjs, cargo, crupdOp := job.db, job.who, job.typeString,
+		job.modelObjs, job.oldmodelObjs, job.cargo, job.crupdOp
 
 	ms := make([]models.IModel, len(modelObjs))
-	cargo := models.BatchHookCargo{}
+
+	if cargo == nil {
+		cargo = &models.BatchHookCargo{}
+	}
 
 	// After CUPD hook
 	if before := models.ModelRegistry[typeString].BeforeCUPD; before != nil {
-		bhpData := models.BatchHookPointData{Ms: modelObjs, DB: db, Who: who, TypeString: typeString, Cargo: &cargo}
+		bhpData := models.BatchHookPointData{Ms: modelObjs, DB: db, Who: who, TypeString: typeString, Cargo: cargo}
 		if err := before(bhpData, crupdOp); err != nil {
 			return nil, err
 		}
@@ -45,7 +50,7 @@ func batchOpCore(job batchOpJob,
 	// Before batch update hookpoint
 	// if before := models.ModelRegistry[typeString].BeforeUpdate; before != nil {
 	if before != nil {
-		bhpData := models.BatchHookPointData{Ms: modelObjs, DB: db, Who: who, TypeString: typeString, Cargo: &cargo}
+		bhpData := models.BatchHookPointData{Ms: modelObjs, DB: db, Who: who, TypeString: typeString, Cargo: cargo}
 		if err := before(bhpData); err != nil {
 			return nil, err
 		}
@@ -72,7 +77,7 @@ func batchOpCore(job batchOpJob,
 
 	// After CRUPD hook
 	if after := models.ModelRegistry[typeString].AfterCRUPD; after != nil {
-		bhpData := models.BatchHookPointData{Ms: ms, DB: db, Who: who, TypeString: typeString, Cargo: &cargo}
+		bhpData := models.BatchHookPointData{Ms: ms, DB: db, Who: who, TypeString: typeString, Cargo: cargo}
 		if err := after(bhpData, crupdOp); err != nil {
 			return nil, err
 		}
@@ -81,7 +86,7 @@ func batchOpCore(job batchOpJob,
 	// After batch update hookpoint
 	// if after := models.ModelRegistry[typeString].AfterUpdate; after != nil {
 	if after != nil {
-		bhpData := models.BatchHookPointData{Ms: ms, DB: db, Who: who, TypeString: typeString, Cargo: &cargo}
+		bhpData := models.BatchHookPointData{Ms: ms, DB: db, Who: who, TypeString: typeString, Cargo: cargo}
 		if err := after(bhpData); err != nil {
 			return nil, err
 		}
@@ -97,8 +102,9 @@ type opJob struct {
 	who         models.Who
 	typeString  string
 	crupdOp     models.CRUPDOp
-	oldModelObj models.IModel // use for update (need to load and override for pegged fields)
-	modelObj    models.IModel // current field value from the user if update, or from the loaded field if delete
+	oldModelObj models.IModel      // use for update (need to load and override for pegged fields)
+	modelObj    models.IModel      // current field value from the user if update, or from the loaded field if delete
+	cargo       *models.ModelCargo // This only is used because we may have an even earlier hookpoint for PatchApply
 }
 
 // before and after are strings, because once we load it from the DB the hooks
@@ -111,13 +117,16 @@ func opCore(
 	job opJob,
 	taskFun func(db *gorm.DB, who models.Who, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObj models.IModel) (models.IModel, error),
 ) (models.IModel, error) {
-	db, who, typeString, oldModelObj, modelObj, crupdOp := job.db, job.who, job.typeString, job.oldModelObj, job.modelObj, job.crupdOp
+	db, who, typeString, oldModelObj, modelObj, crupdOp, cargo := job.db, job.who,
+		job.typeString, job.oldModelObj, job.modelObj, job.crupdOp, job.cargo
 
-	cargo := models.ModelCargo{}
+	if cargo == nil {
+		cargo = &models.ModelCargo{}
+	}
 
 	// Before CRUPD hook
 	if m, ok := modelObj.(models.IBeforeCUPD); ok {
-		hpdata := models.HookPointData{DB: db, Who: who, TypeString: typeString, Cargo: &cargo}
+		hpdata := models.HookPointData{DB: db, Who: who, TypeString: typeString, Cargo: cargo}
 		if err := m.BeforeCUPDDB(hpdata, crupdOp); err != nil {
 			return nil, err
 		}
@@ -127,7 +136,7 @@ func opCore(
 	// It is now expected that the hookpoint for before expect that the patch
 	// gets applied to the JSON, but not before actually updating to DB.
 	if beforeFuncName != nil {
-		hpdata := models.HookPointData{DB: db, Who: who, TypeString: typeString, Cargo: &cargo}
+		hpdata := models.HookPointData{DB: db, Who: who, TypeString: typeString, Cargo: cargo}
 		result := reflect.ValueOf(modelObj).MethodByName(*beforeFuncName).Call([]reflect.Value{reflect.ValueOf(hpdata)})
 		if err, ok := result[0].Interface().(error); ok {
 			return nil, err
@@ -143,7 +152,7 @@ func opCore(
 
 	// After CRUPD hook
 	if m, ok := modelObjReloaded.(models.IAfterCRUPD); ok {
-		hpdata := models.HookPointData{DB: db, Who: who, TypeString: typeString, Cargo: &cargo}
+		hpdata := models.HookPointData{DB: db, Who: who, TypeString: typeString, Cargo: cargo}
 		if err := m.AfterCRUPDDB(hpdata, crupdOp); err != nil {
 			return nil, err
 		}
@@ -152,7 +161,7 @@ func opCore(
 
 	// After hook
 	if afterFuncName != nil {
-		hpdata := models.HookPointData{DB: db, Who: who, TypeString: typeString, Cargo: &cargo}
+		hpdata := models.HookPointData{DB: db, Who: who, TypeString: typeString, Cargo: cargo}
 		result := reflect.ValueOf(modelObjReloaded).MethodByName(*afterFuncName).Call([]reflect.Value{reflect.ValueOf(hpdata)})
 		if err, ok := result[0].Interface().(error); ok {
 			return nil, err

@@ -315,6 +315,12 @@ type IBeforeUpdate interface {
 	BeforeUpdateDB(hpdata HookPointData) error
 }
 
+// IBeforePatchApply supports method to be called before data is patched in the database
+// And also before the patch is applied. This comes before BeforePatchDB
+type IBeforePatchApply interface {
+	BeforePatchApplyDB(hpdata HookPointData) error
+}
+
 // IBeforePatch supports method to be called before data is patched in the database
 type IBeforePatch interface {
 	BeforePatchDB(hpdata HookPointData) error
