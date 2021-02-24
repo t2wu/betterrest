@@ -74,7 +74,6 @@ func (r *Registrar) ModelWithOption(modelObj models.IModel, options models.RegOp
 		reg.IdvMethods = options.IdvMethods
 	}
 
-	// Default 0 is ownershipmapper
 	reg.Mapper = options.Mapper
 
 	switch options.Mapper {

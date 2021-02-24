@@ -85,7 +85,7 @@ func AddRESTRoutes(r *gin.Engine) {
 		case models.MapperTypeViaOwnership:
 			dm = datamapper.SharedOwnershipMapper()
 			addRoute(r, typestring, reg, dm)
-			fallthrough
+			break
 		case models.MapperTypeUser:
 			// don't add the user one
 			break

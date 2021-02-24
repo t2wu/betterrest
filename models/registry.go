@@ -27,11 +27,11 @@ var UserTyp reflect.Type
 type MapperType int
 
 const (
-	// MapperTypeUser is user itself
-	MapperTypeUser MapperType = iota
-
 	// MapperTypeViaOwnership is for type which user owns something
-	MapperTypeViaOwnership
+	MapperTypeViaOwnership MapperType = iota
+
+	// MapperTypeUser is user itself
+	MapperTypeUser
 
 	// MapperTypeViaOrganization is for type where an organization owns something
 	MapperTypeViaOrganization
