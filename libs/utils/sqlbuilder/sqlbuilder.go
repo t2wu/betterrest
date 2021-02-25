@@ -15,11 +15,29 @@ import (
 // Something like this.
 // Search by dense_rank
 
+// FilterPredicate is the type about greater than, less than, etc
+type FilterPredicate string
+
+const (
+	// FilterPredicateEQ is equals
+	FilterPredicateEQ FilterPredicate = "="
+	// FilterPredicateLT is less than
+	FilterPredicateLT FilterPredicate = "<"
+	// FilterPredicateLTEQ is less than or equal to
+	FilterPredicateLTEQ FilterPredicate = "<="
+	// FilterPredicateGT is equal to
+	FilterPredicateGT FilterPredicate = ">"
+	// FilterPredicateGTEQ is greater than or equal to
+	FilterPredicateGTEQ FilterPredicate = ">="
+)
+
 // FilterCriteria is the criteria to query for first-level field
 type FilterCriteria struct {
 	// TableName   string
-	FieldName   string   // Field name to match
-	FieldValues []string // Criteria to match
+	FieldName   string            // Field name to match
+	FieldValues []string          // Criteria to match
+	Predicates  []FilterPredicate // greater than less than, etc.
+	// actually if there is predicate that's not FilterPredicateEQ, you can't do FilterPredicateEQ
 }
 
 // TwoLevelFilterCriteria is the criteria to query for inner level field
@@ -39,13 +57,28 @@ func AddWhereStmt(db *gorm.DB, typeString string, tableName string, filter Filte
 		return nil, err
 	}
 
-	fiterdFieldValues, anyNull := filterNullValue(transformedFieldValues)
+	filterdFieldValues, anyNull := filterNullValue(transformedFieldValues)
 
-	// Gorm will actually use one WHERE clause with AND statements if Where is called repeatedly
-	whereStmt := inOpWithFields(tableName, strcase.SnakeCase(filter.FieldName),
-		len(fiterdFieldValues), anyNull)
+	// If there is any equality comparison other than equal
+	// there shouldn't be any IN then
+	hasEquality := false
+	for _, predicate := range filter.Predicates {
+		if predicate == FilterPredicateEQ {
+			hasEquality = true
+		}
+	}
 
-	db = db.Where(whereStmt, fiterdFieldValues...)
+	var whereStmt string
+	if hasEquality {
+		// Gorm will actually use one WHERE clause with AND statements if Where is called repeatedly
+		whereStmt = inOpWithFields(tableName, strcase.SnakeCase(filter.FieldName),
+			len(filterdFieldValues), anyNull)
+	} else {
+		whereStmt = comparisonOpWithFields(tableName, strcase.SnakeCase(filter.FieldName),
+			len(filterdFieldValues), filter.Predicates)
+	}
+
+	db = db.Where(whereStmt, filterdFieldValues...)
 	return db, nil
 }
 
@@ -179,6 +212,43 @@ func inOpWithFields(tableName string, fieldName string, numfieldValues int, chec
 	if checkNull {
 		stmt.WriteString(fmt.Sprintf("%s IS NULL", tableAndField))
 	}
+
+	return stmt.String()
+}
+
+func comparisonOpWithFields(tableName string, fieldName string, numfieldValues int, predicates []FilterPredicate) string {
+	tableName = "\"" + tableName + "\""
+	fieldName = "\"" + fieldName + "\""
+	tableAndField := fmt.Sprintf("%s.%s", tableName, fieldName)
+
+	// A simple IN clause is OK except when I need to check if the field is an null value
+	// then the IN clause won't work, need to do
+	// (fieldName IN ('fieldValue1', 'fieldValue2') OR fieldName IS NULL)
+
+	// Use AND, if user wants or they have to run twice
+	// fieldName > 0 AND fieldName < 3
+
+	var stmt strings.Builder
+	predicate := predicates[0]
+	stmt.WriteString(fmt.Sprintf("%s %s ?", tableAndField, string(predicate)))
+
+	for _, predicate := range predicates[1:] {
+		stmt.WriteString(fmt.Sprintf(" AND %s %s ?", tableAndField, string(predicate)))
+	}
+
+	// if numfieldValues >= 1 {
+	// 	questionMarks := strings.Repeat("?,", numfieldValues)
+	// 	questionMarks = questionMarks[:len(questionMarks)-1]
+	// 	stmt.WriteString(fmt.Sprintf("%s IN (%s)", tableAndField, questionMarks))
+	// }
+
+	// if numfieldValues >= 1 && checkNull {
+	// 	stmt.WriteString(" OR ")
+	// }
+
+	// if checkNull {
+	// 	stmt.WriteString(fmt.Sprintf("%s IS NULL", tableAndField))
+	// }
 
 	return stmt.String()
 }

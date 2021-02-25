@@ -2,6 +2,8 @@ package datamapper
 
 import (
 	"errors"
+	"fmt"
+	"log"
 	"strings"
 
 	"github.com/jinzhu/gorm"
@@ -24,9 +26,44 @@ func constructDbFromURLFieldQuery(db *gorm.DB, typeString string, urlParams map[
 				continue
 			}
 
+			predicates := make([]sqlbuilder.FilterPredicate, len(fieldValues))
+
+			// Check if there is any predicate
+			hasFilterPredicateEQ := false
+			hasFilterPredicateNotEQ := false
+			for i, fieldValue := range fieldValues {
+				if strings.HasPrefix(fieldValue, "<") {
+					predicates[i] = sqlbuilder.FilterPredicateLT
+					fieldValues[i] = fieldValue[1:]
+					hasFilterPredicateNotEQ = true
+				} else if strings.HasPrefix(fieldValue, "<=") {
+					predicates[i] = sqlbuilder.FilterPredicateLTEQ
+					fieldValues[i] = fieldValue[2:]
+					hasFilterPredicateNotEQ = true
+				} else if strings.HasPrefix(fieldValue, ">") {
+					predicates[i] = sqlbuilder.FilterPredicateGT
+					fieldValues[i] = fieldValue[1:]
+					hasFilterPredicateNotEQ = true
+				} else if strings.HasPrefix(fieldValue, ">=") {
+					predicates[i] = sqlbuilder.FilterPredicateGTEQ
+					fieldValues[i] = fieldValue[2:]
+					hasFilterPredicateNotEQ = true
+				} else {
+					predicates[i] = sqlbuilder.FilterPredicateEQ
+					hasFilterPredicateEQ = true
+				}
+			}
+
+			log.Printf("predicates: %+v\n", predicates)
+			// Cannot both be true
+			if hasFilterPredicateEQ && hasFilterPredicateNotEQ {
+				return db, fmt.Errorf("cannot use both equality and other comparisons")
+			}
+
 			criteria := sqlbuilder.FilterCriteria{
 				FieldName:   fieldName,
 				FieldValues: fieldValues,
+				Predicates:  predicates,
 			}
 
 			// We used the fact that repeatedly call AddWhereStmt genereates only ONE WHERE with multiple filters
