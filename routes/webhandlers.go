@@ -17,6 +17,7 @@ import (
 	"github.com/t2wu/betterrest/datamapper"
 	"github.com/t2wu/betterrest/db"
 	"github.com/t2wu/betterrest/libs/security"
+	"github.com/t2wu/betterrest/libs/utils/transact"
 	"github.com/t2wu/betterrest/models"
 	"github.com/t2wu/betterrest/models/tools"
 
@@ -379,7 +380,6 @@ func CreateHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin
 	return func(c *gin.Context) {
 		w, r := c.Writer, c.Request
 
-		var err error
 		var modelObj models.IModel
 
 		who := WhoFromContext(r)
@@ -390,50 +390,50 @@ func CreateHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin
 			return
 		}
 
-		tx := db.Shared().Begin()
-
-		defer func(tx *gorm.DB) {
+		defer func() {
 			if r := recover(); r != nil {
-				tx.Rollback()
 				debug.PrintStack()
-				render.Render(w, c.Request, NewErrInternalServerError(nil))
 				fmt.Println("Panic in CreateHandler", r)
 			}
-		}(tx)
+		}()
 
 		if *isBatch {
-			if modelObjs, err = mapper.CreateMany(tx, who, typeString, modelObjs); err != nil {
-				// FIXME, there is more than one type of error here
-				// How do I output more detailed messages by inspecting error?
-				tx.Rollback()
-				log.Println("Error in CreateMany ErrCreate:", typeString, err)
-				render.Render(w, r, NewErrCreate(err))
-				return
-			}
+			err := transact.Transact(db.Shared(), func(tx *gorm.DB) error {
+				var err2 error
+				if modelObjs, err2 = mapper.CreateMany(tx, who, typeString, modelObjs); err2 != nil {
+					log.Println("Error in CreateMany ErrCreate:", typeString, err2)
+					return err2
+				}
 
-			tx.Commit()
-
-			// admin is 0 so it's ok
-			roles := make([]models.UserRole, 0, 20)
-			for i := 0; i < len(modelObjs); i++ {
-				roles = append(roles, models.UserRoleAdmin)
+				// renderModelSlice(w, r, typeString, modelObjs, roles, nil, who)
+				return nil
+			})
+			if err != nil {
+				render.Render(w, c.Request, NewErrCreate(err))
+			} else {
+				roles := make([]models.UserRole, len(modelObjs), len(modelObjs))
+				// admin is 0 so it's ok
+				for i := 0; i < len(modelObjs); i++ {
+					roles[i] = models.UserRoleAdmin
+				}
+				renderModelSlice(w, r, typeString, modelObjs, roles, nil, who)
 			}
-			renderModelSlice(w, r, typeString, modelObjs, roles, nil, who)
 		} else {
-			if modelObj, err = mapper.CreateOne(tx, who, typeString, modelObjs[0]); err != nil {
-				// FIXME, there is more than one type of error here
-				// How do I output more detailed messages by inspecting error?
-				tx.Rollback()
-				log.Println("Error in CreateOne ErrCreate:", typeString, err)
-				render.Render(w, r, NewErrCreate(err))
-				return
+			var err2 error
+			err := transact.Transact(db.Shared(), func(tx *gorm.DB) error {
+				if modelObj, err2 = mapper.CreateOne(tx, who, typeString, modelObjs[0]); err2 != nil {
+					log.Println("Error in CreateOne ErrCreate:", typeString, err2)
+					return err2
+				}
+				return nil
+			})
+
+			if err != nil {
+				render.Render(w, c.Request, NewErrCreate(err))
+			} else {
+				renderModel(w, r, typeString, modelObj, models.UserRoleAdmin, who)
 			}
-
-			tx.Commit()
-			renderModel(w, r, typeString, modelObj, models.UserRoleAdmin, who)
 		}
-
-		return
 	}
 }
 
