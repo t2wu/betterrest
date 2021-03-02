@@ -1,6 +1,8 @@
 package transact
 
-import "github.com/jinzhu/gorm"
+import (
+	"github.com/jinzhu/gorm"
+)
 
 // Transact wraps in a trasaction
 // https://stackoverflow.com/questions/16184238/database-sql-tx-detecting-commit-or-rollback

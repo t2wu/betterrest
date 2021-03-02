@@ -273,7 +273,7 @@ func UserLoginHandler(typeString string) func(c *gin.Context) {
 			payload, err = v.AfterLogin(hpdata, payload)
 			if err != nil {
 				// tx.Rollback() no rollback, actually, commit!
-				tx.Commit()
+				tx.Commit() // technically this can return err, too
 
 				log.Println("Error in UserLogin calling AfterLogin:", typeString, err)
 				render.Render(w, r, NewErrNotFound(err))
@@ -281,7 +281,10 @@ func UserLoginHandler(typeString string) func(c *gin.Context) {
 			}
 		}
 
-		tx.Commit()
+		if err := tx.Commit().Error; err != nil {
+			render.Render(w, c.Request, NewErrInternalServerError(nil))
+			return
+		}
 
 		var jsn []byte
 		if jsn, err = json.Marshal(payload); err != nil {
@@ -341,7 +344,6 @@ func ReadAllHandler(typeString string, mapper datamapper.IDataMapper) func(c *gi
 
 		who := WhoFromContext(r)
 
-		var modelObjs []models.IModel
 		options := make(map[datamapper.URLParam]interface{})
 
 		if options, err = getOptionByParsingURL(r); err != nil {
@@ -349,28 +351,31 @@ func ReadAllHandler(typeString string, mapper datamapper.IDataMapper) func(c *gi
 			return
 		}
 
-		var roles []models.UserRole
-		tx := db.Shared().Begin()
-
-		defer func(tx *gorm.DB) {
+		defer func() {
 			if r := recover(); r != nil {
-				tx.Rollback()
 				debug.PrintStack()
 				render.Render(w, c.Request, NewErrInternalServerError(nil))
 				fmt.Println("Panic in ReadAllHandler", r)
 			}
-		}(tx)
+		}()
 
+		var modelObjs []models.IModel
+		var roles []models.UserRole
 		var no *int
-		if modelObjs, roles, no, err = mapper.GetAll(tx, who, typeString, options); err != nil {
-			tx.Rollback()
-			log.Println("Error in ReadAllHandler ErrNotFound:", typeString, err)
-			render.Render(w, r, NewErrNotFound(err))
+		err = transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
+			if modelObjs, roles, no, err = mapper.GetAll(tx, who, typeString, options); err != nil {
+				log.Println("Error in ReadAllHandler:", typeString, err)
+				return err
+			}
 			return
+		})
+
+		if err != nil {
+			render.Render(w, r, NewErrInternalServerError(err))
+		} else {
+			renderModelSlice(w, r, typeString, modelObjs, roles, no, who)
 		}
 
-		tx.Commit()
-		renderModelSlice(w, r, typeString, modelObjs, roles, no, who)
 		return
 	}
 }
@@ -401,7 +406,7 @@ func CreateHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin
 			err := transact.Transact(db.Shared(), func(tx *gorm.DB) error {
 				var err2 error
 				if modelObjs, err2 = mapper.CreateMany(tx, who, typeString, modelObjs); err2 != nil {
-					log.Println("Error in CreateMany ErrCreate:", typeString, err2)
+					log.Println("Error in CreateMany:", typeString, err2)
 					return err2
 				}
 
@@ -422,7 +427,7 @@ func CreateHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin
 			var err2 error
 			err := transact.Transact(db.Shared(), func(tx *gorm.DB) error {
 				if modelObj, err2 = mapper.CreateOne(tx, who, typeString, modelObjs[0]); err2 != nil {
-					log.Println("Error in CreateOne ErrCreate:", typeString, err2)
+					log.Println("Error in CreateOne:", typeString, err2)
 					return err2
 				}
 				return nil
@@ -451,27 +456,32 @@ func ReadOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *gi
 
 		who := WhoFromContext(r)
 
-		tx := db.Shared().Begin()
-
-		defer func(tx *gorm.DB) {
+		defer func() {
 			if r := recover(); r != nil {
-				tx.Rollback()
 				debug.PrintStack()
 				render.Render(w, c.Request, NewErrInternalServerError(nil))
 				fmt.Println("Panic in ReadOneHandler", r)
 			}
-		}(tx)
+		}()
 
-		modelObj, role, err := mapper.GetOneWithID(tx, who, typeString, id)
+		var modelObj models.IModel
+		var role models.UserRole
+		err := transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
+			if modelObj, role, err = mapper.GetOneWithID(tx, who, typeString, id); err != nil {
+				log.Println("Error in ReadOneHandler ErrNotFound:", typeString, err)
+				return err
+			}
+			return nil
+		})
 
-		if err != nil {
-			tx.Rollback()
-			log.Println("Error in ReadOneHandler ErrNotFound:", typeString, err)
+		if err != nil && gorm.IsRecordNotFoundError(err) {
 			render.Render(w, r, NewErrNotFound(err))
-			return
+		} else if err != nil {
+			render.Render(w, r, NewErrInternalServerError(err))
+		} else {
+			renderModel(w, r, typeString, modelObj, role, who)
 		}
-		tx.Commit()
-		renderModel(w, r, typeString, modelObj, role, who)
+
 		return
 	}
 }
@@ -502,27 +512,29 @@ func UpdateOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 			return
 		}
 
-		tx := db.Shared().Begin()
-
-		defer func(tx *gorm.DB) {
+		defer func() {
 			if r := recover(); r != nil {
-				tx.Rollback()
 				debug.PrintStack()
 				render.Render(w, c.Request, NewErrInternalServerError(nil))
 				fmt.Println("Panic in UpdateOneHandler", r)
 			}
-		}(tx)
+		}()
 
-		modelObj, err := mapper.UpdateOneWithID(tx, who, typeString, modelObj, id)
+		var modelObj2 models.IModel
+		err := transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
+			if modelObj2, err = mapper.UpdateOneWithID(tx, who, typeString, modelObj, id); err != nil {
+				log.Println("Error in UpdateOneHandler ErrUpdate:", typeString, err)
+				return err
+			}
+			return nil
+		})
+
 		if err != nil {
-			tx.Rollback()
-			log.Println("Error in UpdateOneHandler ErrUpdate:", typeString, err)
 			render.Render(w, r, NewErrUpdate(err))
-			return
+		} else {
+			renderModel(w, r, typeString, modelObj2, models.UserRoleAdmin, who)
 		}
 
-		tx.Commit()
-		renderModel(w, r, typeString, modelObj, models.UserRoleAdmin, who)
 		return
 	}
 }
@@ -541,32 +553,34 @@ func UpdateManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 			return
 		}
 
-		tx := db.Shared().Begin()
-
-		defer func(tx *gorm.DB) {
+		defer func() {
 			if r := recover(); r != nil {
-				tx.Rollback()
 				debug.PrintStack()
 				render.Render(w, c.Request, NewErrInternalServerError(nil))
 				fmt.Println("Panic in UpdateManyHandler", r)
 			}
-		}(tx)
+		}()
 
-		modelObjs, err := mapper.UpdateMany(tx, who, typeString, modelObjs)
+		var modelObjs2 []models.IModel
+		err := transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
+			if modelObjs2, err = mapper.UpdateMany(tx, who, typeString, modelObjs); err != nil {
+				log.Println("Error in UpdateManyHandler:", typeString, err)
+				return err
+			}
+
+			return nil
+		})
+
 		if err != nil {
-			tx.Rollback()
-			log.Println("Error in UpdateManyHandler ErrUpdate:", typeString, err)
 			render.Render(w, r, NewErrUpdate(err))
-			return
+		} else {
+			roles := make([]models.UserRole, len(modelObjs2), len(modelObjs2))
+			for i := 0; i < len(roles); i++ {
+				roles[i] = models.UserRoleAdmin
+			}
+			renderModelSlice(w, r, typeString, modelObjs2, roles, nil, who)
 		}
 
-		tx.Commit()
-		roles := make([]models.UserRole, len(modelObjs), len(modelObjs))
-		for i := 0; i < len(roles); i++ {
-			roles[i] = models.UserRoleAdmin
-		}
-
-		renderModelSlice(w, r, typeString, modelObjs, roles, nil, who)
 		return
 	}
 }
@@ -592,34 +606,36 @@ func PatchOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *g
 
 		who := WhoFromContext(r)
 
-		tx := db.Shared().Begin()
-
-		defer func(tx *gorm.DB) {
+		defer func() {
 			if r := recover(); r != nil {
-				tx.Rollback()
 				debug.PrintStack()
 				render.Render(w, c.Request, NewErrInternalServerError(nil))
 				fmt.Println("Panic in PatchOneHandler", r)
 			}
-		}(tx)
+		}()
 
-		modelObj, err := mapper.PatchOneWithID(tx, who, typeString, jsonPatch, id)
+		var modelObj models.IModel
+		err = transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
+			if modelObj, err = mapper.PatchOneWithID(tx, who, typeString, jsonPatch, id); err != nil {
+				log.Println("Error in PatchOneHandler:", typeString, err)
+				return err
+			}
+
+			return nil
+		})
+
 		if err != nil {
-			tx.Rollback()
-			log.Println("Error in PatchOneHandler ErrUpdate:", typeString, err)
 			render.Render(w, r, NewErrPatch(err))
-			return
+		} else {
+			renderModel(w, r, typeString, modelObj, models.UserRoleAdmin, who)
 		}
-
-		tx.Commit()
-		renderModel(w, r, typeString, modelObj, models.UserRoleAdmin, who)
-		return
 
 		// type JSONPatch struct {
 		// 	Op    string
 		// 	Path  string
 		// 	Value interface{}
 		// }
+		return
 	}
 }
 
@@ -637,32 +653,33 @@ func PatchManyHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 			return
 		}
 
-		tx := db.Shared().Begin()
-
-		defer func(tx *gorm.DB) {
+		defer func() {
 			if r := recover(); r != nil {
-				tx.Rollback()
 				debug.PrintStack()
 				render.Render(w, c.Request, NewErrInternalServerError(nil))
 				fmt.Println("Panic in PatchManyHandler", r)
 			}
-		}(tx)
+		}()
 
-		modelObjs, err := mapper.PatchMany(tx, who, typeString, jsonIDPatches)
+		var modelObjs []models.IModel
+		err := transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
+			if modelObjs, err = mapper.PatchMany(tx, who, typeString, jsonIDPatches); err != nil {
+				log.Println("Error in PatchManyHandler:", typeString, err)
+				return err
+			}
+			return nil
+		})
+
 		if err != nil {
-			tx.Rollback()
-			log.Println("Error in PatchManyHandler ErrUpdate:", typeString, err)
 			render.Render(w, r, NewErrUpdate(err))
-			return
+		} else {
+			roles := make([]models.UserRole, len(modelObjs), len(modelObjs))
+			for i := 0; i < len(roles); i++ {
+				roles[i] = models.UserRoleAdmin
+			}
+			renderModelSlice(w, r, typeString, modelObjs, roles, nil, who)
 		}
 
-		tx.Commit()
-		roles := make([]models.UserRole, len(modelObjs), len(modelObjs))
-		for i := 0; i < len(roles); i++ {
-			roles[i] = models.UserRoleAdmin
-		}
-
-		renderModelSlice(w, r, typeString, modelObjs, roles, nil, who)
 		return
 	}
 }
@@ -681,30 +698,29 @@ func DeleteOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 
 		who := WhoFromContext(r)
 
-		tx := db.Shared().Begin()
-
-		defer func(tx *gorm.DB) {
+		defer func() {
 			if r := recover(); r != nil {
-				tx.Rollback()
 				debug.PrintStack()
 				render.Render(w, c.Request, NewErrInternalServerError(nil))
 				fmt.Println("Panic in DeleteOneHandler", r)
 			}
-		}(tx)
+		}()
 
-		modelObj, err := mapper.DeleteOneWithID(tx, who, typeString, id)
-		if err != nil {
-			tx.Rollback()
-			log.Printf("Error in DeleteOneHandler ErrDelete: %s %+v\n", typeString, err)
-			// if pqerr, ok := err.(*pq.Error); ok {
-			// 	log.Printf("Code: %s, Message: %s\n", pqerr.Code, pqerr.Message)
-			// }
-			render.Render(w, r, NewErrDelete(err))
+		var modelObj models.IModel
+		err := transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
+			if modelObj, err = mapper.DeleteOneWithID(tx, who, typeString, id); err != nil {
+				log.Printf("Error in DeleteOneHandler: %s %+v\n", typeString, err)
+				return err
+			}
 			return
+		})
+
+		if err != nil {
+			render.Render(w, r, NewErrDelete(err))
+		} else {
+			renderModel(w, r, typeString, modelObj, models.UserRoleAdmin, who)
 		}
 
-		tx.Commit()
-		renderModel(w, r, typeString, modelObj, models.UserRoleAdmin, who)
 		return
 	}
 }
@@ -714,7 +730,6 @@ func DeleteManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 	return func(c *gin.Context) {
 		w, r := c.Writer, c.Request
 		log.Println("DeleteManyHandler called")
-		var err error
 
 		who := WhoFromContext(r)
 
@@ -725,33 +740,32 @@ func DeleteManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 			return
 		}
 
-		tx := db.Shared().Begin() // transaction
-
-		defer func(tx *gorm.DB) {
+		defer func() {
 			if r := recover(); r != nil {
-				tx.Rollback()
 				debug.PrintStack()
 				render.Render(w, c.Request, NewErrInternalServerError(nil))
 				fmt.Println("Panic in DeleteManyHandler", r)
 			}
-		}(tx)
+		}()
 
-		modelObjs, err = mapper.DeleteMany(tx, who, typeString, modelObjs)
+		err := transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
+			if modelObjs, err = mapper.DeleteMany(tx, who, typeString, modelObjs); err != nil {
+				log.Println("Error in DeleteOneHandler ErrDelete:", typeString, err)
+				return err
+			}
+			return nil
+		})
+
 		if err != nil {
-			tx.Rollback()
-			log.Println("Error in DeleteOneHandler ErrDelete:", typeString, err)
 			render.Render(w, r, NewErrDelete(err))
-			return
+		} else {
+			roles := make([]models.UserRole, len(modelObjs), len(modelObjs))
+			for i := 0; i < len(roles); i++ {
+				roles[i] = models.UserRoleAdmin
+			}
+			renderModelSlice(w, r, typeString, modelObjs, roles, nil, who)
 		}
 
-		tx.Commit()
-
-		roles := make([]models.UserRole, len(modelObjs), len(modelObjs))
-		for i := 0; i < len(roles); i++ {
-			roles[i] = models.UserRoleAdmin
-		}
-
-		renderModelSlice(w, r, typeString, modelObjs, roles, nil, who)
 		return
 	}
 }
@@ -775,27 +789,29 @@ func ChangeEmailPasswordHandler(typeString string, mapper datamapper.IChangeEmai
 			return
 		}
 
-		tx := db.Shared().Begin()
-
-		defer func(tx *gorm.DB) {
+		defer func() {
 			if r := recover(); r != nil {
-				tx.Rollback()
 				debug.PrintStack()
 				render.Render(w, c.Request, NewErrInternalServerError(nil))
 				fmt.Println("Panic in ChangePasswordHandler", r)
 			}
-		}(tx)
+		}()
 
-		modelObj, err := mapper.ChangeEmailPasswordWithID(tx, who, typeString, modelObj, id)
+		var modelObj2 models.IModel
+		err := transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
+			if modelObj2, err = mapper.ChangeEmailPasswordWithID(tx, who, typeString, modelObj, id); err != nil {
+				log.Println("Error in ChangeEmailPasswordHandler:", typeString, err)
+				return err
+			}
+			return err
+		})
+
 		if err != nil {
-			tx.Rollback()
-			log.Println("Error in ChangeEmailPasswordHandler ErrUpdate:", typeString, err)
 			render.Render(w, r, NewErrUpdate(err))
-			return
+		} else {
+			renderModel(w, r, typeString, modelObj2, models.UserRoleAdmin, who)
 		}
 
-		tx.Commit()
-		renderModel(w, r, typeString, modelObj, models.UserRoleAdmin, who)
 		return
 	}
 }
