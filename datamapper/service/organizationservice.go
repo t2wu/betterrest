@@ -237,6 +237,7 @@ func (serv *OrganizationService) GetAllRolesCore(dbChained *gorm.DB, dbClean *go
 	joinTableName := orgJoinTableName(typeString)
 
 	rows, err := db.Shared().Table(joinTableName).Select("model_id, role").Where("user_id = ?", who.Oid.String()).Rows()
+	// that's weird, Gorm says [0 rows affected or returned ] but in fact it did return something.
 	if err != nil {
 		return nil, err
 	}

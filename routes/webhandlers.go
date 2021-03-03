@@ -398,6 +398,7 @@ func CreateHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin
 		defer func() {
 			if r := recover(); r != nil {
 				debug.PrintStack()
+				render.Render(w, c.Request, NewErrInternalServerError(nil))
 				fmt.Println("Panic in CreateHandler", r)
 			}
 		}()
