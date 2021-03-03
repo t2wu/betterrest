@@ -3,11 +3,11 @@ package routes
 import (
 	"time"
 
-	jsonpatch "github.com/evanphx/json-patch"
 	"github.com/gin-gonic/gin"
 	"github.com/go-chi/render"
 	"github.com/t2wu/betterrest/libs/datatypes"
 	"github.com/t2wu/betterrest/libs/security"
+	"github.com/t2wu/betterrest/libs/utils/jsontrans"
 	"github.com/t2wu/betterrest/models"
 )
 
@@ -46,15 +46,40 @@ func createTokenPayloadForScope(id *datatypes.UUID, scope *string, tokenHours *f
 	return retval, nil
 }
 
-func removeCreatedAtFromModel(original []byte) ([]byte, error) {
-	jsonPatch := []byte("[{ \"op\": \"remove\", \"path\": \"/createdAt\" }]")
-	patch, err := jsonpatch.DecodePatch(jsonPatch)
-	if err != nil {
-		return nil, err
-	}
+// transformJSONToModel transforms fields when there is IFieldTransformJSONToModel
+func transformJSONToModel(data map[string]interface{}, f *jsontrans.JSONFields) error {
+	fi := *f
+	for k, v := range *f {
+		if datv, ok := data[k].([]interface{}); ok { // is slice after this
+			for i := range datv { // loop the slice
 
-	return patch.Apply(original)
+				newdat := datv[i].(map[string]interface{})
+				newF := fi[k].(jsontrans.JSONFields)
+				if err := transformJSONToModel(newdat, &newF); err != nil {
+					return err
+				}
+			}
+		} else if newF, ok := v.(jsontrans.JSONFields); ok { // other object
+			// embeddedStruct := make(map[string]interface{})
+			if err := transformJSONToModel(data[k].(map[string]interface{}), &newF); err != nil {
+				return err
+			}
+			// data[k] = embeddedStruct
+		} else { // data field
+			if transformStruct, ok := v.(jsontrans.IFieldTransformJSONToModel); ok {
+				transV, err := transformStruct.TransformJSONToModel(data[k])
+				if err != nil {
+					return err
+				}
+				data[k] = transV
+			}
+		}
+	}
+	return nil
 }
+
+// func transformJSONToModelCore(modelInMap map[string]interface{}, fields jsontrans.JSONFields) (map[string]interface{}, error) {
+// }
 
 func guardMiddleWare(typeString string) func(c *gin.Context) {
 	return func(c *gin.Context) {

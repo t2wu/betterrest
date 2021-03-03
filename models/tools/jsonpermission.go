@@ -26,10 +26,13 @@ func ToJSON(typeString string, v models.IModel, r models.UserRole, who models.Wh
 		dataPicked = transFromByHidingDateFieldsFromIModel(v, includeCUDDates)
 
 		if permType == jsontrans.PermissionWhiteList {
-			dataPicked = jsontrans.Transform(dataPicked, &fields, jsontrans.PermissionWhiteList)
+			dataPicked, err = jsontrans.Transform(dataPicked, &fields, jsontrans.PermissionWhiteList)
 		} else {
 			// TODO, currently doesn't work
-			dataPicked = jsontrans.Transform(dataPicked, &fields, jsontrans.PermissionWhiteList)
+			dataPicked, err = jsontrans.Transform(dataPicked, &fields, jsontrans.PermissionWhiteList)
+		}
+		if err != nil {
+			return nil, err
 		}
 	} else {
 		// By default just hide all date fields and return everything else

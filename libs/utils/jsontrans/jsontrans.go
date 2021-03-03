@@ -45,6 +45,18 @@ const (
 	PermissionBlackList
 )
 
+// IFieldTransformModelToJSON does any transformation from model to JSON when fetching
+// out of database
+type IFieldTransformModelToJSON interface {
+	TransformModelToJSON(field interface{}) (interface{}, error)
+}
+
+// IFieldTransformJSONToModel does any transformation from JSON when
+// fetching from user JSON input
+type IFieldTransformJSONToModel interface {
+	TransformJSONToModel(field interface{}) (interface{}, error)
+}
+
 // Transform performs the following:
 // 1. Cehrry pick only fields we want by the fields specifier
 // when given a json string,
@@ -53,20 +65,22 @@ const (
 // Then that means I have to loop the array to json marshal it
 // 2. Transform the value if necessary
 // (used to be called JSONCherryPickFields)
-func Transform(data map[string]interface{}, f *JSONFields, permType Permission) map[string]interface{} {
+func Transform(data map[string]interface{}, f *JSONFields, permType Permission) (map[string]interface{}, error) {
 	dataPicked := make(map[string]interface{})
 	if f != nil {
 		// Traverse through the fields and pick only those we need
-		cherryPickCore(data, f, dataPicked, permType)
+		if err := cherryPickCore(data, f, dataPicked, permType); err != nil {
+			return nil, err
+		}
 	} else {
 		dataPicked = data
 	}
 
-	return dataPicked
+	return dataPicked, nil
 }
 
 // TODO permType = PermissionBlackList not implemented yet
-func cherryPickCore(data map[string]interface{}, f *JSONFields, dataPicked map[string]interface{}, permType Permission) {
+func cherryPickCore(data map[string]interface{}, f *JSONFields, dataPicked map[string]interface{}, permType Permission) error {
 	// Traverse through the fields and pick only those we need
 	fi := *f
 	for k, v := range *f {
@@ -82,19 +96,15 @@ func cherryPickCore(data map[string]interface{}, f *JSONFields, dataPicked map[s
 					newF := fi[k].(JSONFields)
 					datPickedv[i] = make(map[string]interface{})
 					newDatPicked := datPickedv[i]
-					cherryPickCore(newdat, &newF, newDatPicked, permType)
+					if err := cherryPickCore(newdat, &newF, newDatPicked, permType); err != nil {
+						return err
+					}
 				}
 			} else {
 				// Probably never here
 				log.Println("cherryPickCore probably never here ")
 				dataPicked[k] = make([]interface{}, 0)
 			}
-			// for i := range data[k].([]interface{}) { // loop the slice
-			// 	newdat := data[k][i].(map[string]interface{})
-			// 	newF := fi[k].(JSONFields)
-			// 	newDatPicked := dataPicked[k][i].(map[string]interface{})
-			// 	cherryPickCore(newdat, &newF, newDatPicked)
-			// }
 		} else if data[k] == nil {
 			// since value is interface{}, if we never insert it, it comes out to be nil
 			// technically since run through TransFromByHidingDateFieldsFromIModel() now,
@@ -134,17 +144,41 @@ func cherryPickCore(data map[string]interface{}, f *JSONFields, dataPicked map[s
 			// inside a table and we're looping through that instance.
 			// But it could also be like deviceStatus it's actually a nested struct of one
 			embeddedStruct := make(map[string]interface{})
-			cherryPickCore(data[k].(map[string]interface{}), &newF, embeddedStruct, permType)
+			if err := cherryPickCore(data[k].(map[string]interface{}), &newF, embeddedStruct, permType); err != nil {
+				return err
+			}
 			dataPicked[k] = embeddedStruct
 		} else {
-			transformF, ok := v.(func(interface{}) interface{})
-			if ok {
+			if transformF, ok := v.(func(interface{}) interface{}); ok {
 				dataPicked[k] = transformF(data[k])
+			} else if transformStruct, ok := v.(IFieldTransformModelToJSON); ok {
+				transV, err := transformStruct.TransformModelToJSON(data[k])
+				if err != nil {
+					return err
+				}
+				dataPicked[k] = transV
 			} else { // v can be nil, or other default value
 				dataPicked[k] = data[k]
 			}
 		}
 	}
+
+	return nil
+}
+
+// ContainsIFieldTransformModelToJSON check if f contains any struct comforms to IFieldTransformModelToJSON
+func ContainsIFieldTransformModelToJSON(f *JSONFields) bool {
+	for _, v := range *f {
+		if newF, ok := v.(JSONFields); ok { // an object
+			result := ContainsIFieldTransformModelToJSON(&newF)
+			if result == true {
+				return true
+			}
+		} else if _, ok := v.(IFieldTransformModelToJSON); ok {
+			return true
+		}
+	}
+	return false
 }
 
 // ----------------------------------

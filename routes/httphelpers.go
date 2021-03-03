@@ -105,21 +105,13 @@ func ModelOrModelsFromJSONBody(r *http.Request, typeString string, who models.Wh
 
 	var jcmodel JSONBodyWithContent
 
-	canHaveCreatedAt := false
 	modelObj := models.NewFromTypeString(typeString)
+
+	needTransform := false
+	var fields jsontrans.JSONFields
 	if modelObjPerm, ok := modelObj.(models.IHasPermissions); ok {
-		perm, fields := modelObjPerm.Permissions(models.UserRoleAdmin, who)
-		if perm == jsontrans.PermissionWhiteList {
-			if _, ok := fields["createdAt"]; ok {
-				canHaveCreatedAt = true
-			}
-		} else {
-			// when black list is used and createdAt is there, block it
-			// (black list is not supported yet, but maybe this will work in the future)
-			if _, ok := fields["createdAt"]; ok {
-				canHaveCreatedAt = false
-			}
-		}
+		_, fields = modelObjPerm.Permissions(models.UserRoleAdmin, who)
+		needTransform = jsontrans.ContainsIFieldTransformModelToJSON(&fields)
 	}
 
 	err = json.Unmarshal(jsn, &jcmodel)
@@ -130,12 +122,18 @@ func ModelOrModelsFromJSONBody(r *http.Request, typeString string, who models.Wh
 	if len(jcmodel.Content) == 0 {
 		// then it's not a batch insert
 
-		// parsing error...try again with one body
-		if canHaveCreatedAt {
-			jsnModel2, err := removeCreatedAtFromModel(jsn)
-			// ignore error, so if there is no createdAt in the field it will be fine, too
-			if err == nil {
-				jsn = jsnModel2
+		if needTransform {
+			var modelInMap map[string]interface{}
+			if err = json.Unmarshal(jsn, &modelInMap); err != nil {
+				return nil, nil, NewErrParsingJSON(err)
+			}
+
+			if err = transformJSONToModel(modelInMap, &fields); err != nil {
+				return nil, nil, NewErrParsingJSON(err)
+			}
+
+			if jsn, err = json.Marshal(modelInMap); err != nil {
+				return nil, nil, NewErrParsingJSON(err)
 			}
 		}
 
@@ -164,11 +162,19 @@ func ModelOrModelsFromJSONBody(r *http.Request, typeString string, who models.Wh
 	}
 
 	for _, jsnModel := range jcmodel.Content {
-		if canHaveCreatedAt {
-			jsnModel2, err := removeCreatedAtFromModel(jsnModel)
-			// ignore error, so if there is no createdAt in the field it will be fine, too
-			if err == nil {
-				jsnModel = jsnModel2
+
+		if needTransform {
+			var modelInMap map[string]interface{}
+			if err = json.Unmarshal(jsnModel, &modelInMap); err != nil {
+				return nil, nil, NewErrParsingJSON(err)
+			}
+
+			if err = transformJSONToModel(modelInMap, &fields); err != nil {
+				return nil, nil, NewErrParsingJSON(err)
+			}
+
+			if jsnModel, err = json.Marshal(modelInMap); err != nil {
+				return nil, nil, NewErrParsingJSON(err)
 			}
 		}
 
@@ -222,30 +228,26 @@ func ModelsFromJSONBody(r *http.Request, typeString string, who models.Who) ([]m
 	}
 
 	modelTest := models.NewFromTypeString(typeString)
-	removeCreated := false
+	needTransform := false
+	var fields jsontrans.JSONFields
 	if modelObjPerm, ok := modelTest.(models.IHasPermissions); ok {
-		perm, fields := modelObjPerm.Permissions(models.UserRoleAdmin, who)
-		if perm == jsontrans.PermissionWhiteList {
-			if _, ok := fields["createdAt"]; ok {
-				// there is created_at field, so we remove it because it's suppose to be
-				// time object and I have int which is not unmarshable
-				removeCreated = true
-			}
-		} else {
-			// when black list is used and createdAt is there, block it
-			// (black list is not supported yet, but maybe this will work in the future)
-			if _, ok := fields["createdAt"]; ok {
-				removeCreated = false
-			}
-		}
+		_, fields = modelObjPerm.Permissions(models.UserRoleAdmin, who)
+		needTransform = jsontrans.ContainsIFieldTransformModelToJSON(&fields)
 	}
 
 	for _, jsnModel := range jcmodel.Content {
-		if removeCreated {
-			jsnModel2, err := removeCreatedAtFromModel(jsnModel)
-			// ignore error, so if there is no createdAt in the field it will be fine, too
-			if err == nil {
-				jsnModel = jsnModel2
+		if needTransform {
+			var modelInMap map[string]interface{}
+			if err = json.Unmarshal(jsnModel, &modelInMap); err != nil {
+				return nil, NewErrParsingJSON(err)
+			}
+
+			if err = transformJSONToModel(modelInMap, &fields); err != nil {
+				return nil, NewErrParsingJSON(err)
+			}
+
+			if jsnModel, err = json.Marshal(modelInMap); err != nil {
+				return nil, NewErrParsingJSON(err)
 			}
 		}
 
@@ -291,35 +293,28 @@ func ModelFromJSONBody(r *http.Request, typeString string, who models.Who) (mode
 	modelObj := models.NewFromTypeString(typeString)
 
 	if modelObjPerm, ok := modelObj.(models.IHasPermissions); ok {
-		removeCreated := false
-		perm, fields := modelObjPerm.Permissions(models.UserRoleAdmin, who)
-		if perm == jsontrans.PermissionWhiteList {
-			if _, ok := fields["createdAt"]; ok {
-				// there is created_at field, so we remove it because it's suppose to be
-				// time object and I have int which is not unmarshable
-				removeCreated = true
-			}
-		} else {
-			// when black list is used and createdAt is there, block it
-			// (black list is not supported yet, but maybe this will work in the future)
-			if _, ok := fields["createdAt"]; ok {
-				removeCreated = false
-			}
-		}
+		// removeCreated := false
+		_, fields := modelObjPerm.Permissions(models.UserRoleAdmin, who)
 
-		if removeCreated {
-			// there is created_at field, so we remove it because it's suppose to be
-			// time object and I have int which is not unmarshable
-			jsn2, err := removeCreatedAtFromModel(jsn)
-			// ignore error, so if there is no createdAt in the field it will be fine, too
-			if err == nil {
-				jsn = jsn2
+		// black list or white list all the same, transform is transform
+		if jsontrans.ContainsIFieldTransformModelToJSON(&fields) {
+			// First extract into map interface, then convert it
+			var modelInMap map[string]interface{}
+			if err = json.Unmarshal(jsn, &modelInMap); err != nil {
+				return nil, NewErrParsingJSON(err)
+			}
+
+			if err = transformJSONToModel(modelInMap, &fields); err != nil {
+				return nil, NewErrParsingJSON(err)
+			}
+
+			if jsn, err = json.Marshal(modelInMap); err != nil {
+				return nil, NewErrParsingJSON(err)
 			}
 		}
 	}
 
-	err = json.Unmarshal(jsn, modelObj)
-	if err != nil {
+	if err = json.Unmarshal(jsn, modelObj); err != nil {
 		return nil, NewErrParsingJSON(err)
 	}
 
