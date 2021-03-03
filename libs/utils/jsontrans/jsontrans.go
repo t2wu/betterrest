@@ -149,8 +149,12 @@ func cherryPickCore(data map[string]interface{}, f *JSONFields, dataPicked map[s
 			}
 			dataPicked[k] = embeddedStruct
 		} else {
-			if transformF, ok := v.(func(interface{}) interface{}); ok {
-				dataPicked[k] = transformF(data[k])
+			if transformF, ok := v.(func(interface{}) (interface{}, error)); ok {
+				transV, err := transformF(data[k])
+				if err != nil {
+					return err
+				}
+				dataPicked[k] = transV
 			} else if transformStruct, ok := v.(IFieldTransformModelToJSON); ok {
 				transV, err := transformStruct.TransformModelToJSON(data[k])
 				if err != nil {
