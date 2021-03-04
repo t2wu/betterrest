@@ -3,7 +3,6 @@ package datamapper
 import (
 	"errors"
 	"fmt"
-	"log"
 	"strings"
 
 	"github.com/jinzhu/gorm"
@@ -14,6 +13,65 @@ import (
 	"github.com/t2wu/betterrest/models"
 )
 
+func constructFilterCriteriaFromFieldNameAndFieldValue(fieldName string, fieldValues []string) (*sqlbuilder.FilterCriteria, error) {
+	predicatesArr := make([][]sqlbuilder.Predicate, len(fieldValues))
+
+	// Check if there is any predicate
+	hasFilterPredicateEQ := false
+	hasFilterPredicateNotEQ := false
+
+	for i, fieldValue := range fieldValues {
+		// fieldValue could be ">30;<20" for greater than 30 OR smaller than 20
+		fieldValue = strings.TrimSpace(fieldValue)
+		fieldValue = strings.TrimRight(fieldValue, ";")
+		if fieldValue == "" {
+			return nil, fmt.Errorf("query value shouldn't be empty")
+		}
+
+		fieldVals := strings.Split(fieldValue, ";")
+
+		predicatesArr[i] = make([]sqlbuilder.Predicate, len(fieldVals))
+		for j, fieldVal := range fieldVals {
+			predicate := sqlbuilder.Predicate{}
+
+			if strings.HasPrefix(fieldVal, "<") {
+				predicate.PredicateLogic = sqlbuilder.FilterPredicateLogicLT
+				predicate.FieldValue = fieldVal[1:]
+				hasFilterPredicateNotEQ = true
+			} else if strings.HasPrefix(fieldVal, "<=") {
+				predicate.PredicateLogic = sqlbuilder.FilterPredicateLogicLTEQ
+				predicate.FieldValue = fieldVal[2:]
+				hasFilterPredicateNotEQ = true
+			} else if strings.HasPrefix(fieldVal, ">") {
+				predicate.PredicateLogic = sqlbuilder.FilterPredicateLogicGT
+				predicate.FieldValue = fieldVal[1:]
+				hasFilterPredicateNotEQ = true
+			} else if strings.HasPrefix(fieldVal, ">=") {
+				predicate.PredicateLogic = sqlbuilder.FilterPredicateLogicGTEQ
+				predicate.FieldValue = fieldVal[2:]
+				hasFilterPredicateNotEQ = true
+			} else { // no sign
+				predicate.PredicateLogic = sqlbuilder.FilterPredicateLogicEQ
+				predicate.FieldValue = fieldVal
+				hasFilterPredicateEQ = true
+			}
+			predicatesArr[i][j] = predicate
+		}
+	}
+
+	// Cannot both be true
+	if hasFilterPredicateEQ && hasFilterPredicateNotEQ {
+		return nil, fmt.Errorf("cannot use both equality and other comparisons")
+	}
+
+	criteria := sqlbuilder.FilterCriteria{
+		FieldName: fieldName,
+		// FieldValues:   fieldValues,
+		PredicatesArr: predicatesArr,
+	}
+	return &criteria, nil
+}
+
 func constructDbFromURLFieldQuery(db *gorm.DB, typeString string, urlParams map[string][]string, latestn *int) (*gorm.DB, error) {
 	var err error
 
@@ -21,53 +79,19 @@ func constructDbFromURLFieldQuery(db *gorm.DB, typeString string, urlParams map[
 	// IF thee IS latestn, then we use INNER JOIN with a dense_rank
 	if latestn == nil {
 		for fieldName, fieldValues := range urlParams {
+
 			// If querying nested field, skip
 			if strings.Contains(fieldName, ".") {
 				continue
 			}
 
-			predicates := make([]sqlbuilder.FilterPredicate, len(fieldValues))
-
-			// Check if there is any predicate
-			hasFilterPredicateEQ := false
-			hasFilterPredicateNotEQ := false
-			for i, fieldValue := range fieldValues {
-				if strings.HasPrefix(fieldValue, "<") {
-					predicates[i] = sqlbuilder.FilterPredicateLT
-					fieldValues[i] = fieldValue[1:]
-					hasFilterPredicateNotEQ = true
-				} else if strings.HasPrefix(fieldValue, "<=") {
-					predicates[i] = sqlbuilder.FilterPredicateLTEQ
-					fieldValues[i] = fieldValue[2:]
-					hasFilterPredicateNotEQ = true
-				} else if strings.HasPrefix(fieldValue, ">") {
-					predicates[i] = sqlbuilder.FilterPredicateGT
-					fieldValues[i] = fieldValue[1:]
-					hasFilterPredicateNotEQ = true
-				} else if strings.HasPrefix(fieldValue, ">=") {
-					predicates[i] = sqlbuilder.FilterPredicateGTEQ
-					fieldValues[i] = fieldValue[2:]
-					hasFilterPredicateNotEQ = true
-				} else {
-					predicates[i] = sqlbuilder.FilterPredicateEQ
-					hasFilterPredicateEQ = true
-				}
-			}
-
-			log.Printf("predicates: %+v\n", predicates)
-			// Cannot both be true
-			if hasFilterPredicateEQ && hasFilterPredicateNotEQ {
-				return db, fmt.Errorf("cannot use both equality and other comparisons")
-			}
-
-			criteria := sqlbuilder.FilterCriteria{
-				FieldName:   fieldName,
-				FieldValues: fieldValues,
-				Predicates:  predicates,
+			criteria, err := constructFilterCriteriaFromFieldNameAndFieldValue(fieldName, fieldValues)
+			if err != nil {
+				return db, err
 			}
 
 			// We used the fact that repeatedly call AddWhereStmt genereates only ONE WHERE with multiple filters
-			db, err = sqlbuilder.AddWhereStmt(db, typeString, models.GetTableNameFromTypeString(typeString), criteria)
+			db, err = sqlbuilder.AddWhereStmt(db, typeString, models.GetTableNameFromTypeString(typeString), *criteria)
 			if err != nil {
 				return db, err
 			}
@@ -80,11 +104,12 @@ func constructDbFromURLFieldQuery(db *gorm.DB, typeString string, urlParams map[
 				continue
 			}
 
-			criteria := sqlbuilder.FilterCriteria{
-				FieldName:   fieldName,
-				FieldValues: fieldValues,
+			criteria, err := constructFilterCriteriaFromFieldNameAndFieldValue(fieldName, fieldValues)
+			if err != nil {
+				return db, err
 			}
-			filters = append(filters, criteria)
+
+			filters = append(filters, *criteria)
 		}
 
 		db, err = sqlbuilder.AddLatestJoinWithOneLevelFilter(db, typeString, models.GetTableNameFromTypeString(typeString), *latestn, filters)
@@ -97,7 +122,10 @@ func constructDbFromURLFieldQuery(db *gorm.DB, typeString string, urlParams map[
 }
 
 func constructDbFromURLInnerFieldQuery(db *gorm.DB, typeString string, urlParams map[string][]string, latestn *int) (*gorm.DB, error) {
-	urlParamDic := urlLevel2ParametersToMapOfMap(urlParams)
+	urlParamDic, err := urlLevel2ParametersToMapOfMap(urlParams)
+	if err != nil {
+		return db, err
+	}
 
 	if len(urlParamDic) != 0 {
 		if latestn != nil {
@@ -135,7 +163,7 @@ func constructDbFromURLInnerFieldQuery(db *gorm.DB, typeString string, urlParams
 // Private within this file
 // ***************************************
 
-func urlLevel2ParametersToMapOfMap(urlParameters map[string][]string) map[string][]sqlbuilder.FilterCriteria {
+func urlLevel2ParametersToMapOfMap(urlParameters map[string][]string) (map[string][]sqlbuilder.FilterCriteria, error) {
 	dic := make(map[string][]sqlbuilder.FilterCriteria, 0)
 	for fieldName, fieldValues := range urlParameters { // map, fieldName, fieldValues
 		toks := strings.Split(fieldName, ".")
@@ -148,9 +176,12 @@ func urlLevel2ParametersToMapOfMap(urlParameters map[string][]string) map[string
 			dic[outerFieldName] = make([]sqlbuilder.FilterCriteria, 0)
 		}
 
-		// criteriaArray := dic[outerFieldName]
-		filterc := sqlbuilder.FilterCriteria{FieldName: innerFieldName, FieldValues: fieldValues}
-		dic[outerFieldName] = append(dic[outerFieldName], filterc)
+		criteria, err := constructFilterCriteriaFromFieldNameAndFieldValue(innerFieldName, fieldValues)
+		if err != nil {
+			return nil, err
+		}
+
+		dic[outerFieldName] = append(dic[outerFieldName], *criteria)
 	}
-	return dic
+	return dic, nil
 }

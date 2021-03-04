@@ -15,29 +15,38 @@ import (
 // Something like this.
 // Search by dense_rank
 
-// FilterPredicate is the type about greater than, less than, etc
-type FilterPredicate string
+// FilterPredicateLogic is the type about greater than, less than, etc
+type FilterPredicateLogic string
 
 const (
-	// FilterPredicateEQ is equals
-	FilterPredicateEQ FilterPredicate = "="
-	// FilterPredicateLT is less than
-	FilterPredicateLT FilterPredicate = "<"
-	// FilterPredicateLTEQ is less than or equal to
-	FilterPredicateLTEQ FilterPredicate = "<="
-	// FilterPredicateGT is equal to
-	FilterPredicateGT FilterPredicate = ">"
-	// FilterPredicateGTEQ is greater than or equal to
-	FilterPredicateGTEQ FilterPredicate = ">="
+	// FilterPredicateLogicEQ is equals
+	FilterPredicateLogicEQ FilterPredicateLogic = "="
+	// FilterPredicateLogicLT is less than
+	FilterPredicateLogicLT FilterPredicateLogic = "<"
+	// FilterPredicateLogicLTEQ is less than or equal to
+	FilterPredicateLogicLTEQ FilterPredicateLogic = "<="
+	// FilterPredicateLogicGT is equal to
+	FilterPredicateLogicGT FilterPredicateLogic = ">"
+	// FilterPredicateLogicGTEQ is greater than or equal to
+	FilterPredicateLogicGTEQ FilterPredicateLogic = ">="
 )
+
+// Predicate :-
+type Predicate struct {
+	PredicateLogic FilterPredicateLogic
+	FieldValue     string
+}
 
 // FilterCriteria is the criteria to query for first-level field
 type FilterCriteria struct {
 	// TableName   string
-	FieldName   string            // Field name to match
-	FieldValues []string          // Criteria to match
-	Predicates  []FilterPredicate // greater than less than, etc.
-	// actually if there is predicate that's not FilterPredicateEQ, you can't do FilterPredicateEQ
+	FieldName string // Field name to match
+	// FieldValues []string // Criteria to match
+	// Predicates  []FilterPredicateLogic // greater than less than, etc.
+
+	PredicatesArr [][]Predicate // greater than less than, etc., multiple for AND relationship
+
+	// actually if there is predicate that's not FilterPredicateLogicEQ, you can't do FilterPredicateLogicEQ
 }
 
 // TwoLevelFilterCriteria is the criteria to query for inner level field
@@ -50,9 +59,19 @@ type TwoLevelFilterCriteria struct { //看到I看不到 lower left bracket
 
 // AddWhereStmt adds where statement into db
 func AddWhereStmt(db *gorm.DB, typeString string, tableName string, filter FilterCriteria) (*gorm.DB, error) {
+	// I won't have both equal test AND >, <, <=, >= tests in these case
 	modelObj := models.NewFromTypeString(typeString)
+
+	urlFieldValues := make([]string, 0)
+	for _, predicates := range filter.PredicatesArr {
+		for _, predicate := range predicates {
+			urlFieldValues = append(urlFieldValues, predicate.FieldValue)
+		}
+	}
+
 	transformedFieldValues, err := getTransformedValueFromValidField(modelObj,
-		letters.CamelCaseToPascalCase(filter.FieldName), filter.FieldValues)
+		letters.CamelCaseToPascalCase(filter.FieldName), urlFieldValues)
+
 	if err != nil {
 		return nil, err
 	}
@@ -62,23 +81,26 @@ func AddWhereStmt(db *gorm.DB, typeString string, tableName string, filter Filte
 	// If there is any equality comparison other than equal
 	// there shouldn't be any IN then
 	hasEquality := false
-	for _, predicate := range filter.Predicates {
-		if predicate == FilterPredicateEQ {
-			hasEquality = true
+	for _, predicates := range filter.PredicatesArr {
+		for _, predicate := range predicates {
+			if predicate.PredicateLogic == FilterPredicateLogicEQ {
+				hasEquality = true
+			}
 		}
 	}
 
 	var whereStmt string
 	if hasEquality {
 		// Gorm will actually use one WHERE clause with AND statements if Where is called repeatedly
-		whereStmt = inOpWithFields(tableName, strcase.SnakeCase(filter.FieldName),
+		whereStmt = inOpStmt(tableName, strcase.SnakeCase(filter.FieldName),
 			len(filterdFieldValues), anyNull)
+		db = db.Where(whereStmt, filterdFieldValues...)
 	} else {
-		whereStmt = comparisonOpWithFields(tableName, strcase.SnakeCase(filter.FieldName),
-			len(filterdFieldValues), filter.Predicates)
+		whereStmt = comparisonOpStmt(tableName, strcase.SnakeCase(filter.FieldName), filter.PredicatesArr)
+
+		db = db.Where(whereStmt, filterdFieldValues...)
 	}
 
-	db = db.Where(whereStmt, filterdFieldValues...)
 	return db, nil
 }
 
@@ -93,7 +115,15 @@ func AddNestedQueryJoinStmt(db *gorm.DB, typeString string, criteria TwoLevelFil
 
 	for _, filter := range criteria.Filters {
 		innerFieldName := filter.FieldName
-		fieldValues := filter.FieldValues
+
+		fieldValues := make([]string, 0)
+		for _, predicates := range filter.PredicatesArr {
+			for _, predicate := range predicates {
+				fieldValues = append(fieldValues, predicate.FieldValue)
+			}
+		}
+
+		// fieldValues := filter.FieldValues
 
 		// Get inner field type
 		m := models.NewFromTypeString(typeString) // THIS IS TO BE FIXED
@@ -108,17 +138,33 @@ func AddNestedQueryJoinStmt(db *gorm.DB, typeString string, criteria TwoLevelFil
 			return nil, err
 		}
 
-		transformedValues, err := datatypes.TransformFieldValue(fieldType2.String(), fieldValues)
+		transformedValues, err := datatypes.TransformFieldValues(fieldType2.String(), fieldValues)
 		if err != nil {
 			return nil, err
 		}
 
 		fiterdFieldValues, anyNull := filterNullValue(transformedValues)
 
-		// It's possible to have multiple values by using ?xx=yy&xx=zz
-		// Get the inner table's type
-		inStmt := inOpWithFields(criteria.InnerTableName, strcase.SnakeCase(innerFieldName), len(fiterdFieldValues), anyNull)
-		joinStmt += "AND (" + inStmt + ")"
+		// If there is any equality comparison other than equal
+		// there shouldn't be any IN then
+		hasEquality := false
+		for _, predicates := range filter.PredicatesArr {
+			for _, predicate := range predicates {
+				if predicate.PredicateLogic == FilterPredicateLogicEQ {
+					hasEquality = true
+				}
+			}
+		}
+
+		var inOrComparisonStmt string
+		if hasEquality {
+			// It's possible to have multiple values by using ?xx=yy&xx=zz
+			// Get the inner table's type
+			inOrComparisonStmt = inOpStmt(criteria.InnerTableName, strcase.SnakeCase(innerFieldName), len(fiterdFieldValues), anyNull)
+		} else {
+			inOrComparisonStmt = comparisonOpStmt(criteria.InnerTableName, strcase.SnakeCase(innerFieldName), filter.PredicatesArr)
+		}
+		joinStmt += "AND (" + inOrComparisonStmt + ")"
 
 		queryValues = append(queryValues, fiterdFieldValues...)
 	}
@@ -137,9 +183,28 @@ func AddLatestJoinWithOneLevelFilter(db *gorm.DB, typeString string, tableName s
 	transformedValues := make([]interface{}, 0)
 
 	for _, filter := range filters {
+		// If there is any equality comparison other than equal
+		// there shouldn't be any IN then
+		hasEquality := false
+		for _, predicates := range filter.PredicatesArr {
+			for _, predicate := range predicates {
+				if predicate.PredicateLogic == FilterPredicateLogicEQ {
+					hasEquality = true
+				}
+			}
+		}
+
 		m := models.NewFromTypeString(typeString)
+
+		urlFieldValues := make([]string, 0)
+		for _, predicates := range filter.PredicatesArr {
+			for _, predicate := range predicates {
+				urlFieldValues = append(urlFieldValues, predicate.FieldValue)
+			}
+		}
+
 		transformedFieldValues, err := getTransformedValueFromValidField(m,
-			letters.CamelCaseToPascalCase(filter.FieldName), filter.FieldValues)
+			letters.CamelCaseToPascalCase(filter.FieldName), urlFieldValues)
 		if err != nil {
 			return nil, err
 		}
@@ -150,7 +215,12 @@ func AddLatestJoinWithOneLevelFilter(db *gorm.DB, typeString string, tableName s
 		fieldName := strcase.SnakeCase(filter.FieldName)
 		partitionByArr = append(partitionByArr, fieldName)
 
-		whereArr = append(whereArr, inOpWithFields(tableName, fieldName, len(fiterdFieldValues), anyNull)) // "%s.%s IN (%s)
+		if hasEquality {
+			whereArr = append(whereArr, inOpStmt(tableName, fieldName, len(fiterdFieldValues), anyNull)) // "%s.%s IN (%s)
+		} else {
+			whereArr = append(whereArr, comparisonOpStmt(tableName, strcase.SnakeCase(filter.FieldName), filter.PredicatesArr))
+		}
+
 		transformedValues = append(transformedValues, fiterdFieldValues...)
 	}
 	partitionBy := strings.Join(partitionByArr, ", ")
@@ -189,7 +259,8 @@ func AddLatestJoinWithOneLevelFilter(db *gorm.DB, typeString string, tableName s
 // and
 // (x1, x2, x3)
 // from better_other_queries
-func inOpWithFields(tableName string, fieldName string, numfieldValues int, checkNull bool) string {
+// This doesn't fill in the values
+func inOpStmt(tableName string, fieldName string, numfieldValues int, checkNull bool) string {
 	tableName = "\"" + tableName + "\""
 	fieldName = "\"" + fieldName + "\""
 	tableAndField := fmt.Sprintf("%s.%s", tableName, fieldName)
@@ -216,39 +287,30 @@ func inOpWithFields(tableName string, fieldName string, numfieldValues int, chec
 	return stmt.String()
 }
 
-func comparisonOpWithFields(tableName string, fieldName string, numfieldValues int, predicates []FilterPredicate) string {
+func comparisonOpStmt(tableName string, fieldName string, predicatesArr [][]Predicate) string {
 	tableName = "\"" + tableName + "\""
 	fieldName = "\"" + fieldName + "\""
 	tableAndField := fmt.Sprintf("%s.%s", tableName, fieldName)
 
-	// A simple IN clause is OK except when I need to check if the field is an null value
-	// then the IN clause won't work, need to do
-	// (fieldName IN ('fieldValue1', 'fieldValue2') OR fieldName IS NULL)
-
-	// Use AND, if user wants or they have to run twice
-	// fieldName > 0 AND fieldName < 3
+	// predicatesArr[] is OR relationships, inside is AND relationships
 
 	var stmt strings.Builder
-	predicate := predicates[0]
-	stmt.WriteString(fmt.Sprintf("%s %s ?", tableAndField, string(predicate)))
-
+	predicates := predicatesArr[0]
+	stmt.WriteString(fmt.Sprintf(" (%s %s ?", tableAndField, string(predicates[0].PredicateLogic)))
 	for _, predicate := range predicates[1:] {
-		stmt.WriteString(fmt.Sprintf(" AND %s %s ?", tableAndField, string(predicate)))
+		stmt.WriteString(fmt.Sprintf(" AND %s %s ?", tableAndField, string(predicate.PredicateLogic)))
 	}
+	stmt.WriteString(") ")
 
-	// if numfieldValues >= 1 {
-	// 	questionMarks := strings.Repeat("?,", numfieldValues)
-	// 	questionMarks = questionMarks[:len(questionMarks)-1]
-	// 	stmt.WriteString(fmt.Sprintf("%s IN (%s)", tableAndField, questionMarks))
-	// }
-
-	// if numfieldValues >= 1 && checkNull {
-	// 	stmt.WriteString(" OR ")
-	// }
-
-	// if checkNull {
-	// 	stmt.WriteString(fmt.Sprintf("%s IS NULL", tableAndField))
-	// }
+	for _, predicates := range predicatesArr[1:] {
+		// OR for the predicatesArr (outer)
+		// AND for inside
+		stmt.WriteString(fmt.Sprintf(" OR (%s %s ?", tableAndField, string(predicates[0].PredicateLogic)))
+		for _, predicate := range predicates[1:] {
+			stmt.WriteString(fmt.Sprintf(" AND %s %s ?", tableAndField, string(predicate.PredicateLogic)))
+		}
+		stmt.WriteString(") ")
+	}
 
 	return stmt.String()
 }
@@ -262,32 +324,13 @@ func getTransformedValueFromValidField(modelObj interface{}, structFieldName str
 		return nil, err
 	}
 
-	transURLFieldValues, err := datatypes.TransformFieldValue(fieldType.String(), urlFieldValues)
+	transURLFieldValues, err := datatypes.TransformFieldValues(fieldType.String(), urlFieldValues)
 	if err != nil {
 		return nil, err
 	}
 
 	return transURLFieldValues, nil
 }
-
-// getTransformedValueFromValidField make sure the field does exist in struct
-// and output the field value in correct types
-// func getTransformedValueFromValidField2(modelObj interface{}, structFieldName string, urlFieldValues []string) ([]interface{}, error) {
-// 	// Important!! Check if fieldName is actually part of the schema, otherwise risk of sequal injection
-// 	fieldType, err := datatypes.GetModelFieldTypeElmIfValid(modelObj, letters.CamelCaseToPascalCase(structFieldName))
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	log.Println("fieldType:", fieldType)
-
-// 	transURLFieldValues, err := datatypes.TransformFieldValue(fieldType.String(), urlFieldValues)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	return transURLFieldValues, nil
-// }
 
 func filterNullValue(transformedFieldValues []interface{}) (filtered []interface{}, anyNull bool) {
 	// Filter out the "null" ones

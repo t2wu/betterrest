@@ -10,36 +10,25 @@ import (
 )
 
 // TransformFieldValue transforms type in URL parameter to the proper data types
-func TransformFieldValue(typeInString string, fieldValues []string) ([]interface{}, error) {
-	fieldValuesRet := make([]interface{}, len(fieldValues), len(fieldValues))
+func TransformFieldValue(typeInString string, fieldValue string) (interface{}, error) {
+	var retval interface{}
 	switch typeInString {
-	case "*datatypes.UUID":
-		fallthrough
-	case "datatypes.UUID":
-		for i, fieldValue := range fieldValues {
-			var data *UUID
-			if fieldValue != "null" {
-				var err error
-				data, err = NewUUIDFromString(fieldValue)
-				if err != nil {
-					return nil, err
-				}
-			}
-
-			fieldValuesRet[i] = data
-		}
-		break
-	case "*bool":
-		fallthrough
-	case "bool":
-		for i, fieldValue := range fieldValues {
-			data, err := strconv.ParseBool(fieldValue)
+	case "*datatypes.UUID", "datatypes.UUID":
+		var data *UUID
+		if fieldValue != "null" {
+			var err error
+			data, err = NewUUIDFromString(fieldValue)
 			if err != nil {
 				return nil, err
 			}
-			fieldValuesRet[i] = data
 		}
-		break
+		retval = data
+	case "*bool", "bool":
+		data, err := strconv.ParseBool(fieldValue)
+		if err != nil {
+			return nil, err
+		}
+		retval = data
 	// case "*int":
 	// 	fallthrough
 	// case "int":
@@ -53,9 +42,20 @@ func TransformFieldValue(typeInString string, fieldValues []string) ([]interface
 	// 	}
 	// 	break
 	default:
-		for i, fieldValue := range fieldValues {
-			fieldValuesRet[i] = fieldValue
+		retval = fieldValue
+	}
+	return retval, nil
+}
+
+// TransformFieldValues transforms type in URL parameters to the proper data types
+func TransformFieldValues(typeInString string, fieldValues []string) ([]interface{}, error) {
+	fieldValuesRet := make([]interface{}, len(fieldValues), len(fieldValues))
+	for i, fieldValue := range fieldValues {
+		data, err := TransformFieldValue(typeInString, fieldValue)
+		if err != nil {
+			return nil, err
 		}
+		fieldValuesRet[i] = data
 	}
 	return fieldValuesRet, nil
 }
