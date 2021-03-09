@@ -59,7 +59,7 @@ func transformJSONToModel(data map[string]interface{}, f *jsontrans.JSONFields) 
 					return err
 				}
 			}
-		} else if newF, ok := v.(jsontrans.JSONFields); ok { // other object
+		} else if newF, ok := v.(jsontrans.JSONFields); ok && newF != nil && data[k] != nil { // other object
 			// embeddedStruct := make(map[string]interface{})
 			if err := transformJSONToModel(data[k].(map[string]interface{}), &newF); err != nil {
 				return err
