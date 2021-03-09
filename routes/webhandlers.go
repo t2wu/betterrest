@@ -190,6 +190,16 @@ func UserLoginHandler(typeString string) func(c *gin.Context) {
 	return func(c *gin.Context) {
 		w, r := c.Writer, c.Request
 
+		tx := db.Shared().Begin()
+		defer func(tx *gorm.DB) {
+			if r := recover(); r != nil {
+				tx.Rollback()
+				debug.PrintStack()
+				render.Render(w, c.Request, NewErrInternalServerError(nil))
+				fmt.Println("Panic in UserLoginHandler", r)
+			}
+		}(tx)
+
 		tokenHours := TokenHoursFromContext(r)
 
 		client := ClientFromContext(r)
@@ -206,16 +216,6 @@ func UserLoginHandler(typeString string) func(c *gin.Context) {
 			render.Render(w, r, httperr)
 			return
 		}
-
-		tx := db.Shared().Begin()
-		defer func(tx *gorm.DB) {
-			if r := recover(); r != nil {
-				tx.Rollback()
-				debug.PrintStack()
-				render.Render(w, c.Request, NewErrInternalServerError(nil))
-				fmt.Println("Panic in UserLoginHandler", r)
-			}
-		}(tx)
 
 		cargo := models.ModelCargo{}
 		// Before hook
@@ -340,6 +340,15 @@ func getOptionByParsingURL(r *http.Request) (map[datamapper.URLParam]interface{}
 func ReadAllHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin.Context) {
 	return func(c *gin.Context) {
 		w, r := c.Writer, c.Request
+
+		defer func() {
+			if r := recover(); r != nil {
+				debug.PrintStack()
+				render.Render(w, c.Request, NewErrInternalServerError(nil))
+				fmt.Println("Panic in ReadAllHandler", r)
+			}
+		}()
+
 		var err error
 
 		who := WhoFromContext(r)
@@ -350,14 +359,6 @@ func ReadAllHandler(typeString string, mapper datamapper.IDataMapper) func(c *gi
 			render.Render(w, r, NewErrQueryParameter(err))
 			return
 		}
-
-		defer func() {
-			if r := recover(); r != nil {
-				debug.PrintStack()
-				render.Render(w, c.Request, NewErrInternalServerError(nil))
-				fmt.Println("Panic in ReadAllHandler", r)
-			}
-		}()
 
 		var modelObjs []models.IModel
 		var roles []models.UserRole
@@ -385,6 +386,14 @@ func CreateHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin
 	return func(c *gin.Context) {
 		w, r := c.Writer, c.Request
 
+		defer func() {
+			if r := recover(); r != nil {
+				debug.PrintStack()
+				render.Render(w, c.Request, NewErrInternalServerError(nil))
+				fmt.Println("Panic in CreateHandler", r)
+			}
+		}()
+
 		var modelObj models.IModel
 
 		who := WhoFromContext(r)
@@ -394,14 +403,6 @@ func CreateHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin
 			render.Render(w, r, httperr)
 			return
 		}
-
-		defer func() {
-			if r := recover(); r != nil {
-				debug.PrintStack()
-				render.Render(w, c.Request, NewErrInternalServerError(nil))
-				fmt.Println("Panic in CreateHandler", r)
-			}
-		}()
 
 		if *isBatch {
 			err := transact.Transact(db.Shared(), func(tx *gorm.DB) error {
@@ -449,14 +450,6 @@ func ReadOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *gi
 	return func(c *gin.Context) {
 		w, r := c.Writer, c.Request
 
-		id, httperr := IDFromURLQueryString(c)
-		if httperr != nil {
-			render.Render(w, r, httperr)
-			return
-		}
-
-		who := WhoFromContext(r)
-
 		defer func() {
 			if r := recover(); r != nil {
 				debug.PrintStack()
@@ -464,6 +457,14 @@ func ReadOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *gi
 				fmt.Println("Panic in ReadOneHandler", r)
 			}
 		}()
+
+		id, httperr := IDFromURLQueryString(c)
+		if httperr != nil {
+			render.Render(w, r, httperr)
+			return
+		}
+
+		who := WhoFromContext(r)
 
 		var modelObj models.IModel
 		var role models.UserRole
@@ -492,6 +493,14 @@ func UpdateOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 	return func(c *gin.Context) {
 		w, r := c.Writer, c.Request
 
+		defer func() {
+			if r := recover(); r != nil {
+				debug.PrintStack()
+				render.Render(w, c.Request, NewErrInternalServerError(nil))
+				fmt.Println("Panic in UpdateOneHandler", r)
+			}
+		}()
+
 		id, httperr := IDFromURLQueryString(c)
 		if httperr != nil {
 			render.Render(w, r, httperr)
@@ -512,14 +521,6 @@ func UpdateOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 			render.Render(w, r, NewErrValidation(fmt.Errorf("JSON format not expected")))
 			return
 		}
-
-		defer func() {
-			if r := recover(); r != nil {
-				debug.PrintStack()
-				render.Render(w, c.Request, NewErrInternalServerError(nil))
-				fmt.Println("Panic in UpdateOneHandler", r)
-			}
-		}()
 
 		var modelObj2 models.IModel
 		err := transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
@@ -543,16 +544,7 @@ func UpdateOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 // UpdateManyHandler returns a Gin handler which updates many records
 func UpdateManyHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin.Context) {
 	return func(c *gin.Context) {
-		log.Println("UpdateManyHandler called")
 		w, r := c.Writer, c.Request
-		who := WhoFromContext(r)
-
-		modelObjs, httperr := ModelsFromJSONBody(r, typeString, who)
-		if httperr != nil {
-			log.Println("Error in ModelsFromJSONBody:", typeString, httperr)
-			render.Render(w, r, httperr)
-			return
-		}
 
 		defer func() {
 			if r := recover(); r != nil {
@@ -561,6 +553,15 @@ func UpdateManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 				fmt.Println("Panic in UpdateManyHandler", r)
 			}
 		}()
+
+		who := WhoFromContext(r)
+
+		modelObjs, httperr := ModelsFromJSONBody(r, typeString, who)
+		if httperr != nil {
+			log.Println("Error in ModelsFromJSONBody:", typeString, httperr)
+			render.Render(w, r, httperr)
+			return
+		}
 
 		var modelObjs2 []models.IModel
 		err := transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
@@ -589,8 +590,15 @@ func UpdateManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 // PatchOneHandler returns a Gin handler which patch (partial update) one record
 func PatchOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin.Context) {
 	return func(c *gin.Context) {
-		log.Println("PatchOneHandler")
 		w, r := c.Writer, c.Request
+
+		defer func() {
+			if r := recover(); r != nil {
+				debug.PrintStack()
+				render.Render(w, c.Request, NewErrInternalServerError(nil))
+				fmt.Println("Panic in PatchOneHandler", r)
+			}
+		}()
 
 		id, httperr := IDFromURLQueryString(c)
 		if httperr != nil {
@@ -606,14 +614,6 @@ func PatchOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *g
 		}
 
 		who := WhoFromContext(r)
-
-		defer func() {
-			if r := recover(); r != nil {
-				debug.PrintStack()
-				render.Render(w, c.Request, NewErrInternalServerError(nil))
-				fmt.Println("Panic in PatchOneHandler", r)
-			}
-		}()
 
 		var modelObj models.IModel
 		err = transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
@@ -643,16 +643,7 @@ func PatchOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *g
 // PatchManyHandler returns a Gin handler which patch (partial update) many records
 func PatchManyHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin.Context) {
 	return func(c *gin.Context) {
-		log.Println("PatchManyHandler")
 		w, r := c.Writer, c.Request
-		who := WhoFromContext(r)
-
-		jsonIDPatches, httperr := JSONPatchesFromJSONBody(r)
-		if httperr != nil {
-			log.Println("Error in JSONPatchesFromJSONBody:", typeString, httperr)
-			render.Render(w, r, httperr)
-			return
-		}
 
 		defer func() {
 			if r := recover(); r != nil {
@@ -661,6 +652,15 @@ func PatchManyHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 				fmt.Println("Panic in PatchManyHandler", r)
 			}
 		}()
+
+		who := WhoFromContext(r)
+
+		jsonIDPatches, httperr := JSONPatchesFromJSONBody(r)
+		if httperr != nil {
+			log.Println("Error in JSONPatchesFromJSONBody:", typeString, httperr)
+			render.Render(w, r, httperr)
+			return
+		}
 
 		var modelObjs []models.IModel
 		err := transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
@@ -688,16 +688,7 @@ func PatchManyHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 // DeleteOneHandler returns a Gin handler which delete one record
 func DeleteOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin.Context) {
 	return func(c *gin.Context) {
-		log.Println("DeleteOneHandler")
 		w, r := c.Writer, c.Request
-
-		id, httperr := IDFromURLQueryString(c)
-		if httperr != nil {
-			render.Render(w, r, httperr)
-			return
-		}
-
-		who := WhoFromContext(r)
 
 		defer func() {
 			if r := recover(); r != nil {
@@ -706,6 +697,14 @@ func DeleteOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 				fmt.Println("Panic in DeleteOneHandler", r)
 			}
 		}()
+
+		id, httperr := IDFromURLQueryString(c)
+		if httperr != nil {
+			render.Render(w, r, httperr)
+			return
+		}
+
+		who := WhoFromContext(r)
 
 		var modelObj models.IModel
 		err := transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
@@ -730,7 +729,14 @@ func DeleteOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 func DeleteManyHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin.Context) {
 	return func(c *gin.Context) {
 		w, r := c.Writer, c.Request
-		log.Println("DeleteManyHandler called")
+
+		defer func() {
+			if r := recover(); r != nil {
+				debug.PrintStack()
+				render.Render(w, c.Request, NewErrInternalServerError(nil))
+				fmt.Println("Panic in DeleteManyHandler", r)
+			}
+		}()
 
 		who := WhoFromContext(r)
 
@@ -740,14 +746,6 @@ func DeleteManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 			render.Render(w, r, httperr)
 			return
 		}
-
-		defer func() {
-			if r := recover(); r != nil {
-				debug.PrintStack()
-				render.Render(w, c.Request, NewErrInternalServerError(nil))
-				fmt.Println("Panic in DeleteManyHandler", r)
-			}
-		}()
 
 		err := transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
 			if modelObjs, err = mapper.DeleteMany(tx, who, typeString, modelObjs); err != nil {
@@ -776,6 +774,14 @@ func ChangeEmailPasswordHandler(typeString string, mapper datamapper.IChangeEmai
 	return func(c *gin.Context) {
 		w, r := c.Writer, c.Request
 
+		defer func() {
+			if r := recover(); r != nil {
+				debug.PrintStack()
+				render.Render(w, c.Request, NewErrInternalServerError(nil))
+				fmt.Println("Panic in ChangePasswordHandler", r)
+			}
+		}()
+
 		id, httperr := IDFromURLQueryString(c)
 		if httperr != nil {
 			render.Render(w, r, httperr)
@@ -789,14 +795,6 @@ func ChangeEmailPasswordHandler(typeString string, mapper datamapper.IChangeEmai
 			render.Render(w, r, httperr)
 			return
 		}
-
-		defer func() {
-			if r := recover(); r != nil {
-				debug.PrintStack()
-				render.Render(w, c.Request, NewErrInternalServerError(nil))
-				fmt.Println("Panic in ChangePasswordHandler", r)
-			}
-		}()
 
 		var modelObj2 models.IModel
 		err := transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {

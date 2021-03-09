@@ -236,8 +236,6 @@ func (mapper *BaseMapper) UpdateOneWithID(db *gorm.DB, who models.Who, typeStrin
 		return nil, err
 	}
 
-	log.Printf("oldMoelObj: %+v", oldModelObj)
-
 	// TODO: Huh? How do we do validation here?!
 	var before, after *string
 	if _, ok := modelObj.(models.IBeforeUpdate); ok {
