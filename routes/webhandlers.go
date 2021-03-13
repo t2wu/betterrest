@@ -26,7 +26,7 @@ import (
 )
 
 // ---------------------------------------------
-func limitAndOffsetFromQueryString(values *url.Values) (*int, *int, error) {
+func LimitAndOffsetFromQueryString(values *url.Values) (*int, *int, error) {
 	defer delete(*values, string(datamapper.URLParamOffset))
 	defer delete(*values, string(datamapper.URLParamLimit))
 
@@ -59,7 +59,7 @@ func limitAndOffsetFromQueryString(values *url.Values) (*int, *int, error) {
 	return &o, &l, nil // It's ok to pass 0 limit, it'll be interpreted as an all.
 }
 
-func orderFromQueryString(values *url.Values) *string {
+func OrderFromQueryString(values *url.Values) *string {
 	defer delete(*values, string(datamapper.URLParamOrder))
 
 	if order := values.Get(string(datamapper.URLParamOrder)); order != "" {
@@ -72,7 +72,7 @@ func orderFromQueryString(values *url.Values) *string {
 	return nil
 }
 
-func latestnFromQueryString(values *url.Values) *string {
+func LatestnFromQueryString(values *url.Values) *string {
 	defer delete(*values, string(datamapper.URLParamLatestN))
 
 	if latestn := values.Get(string(datamapper.URLParamLatestN)); latestn != "" {
@@ -86,7 +86,7 @@ func latestnFromQueryString(values *url.Values) *string {
 	return nil
 }
 
-func createdTimeRangeFromQueryString(values *url.Values) (*int, *int, error) {
+func CreatedTimeRangeFromQueryString(values *url.Values) (*int, *int, error) {
 	defer delete(*values, string(datamapper.URLParamCstart))
 	defer delete(*values, string(datamapper.URLParamCstop))
 
@@ -137,7 +137,8 @@ func modelObjsToJSON(typeString string, modelObjs []models.IModel, roles []model
 	return content, nil
 }
 
-func renderModel(w http.ResponseWriter, r *http.Request, typeString string, modelObj models.IModel, role models.UserRole, who models.Who) {
+// RenderModel :-
+func RenderModel(w http.ResponseWriter, r *http.Request, typeString string, modelObj models.IModel, role models.UserRole, who models.Who) {
 	if mrender, ok := modelObj.(models.IHasRenderer); ok {
 		w.Write(mrender.Render(role, who))
 		return
@@ -146,7 +147,7 @@ func renderModel(w http.ResponseWriter, r *http.Request, typeString string, mode
 	// render.JSON(w, r, modelObj) // cannot use this since no picking the field we need
 	jsonBytes, err := tools.ToJSON(typeString, modelObj, role, who)
 	if err != nil {
-		log.Println("Error in renderModel:", err)
+		log.Println("Error in RenderModel:", err)
 		render.Render(w, r, NewErrGenJSON(err))
 		return
 	}
@@ -157,7 +158,8 @@ func renderModel(w http.ResponseWriter, r *http.Request, typeString string, mode
 	w.Write([]byte(content))
 }
 
-func renderModelSlice(w http.ResponseWriter, r *http.Request, typeString string, modelObjs []models.IModel, roles []models.UserRole, total *int, who models.Who) {
+// RenderModelSlice :-
+func RenderModelSlice(w http.ResponseWriter, r *http.Request, typeString string, modelObjs []models.IModel, roles []models.UserRole, total *int, who models.Who) {
 	if models.ModelRegistry[typeString].BatchRenderer != nil {
 		w.Write(models.ModelRegistry[typeString].BatchRenderer(roles, who, modelObjs))
 		return
@@ -165,7 +167,7 @@ func renderModelSlice(w http.ResponseWriter, r *http.Request, typeString string,
 
 	jsonString, err := modelObjsToJSON(typeString, modelObjs, roles, who)
 	if err != nil {
-		log.Println("Error in renderModelSlice:", err)
+		log.Println("Error in RenderModelSlice:", err)
 		render.Render(w, r, NewErrGenJSON(err))
 		return
 	}
@@ -296,11 +298,11 @@ func UserLoginHandler(typeString string) func(c *gin.Context) {
 	}
 }
 
-func getOptionByParsingURL(r *http.Request) (map[datamapper.URLParam]interface{}, error) {
+func GetOptionByParsingURL(r *http.Request) (map[datamapper.URLParam]interface{}, error) {
 	options := make(map[datamapper.URLParam]interface{})
 
 	values := r.URL.Query()
-	if o, l, err := limitAndOffsetFromQueryString(&values); err == nil {
+	if o, l, err := LimitAndOffsetFromQueryString(&values); err == nil {
 		if o != nil && l != nil {
 			options[datamapper.URLParamOffset], options[datamapper.URLParamLimit] = o, l
 		}
@@ -308,17 +310,17 @@ func getOptionByParsingURL(r *http.Request) (map[datamapper.URLParam]interface{}
 		return nil, err
 	}
 
-	if order := orderFromQueryString(&values); order != nil {
+	if order := OrderFromQueryString(&values); order != nil {
 		options[datamapper.URLParamOrder] = order
 	}
 
-	if latest := latestnFromQueryString(&values); latest != nil {
+	if latest := LatestnFromQueryString(&values); latest != nil {
 		options[datamapper.URLParamLatestN] = latest
 	}
 
 	options[datamapper.URLParamOtherQueries] = values
 
-	if cstart, cstop, err := createdTimeRangeFromQueryString(&values); err == nil {
+	if cstart, cstop, err := CreatedTimeRangeFromQueryString(&values); err == nil {
 		if cstart != nil && cstop != nil {
 			options[datamapper.URLParamCstart], options[datamapper.URLParamCstop] = cstart, cstop
 		}
@@ -355,7 +357,7 @@ func ReadAllHandler(typeString string, mapper datamapper.IDataMapper) func(c *gi
 
 		options := make(map[datamapper.URLParam]interface{})
 
-		if options, err = getOptionByParsingURL(r); err != nil {
+		if options, err = GetOptionByParsingURL(r); err != nil {
 			render.Render(w, r, NewErrQueryParameter(err))
 			return
 		}
@@ -374,7 +376,7 @@ func ReadAllHandler(typeString string, mapper datamapper.IDataMapper) func(c *gi
 		if err != nil {
 			render.Render(w, r, NewErrInternalServerError(err))
 		} else {
-			renderModelSlice(w, r, typeString, modelObjs, roles, no, who)
+			RenderModelSlice(w, r, typeString, modelObjs, roles, no, who)
 		}
 
 		return
@@ -412,7 +414,7 @@ func CreateHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin
 					return err2
 				}
 
-				// renderModelSlice(w, r, typeString, modelObjs, roles, nil, who)
+				// RenderModelSlice(w, r, typeString, modelObjs, roles, nil, who)
 				return nil
 			})
 			if err != nil {
@@ -423,7 +425,7 @@ func CreateHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin
 				for i := 0; i < len(modelObjs); i++ {
 					roles[i] = models.UserRoleAdmin
 				}
-				renderModelSlice(w, r, typeString, modelObjs, roles, nil, who)
+				RenderModelSlice(w, r, typeString, modelObjs, roles, nil, who)
 			}
 		} else {
 			var err2 error
@@ -438,7 +440,7 @@ func CreateHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin
 			if err != nil {
 				render.Render(w, c.Request, NewErrCreate(err))
 			} else {
-				renderModel(w, r, typeString, modelObj, models.UserRoleAdmin, who)
+				RenderModel(w, r, typeString, modelObj, models.UserRoleAdmin, who)
 			}
 		}
 	}
@@ -481,7 +483,7 @@ func ReadOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *gi
 		} else if err != nil {
 			render.Render(w, r, NewErrInternalServerError(err))
 		} else {
-			renderModel(w, r, typeString, modelObj, role, who)
+			RenderModel(w, r, typeString, modelObj, role, who)
 		}
 
 		return
@@ -534,7 +536,7 @@ func UpdateOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 		if err != nil {
 			render.Render(w, r, NewErrUpdate(err))
 		} else {
-			renderModel(w, r, typeString, modelObj2, models.UserRoleAdmin, who)
+			RenderModel(w, r, typeString, modelObj2, models.UserRoleAdmin, who)
 		}
 
 		return
@@ -580,7 +582,7 @@ func UpdateManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 			for i := 0; i < len(roles); i++ {
 				roles[i] = models.UserRoleAdmin
 			}
-			renderModelSlice(w, r, typeString, modelObjs2, roles, nil, who)
+			RenderModelSlice(w, r, typeString, modelObjs2, roles, nil, who)
 		}
 
 		return
@@ -628,7 +630,7 @@ func PatchOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *g
 		if err != nil {
 			render.Render(w, r, NewErrPatch(err))
 		} else {
-			renderModel(w, r, typeString, modelObj, models.UserRoleAdmin, who)
+			RenderModel(w, r, typeString, modelObj, models.UserRoleAdmin, who)
 		}
 
 		// type JSONPatch struct {
@@ -678,7 +680,7 @@ func PatchManyHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 			for i := 0; i < len(roles); i++ {
 				roles[i] = models.UserRoleAdmin
 			}
-			renderModelSlice(w, r, typeString, modelObjs, roles, nil, who)
+			RenderModelSlice(w, r, typeString, modelObjs, roles, nil, who)
 		}
 
 		return
@@ -718,7 +720,7 @@ func DeleteOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 		if err != nil {
 			render.Render(w, r, NewErrDelete(err))
 		} else {
-			renderModel(w, r, typeString, modelObj, models.UserRoleAdmin, who)
+			RenderModel(w, r, typeString, modelObj, models.UserRoleAdmin, who)
 		}
 
 		return
@@ -762,7 +764,7 @@ func DeleteManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 			for i := 0; i < len(roles); i++ {
 				roles[i] = models.UserRoleAdmin
 			}
-			renderModelSlice(w, r, typeString, modelObjs, roles, nil, who)
+			RenderModelSlice(w, r, typeString, modelObjs, roles, nil, who)
 		}
 
 		return
@@ -808,7 +810,7 @@ func ChangeEmailPasswordHandler(typeString string, mapper datamapper.IChangeEmai
 		if err != nil {
 			render.Render(w, r, NewErrUpdate(err))
 		} else {
-			renderModel(w, r, typeString, modelObj2, models.UserRoleAdmin, who)
+			RenderModel(w, r, typeString, modelObj2, models.UserRoleAdmin, who)
 		}
 
 		return
