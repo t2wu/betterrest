@@ -7,9 +7,19 @@ import (
 	"strings"
 
 	"github.com/jinzhu/gorm"
+	"github.com/t2wu/betterrest/db"
 	"github.com/t2wu/betterrest/libs/utils/jsontrans"
 	"github.com/t2wu/betterrest/models"
 )
+
+/*
+ * DB
+ */
+
+// RegDB register the db
+func RegDB(dbi *gorm.DB) {
+	db.SetUpDB(dbi)
+}
 
 /*
  * Registration
