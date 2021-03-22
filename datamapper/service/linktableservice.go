@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"reflect"
 
 	"github.com/jinzhu/gorm"
 	"github.com/t2wu/betterrest/datamapper/gormfixes"
@@ -74,7 +75,6 @@ func (serv *LinkTableService) HookBeforeDeleteMany(db *gorm.DB, who models.Who, 
 }
 
 // getOneWithIDCore get one model object based on its type and its id string
-// since this is organizationMapper, need to make sure it's the same organization
 func (service *LinkTableService) GetOneWithIDCore(db *gorm.DB, who models.Who, typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error) {
 	modelObj := models.NewFromTypeString(typeString)
 
@@ -87,16 +87,19 @@ func (service *LinkTableService) GetOneWithIDCore(db *gorm.DB, who models.Who, t
 	rtable := models.GetTableNameFromIModel(modelObj)
 
 	// Subquery: find all models where user_id has ME in it, then find
-	// record where model_is from subquery and id matches the one we query for
+	// record where model_id from subquery and id matches the one we query for
 
 	// Specify user_id because you gotta own this or is a guest to this
 	subquery := fmt.Sprintf("model_id IN (select model_id from %s where user_id = ?)", rtable)
 
-	err := db.Table(rtable).Where(subquery, who.Oid).Where("id = ?", &id).Find(modelObj).Error
+	err := db.Table(rtable).Where(subquery, who.Oid).Where("id = ?", id).Find(modelObj).Error
 	// err := db.Table(rtable).Where(subquery, oid).Where("user_id = ?", &id).Find(modelObj).Error
 	if err != nil {
 		return nil, 0, err
 	}
+
+	// It doesn't have to be models.OwnershipModelWithIDBase but it has to have this field
+	modelID := reflect.ValueOf(modelObj).Elem().FieldByName(("ModelID")).Interface().(*datatypes.UUID)
 
 	// The role for this role is determined on the role of the row where the user_id is YOU
 	type result struct {
@@ -104,7 +107,7 @@ func (service *LinkTableService) GetOneWithIDCore(db *gorm.DB, who models.Who, t
 	}
 	res := result{}
 	if err := db.Table(rtable).Where("user_id = ? and role = ? and model_id = ?",
-		who.Oid, models.UserRoleAdmin, id).Select("role").Scan(&res).Error; err != nil {
+		who.Oid, models.UserRoleAdmin, modelID).Select("role").Scan(&res).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, models.UserRoleInvalid, ErrPermission
 		}
