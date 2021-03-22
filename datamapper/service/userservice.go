@@ -54,7 +54,7 @@ func (serv *UserService) HookBeforeCreateMany(db *gorm.DB, who models.Who, typeS
 }
 
 func (serv *UserService) HookBeforeDeleteOne(db *gorm.DB, who models.Who, typeString string, modelObj models.IModel) (models.IModel, error) {
-	return nil, errors.New("not implemented") // probably can
+	return modelObj, nil // looks like nothing to do
 }
 
 func (serv *UserService) HookBeforeDeleteMany(db *gorm.DB, who models.Who, typeString string, modelObjs []models.IModel) ([]models.IModel, error) {

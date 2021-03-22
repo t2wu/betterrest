@@ -1,7 +1,6 @@
 package datamapper
 
 import (
-	"errors"
 	"fmt"
 	"log"
 	"reflect"
@@ -131,30 +130,9 @@ func (mapper *UserMapper) UpdateOneWithID(db *gorm.DB, who models.Who, typeStrin
 
 // DeleteOneWithID deletes the user with the ID
 func (mapper *UserMapper) DeleteOneWithID(db *gorm.DB, who models.Who, typeString string, id *datatypes.UUID) (models.IModel, error) {
-	if id == nil || id.UUID.String() == "" {
-		return nil, service.ErrIDEmpty
-	}
-
-	// Pull out entire modelObj
-	modelObj, role, err := mapper.GetOneWithID(db, who, typeString, id)
-	if err != nil { // Error is "record not found" when not found
+	modelObj, _, err := loadAndCheckErrorBeforeModify(mapper.Service, db, who, typeString, nil, id, []models.UserRole{models.UserRoleAdmin})
+	if err != nil {
 		return nil, err
-	}
-	if role != models.UserRoleAdmin {
-		// even if found, not authorized, so return a not found
-		// but how do I do that here?
-		return nil, errors.New("not found")
-	}
-
-	cargo := models.ModelCargo{}
-
-	// Before delete hookpoint
-	if v, ok := modelObj.(models.IBeforeDelete); ok {
-		hpdata := models.HookPointData{DB: db, Who: who, TypeString: typeString, Cargo: &cargo}
-		err = v.BeforeDeleteDB(hpdata)
-		if err != nil {
-			return nil, err
-		}
 	}
 
 	// Unscoped() for REAL delete!
@@ -164,25 +142,32 @@ func (mapper *UserMapper) DeleteOneWithID(db *gorm.DB, who models.Who, typeStrin
 		db = db.Unscoped()
 	}
 
-	// Unscoped() for REAL delete!
-	// Otherwise my constraint won't work...
-	// Soft delete will take more work, have to verify myself manually
-	// db.Unscoped().Delete(modelObj).Errorf
-	err = db.Delete(modelObj).Error
+	modelObj, err = mapper.Service.HookBeforeDeleteOne(db, who, typeString, modelObj)
 	if err != nil {
 		return nil, err
 	}
 
-	// After delete hookpoint
-	if v, ok := modelObj.(models.IAfterDelete); ok {
-		hpdata := models.HookPointData{DB: db, Who: who, TypeString: typeString, Cargo: &cargo}
-		err = v.AfterDeleteDB(hpdata)
-		if err != nil {
-			return nil, err
-		}
+	var before, after *string
+	if _, ok := modelObj.(models.IBeforeDelete); ok {
+		b := "BeforeDeleteDB"
+		before = &b
+	}
+	if _, ok := modelObj.(models.IAfterDelete); ok {
+		a := "AfterDeleteDB"
+		after = &a
 	}
 
-	return modelObj, nil
+	j := opJob{
+		serv:       mapper.Service,
+		db:         db,
+		who:        who,
+		typeString: typeString,
+		// oldModelObj: oldModelObj,
+		modelObj: modelObj,
+		crupdOp:  models.CRUPDOpDelete,
+	}
+
+	return opCore(before, after, j, mapper.Service.DeleteOneCore)
 }
 
 // ChangeEmailPasswordWithID changes email and/or password
