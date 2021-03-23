@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"reflect"
 	"runtime/debug"
 	"strconv"
 	"strings"
@@ -231,8 +232,8 @@ func UserLoginHandler(typeString string) func(c *gin.Context) {
 			}
 		}
 
-		authUserModel, verifyUserResult := security.GetVerifiedAuthUser(m)
-		if verifyUserResult == security.VerifyUserResultPasswordNotMatch {
+		authUserModel, err := security.GetVerifiedAuthUser(m)
+		if err == security.ErrPasswordIncorrect {
 			// User hookpoing after login
 			if v, ok := authUserModel.(models.IAfterLoginFailed); ok {
 				who.Oid = authUserModel.GetID()
@@ -252,13 +253,13 @@ func UserLoginHandler(typeString string) func(c *gin.Context) {
 
 			render.Render(w, r, NewErrLoginUser(nil))
 			return
-		} else if verifyUserResult != security.VerifyUserResultOK {
+		} else if err != nil {
 			// unable to login user. maybe doesn't exist?
 			// or username, password wrong
 			// tx.Rollback() no rollback, actually commit
 			tx.Commit()
 
-			render.Render(w, r, NewErrLoginUser(nil))
+			render.Render(w, r, NewErrLoginUser(err))
 			return
 		}
 
@@ -299,6 +300,41 @@ func UserLoginHandler(typeString string) func(c *gin.Context) {
 		w.Write(jsn)
 	}
 }
+
+// UserVerifyEmailHandler verifies the user's email
+// func UserVerifyEmailHandler(typeString string) func(c *gin.Context) {
+// 	return func(c *gin.Context) {
+// 		w, r := c.Writer, c.Request
+// 		values := r.URL.Query()
+// 		email := values.Get("email") // verification email
+// 		code := values.Get("code")   // verification code
+
+// 		// Query the library for verification of this email
+// 		err := libs.Transact(db.Shared(), func(tx *gorm.DB) error {
+// 			model := models.NewFromTypeString(typeString)
+// 			if err := tx.Model(&model).Where("email = ? AND code = ? AND status = ?",
+// 				email, code, models.UserStatusUnverified).Error; err != nil {
+// 				return fmt.Errorf("account verification failed")
+// 			}
+
+// 			if err := tx.Model(&model).Update("status", models.UserStatusActive).Error; err != nil {
+// 				err := fmt.Errorf("account failed to activate")
+// 				return err
+// 			}
+// 			return nil
+// 		})
+
+// 		if err != nil {
+// 			render.Render(w, r, NewErrVerify(err))
+// 		}
+
+// 		content := fmt.Sprintf("{ \"code\": 0 }")
+// 		data := []byte(content)
+
+// 		w.Header().Set("Content-Length", strconv.Itoa(len(data)))
+// 		w.Write(data)
+// 	}
+// }
 
 func GetOptionByParsingURL(r *http.Request) (map[datamapper.URLParam]interface{}, error) {
 	options := make(map[datamapper.URLParam]interface{})
@@ -773,8 +809,8 @@ func DeleteManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 	}
 }
 
-// ChangeEmailPasswordHandler returns a gin handler which changes password
-func ChangeEmailPasswordHandler(typeString string, mapper datamapper.IChangeEmailPasswordMapper) func(c *gin.Context) {
+// EmailChangePasswordHandler returns a gin handler which changes password
+func EmailChangePasswordHandler(typeString string, mapper datamapper.IChangeEmailPasswordMapper) func(c *gin.Context) {
 	return func(c *gin.Context) {
 		w, r := c.Writer, c.Request
 
@@ -806,13 +842,73 @@ func ChangeEmailPasswordHandler(typeString string, mapper datamapper.IChangeEmai
 				log.Println("Error in ChangeEmailPasswordHandler:", typeString, err)
 				return err
 			}
-			return err
+
+			return nil
 		})
 
 		if err != nil {
 			render.Render(w, r, NewErrUpdate(err))
 		} else {
 			RenderModel(w, r, typeString, modelObj2, models.UserRoleAdmin, who)
+		}
+
+		return
+	}
+}
+
+// EmailVerificationHandler returns a gin handler which make the account verified and active
+func EmailVerificationHandler(typeString string) func(c *gin.Context) {
+	return func(c *gin.Context) {
+		w, r := c.Writer, c.Request
+
+		defer func() {
+			if r := recover(); r != nil {
+				debug.PrintStack()
+				render.Render(w, c.Request, NewErrInternalServerError(nil))
+				fmt.Println("Panic in ChangePasswordHandler", r)
+			}
+		}()
+
+		id, httperr := IDFromURLQueryString(c)
+		if httperr != nil {
+			render.Render(w, r, httperr)
+			return
+		}
+
+		code := c.Param("code")
+		if code == "" {
+			render.Render(w, r, NewErrURLParameter(errors.New("missing verification code")))
+			return
+		}
+
+		values := r.URL.Query()
+		redirectURL := values.Get(string(datamapper.URLParamRedirect))
+
+		// Remove this code from the db and make this user verified
+		err := transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
+			modelObj := models.NewFromTypeString(typeString)
+			if err := tx.Model(modelObj).Where("id = ? AND verification_code = ?", id, code).Find(modelObj).Error; err != nil {
+				return err
+			}
+
+			expiry := reflect.ValueOf(modelObj).Elem().FieldByName("VerificationExpiredAt").Interface().(*time.Time)
+			if time.Now().Sub(*expiry) > 0 { // expired
+				return fmt.Errorf("expired")
+			}
+
+			reflect.ValueOf(modelObj).Elem().FieldByName("Status").Set(reflect.ValueOf(models.UserStatusActive))
+			if err := tx.Save(modelObj).Error; err != nil {
+				return err
+			}
+
+			return nil
+		})
+
+		if err != nil {
+			c.Redirect(http.StatusFound, redirectURL+"?error="+err.Error())
+		} else {
+			c.Redirect(http.StatusFound, redirectURL)
+			return
 		}
 
 		return

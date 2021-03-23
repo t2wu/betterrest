@@ -15,6 +15,7 @@ func UserRoutes(endpoint string, r *gin.Engine) {
 	// r.Get("/", ReadAllHandler("users"))
 	// r.With(paginate).Get("/", ListArticles)
 	g.POST("", guardMiddleWare(typeString), CreateHandler(typeString, dm))
+	g.GET("/:id/verifyemail/:code", guardMiddleWare(typeString), EmailVerificationHandler(typeString))
 	g.POST("/login", guardMiddleWare(typeString), UserLoginHandler(typeString)) // no crud on this one...access db itself
 
 	// g := r.Group(nil)
@@ -24,7 +25,7 @@ func UserRoutes(endpoint string, r *gin.Engine) {
 	{
 		n.GET("", guardMiddleWare(typeString), ReadOneHandler(typeString, dm))
 		n.PUT("", guardMiddleWare(typeString), UpdateOneHandler(typeString, dm))
-		n.PUT("/changeemailpassword", guardMiddleWare(typeString), ChangeEmailPasswordHandler(typeString, dm))
+		n.PUT("/changeemailpassword", guardMiddleWare(typeString), EmailChangePasswordHandler(typeString, dm))
 		n.DELETE("", guardMiddleWare(typeString), DeleteOneHandler(typeString, dm))
 	}
 }

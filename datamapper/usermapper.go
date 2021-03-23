@@ -5,12 +5,15 @@ import (
 	"log"
 	"reflect"
 	"sync"
+	"time"
 
 	"github.com/t2wu/betterrest/datamapper/service"
 	"github.com/t2wu/betterrest/libs/datatypes"
 	"github.com/t2wu/betterrest/libs/security"
+	"github.com/t2wu/betterrest/libs/utils"
 	"github.com/t2wu/betterrest/models"
 
+	"github.com/jinzhu/copier"
 	"github.com/jinzhu/gorm"
 )
 
@@ -46,6 +49,19 @@ func (mapper *UserMapper) CreateOne(db *gorm.DB, who models.Who, typeString stri
 		return nil, err
 	}
 
+	verificationURL, ok := reflect.ValueOf(modelObj).Elem().FieldByName("VerificationURL").Interface().(string)
+	if ok && verificationURL != "" {
+		// Verfication code
+		code := utils.RandStringBytesMaskImprSrcUnsafe(12)
+		reflect.ValueOf(modelObj).Elem().FieldByName("VerificationCode").Set(reflect.ValueOf(code))
+
+		expiry := time.Now().Add(time.Duration(time.Hour * 24 * 3))
+		reflect.ValueOf(modelObj).Elem().FieldByName("VerificationExpiredAt").Set(reflect.ValueOf(&expiry))
+	} else {
+		// No verification needed, go right ahead
+		reflect.ValueOf(modelObj).Elem().FieldByName("Status").Set(reflect.ValueOf(models.UserStatusActive))
+	}
+
 	var before, after *string
 	if _, ok := modelObj.(models.IBeforeCreate); ok {
 		*before = "BeforeCreateDB"
@@ -60,7 +76,9 @@ func (mapper *UserMapper) CreateOne(db *gorm.DB, who models.Who, typeString stri
 		typeString: typeString,
 		// oldModelObj: oldModelObj,
 		modelObj: modelObj,
+		crupdOp:  models.CRUPDOpCreate,
 	}
+
 	return opCore(before, after, j, mapper.Service.CreateOneCore)
 }
 
@@ -72,6 +90,7 @@ func (mapper *UserMapper) CreateOne(db *gorm.DB, who models.Who, typeString stri
 
 // GetOneWithID get one model object based on its type and its id string
 func (mapper *UserMapper) GetOneWithID(db *gorm.DB, who models.Who, typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error) {
+	log.Println("GetOneWithID...................")
 	modelObj, role, err := mapper.Service.GetOneWithIDCore(db, who, typeString, id)
 	if err != nil {
 		return nil, 0, err
@@ -173,64 +192,70 @@ func (mapper *UserMapper) DeleteOneWithID(db *gorm.DB, who models.Who, typeStrin
 // ChangeEmailPasswordWithID changes email and/or password
 func (mapper *UserMapper) ChangeEmailPasswordWithID(db *gorm.DB, who models.Who, typeString string, modelObj models.IModel, id *datatypes.UUID) (models.IModel, error) {
 	log.Println("userMapper's ChangeEmailPasswordWithID called")
-	oldModelObj, _, err := loadAndCheckErrorBeforeModify(mapper.Service, db, who, typeString, modelObj, id, []models.UserRole{models.UserRoleAdmin})
-	if err != nil {
-		return nil, err
-	}
-
-	// Verify the password in the current modelObj
-	if _, code := security.GetVerifiedAuthUser(modelObj); code != security.VerifyUserResultOK {
-		// unable to login user. maybe doesn't exist?
-		// or username, password wrong
-		return nil, fmt.Errorf("password incorrect")
-	}
-
-	// Hash the new password (assume already the correct format and length)
-	newPassword := reflect.ValueOf(modelObj).Elem().FieldByName(("NewPassword")).Interface().(string)
-	hash, err := security.HashAndSalt(newPassword)
-	if err != nil {
-		return nil, err
-	}
-
-	newEmail := reflect.ValueOf(modelObj).Elem().FieldByName(("NewEmail")).Interface().(string)
-
-	// // Load the original model, then override email and password hash which we want to change
-	// oldModel, role, err := mapper.getOneWithIDCore(db, oid, scope, typeString, id)
+	// This will require that it has an ID, but in changing email there isn't
+	// oldModelObj, _, err := loadAndCheckErrorBeforeModify(mapper.Service, db, who, typeString, modelObj, id, []models.UserRole{models.UserRoleAdmin})
 	// if err != nil {
 	// 	return nil, err
 	// }
-	// modelObj = oldModel
 
-	// if role != models.UserRoleAdmin {
-	// 	return nil, errPermission
-	// }
+	// Verify the password in the current modelObj
+	oldModelObj, err := security.GetVerifiedAuthUser(modelObj)
+	if err != nil {
+		// unable to login user. maybe doesn't exist?
+		// or username, password wrong
+		return nil, err
+	}
 
-	// Override email with newemail
-	reflect.ValueOf(modelObj).Elem().FieldByName("Email").Set(reflect.ValueOf(newEmail))
+	newModel := models.NewFromTypeString(typeString)
+	copier.Copy(newModel, oldModelObj)
 
-	reflect.ValueOf(modelObj).Elem().FieldByName("PasswordHash").Set(reflect.ValueOf(hash))
-	reflect.ValueOf(modelObj).Elem().FieldByName("Password").Set(reflect.ValueOf(""))    // just in case user mess up
-	reflect.ValueOf(modelObj).Elem().FieldByName("NewPassword").Set(reflect.ValueOf("")) // just in case
+	modelObj.SetID(oldModelObj.GetID())
+
+	// Hash the new password (assume already the correct format and length)
+	if newPassword := reflect.ValueOf(modelObj).Elem().FieldByName("NewPassword").Interface().(string); newPassword != "" {
+		hash, err := security.HashAndSalt(newPassword)
+		if err != nil {
+			return nil, err
+		}
+		reflect.ValueOf(newModel).Elem().FieldByName("PasswordHash").Set(reflect.ValueOf(hash))
+		// reflect.ValueOf(modelObj).Elem().FieldByName("Password").Set(reflect.ValueOf("")) // just in case user mess up
+		// reflect.ValueOf(modelObj).Elem().FieldByName("NewPassword").Set(reflect.ValueOf("")) // just in case
+	} else {
+		log.Println("no new password")
+	}
+
+	if newEmail := reflect.ValueOf(modelObj).Elem().FieldByName("NewEmail").Interface().(string); newEmail != "" {
+		email := reflect.ValueOf(oldModelObj).Elem().FieldByName("Email").Interface().(string)
+
+		// Override email with newemail
+		reflect.ValueOf(newModel).Elem().FieldByName("Email").Set(reflect.ValueOf(newEmail))
+		if newEmail != email {
+			reflect.ValueOf(newModel).Elem().FieldByName("Status").Set(reflect.ValueOf(models.UserStatusUnverified))
+		}
+	} else {
+		log.Println("no new email")
+	}
 
 	cargo := models.ModelCargo{}
 
 	// Before hook
-	if v, ok := modelObj.(models.IBeforePasswordUpdate); ok {
+	if v, ok := newModel.(models.IBeforePasswordChange); ok {
 		hpdata := models.HookPointData{DB: db, Who: who, TypeString: typeString, Cargo: &cargo}
-		if err := v.BeforePasswordUpdateDB(hpdata); err != nil {
+		if err := v.BeforePasswordChange(hpdata); err != nil {
 			return nil, err
 		}
 	}
 
-	modelObj2, err := mapper.Service.UpdateOneCore(db, who, typeString, modelObj, id, oldModelObj)
+	modelObj2, err := mapper.Service.UpdateOneCore(db, who, typeString, newModel, id, oldModelObj)
 	if err != nil {
 		return nil, err
 	}
 
 	// After hook
-	if v, ok := modelObj2.(models.IAfterPasswordUpdate); ok {
+	if v, ok := modelObj2.(models.IAfterPasswordChange); ok {
 		hpdata := models.HookPointData{DB: db, Who: who, TypeString: typeString, Cargo: &cargo}
-		if err = v.AfterPasswordUpdateDB(hpdata); err != nil {
+		if err = v.AfterPasswordChange(hpdata); err != nil {
+			log.Println("AfterPasswordUpdateDB error returns:", err)
 			return nil, err
 		}
 	}

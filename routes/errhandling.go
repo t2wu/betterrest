@@ -281,6 +281,23 @@ type ErrInvalidRefreshToken struct {
 	ErrResponse
 }
 
+// NewErrVerify creates a new ErrVerify
+func NewErrVerify(err error) render.Renderer {
+	return &ErrVerify{
+		ErrResponse{
+			HTTPStatusCode: http.StatusBadRequest,
+			Code:           16,
+			StatusText:     "error verifying email",
+			ErrorText:      errorToSensibleString(err),
+		},
+	}
+}
+
+// ErrVerify some problem verifying email (not specific yet)
+type ErrVerify struct {
+	ErrResponse
+}
+
 // General CRUD errors
 
 // NewErrCreate creates a new ErrCreate
@@ -344,6 +361,23 @@ func NewErrDelete(err error) render.Renderer {
 			HTTPStatusCode: http.StatusBadRequest,
 			Code:           103,
 			StatusText:     "error in deleting resource",
+			ErrorText:      errorToSensibleString(err),
+		},
+	}
+}
+
+// ErrVerification some problem regarding email verification
+type ErrVerification struct {
+	ErrResponse
+}
+
+// NewErrVerification creates a new ErrDelete
+func NewErrVerification(err error) render.Renderer {
+	return &ErrDelete{
+		ErrResponse{
+			HTTPStatusCode: http.StatusBadRequest,
+			Code:           104,
+			StatusText:     "error in verifying user",
 			ErrorText:      errorToSensibleString(err),
 		},
 	}

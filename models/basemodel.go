@@ -37,6 +37,14 @@ const (
 	UserRolePublic UserRole = 2
 )
 
+type UserStatus int
+
+const (
+	UserStatusUnverified UserStatus = iota // email unverified (can happen with a change of email)
+	UserStatusActive                       // email active
+	UserStatusInactive                     // email inactive (for whatever reason the account is inactivated)
+)
+
 // BaseModel is the base class domain model which has standard ID
 type BaseModel struct {
 	// For MySQL
@@ -290,12 +298,12 @@ type HookPointData struct {
 	Role *UserRole
 }
 
-// IBeforeLogin has a function that is a hookpoint for actions after login but before marshalling
+// IBeforeLogin has a function that is a hookpoint for actions before login but after marshalling
 type IBeforeLogin interface {
 	BeforeLogin(hpdata HookPointData) error
 }
 
-// IAfterLogin has a function that is a hookpoint for actions after login but before marshalling
+// IAfterLogin has a function that is a hookpoint for actions after login
 type IAfterLogin interface {
 	AfterLogin(hpdata HookPointData, payload map[string]interface{}) (map[string]interface{}, error)
 }
@@ -303,6 +311,16 @@ type IAfterLogin interface {
 // IAfterLoginFailed has a function that is a hookpoint for actions after login but before marshalling
 type IAfterLoginFailed interface {
 	AfterLoginFailed(hpdata HookPointData) error
+}
+
+// IBeforePasswordChange has a function that is a hookpoint for actions before password change but before marshalling
+type IBeforePasswordChange interface {
+	BeforePasswordChange(hpdata HookPointData) error
+}
+
+// IAfterPasswordChange has a function that is a hookpoint for actions after password change
+type IAfterPasswordChange interface {
+	AfterPasswordChange(hpdata HookPointData) error
 }
 
 // IBeforeCreate supports method to be called before data is inserted (created) into the database
@@ -371,16 +389,6 @@ type IAfterCRUPD interface {
 // IValidate supports validation with govalidator
 type IValidate interface {
 	Validate(who Who, http HTTP) error
-}
-
-// IBeforePasswordUpdate supports method to be called before data is updated in the database
-type IBeforePasswordUpdate interface {
-	BeforePasswordUpdateDB(hpdata HookPointData) error
-}
-
-// IAfterPasswordUpdate supports method to be called after data is updated in the database
-type IAfterPasswordUpdate interface {
-	AfterPasswordUpdateDB(hpdata HookPointData) error
 }
 
 // ------------------------------------
