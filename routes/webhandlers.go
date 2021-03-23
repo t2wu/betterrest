@@ -192,6 +192,8 @@ func UserLoginHandler(typeString string) func(c *gin.Context) {
 	return func(c *gin.Context) {
 		w, r := c.Writer, c.Request
 
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+
 		tx := db.Shared().Begin()
 		defer func(tx *gorm.DB) {
 			if r := recover(); r != nil {
