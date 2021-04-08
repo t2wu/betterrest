@@ -88,7 +88,7 @@ func (mapper *GlobalMapper) CreateMany(db *gorm.DB, oid *datatypes.UUID, scope *
 
 	// After batch insert hookpoint
 	if after := models.ModelRegistry[typeString].AfterInsert; after != nil {
-		if err := after(modelObjs, db, oid, scope, typeString, &cargo); err != nil {
+		if err := after(retModels, db, oid, scope, typeString, &cargo); err != nil {
 			return nil, err
 		}
 	}
@@ -257,7 +257,7 @@ func (mapper *GlobalMapper) UpdateMany(db *gorm.DB, oid *datatypes.UUID, scope *
 
 	// After batch update hookpoint
 	if after := models.ModelRegistry[typeString].AfterUpdate; after != nil {
-		if err = after(modelObjs, db, oid, scope, typeString, &cargo); err != nil {
+		if err = after(ms, db, oid, scope, typeString, &cargo); err != nil {
 			return nil, err
 		}
 	}
@@ -436,7 +436,7 @@ func (mapper *GlobalMapper) DeleteMany(db *gorm.DB, oid *datatypes.UUID, scope *
 
 	// After batch delete hookpoint
 	if after := models.ModelRegistry[typeString].AfterDelete; after != nil {
-		if err = after(modelObjs, db, oid, scope, typeString, &cargo); err != nil {
+		if err = after(ms, db, oid, scope, typeString, &cargo); err != nil {
 			return nil, err
 		}
 	}
