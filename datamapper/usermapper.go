@@ -121,6 +121,8 @@ func (mapper *UserMapper) UpdateOneWithID(db *gorm.DB, who models.Who, typeStrin
 		return nil, err
 	}
 
+	reflect.ValueOf(modelObj).Elem().FieldByName("Status").Set(reflect.ValueOf(models.UserStatusActive))
+
 	cargo := models.ModelCargo{}
 
 	// Before hook
