@@ -33,20 +33,20 @@ func (serv *LinkTableService) HookBeforeCreateOne(db *gorm.DB, who models.Who, t
 		return nil, err
 	}
 
-	userID := ownerModelObj.GetUserID()
+	// userID := ownerModelObj.GetUserID()
 
-	// This user actually has to exists!
-	// Again the user table needs to be called "user" (limitation)
-	// Unless I provide an interface to register it specifically
-	type result struct {
-		ID *datatypes.UUID
-	}
-	res := result{}
-	if err := db.Table("user").Select("id").Where("id = ?", userID).Scan(&res).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, fmt.Errorf("user does not exists")
-		}
-	}
+	// // This user actually has to exists!
+	// // Again the user table needs to be called "user" (limitation)
+	// // Unless I provide an interface to register it specifically
+	// type result struct {
+	// 	ID *datatypes.UUID
+	// }
+	// res := result{}
+	// if err := db.Table("user").Select("id").Where("id = ?", userID).Scan(&res).Error; err != nil {
+	// 	if errors.Is(err, gorm.ErrRecordNotFound) {
+	// 		return nil, fmt.Errorf("user does not exists")
+	// 	}
+	// }
 	return modelObj, nil
 }
 
