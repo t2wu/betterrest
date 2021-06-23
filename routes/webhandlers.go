@@ -18,6 +18,7 @@ import (
 	"github.com/t2wu/betterrest/datamapper"
 	"github.com/t2wu/betterrest/db"
 	"github.com/t2wu/betterrest/libs/security"
+	"github.com/t2wu/betterrest/libs/settings"
 	"github.com/t2wu/betterrest/libs/utils/transact"
 	"github.com/t2wu/betterrest/models"
 	"github.com/t2wu/betterrest/models/tools"
@@ -25,6 +26,24 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/go-chi/render"
 )
+
+// ------------------------------------------------------
+func logTransID(tx *gorm.DB, method, url, cardinality string) {
+	if settings.Log {
+		res := struct {
+			TxidCurrent int
+		}{}
+		if err := tx.Raw("SELECT txid_current()").Scan(&res).Error; err != nil {
+			s := fmt.Sprintf("[BetterREST]: Error in HTTP method: %s, Endpoint: %s, cardinality: %s", method, url, cardinality)
+			log.Println(s)
+			// ignore error
+			return
+		}
+
+		s := fmt.Sprintf("[BetterREST]: %s %s (%s), transact: %d", method, url, cardinality, res.TxidCurrent)
+		log.Println(s)
+	}
+}
 
 // ---------------------------------------------
 func LimitAndOffsetFromQueryString(values *url.Values) (*int, *int, error) {
@@ -404,6 +423,8 @@ func ReadAllHandler(typeString string, mapper datamapper.IDataMapper) func(c *gi
 		var roles []models.UserRole
 		var no *int
 		err = transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
+			logTransID(tx, c.Request.Method, c.Request.URL.String(), "n")
+
 			if modelObjs, roles, no, err = mapper.GetAll(tx, who, typeString, options); err != nil {
 				log.Println("Error in ReadAllHandler:", typeString, err)
 				return err
@@ -446,6 +467,8 @@ func CreateHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin
 
 		if *isBatch {
 			err := transact.Transact(db.Shared(), func(tx *gorm.DB) error {
+				logTransID(tx, c.Request.Method, c.Request.URL.String(), "n")
+
 				var err2 error
 				if modelObjs, err2 = mapper.CreateMany(tx, who, typeString, modelObjs); err2 != nil {
 					log.Println("Error in CreateMany:", typeString, err2)
@@ -468,6 +491,8 @@ func CreateHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin
 		} else {
 			var err2 error
 			err := transact.Transact(db.Shared(), func(tx *gorm.DB) error {
+				logTransID(tx, c.Request.Method, c.Request.URL.String(), "1")
+
 				if modelObj, err2 = mapper.CreateOne(tx, who, typeString, modelObjs[0]); err2 != nil {
 					log.Println("Error in CreateOne:", typeString, err2)
 					return err2
@@ -509,6 +534,8 @@ func ReadOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *gi
 		var modelObj models.IModel
 		var role models.UserRole
 		err := transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
+			logTransID(tx, c.Request.Method, c.Request.URL.String(), "1")
+
 			if modelObj, role, err = mapper.GetOneWithID(tx, who, typeString, id); err != nil {
 				log.Println("Error in ReadOneHandler ErrNotFound:", typeString, err)
 				return err
@@ -564,6 +591,8 @@ func UpdateOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 
 		var modelObj2 models.IModel
 		err := transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
+			logTransID(tx, c.Request.Method, c.Request.URL.String(), "1")
+
 			if modelObj2, err = mapper.UpdateOneWithID(tx, who, typeString, modelObj, id); err != nil {
 				log.Println("Error in UpdateOneHandler ErrUpdate:", typeString, err)
 				return err
@@ -605,6 +634,8 @@ func UpdateManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 
 		var modelObjs2 []models.IModel
 		err := transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
+			logTransID(tx, c.Request.Method, c.Request.URL.String(), "n")
+
 			if modelObjs2, err = mapper.UpdateMany(tx, who, typeString, modelObjs); err != nil {
 				log.Println("Error in UpdateManyHandler:", typeString, err)
 				return err
@@ -657,6 +688,8 @@ func PatchOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *g
 
 		var modelObj models.IModel
 		err = transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
+			logTransID(tx, c.Request.Method, c.Request.URL.String(), "1")
+
 			if modelObj, err = mapper.PatchOneWithID(tx, who, typeString, jsonPatch, id); err != nil {
 				log.Println("Error in PatchOneHandler:", typeString, err)
 				return err
@@ -704,6 +737,8 @@ func PatchManyHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 
 		var modelObjs []models.IModel
 		err := transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
+			logTransID(tx, c.Request.Method, c.Request.URL.String(), "n")
+
 			if modelObjs, err = mapper.PatchMany(tx, who, typeString, jsonIDPatches); err != nil {
 				log.Println("Error in PatchManyHandler:", typeString, err)
 				return err
@@ -748,6 +783,8 @@ func DeleteOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 
 		var modelObj models.IModel
 		err := transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
+			logTransID(tx, c.Request.Method, c.Request.URL.String(), "1")
+
 			if modelObj, err = mapper.DeleteOneWithID(tx, who, typeString, id); err != nil {
 				log.Printf("Error in DeleteOneHandler: %s %+v\n", typeString, err)
 				return err
@@ -788,6 +825,8 @@ func DeleteManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 		}
 
 		err := transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
+			logTransID(tx, c.Request.Method, c.Request.URL.String(), "n")
+
 			if modelObjs, err = mapper.DeleteMany(tx, who, typeString, modelObjs); err != nil {
 				log.Println("Error in DeleteOneHandler ErrDelete:", typeString, err)
 				return err
@@ -838,6 +877,8 @@ func EmailChangePasswordHandler(typeString string, mapper datamapper.IChangeEmai
 
 		var modelObj2 models.IModel
 		err := transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
+			logTransID(tx, c.Request.Method, c.Request.URL.String(), "1")
+
 			if modelObj2, err = mapper.ChangeEmailPasswordWithID(tx, who, typeString, modelObj, id); err != nil {
 				log.Println("Error in ChangeEmailPasswordHandler:", typeString, err)
 				return err
@@ -886,6 +927,8 @@ func EmailVerificationHandler(typeString string) func(c *gin.Context) {
 
 		// Remove this code from the db and make this user verified
 		err := transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
+			logTransID(tx, c.Request.Method, c.Request.URL.String(), "1")
+
 			modelObj := models.NewFromTypeString(typeString)
 			if err := tx.Model(modelObj).Where("id = ? AND verification_code = ?", id, code).Find(modelObj).Error; err != nil {
 				return err

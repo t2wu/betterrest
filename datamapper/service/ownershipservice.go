@@ -159,7 +159,7 @@ func (serv *OwnershipService) GetOneWithIDCore(db *gorm.DB, who models.Who, type
 	*/
 
 	joinTableName := models.OwnershipTableNameFromOwnershipResourceTypeString(typeString)
-	log.Println("joinTableName???", joinTableName)
+	// log.Println("joinTableName???", joinTableName)
 	// joinTableName := models.GetJoinTableName(modelObj)
 
 	firstJoin := fmt.Sprintf("INNER JOIN \"%s\" ON \"%s\".id = \"%s\".model_id AND \"%s\".id = ?", joinTableName, rtable, joinTableName, rtable)

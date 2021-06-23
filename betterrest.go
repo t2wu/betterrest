@@ -6,11 +6,21 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/t2wu/betterrest/libs/settings"
+
 	"github.com/jinzhu/gorm"
 	"github.com/t2wu/betterrest/db"
 	"github.com/t2wu/betterrest/libs/utils/jsontrans"
 	"github.com/t2wu/betterrest/models"
 )
+
+type Config struct {
+	Log bool
+}
+
+func SetConfig(cfg Config) {
+	settings.Log = cfg.Log
+}
 
 /*
  * DB
