@@ -422,15 +422,12 @@ func ReadAllHandler(typeString string, mapper datamapper.IDataMapper) func(c *gi
 		var modelObjs []models.IModel
 		var roles []models.UserRole
 		var no *int
-		err = transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
-			logTransID(tx, c.Request.Method, c.Request.URL.String(), "n")
 
-			if modelObjs, roles, no, err = mapper.GetAll(tx, who, typeString, options); err != nil {
-				log.Println("Error in ReadAllHandler:", typeString, err)
-				return err
-			}
-			return
-		})
+		if settings.Log {
+			log.Println(fmt.Sprintf("[BetterREST]: %s %s (n), transact: n/a", c.Request.Method, c.Request.URL.String()))
+		}
+
+		modelObjs, roles, no, err = mapper.GetAll(db.Shared(), who, typeString, options)
 
 		if err != nil {
 			render.Render(w, r, NewErrInternalServerError(err))
@@ -533,15 +530,13 @@ func ReadOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *gi
 
 		var modelObj models.IModel
 		var role models.UserRole
-		err := transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
-			logTransID(tx, c.Request.Method, c.Request.URL.String(), "1")
 
-			if modelObj, role, err = mapper.GetOneWithID(tx, who, typeString, id); err != nil {
-				log.Println("Error in ReadOneHandler ErrNotFound:", typeString, err)
-				return err
-			}
-			return nil
-		})
+		if settings.Log {
+			log.Println(fmt.Sprintf("[BetterREST]: %s %s (1), transact: n/a", c.Request.Method, c.Request.URL.String()))
+		}
+
+		var err error
+		modelObj, role, err = mapper.GetOneWithID(db.Shared(), who, typeString, id)
 
 		if err != nil && gorm.IsRecordNotFoundError(err) {
 			render.Render(w, r, NewErrNotFound(err))
