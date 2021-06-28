@@ -20,10 +20,10 @@ func UserRoutes(endpoint string, r *gin.Engine) {
 	// The following :id is bogus
 	// I want the user to just do /#/sendverificationemail
 	g.POST("/sendverificationemail", guardMiddleWare(typeString), SendVerificationEmailHandler(typeString, dm))
-	g.GET("/:id/verifyemail/:code", guardMiddleWare(typeString), EmailVerificationHandler(typeString))
+	g.POST("/verifyemail/:id/:code", guardMiddleWare(typeString), EmailVerificationHandler(typeString, dm))
 
-	g.POST("/resetpassword", guardMiddleWare(typeString), SendResetPasswordHandler(typeString, dm))
-	g.GET("/:id/resetpassword/:code", guardMiddleWare(typeString), PasswordResetHandler(typeString))
+	g.POST("/sendresetpasswordemail", guardMiddleWare(typeString), SendResetPasswordHandler(typeString, dm))
+	g.POST("/resetpassword/:id/:code", guardMiddleWare(typeString), PasswordResetHandler(typeString, dm))
 
 	g.POST("/login", guardMiddleWare(typeString), UserLoginHandler(typeString)) // no crud on this one...access db itself
 

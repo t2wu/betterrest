@@ -54,14 +54,16 @@ type IChangeEmailPasswordMapper interface {
 		typeString string, modelobj models.IModel, id *datatypes.UUID) (models.IModel, error)
 }
 
-// ISendEmailVerificationMapper re-send verification email
-type ISendEmailVerificationMapper interface {
+// IEmailVerificationMapper does verification email
+type IEmailVerificationMapper interface {
 	SendEmailVerification(db *gorm.DB, who models.Who, typeString string, modelObj models.IModel) error
+	VerifyEmail(db *gorm.DB, typeString string, id *datatypes.UUID, code string) error
 }
 
 // IResetPasswordMapper reset password in-case user forgotten it.
 type IResetPasswordMapper interface {
-	ResetPassword(db *gorm.DB, who models.Who, typeString string, modelObj models.IModel) error
+	SendEmailResetPassword(db *gorm.DB, who models.Who, typeString string, modelObj models.IModel) error
+	ResetPassword(db *gorm.DB, typeString string, modelObj models.IModel, id *datatypes.UUID, code string) error
 }
 
 // -----------------------------------

@@ -8,7 +8,6 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"reflect"
 	"runtime/debug"
 	"strconv"
 	"strings"
@@ -17,7 +16,6 @@ import (
 	"github.com/jinzhu/gorm"
 	"github.com/t2wu/betterrest/datamapper"
 	"github.com/t2wu/betterrest/db"
-	"github.com/t2wu/betterrest/libs/datatypes"
 	"github.com/t2wu/betterrest/libs/security"
 	"github.com/t2wu/betterrest/libs/settings"
 	"github.com/t2wu/betterrest/libs/utils/transact"
@@ -893,7 +891,7 @@ func EmailChangePasswordHandler(typeString string, mapper datamapper.IChangeEmai
 	}
 }
 
-func SendResetPasswordHandler(typeString string, mapper datamapper.IResetPasswordMapper) func(c *gin.Context) {
+func SendVerificationEmailHandler(typeString string, mapper datamapper.IEmailVerificationMapper) func(c *gin.Context) {
 	return func(c *gin.Context) {
 		w, r := c.Writer, c.Request
 
@@ -908,48 +906,7 @@ func SendResetPasswordHandler(typeString string, mapper datamapper.IResetPasswor
 		// var modelObj models.IModel
 
 		who := WhoFromContext(r)
-
-		modelObj, httperr := ModelFromJSONBody(r, typeString, who)
-		if httperr != nil {
-			render.Render(w, r, httperr)
-			return
-		}
-
-		// db *gorm.DB, who models.Who,
-		// typeString string, modelobj models.IModel, id *datatypes.UUID
-		err := transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
-			logTransID(tx, c.Request.Method, c.Request.URL.String(), "1")
-
-			return mapper.ResetPassword(tx, who, typeString, modelObj)
-		})
-
-		if err != nil {
-			render.Render(w, r, NewErrBadRequest(err)) // maybe another type of error?
-		} else {
-			w.Header().Set("Content-Type", "application/json; charset=utf-8")
-			w.Write([]byte("{\"code\": 0}"))
-		}
-
-		return
-	}
-}
-
-func SendVerificationEmailHandler(typeString string, mapper datamapper.ISendEmailVerificationMapper) func(c *gin.Context) {
-	return func(c *gin.Context) {
-		w, r := c.Writer, c.Request
-
-		defer func() {
-			if r := recover(); r != nil {
-				debug.PrintStack()
-				render.Render(w, c.Request, NewErrInternalServerError(nil))
-				fmt.Println("Panic in CreateHandler", r)
-			}
-		}()
-
-		// var modelObj models.IModel
-
-		who := WhoFromContext(r)
-
+		// Is there a ownerID? Probably not...
 		modelObj, httperr := ModelFromJSONBody(r, typeString, who)
 		if httperr != nil {
 			render.Render(w, r, httperr)
@@ -976,7 +933,7 @@ func SendVerificationEmailHandler(typeString string, mapper datamapper.ISendEmai
 }
 
 // EmailVerificationHandler returns a gin handler which make the account verified and active
-func EmailVerificationHandler(typeString string) func(c *gin.Context) {
+func EmailVerificationHandler(typeString string, mapper datamapper.IEmailVerificationMapper) func(c *gin.Context) {
 	return func(c *gin.Context) {
 		w, r := c.Writer, c.Request
 
@@ -1000,34 +957,52 @@ func EmailVerificationHandler(typeString string) func(c *gin.Context) {
 			return
 		}
 
-		// values := r.URL.Query()
-		// redirectURL := values.Get(string(datamapper.URLParamRedirect))
-
 		// Remove this code from the db and make this user verified
 		err := transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
 			logTransID(tx, c.Request.Method, c.Request.URL.String(), "1")
 
-			// modelObj is user (typeString is "users")
-			modelObj := models.NewFromTypeString(typeString)
-			if err := tx.Model(modelObj).Where("id = ? AND verification_code = ?", id, code).Find(modelObj).Error; err != nil {
-				return err
-			}
+			return mapper.VerifyEmail(tx, typeString, id, code)
+		})
 
-			if actionType := reflect.ValueOf(modelObj).Elem().FieldByName("VerificationAction").Interface().(datatypes.VerificationActionType); actionType != datatypes.VerificationActionTypeVerifyEmail {
-				return fmt.Errorf("no code for verification")
-			}
+		if err != nil {
+			render.Render(w, r, NewErrBadRequest(err)) // maybe another type of error?
+		} else {
+			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			w.Write([]byte("{\"code\": 0}"))
+		}
 
-			expiry := reflect.ValueOf(modelObj).Elem().FieldByName("VerificationExpiredAt").Interface().(*time.Time)
-			if time.Now().Sub(*expiry) > 0 { // expired
-				return fmt.Errorf("expired")
-			}
+		return
+	}
+}
 
-			reflect.ValueOf(modelObj).Elem().FieldByName("Status").Set(reflect.ValueOf(models.UserStatusActive))
-			if err := tx.Save(modelObj).Error; err != nil {
-				return err
-			}
+func SendResetPasswordHandler(typeString string, mapper datamapper.IResetPasswordMapper) func(c *gin.Context) {
+	return func(c *gin.Context) {
+		w, r := c.Writer, c.Request
 
-			return nil
+		defer func() {
+			if r := recover(); r != nil {
+				debug.PrintStack()
+				render.Render(w, c.Request, NewErrInternalServerError(nil))
+				fmt.Println("Panic in CreateHandler", r)
+			}
+		}()
+
+		// var modelObj models.IModel
+
+		who := WhoFromContext(r)
+
+		log.Println("model from json body")
+		modelObj, httperr := ModelFromJSONBody(r, typeString, who)
+		if httperr != nil {
+			render.Render(w, r, httperr)
+			return
+		}
+
+		// db *gorm.DB, who models.Who,
+		// typeString string, modelobj models.IModel, id *datatypes.UUID
+		err := transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
+			logTransID(tx, c.Request.Method, c.Request.URL.String(), "1")
+			return mapper.SendEmailResetPassword(tx, who, typeString, modelObj)
 		})
 
 		if err != nil {
@@ -1042,7 +1017,7 @@ func EmailVerificationHandler(typeString string) func(c *gin.Context) {
 }
 
 // EmailVerificationHandler returns a gin handler which make the account verified and active
-func PasswordResetHandler(typeString string) func(c *gin.Context) {
+func PasswordResetHandler(typeString string, mapper datamapper.IResetPasswordMapper) func(c *gin.Context) {
 	return func(c *gin.Context) {
 		w, r := c.Writer, c.Request
 
@@ -1076,35 +1051,10 @@ func PasswordResetHandler(typeString string) func(c *gin.Context) {
 		// redirectURL := values.Get(string(datamapper.URLParamRedirect))
 
 		// Remove this code from the db and make this user verified
-		err := transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
+		err := transact.Transact(db.Shared(), func(tx *gorm.DB) error {
 			logTransID(tx, c.Request.Method, c.Request.URL.String(), "1")
 
-			// modelObj is user (typeString is "users")
-			modelObj2 := models.NewFromTypeString(typeString)
-			if err := tx.Model(modelObj2).Where("id = ? AND verification_code = ?", id, code).Find(modelObj2).Error; err != nil {
-				return err
-			}
-
-			if actionType := reflect.ValueOf(modelObj2).Elem().FieldByName("VerificationAction").Interface().(datatypes.VerificationActionType); actionType != datatypes.VerificationActionTypeResetPassword {
-				return fmt.Errorf("no code for verification")
-			}
-
-			expiry := reflect.ValueOf(modelObj2).Elem().FieldByName("VerificationExpiredAt").Interface().(*time.Time)
-			if time.Now().Sub(*expiry) > 0 { // expired
-				return fmt.Errorf("expired")
-			}
-
-			password := reflect.ValueOf(modelObj).Elem().FieldByName("Password").Interface().(string)
-			if password != "" {
-				return fmt.Errorf("missing password")
-			}
-
-			reflect.ValueOf(modelObj).Elem().FieldByName("Password").Set(reflect.ValueOf(password))
-			if err := tx.Save(modelObj).Error; err != nil {
-				return err
-			}
-
-			return nil
+			return mapper.ResetPassword(tx, typeString, modelObj, id, code)
 		})
 
 		if err != nil {

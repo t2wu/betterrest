@@ -42,7 +42,7 @@ func SharedUserMapper() *UserMapper {
 // This is for user model
 type ISendVerificationEmail interface {
 	SendVerificationEmail(db *gorm.DB, who models.Who,
-		typeString string, modelobj models.IModel) error
+		typeString string, modelobj models.IModel, actionType datatypes.VerificationActionType) error
 }
 
 // ISendVerificationEmailHandler for sending verification email
@@ -66,8 +66,8 @@ func (mapper *UserMapper) CreateOne(db *gorm.DB, who models.Who, typeString stri
 		return nil, err
 	}
 
-	verificationURL, veriOK := reflect.ValueOf(modelObj).Elem().FieldByName("VerificationURL").Interface().(string)
-	if veriOK && verificationURL != "" {
+	verificationURL, veriOK := reflect.ValueOf(modelObj).Elem().FieldByName("VerificationURL").Interface().(*string)
+	if veriOK && verificationURL != nil {
 		// Do verfication code
 		modelObj = mapper.setCodeAndExpiryDate(modelObj)
 		modelObj = mapper.setVerficationActionType(modelObj, datatypes.VerificationActionTypeVerifyEmail)
@@ -98,9 +98,9 @@ func (mapper *UserMapper) CreateOne(db *gorm.DB, who models.Who, typeString stri
 		return modelObj2, err
 	}
 
-	if veriOK && verificationURL != "" {
+	if veriOK && verificationURL != nil {
 		if v, ok := modelObj2.(ISendVerificationEmail); ok {
-			if err := v.SendVerificationEmail(db, who, typeString, modelObj2); err != nil {
+			if err := v.SendVerificationEmail(db, who, typeString, modelObj2, datatypes.VerificationActionTypeVerifyEmail); err != nil {
 				return modelObj2, err
 			}
 		} else {
@@ -219,10 +219,10 @@ func (mapper *UserMapper) DeleteOneWithID(db *gorm.DB, who models.Who, typeStrin
 	return opCore(before, after, j, mapper.Service.DeleteOneCore)
 }
 
-// ResetPassword :-
+// SendEmailResetPassword :-
 // Calling this allow a way to change password by the verification code
 // without logging in. But doens't mean the password is already invalidated
-func (mapper *UserMapper) ResetPassword(db *gorm.DB, who models.Who, typeString string, modelObj models.IModel) error {
+func (mapper *UserMapper) SendEmailResetPassword(db *gorm.DB, who models.Who, typeString string, modelObj models.IModel) error {
 	// TODO: shouldn't just do a fieldby name
 	email := reflect.ValueOf(modelObj).Elem().FieldByName("Email").Interface().(string)
 	if err := db.Model(modelObj).Where("email = ?", email).First(modelObj).Error; err != nil {
@@ -236,10 +236,50 @@ func (mapper *UserMapper) ResetPassword(db *gorm.DB, who models.Who, typeString 
 	}
 
 	if v, ok := modelObj.(ISendVerificationEmail); ok {
-		return v.SendVerificationEmail(db, who, typeString, modelObj)
+		return v.SendVerificationEmail(db, who, typeString, modelObj, datatypes.VerificationActionTypeResetPassword)
 	}
 
 	return errors.New("user model does not conform to ISendVerificationEmail")
+}
+
+func (mapper *UserMapper) ResetPassword(db *gorm.DB, typeString string, modelObj models.IModel, id *datatypes.UUID, code string) error {
+
+	// modelObj is user (typeString is "users")
+	modelObj2 := models.NewFromTypeString(typeString)
+	if err := db.Model(modelObj2).Where("id = ? AND verification_code = ? AND verification_action = ?", id, code, datatypes.VerificationActionTypeResetPassword).Find(modelObj2).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return fmt.Errorf("verification code incorrect")
+		}
+		return err
+	}
+
+	if actionType := reflect.ValueOf(modelObj2).Elem().FieldByName("VerificationAction").Interface().(datatypes.VerificationActionType); actionType != datatypes.VerificationActionTypeResetPassword {
+		return fmt.Errorf("no code for verification")
+	}
+
+	expiry := reflect.ValueOf(modelObj2).Elem().FieldByName("VerificationExpiredAt").Interface().(*time.Time)
+	if time.Now().Sub(*expiry) > 0 { // expired
+		return fmt.Errorf("expired")
+	}
+
+	password := reflect.ValueOf(modelObj).Elem().FieldByName("Password").Interface().(string)
+	if password == "" {
+		return fmt.Errorf("missing password")
+	}
+
+	hash, err := security.HashAndSalt(password)
+	if err != nil {
+		return err
+	}
+
+	reflect.ValueOf(modelObj2).Elem().FieldByName("PasswordHash").Set(reflect.ValueOf(hash))
+	reflect.ValueOf(modelObj2).Elem().FieldByName("VerificationAction").Set(reflect.ValueOf(datatypes.VerificationActionTypeNone))
+	// How to set VerificationExpiredAt nil?
+	if err := db.Save(modelObj2).Error; err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (mapper *UserMapper) SendEmailVerification(db *gorm.DB, who models.Who, typeString string, modelObj models.IModel) error {
@@ -256,10 +296,36 @@ func (mapper *UserMapper) SendEmailVerification(db *gorm.DB, who models.Who, typ
 	}
 
 	if v, ok := modelObj.(ISendVerificationEmail); ok {
-		return v.SendVerificationEmail(db, who, typeString, modelObj)
+		return v.SendVerificationEmail(db, who, typeString, modelObj, datatypes.VerificationActionTypeVerifyEmail)
 	}
 
 	return errors.New("user model does not conform to ISendVerificationEmail")
+}
+
+func (mapper *UserMapper) VerifyEmail(db *gorm.DB, typeString string, id *datatypes.UUID, code string) error {
+	// modelObj is user (typeString is "users")
+	modelObj := models.NewFromTypeString(typeString)
+	if err := db.Model(modelObj).Where("id = ? AND verification_code = ?", id, code).Find(modelObj).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return fmt.Errorf("verification code incorrect")
+		}
+		return err
+	}
+
+	if actionType := reflect.ValueOf(modelObj).Elem().FieldByName("VerificationAction").Interface().(datatypes.VerificationActionType); actionType != datatypes.VerificationActionTypeVerifyEmail {
+		return fmt.Errorf("no code for verification")
+	}
+
+	expiry := reflect.ValueOf(modelObj).Elem().FieldByName("VerificationExpiredAt").Interface().(*time.Time)
+	if time.Now().Sub(*expiry) > 0 { // expired
+		return fmt.Errorf("verification code expired")
+	}
+
+	reflect.ValueOf(modelObj).Elem().FieldByName("Status").Set(reflect.ValueOf(models.UserStatusActive))
+	if err := db.Save(modelObj).Error; err != nil {
+		return err
+	}
+	return nil
 }
 
 // ChangeEmailPasswordWithID changes email and/or password
@@ -407,6 +473,6 @@ func (mapper *UserMapper) setCodeAndExpiryDate(modelObj models.IModel) models.IM
 }
 
 func (mapper *UserMapper) setVerficationActionType(modelObj models.IModel, t datatypes.VerificationActionType) models.IModel {
-	reflect.ValueOf(modelObj).Elem().FieldByName("VerificationCode").Set(reflect.ValueOf(&t))
+	reflect.ValueOf(modelObj).Elem().FieldByName("VerificationAction").Set(reflect.ValueOf(t))
 	return modelObj
 }
