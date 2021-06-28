@@ -329,6 +329,32 @@ func ModelFromJSONBody(r *http.Request, typeString string, who models.Who) (mode
 	return modelObj, nil
 }
 
+func ModelFromJSONBodyNoWhoNoCheckPermissionNoTransform(r *http.Request, typeString string) (models.IModel, render.Renderer) {
+	defer r.Body.Close()
+	var jsn []byte
+	var err error
+
+	if jsn, err = ioutil.ReadAll(r.Body); err != nil {
+		return nil, NewErrReadingBody(err)
+	}
+
+	modelObj := models.NewFromTypeString(typeString)
+
+	if err = json.Unmarshal(jsn, modelObj); err != nil {
+		return nil, NewErrParsingJSON(err)
+	}
+
+	if v, ok := modelObj.(models.IValidate); ok {
+		who := WhoFromContext(r)
+		http := models.HTTP{Endpoint: r.URL.Path, Method: r.Method}
+		if err := v.Validate(who, http); err != nil {
+			return nil, NewErrValidation(err)
+		}
+	}
+
+	return modelObj, nil
+}
+
 // JSONPatchesFromJSONBody pares an array of JSON patch from the HTTP body
 func JSONPatchesFromJSONBody(r *http.Request) ([]models.JSONIDPatch, render.Renderer) {
 	defer r.Body.Close()

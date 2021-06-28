@@ -30,7 +30,7 @@ const (
 	URLParamOtherQueries  URLParam = "better_otherqueries"
 
 	// For email verification
-	URLParamRedirect URLParam = "redirect"
+	// URLParamRedirect URLParam = "redirect"
 )
 
 func getOptions(options map[URLParam]interface{}) (offset *int, limit *int, cstart *int, cstop *int, order *string, latestn *int, count bool) {

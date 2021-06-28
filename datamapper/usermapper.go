@@ -1,6 +1,7 @@
 package datamapper
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"reflect"
@@ -36,6 +37,22 @@ func SharedUserMapper() *UserMapper {
 	return usercrud
 }
 
+// ISendVerificationEmailHandler for sending verification email
+// (Should be impelemented in model)
+// This is for user model
+type ISendVerificationEmail interface {
+	SendVerificationEmail(db *gorm.DB, who models.Who,
+		typeString string, modelobj models.IModel) error
+}
+
+// ISendVerificationEmailHandler for sending verification email
+// (Should be impelemented in model)
+// This is for user model
+type ISendPasswordResetEmail interface {
+	SendPasswordResetEmail(db *gorm.DB, who models.Who,
+		typeString string, modelobj models.IModel) error
+}
+
 //------------------------
 // User specific CRUD
 // Cuz user is spcial, need to create ownership and no need to check for owner
@@ -49,14 +66,11 @@ func (mapper *UserMapper) CreateOne(db *gorm.DB, who models.Who, typeString stri
 		return nil, err
 	}
 
-	verificationURL, ok := reflect.ValueOf(modelObj).Elem().FieldByName("VerificationURL").Interface().(string)
-	if ok && verificationURL != "" {
-		// Verfication code
-		code := utils.RandStringBytesMaskImprSrcUnsafe(12)
-		reflect.ValueOf(modelObj).Elem().FieldByName("VerificationCode").Set(reflect.ValueOf(code))
-
-		expiry := time.Now().Add(time.Duration(time.Hour * 24 * 3))
-		reflect.ValueOf(modelObj).Elem().FieldByName("VerificationExpiredAt").Set(reflect.ValueOf(&expiry))
+	verificationURL, veriOK := reflect.ValueOf(modelObj).Elem().FieldByName("VerificationURL").Interface().(string)
+	if veriOK && verificationURL != "" {
+		// Do verfication code
+		modelObj = mapper.setCodeAndExpiryDate(modelObj)
+		modelObj = mapper.setVerficationActionType(modelObj, datatypes.VerificationActionTypeVerifyEmail)
 	} else {
 		// No verification needed, go right ahead
 		reflect.ValueOf(modelObj).Elem().FieldByName("Status").Set(reflect.ValueOf(models.UserStatusActive))
@@ -79,7 +93,21 @@ func (mapper *UserMapper) CreateOne(db *gorm.DB, who models.Who, typeString stri
 		crupdOp:  models.CRUPDOpCreate,
 	}
 
-	return opCore(before, after, j, mapper.Service.CreateOneCore)
+	modelObj2, err := opCore(before, after, j, mapper.Service.CreateOneCore)
+	if err != nil {
+		return modelObj2, err
+	}
+
+	if veriOK && verificationURL != "" {
+		if v, ok := modelObj2.(ISendVerificationEmail); ok {
+			if err := v.SendVerificationEmail(db, who, typeString, modelObj2); err != nil {
+				return modelObj2, err
+			}
+		} else {
+			return modelObj2, errors.New("user model should satisfy ISendVerificationEmail interface")
+		}
+	}
+	return modelObj2, nil
 }
 
 // // CreateMany is currently a dummy
@@ -189,6 +217,49 @@ func (mapper *UserMapper) DeleteOneWithID(db *gorm.DB, who models.Who, typeStrin
 	}
 
 	return opCore(before, after, j, mapper.Service.DeleteOneCore)
+}
+
+// ResetPassword :-
+// Calling this allow a way to change password by the verification code
+// without logging in. But doens't mean the password is already invalidated
+func (mapper *UserMapper) ResetPassword(db *gorm.DB, who models.Who, typeString string, modelObj models.IModel) error {
+	// TODO: shouldn't just do a fieldby name
+	email := reflect.ValueOf(modelObj).Elem().FieldByName("Email").Interface().(string)
+	if err := db.Model(modelObj).Where("email = ?", email).First(modelObj).Error; err != nil {
+		return err
+	}
+
+	modelObj = mapper.setCodeAndExpiryDate(modelObj)
+	modelObj = mapper.setVerficationActionType(modelObj, datatypes.VerificationActionTypeResetPassword)
+	if err := db.Save(modelObj).Error; err != nil {
+		return err
+	}
+
+	if v, ok := modelObj.(ISendVerificationEmail); ok {
+		return v.SendVerificationEmail(db, who, typeString, modelObj)
+	}
+
+	return errors.New("user model does not conform to ISendVerificationEmail")
+}
+
+func (mapper *UserMapper) SendEmailVerification(db *gorm.DB, who models.Who, typeString string, modelObj models.IModel) error {
+	// TODO: shouldn't just do a fieldby name
+	email := reflect.ValueOf(modelObj).Elem().FieldByName("Email").Interface().(string)
+	if err := db.Model(modelObj).Where("email = ?", email).First(modelObj).Error; err != nil {
+		return err
+	}
+
+	modelObj = mapper.setCodeAndExpiryDate(modelObj)
+	modelObj = mapper.setVerficationActionType(modelObj, datatypes.VerificationActionTypeVerifyEmail)
+	if err := db.Save(modelObj).Error; err != nil {
+		return err
+	}
+
+	if v, ok := modelObj.(ISendVerificationEmail); ok {
+		return v.SendVerificationEmail(db, who, typeString, modelObj)
+	}
+
+	return errors.New("user model does not conform to ISendVerificationEmail")
 }
 
 // ChangeEmailPasswordWithID changes email and/or password
@@ -323,4 +394,19 @@ func (mapper *UserMapper) DeleteMany(db *gorm.DB, who models.Who,
 func (mapper *UserMapper) PatchOneWithID(db *gorm.DB, who models.Who,
 	typeString string, jsonPatch []byte, id *datatypes.UUID) (models.IModel, error) {
 	return nil, fmt.Errorf("Not implemented, todo")
+}
+
+// Private -------------------------------------------------------------------------
+func (mapper *UserMapper) setCodeAndExpiryDate(modelObj models.IModel) models.IModel {
+	code := utils.RandStringBytesMaskImprSrcUnsafe(12)
+	reflect.ValueOf(modelObj).Elem().FieldByName("VerificationCode").Set(reflect.ValueOf(code))
+
+	expiry := time.Now().Add(time.Duration(time.Hour * 24 * 3))
+	reflect.ValueOf(modelObj).Elem().FieldByName("VerificationExpiredAt").Set(reflect.ValueOf(&expiry))
+	return modelObj
+}
+
+func (mapper *UserMapper) setVerficationActionType(modelObj models.IModel, t datatypes.VerificationActionType) models.IModel {
+	reflect.ValueOf(modelObj).Elem().FieldByName("VerificationCode").Set(reflect.ValueOf(&t))
+	return modelObj
 }

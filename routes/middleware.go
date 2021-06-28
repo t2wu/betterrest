@@ -92,6 +92,7 @@ func ClientAuthMiddleware() gin.HandlerFunc {
 // And also get the user ID into the context
 func BearerAuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
+
 		w, r := c.Writer, c.Request
 		var token string
 		var ok bool
