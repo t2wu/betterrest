@@ -243,7 +243,6 @@ func (mapper *UserMapper) SendEmailResetPassword(db *gorm.DB, who models.Who, ty
 }
 
 func (mapper *UserMapper) ResetPassword(db *gorm.DB, typeString string, modelObj models.IModel, id *datatypes.UUID, code string) error {
-
 	// modelObj is user (typeString is "users")
 	modelObj2 := models.NewFromTypeString(typeString)
 	if err := db.Model(modelObj2).Where("id = ? AND verification_code = ? AND verification_action = ?", id, code, datatypes.VerificationActionTypeResetPassword).Find(modelObj2).Error; err != nil {
@@ -305,7 +304,7 @@ func (mapper *UserMapper) SendEmailVerification(db *gorm.DB, who models.Who, typ
 func (mapper *UserMapper) VerifyEmail(db *gorm.DB, typeString string, id *datatypes.UUID, code string) error {
 	// modelObj is user (typeString is "users")
 	modelObj := models.NewFromTypeString(typeString)
-	if err := db.Model(modelObj).Where("id = ? AND verification_code = ?", id, code).Find(modelObj).Error; err != nil {
+	if err := db.Model(modelObj).Where("id = ? AND verification_code = ? AND verification_action = ?", id, code, datatypes.VerificationActionTypeVerifyEmail).Find(modelObj).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return fmt.Errorf("verification code incorrect")
 		}
