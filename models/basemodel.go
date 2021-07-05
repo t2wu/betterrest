@@ -460,8 +460,8 @@ func (o *OwnershipModelBase) SetID(id *datatypes.UUID) {
 type OwnershipModelWithIDBase struct {
 	OwnershipModelBase
 
-	UserID  *datatypes.UUID `json:"userID"` // I guess the user's table has to be named "User" then.
-	ModelID *datatypes.UUID `json:"modelID"`
+	UserID  *datatypes.UUID `gorm:"index" json:"userID"` // I guess the user's table has to be named "User" then.
+	ModelID *datatypes.UUID `gorm:"index" json:"modelID"`
 }
 
 // To comform to IModel, embedding functions don't work
