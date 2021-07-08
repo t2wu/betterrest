@@ -250,7 +250,7 @@ func UserLoginHandler(typeString string) func(c *gin.Context) {
 			}
 		}
 
-		authUserModel, err := security.GetVerifiedAuthUser(m)
+		authUserModel, err := security.GetVerifiedAuthUser(tx, m)
 		if err == security.ErrPasswordIncorrect {
 			// User hookpoing after login
 			if v, ok := authUserModel.(models.IAfterLoginFailed); ok {

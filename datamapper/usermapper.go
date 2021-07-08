@@ -329,7 +329,6 @@ func (mapper *UserMapper) VerifyEmail(db *gorm.DB, typeString string, id *dataty
 
 // ChangeEmailPasswordWithID changes email and/or password
 func (mapper *UserMapper) ChangeEmailPasswordWithID(db *gorm.DB, who models.Who, typeString string, modelObj models.IModel, id *datatypes.UUID) (models.IModel, error) {
-	log.Println("userMapper's ChangeEmailPasswordWithID called")
 	// This will require that it has an ID, but in changing email there isn't
 	// oldModelObj, _, err := loadAndCheckErrorBeforeModify(mapper.Service, db, who, typeString, modelObj, id, []models.UserRole{models.UserRoleAdmin})
 	// if err != nil {
@@ -337,7 +336,7 @@ func (mapper *UserMapper) ChangeEmailPasswordWithID(db *gorm.DB, who models.Who,
 	// }
 
 	// Verify the password in the current modelObj
-	oldModelObj, err := security.GetVerifiedAuthUser(modelObj)
+	oldModelObj, err := security.GetVerifiedAuthUser(db, modelObj)
 	if err != nil {
 		// unable to login user. maybe doesn't exist?
 		// or username, password wrong

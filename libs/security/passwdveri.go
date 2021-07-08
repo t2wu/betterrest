@@ -3,11 +3,9 @@ package security
 import (
 	"errors"
 	"fmt"
-	"log"
 	"reflect"
 
 	"github.com/jinzhu/gorm"
-	"github.com/t2wu/betterrest/db"
 	"github.com/t2wu/betterrest/models"
 )
 
@@ -36,7 +34,7 @@ var ErrInactive = errors.New("account inactive")
 
 // GetVerifiedAuthUser authenticates the user
 // userModel is from JSON in the HTTP body
-func GetVerifiedAuthUser(userModel models.IModel) (models.IModel, error) {
+func GetVerifiedAuthUser(db *gorm.DB, userModel models.IModel) (models.IModel, error) {
 	// TODO: maybe email is not the login, make it more flexible?
 	// field name needs to be more flexible
 	email := reflect.ValueOf(userModel).Elem().FieldByName(("Email")).Interface().(string)
@@ -46,7 +44,7 @@ func GetVerifiedAuthUser(userModel models.IModel) (models.IModel, error) {
 	// expiredAt := reflect.ValueOf(userModel).Elem().FieldByName(("VerificationExpiredAt")).Interface().(*time.Time)
 
 	userModel2 := reflect.New(models.UserTyp).Interface().(models.IModel)
-	err := db.Shared().Where("email = ?", email).First(userModel2).Error
+	err := db.Where("email = ?", email).First(userModel2).Error
 	if gorm.IsRecordNotFoundError(err) {
 		return nil, ErrEmailNotFound // User doesn't exists with this email
 		// return nil, VerifyUserResultEmailNotFound // User doesn't exists with this email
@@ -57,7 +55,6 @@ func GetVerifiedAuthUser(userModel models.IModel) (models.IModel, error) {
 
 	status := reflect.ValueOf(userModel2).Elem().FieldByName(("Status")).Interface().(models.UserStatus)
 
-	log.Println("user status:", status)
 	if status == models.UserStatusActive {
 		passwordHash := reflect.ValueOf(userModel2).Elem().FieldByName("PasswordHash").Interface().(string)
 		if !IsSamePassword(password, passwordHash) {
