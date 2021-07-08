@@ -8,6 +8,7 @@ import (
 	"github.com/t2wu/betterrest/libs/datatypes"
 	"github.com/t2wu/betterrest/libs/security"
 	"github.com/t2wu/betterrest/libs/utils/jsontrans"
+	"github.com/t2wu/betterrest/libs/webrender"
 	"github.com/t2wu/betterrest/models"
 )
 
@@ -90,7 +91,7 @@ func guardMiddleWare(typeString string) func(c *gin.Context) {
 			who := WhoFromContext(r)
 			http := models.HTTP{Endpoint: r.URL.Path, Method: r.Method}
 			if !m.GuardAPIEntry(who, http) {
-				render.Render(w, r, NewErrPermissionDeniedForAPIEndpoint(nil))
+				render.Render(w, r, webrender.NewErrPermissionDeniedForAPIEndpoint(nil))
 				c.Abort() // abort
 				return
 			}

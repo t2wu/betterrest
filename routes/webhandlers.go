@@ -19,6 +19,7 @@ import (
 	"github.com/t2wu/betterrest/libs/security"
 	"github.com/t2wu/betterrest/libs/settings"
 	"github.com/t2wu/betterrest/libs/utils/transact"
+	"github.com/t2wu/betterrest/libs/webrender"
 	"github.com/t2wu/betterrest/models"
 	"github.com/t2wu/betterrest/models/tools"
 
@@ -167,7 +168,7 @@ func RenderModel(w http.ResponseWriter, r *http.Request, typeString string, mode
 	jsonBytes, err := tools.ToJSON(typeString, modelObj, role, who)
 	if err != nil {
 		log.Println("Error in RenderModel:", err)
-		render.Render(w, r, NewErrGenJSON(err))
+		render.Render(w, r, webrender.NewErrGenJSON(err))
 		return
 	}
 
@@ -187,7 +188,7 @@ func RenderModelSlice(w http.ResponseWriter, r *http.Request, typeString string,
 	jsonString, err := modelObjsToJSON(typeString, modelObjs, roles, who)
 	if err != nil {
 		log.Println("Error in RenderModelSlice:", err)
-		render.Render(w, r, NewErrGenJSON(err))
+		render.Render(w, r, webrender.NewErrGenJSON(err))
 		return
 	}
 
@@ -218,7 +219,7 @@ func UserLoginHandler(typeString string) func(c *gin.Context) {
 			if r := recover(); r != nil {
 				tx.Rollback()
 				debug.PrintStack()
-				render.Render(w, c.Request, NewErrInternalServerError(nil))
+				render.Render(w, c.Request, webrender.NewErrInternalServerError(nil))
 				fmt.Println("Panic in UserLoginHandler", r)
 			}
 		}(tx)
@@ -245,7 +246,7 @@ func UserLoginHandler(typeString string) func(c *gin.Context) {
 		if v, ok := m.(models.IBeforeLogin); ok {
 			hpdata := models.HookPointData{DB: tx, Who: who, TypeString: typeString, Cargo: &cargo}
 			if err := v.BeforeLogin(hpdata); err != nil {
-				render.Render(w, r, NewErrInternalServerError(err))
+				render.Render(w, r, webrender.NewErrInternalServerError(err))
 				return
 			}
 		}
@@ -261,7 +262,7 @@ func UserLoginHandler(typeString string) func(c *gin.Context) {
 					tx.Commit()
 
 					log.Println("Error in UserLogin callign AfterLogin:", typeString, err)
-					render.Render(w, r, NewErrLoginUser(err))
+					render.Render(w, r, webrender.NewErrLoginUser(err))
 					return
 				}
 			}
@@ -269,7 +270,7 @@ func UserLoginHandler(typeString string) func(c *gin.Context) {
 			// tx.Rollback() //no rollback, actually. commit
 			tx.Commit()
 
-			render.Render(w, r, NewErrLoginUser(nil))
+			render.Render(w, r, webrender.NewErrLoginUser(nil))
 			return
 		} else if err != nil {
 			// unable to login user. maybe doesn't exist?
@@ -277,7 +278,7 @@ func UserLoginHandler(typeString string) func(c *gin.Context) {
 			// tx.Rollback() no rollback, actually commit
 			tx.Commit()
 
-			render.Render(w, r, NewErrLoginUser(err))
+			render.Render(w, r, webrender.NewErrLoginUser(err))
 			return
 		}
 
@@ -285,7 +286,7 @@ func UserLoginHandler(typeString string) func(c *gin.Context) {
 		payload, err := createTokenPayloadForScope(authUserModel.GetID(), &scope, tokenHours)
 		if err != nil {
 			tx.Rollback()
-			render.Render(w, r, NewErrGeneratingToken(err))
+			render.Render(w, r, webrender.NewErrGeneratingToken(err))
 			return
 		}
 
@@ -299,19 +300,19 @@ func UserLoginHandler(typeString string) func(c *gin.Context) {
 				tx.Commit() // technically this can return err, too
 
 				log.Println("Error in UserLogin calling AfterLogin:", typeString, err)
-				render.Render(w, r, NewErrNotFound(err))
+				render.Render(w, r, webrender.NewErrNotFound(err))
 				return
 			}
 		}
 
 		if err := tx.Commit().Error; err != nil {
-			render.Render(w, c.Request, NewErrInternalServerError(nil))
+			render.Render(w, c.Request, webrender.NewErrInternalServerError(nil))
 			return
 		}
 
 		var jsn []byte
 		if jsn, err = json.Marshal(payload); err != nil {
-			render.Render(w, r, NewErrGenJSON(err))
+			render.Render(w, r, webrender.NewErrGenJSON(err))
 			return
 		}
 
@@ -402,7 +403,7 @@ func ReadAllHandler(typeString string, mapper datamapper.IDataMapper) func(c *gi
 		defer func() {
 			if r := recover(); r != nil {
 				debug.PrintStack()
-				render.Render(w, c.Request, NewErrInternalServerError(nil))
+				render.Render(w, c.Request, webrender.NewErrInternalServerError(nil))
 				fmt.Println("Panic in ReadAllHandler", r)
 			}
 		}()
@@ -414,7 +415,7 @@ func ReadAllHandler(typeString string, mapper datamapper.IDataMapper) func(c *gi
 		options := make(map[datamapper.URLParam]interface{})
 
 		if options, err = GetOptionByParsingURL(r); err != nil {
-			render.Render(w, r, NewErrQueryParameter(err))
+			render.Render(w, r, webrender.NewErrQueryParameter(err))
 			return
 		}
 
@@ -429,7 +430,7 @@ func ReadAllHandler(typeString string, mapper datamapper.IDataMapper) func(c *gi
 		modelObjs, roles, no, err = mapper.GetAll(db.Shared(), who, typeString, options)
 
 		if err != nil {
-			render.Render(w, r, NewErrInternalServerError(err))
+			render.Render(w, r, webrender.NewErrInternalServerError(err))
 		} else {
 			RenderModelSlice(w, r, typeString, modelObjs, roles, no, who)
 		}
@@ -446,7 +447,7 @@ func CreateHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin
 		defer func() {
 			if r := recover(); r != nil {
 				debug.PrintStack()
-				render.Render(w, c.Request, NewErrInternalServerError(nil))
+				render.Render(w, c.Request, webrender.NewErrInternalServerError(nil))
 				fmt.Println("Panic in CreateHandler", r)
 			}
 		}()
@@ -475,7 +476,7 @@ func CreateHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin
 				return nil
 			})
 			if err != nil {
-				render.Render(w, c.Request, NewErrCreate(err))
+				render.Render(w, c.Request, webrender.NewErrCreate(err))
 			} else {
 				roles := make([]models.UserRole, len(modelObjs), len(modelObjs))
 				// admin is 0 so it's ok
@@ -497,7 +498,7 @@ func CreateHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin
 			})
 
 			if err != nil {
-				render.Render(w, c.Request, NewErrCreate(err))
+				render.Render(w, c.Request, webrender.NewErrCreate(err))
 			} else {
 				RenderModel(w, r, typeString, modelObj, models.UserRoleAdmin, who)
 			}
@@ -514,7 +515,7 @@ func ReadOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *gi
 		defer func() {
 			if r := recover(); r != nil {
 				debug.PrintStack()
-				render.Render(w, c.Request, NewErrInternalServerError(nil))
+				render.Render(w, c.Request, webrender.NewErrInternalServerError(nil))
 				fmt.Println("Panic in ReadOneHandler", r)
 			}
 		}()
@@ -538,9 +539,9 @@ func ReadOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *gi
 		modelObj, role, err = mapper.GetOneWithID(db.Shared(), who, typeString, id)
 
 		if err != nil && gorm.IsRecordNotFoundError(err) {
-			render.Render(w, r, NewErrNotFound(err))
+			render.Render(w, r, webrender.NewErrNotFound(err))
 		} else if err != nil {
-			render.Render(w, r, NewErrInternalServerError(err))
+			render.Render(w, r, webrender.NewErrInternalServerError(err))
 		} else {
 			RenderModel(w, r, typeString, modelObj, role, who)
 		}
@@ -557,7 +558,7 @@ func UpdateOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 		defer func() {
 			if r := recover(); r != nil {
 				debug.PrintStack()
-				render.Render(w, c.Request, NewErrInternalServerError(nil))
+				render.Render(w, c.Request, webrender.NewErrInternalServerError(nil))
 				fmt.Println("Panic in UpdateOneHandler", r)
 			}
 		}()
@@ -579,7 +580,7 @@ func UpdateOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 		// Before validation this is a temporary check
 		// This traps the mistake if "content" and the array is included
 		if modelObj.GetID() == nil {
-			render.Render(w, r, NewErrValidation(fmt.Errorf("JSON format not expected")))
+			render.Render(w, r, webrender.NewErrValidation(fmt.Errorf("JSON format not expected")))
 			return
 		}
 
@@ -595,7 +596,7 @@ func UpdateOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 		})
 
 		if err != nil {
-			render.Render(w, r, NewErrUpdate(err))
+			render.Render(w, r, webrender.NewErrUpdate(err))
 		} else {
 			RenderModel(w, r, typeString, modelObj2, models.UserRoleAdmin, who)
 		}
@@ -612,7 +613,7 @@ func UpdateManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 		defer func() {
 			if r := recover(); r != nil {
 				debug.PrintStack()
-				render.Render(w, c.Request, NewErrInternalServerError(nil))
+				render.Render(w, c.Request, webrender.NewErrInternalServerError(nil))
 				fmt.Println("Panic in UpdateManyHandler", r)
 			}
 		}()
@@ -639,7 +640,7 @@ func UpdateManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 		})
 
 		if err != nil {
-			render.Render(w, r, NewErrUpdate(err))
+			render.Render(w, r, webrender.NewErrUpdate(err))
 		} else {
 			roles := make([]models.UserRole, len(modelObjs2), len(modelObjs2))
 			for i := 0; i < len(roles); i++ {
@@ -660,7 +661,7 @@ func PatchOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *g
 		defer func() {
 			if r := recover(); r != nil {
 				debug.PrintStack()
-				render.Render(w, c.Request, NewErrInternalServerError(nil))
+				render.Render(w, c.Request, webrender.NewErrInternalServerError(nil))
 				fmt.Println("Panic in PatchOneHandler", r)
 			}
 		}()
@@ -674,7 +675,7 @@ func PatchOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *g
 		var jsonPatch []byte
 		var err error
 		if jsonPatch, err = ioutil.ReadAll(r.Body); err != nil {
-			render.Render(w, r, NewErrReadingBody(err))
+			render.Render(w, r, webrender.NewErrReadingBody(err))
 			return
 		}
 
@@ -693,7 +694,7 @@ func PatchOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *g
 		})
 
 		if err != nil {
-			render.Render(w, r, NewErrPatch(err))
+			render.Render(w, r, webrender.NewErrPatch(err))
 		} else {
 			RenderModel(w, r, typeString, modelObj, models.UserRoleAdmin, who)
 		}
@@ -715,7 +716,7 @@ func PatchManyHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 		defer func() {
 			if r := recover(); r != nil {
 				debug.PrintStack()
-				render.Render(w, c.Request, NewErrInternalServerError(nil))
+				render.Render(w, c.Request, webrender.NewErrInternalServerError(nil))
 				fmt.Println("Panic in PatchManyHandler", r)
 			}
 		}()
@@ -741,7 +742,7 @@ func PatchManyHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 		})
 
 		if err != nil {
-			render.Render(w, r, NewErrUpdate(err))
+			render.Render(w, r, webrender.NewErrUpdate(err))
 		} else {
 			roles := make([]models.UserRole, len(modelObjs), len(modelObjs))
 			for i := 0; i < len(roles); i++ {
@@ -762,7 +763,7 @@ func DeleteOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 		defer func() {
 			if r := recover(); r != nil {
 				debug.PrintStack()
-				render.Render(w, c.Request, NewErrInternalServerError(nil))
+				render.Render(w, c.Request, webrender.NewErrInternalServerError(nil))
 				fmt.Println("Panic in DeleteOneHandler", r)
 			}
 		}()
@@ -787,7 +788,7 @@ func DeleteOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 		})
 
 		if err != nil {
-			render.Render(w, r, NewErrDelete(err))
+			render.Render(w, r, webrender.NewErrDelete(err))
 		} else {
 			RenderModel(w, r, typeString, modelObj, models.UserRoleAdmin, who)
 		}
@@ -804,7 +805,7 @@ func DeleteManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 		defer func() {
 			if r := recover(); r != nil {
 				debug.PrintStack()
-				render.Render(w, c.Request, NewErrInternalServerError(nil))
+				render.Render(w, c.Request, webrender.NewErrInternalServerError(nil))
 				fmt.Println("Panic in DeleteManyHandler", r)
 			}
 		}()
@@ -829,7 +830,7 @@ func DeleteManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 		})
 
 		if err != nil {
-			render.Render(w, r, NewErrDelete(err))
+			render.Render(w, r, webrender.NewErrDelete(err))
 		} else {
 			roles := make([]models.UserRole, len(modelObjs), len(modelObjs))
 			for i := 0; i < len(roles); i++ {
@@ -850,7 +851,7 @@ func EmailChangePasswordHandler(typeString string, mapper datamapper.IChangeEmai
 		defer func() {
 			if r := recover(); r != nil {
 				debug.PrintStack()
-				render.Render(w, c.Request, NewErrInternalServerError(nil))
+				render.Render(w, c.Request, webrender.NewErrInternalServerError(nil))
 				fmt.Println("Panic in ChangePasswordHandler", r)
 			}
 		}()
@@ -882,7 +883,7 @@ func EmailChangePasswordHandler(typeString string, mapper datamapper.IChangeEmai
 		})
 
 		if err != nil {
-			render.Render(w, r, NewErrUpdate(err))
+			render.Render(w, r, webrender.NewErrUpdate(err))
 		} else {
 			RenderModel(w, r, typeString, modelObj2, models.UserRoleAdmin, who)
 		}
@@ -898,7 +899,7 @@ func SendVerificationEmailHandler(typeString string, mapper datamapper.IEmailVer
 		defer func() {
 			if r := recover(); r != nil {
 				debug.PrintStack()
-				render.Render(w, c.Request, NewErrInternalServerError(nil))
+				render.Render(w, c.Request, webrender.NewErrInternalServerError(nil))
 				fmt.Println("Panic in CreateHandler", r)
 			}
 		}()
@@ -922,7 +923,7 @@ func SendVerificationEmailHandler(typeString string, mapper datamapper.IEmailVer
 		})
 
 		if err != nil {
-			render.Render(w, r, NewErrBadRequest(err)) // maybe another type of error?
+			render.Render(w, r, webrender.NewErrBadRequest(err)) // maybe another type of error?
 		} else {
 			w.Header().Set("Content-Type", "application/json; charset=utf-8")
 			w.Write([]byte("{\"code\": 0}"))
@@ -940,7 +941,7 @@ func EmailVerificationHandler(typeString string, mapper datamapper.IEmailVerific
 		defer func() {
 			if r := recover(); r != nil {
 				debug.PrintStack()
-				render.Render(w, c.Request, NewErrInternalServerError(nil))
+				render.Render(w, c.Request, webrender.NewErrInternalServerError(nil))
 				fmt.Println("Panic in ChangePasswordHandler", r)
 			}
 		}()
@@ -953,7 +954,7 @@ func EmailVerificationHandler(typeString string, mapper datamapper.IEmailVerific
 
 		code := c.Param("code")
 		if code == "" {
-			render.Render(w, r, NewErrURLParameter(errors.New("missing verification code")))
+			render.Render(w, r, webrender.NewErrURLParameter(errors.New("missing verification code")))
 			return
 		}
 
@@ -965,7 +966,7 @@ func EmailVerificationHandler(typeString string, mapper datamapper.IEmailVerific
 		})
 
 		if err != nil {
-			render.Render(w, r, NewErrBadRequest(err)) // maybe another type of error?
+			render.Render(w, r, webrender.NewErrBadRequest(err)) // maybe another type of error?
 		} else {
 			w.Header().Set("Content-Type", "application/json; charset=utf-8")
 			w.Write([]byte("{\"code\": 0}"))
@@ -982,7 +983,7 @@ func SendResetPasswordHandler(typeString string, mapper datamapper.IResetPasswor
 		defer func() {
 			if r := recover(); r != nil {
 				debug.PrintStack()
-				render.Render(w, c.Request, NewErrInternalServerError(nil))
+				render.Render(w, c.Request, webrender.NewErrInternalServerError(nil))
 				fmt.Println("Panic in CreateHandler", r)
 			}
 		}()
@@ -1006,7 +1007,7 @@ func SendResetPasswordHandler(typeString string, mapper datamapper.IResetPasswor
 		})
 
 		if err != nil {
-			render.Render(w, r, NewErrBadRequest(err)) // maybe another type of error?
+			render.Render(w, r, webrender.NewErrBadRequest(err)) // maybe another type of error?
 		} else {
 			w.Header().Set("Content-Type", "application/json; charset=utf-8")
 			w.Write([]byte("{\"code\": 0}"))
@@ -1024,7 +1025,7 @@ func PasswordResetHandler(typeString string, mapper datamapper.IResetPasswordMap
 		defer func() {
 			if r := recover(); r != nil {
 				debug.PrintStack()
-				render.Render(w, c.Request, NewErrInternalServerError(nil))
+				render.Render(w, c.Request, webrender.NewErrInternalServerError(nil))
 				fmt.Println("Panic in ChangePasswordHandler", r)
 			}
 		}()
@@ -1037,7 +1038,7 @@ func PasswordResetHandler(typeString string, mapper datamapper.IResetPasswordMap
 
 		code := c.Param("code")
 		if code == "" {
-			render.Render(w, r, NewErrURLParameter(errors.New("missing verification code")))
+			render.Render(w, r, webrender.NewErrURLParameter(errors.New("missing verification code")))
 			return
 		}
 
@@ -1058,7 +1059,7 @@ func PasswordResetHandler(typeString string, mapper datamapper.IResetPasswordMap
 		})
 
 		if err != nil {
-			render.Render(w, r, NewErrBadRequest(err)) // maybe another type of error?
+			render.Render(w, r, webrender.NewErrBadRequest(err)) // maybe another type of error?
 		} else {
 			w.Header().Set("Content-Type", "application/json; charset=utf-8")
 			w.Write([]byte("{\"code\": 0}"))

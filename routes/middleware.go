@@ -13,6 +13,7 @@ import (
 	"github.com/t2wu/betterrest/db"
 	"github.com/t2wu/betterrest/libs/datatypes"
 	"github.com/t2wu/betterrest/libs/security"
+	"github.com/t2wu/betterrest/libs/webrender"
 	"github.com/t2wu/betterrest/models"
 
 	"github.com/gin-gonic/gin"
@@ -50,7 +51,7 @@ func ClientAuthMiddleware() gin.HandlerFunc {
 
 		clientID, secret, ok = apiKeyAuth(r)
 		if !ok {
-			render.Render(w, r, NewErrClientNotAuthorized(errors.New("missing client credentials")))
+			render.Render(w, r, webrender.NewErrClientNotAuthorized(errors.New("missing client credentials")))
 			c.Abort()
 			return
 		}
@@ -59,25 +60,25 @@ func ClientAuthMiddleware() gin.HandlerFunc {
 		client := new(models.Client)
 		id, err := strconv.Atoi(clientID)
 		if err != nil {
-			render.Render(w, r, NewErrClientNotAuthorized(errors.New("incorrect client credentials")))
+			render.Render(w, r, webrender.NewErrClientNotAuthorized(errors.New("incorrect client credentials")))
 			c.Abort()
 			return
 		}
 
 		if err := db.Shared().First(&client, id).Error; gorm.IsRecordNotFoundError(err) {
 			// Record not found here.
-			render.Render(w, r, NewErrClientNotAuthorized(errors.New("incorrect client credentials")))
+			render.Render(w, r, webrender.NewErrClientNotAuthorized(errors.New("incorrect client credentials")))
 			c.Abort()
 			return
 		} else if err != nil { // Other type of error
-			render.Render(w, r, NewErrClientNotAuthorized(err))
+			render.Render(w, r, webrender.NewErrClientNotAuthorized(err))
 			c.Abort()
 			return
 		}
 
 		if client.Secret != secret {
 			// Unauthorzed
-			render.Render(w, r, NewErrClientNotAuthorized(errors.New("incorrect client credentials")))
+			render.Render(w, r, webrender.NewErrClientNotAuthorized(errors.New("incorrect client credentials")))
 			c.Abort()
 			return
 		}
@@ -98,7 +99,7 @@ func BearerAuthMiddleware() gin.HandlerFunc {
 		var ok bool
 
 		if token, ok = BearerToken(r); !ok {
-			render.Render(w, r, NewErrTokenInvalid(errors.New("missing token"))) // Not pass, no token
+			render.Render(w, r, webrender.NewErrTokenInvalid(errors.New("missing token"))) // Not pass, no token
 			c.Abort()
 			return
 		}
@@ -106,7 +107,7 @@ func BearerAuthMiddleware() gin.HandlerFunc {
 		claims, err := security.GetClaimsIfAccessTokenIsValid(token)
 		if err != nil {
 			log.Println("Error in BearerAuthMiddleware:", err)
-			render.Render(w, r, NewErrTokenInvalid(errors.New("invalid token"))) // Token invalid (either expired or just wrong)
+			render.Render(w, r, webrender.NewErrTokenInvalid(errors.New("invalid token"))) // Token invalid (either expired or just wrong)
 			c.Abort()
 			return
 		}
@@ -114,7 +115,7 @@ func BearerAuthMiddleware() gin.HandlerFunc {
 		if ident, ok := (*claims)["iss"].(string); ok {
 			ownerID, err := datatypes.NewUUIDFromString(ident)
 			if err != nil {
-				render.Render(w, r, NewErrTokenInvalid(err))
+				render.Render(w, r, webrender.NewErrTokenInvalid(err))
 				c.Abort()
 				return
 			}
@@ -122,7 +123,7 @@ func BearerAuthMiddleware() gin.HandlerFunc {
 			ctx := context.WithValue(c.Request.Context(), ContextKeyOwnerID, ownerID)
 			c.Request = c.Request.WithContext(ctx)
 		} else {
-			render.Render(w, r, NewErrTokenInvalid(errors.New("getting ISS from token error")))
+			render.Render(w, r, webrender.NewErrTokenInvalid(errors.New("getting ISS from token error")))
 			c.Abort()
 			return
 		}
@@ -134,7 +135,7 @@ func BearerAuthMiddleware() gin.HandlerFunc {
 				c.Request = c.Request.WithContext(ctx)
 			}
 		} else {
-			render.Render(w, r, NewErrTokenInvalid(errors.New("getting ISS from token error")))
+			render.Render(w, r, webrender.NewErrTokenInvalid(errors.New("getting ISS from token error")))
 			c.Abort()
 			return
 		}
@@ -143,14 +144,14 @@ func BearerAuthMiddleware() gin.HandlerFunc {
 			ctx := context.WithValue(c.Request.Context(), ContextKeyIat, iat)
 			c.Request = c.Request.WithContext(ctx)
 		} else {
-			render.Render(w, r, NewErrTokenInvalid(errors.New("getting IAT from token error")))
+			render.Render(w, r, webrender.NewErrTokenInvalid(errors.New("getting IAT from token error")))
 			c.Abort()
 			return
 		}
 
 		if exp, ok := (*claims)["exp"].(float64); ok {
 			if err != nil {
-				render.Render(w, r, NewErrTokenInvalid(err))
+				render.Render(w, r, webrender.NewErrTokenInvalid(err))
 				c.Abort()
 				return
 			}
@@ -158,7 +159,7 @@ func BearerAuthMiddleware() gin.HandlerFunc {
 			ctx := context.WithValue(c.Request.Context(), ContextKeyExp, exp)
 			c.Request = c.Request.WithContext(ctx)
 		} else {
-			render.Render(w, r, NewErrTokenInvalid(errors.New("getting EXP from token error")))
+			render.Render(w, r, webrender.NewErrTokenInvalid(errors.New("getting EXP from token error")))
 			c.Abort()
 			return
 		}

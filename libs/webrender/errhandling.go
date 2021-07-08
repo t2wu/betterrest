@@ -1,4 +1,4 @@
-package routes
+package webrender
 
 import (
 	"fmt"

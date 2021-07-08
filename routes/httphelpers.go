@@ -8,6 +8,7 @@ import (
 
 	"github.com/t2wu/betterrest/libs/datatypes"
 	"github.com/t2wu/betterrest/libs/utils/jsontrans"
+	"github.com/t2wu/betterrest/libs/webrender"
 	"github.com/t2wu/betterrest/models"
 
 	"github.com/gin-gonic/gin"
@@ -100,7 +101,7 @@ func ModelOrModelsFromJSONBody(r *http.Request, typeString string, who models.Wh
 	var modelObjs []models.IModel
 	var err error
 	if jsn, err = ioutil.ReadAll(r.Body); err != nil {
-		return nil, nil, NewErrReadingBody(err)
+		return nil, nil, webrender.NewErrReadingBody(err)
 	}
 
 	var jcmodel JSONBodyWithContent
@@ -116,7 +117,7 @@ func ModelOrModelsFromJSONBody(r *http.Request, typeString string, who models.Wh
 
 	err = json.Unmarshal(jsn, &jcmodel)
 	if err != nil {
-		return nil, nil, NewErrParsingJSON(err)
+		return nil, nil, webrender.NewErrParsingJSON(err)
 	}
 
 	if len(jcmodel.Content) == 0 {
@@ -125,34 +126,34 @@ func ModelOrModelsFromJSONBody(r *http.Request, typeString string, who models.Wh
 		if needTransform {
 			var modelInMap map[string]interface{}
 			if err = json.Unmarshal(jsn, &modelInMap); err != nil {
-				return nil, nil, NewErrParsingJSON(err)
+				return nil, nil, webrender.NewErrParsingJSON(err)
 			}
 
 			if err = transformJSONToModel(modelInMap, &fields); err != nil {
-				return nil, nil, NewErrParsingJSON(err)
+				return nil, nil, webrender.NewErrParsingJSON(err)
 			}
 
 			if jsn, err = json.Marshal(modelInMap); err != nil {
-				return nil, nil, NewErrParsingJSON(err)
+				return nil, nil, webrender.NewErrParsingJSON(err)
 			}
 		}
 
 		err = json.Unmarshal(jsn, modelObj)
 		if err != nil {
-			return nil, nil, NewErrParsingJSON(err)
+			return nil, nil, webrender.NewErrParsingJSON(err)
 		}
 
 		err := models.Validate.Struct(modelObj)
 		if err != nil {
 			errs := err.(validator.ValidationErrors)
-			return nil, nil, NewErrValidation(errs)
+			return nil, nil, webrender.NewErrValidation(errs)
 		}
 
 		if v, ok := modelObj.(models.IValidate); ok {
 			who := WhoFromContext(r)
 			http := models.HTTP{Endpoint: r.URL.Path, Method: r.Method}
 			if err := v.Validate(who, http); err != nil {
-				return nil, nil, NewErrValidation(err)
+				return nil, nil, webrender.NewErrValidation(err)
 			}
 		}
 
@@ -166,22 +167,22 @@ func ModelOrModelsFromJSONBody(r *http.Request, typeString string, who models.Wh
 		if needTransform {
 			var modelInMap map[string]interface{}
 			if err = json.Unmarshal(jsnModel, &modelInMap); err != nil {
-				return nil, nil, NewErrParsingJSON(err)
+				return nil, nil, webrender.NewErrParsingJSON(err)
 			}
 
 			if err = transformJSONToModel(modelInMap, &fields); err != nil {
-				return nil, nil, NewErrParsingJSON(err)
+				return nil, nil, webrender.NewErrParsingJSON(err)
 			}
 
 			if jsnModel, err = json.Marshal(modelInMap); err != nil {
-				return nil, nil, NewErrParsingJSON(err)
+				return nil, nil, webrender.NewErrParsingJSON(err)
 			}
 		}
 
 		modelObj := models.NewFromTypeString(typeString)
 		err = json.Unmarshal(jsnModel, modelObj)
 		if err != nil {
-			return nil, nil, NewErrParsingJSON(err)
+			return nil, nil, webrender.NewErrParsingJSON(err)
 		}
 
 		// err := models.Validate.Struct(modelObj)
@@ -194,7 +195,7 @@ func ModelOrModelsFromJSONBody(r *http.Request, typeString string, who models.Wh
 			who := WhoFromContext(r)
 			http := models.HTTP{Endpoint: r.URL.Path, Method: r.Method}
 			if err := v.Validate(who, http); err != nil {
-				return nil, nil, NewErrValidation(err)
+				return nil, nil, webrender.NewErrValidation(err)
 			}
 		}
 		// return nil, nil, NewErrValidation(errors.New("test"))
@@ -213,7 +214,7 @@ func ModelsFromJSONBody(r *http.Request, typeString string, who models.Who) ([]m
 	var modelObjs []models.IModel
 	var err error
 	if jsn, err = ioutil.ReadAll(r.Body); err != nil {
-		return nil, NewErrReadingBody(err)
+		return nil, webrender.NewErrReadingBody(err)
 	}
 
 	// Previously I don't know about partial marshalling
@@ -224,7 +225,7 @@ func ModelsFromJSONBody(r *http.Request, typeString string, who models.Who) ([]m
 
 	err = json.Unmarshal(jsn, &jcmodel)
 	if err != nil {
-		return nil, NewErrParsingJSON(err)
+		return nil, webrender.NewErrParsingJSON(err)
 	}
 
 	modelTest := models.NewFromTypeString(typeString)
@@ -239,22 +240,22 @@ func ModelsFromJSONBody(r *http.Request, typeString string, who models.Who) ([]m
 		if needTransform {
 			var modelInMap map[string]interface{}
 			if err = json.Unmarshal(jsnModel, &modelInMap); err != nil {
-				return nil, NewErrParsingJSON(err)
+				return nil, webrender.NewErrParsingJSON(err)
 			}
 
 			if err = transformJSONToModel(modelInMap, &fields); err != nil {
-				return nil, NewErrParsingJSON(err)
+				return nil, webrender.NewErrParsingJSON(err)
 			}
 
 			if jsnModel, err = json.Marshal(modelInMap); err != nil {
-				return nil, NewErrParsingJSON(err)
+				return nil, webrender.NewErrParsingJSON(err)
 			}
 		}
 
 		modelObj := models.NewFromTypeString(typeString)
 		err = json.Unmarshal(jsnModel, modelObj)
 		if err != nil {
-			return nil, NewErrParsingJSON(err)
+			return nil, webrender.NewErrParsingJSON(err)
 		}
 
 		// err := models.Validate.Struct(modelObj)
@@ -267,7 +268,7 @@ func ModelsFromJSONBody(r *http.Request, typeString string, who models.Who) ([]m
 			who := WhoFromContext(r)
 			http := models.HTTP{Endpoint: r.URL.Path, Method: r.Method}
 			if err := v.Validate(who, http); err != nil {
-				return nil, NewErrValidation(err)
+				return nil, webrender.NewErrValidation(err)
 			}
 		}
 
@@ -287,7 +288,7 @@ func ModelFromJSONBody(r *http.Request, typeString string, who models.Who) (mode
 	var err error
 
 	if jsn, err = ioutil.ReadAll(r.Body); err != nil {
-		return nil, NewErrReadingBody(err)
+		return nil, webrender.NewErrReadingBody(err)
 	}
 
 	modelObj := models.NewFromTypeString(typeString)
@@ -301,28 +302,28 @@ func ModelFromJSONBody(r *http.Request, typeString string, who models.Who) (mode
 			// First extract into map interface, then convert it
 			var modelInMap map[string]interface{}
 			if err = json.Unmarshal(jsn, &modelInMap); err != nil {
-				return nil, NewErrParsingJSON(err)
+				return nil, webrender.NewErrParsingJSON(err)
 			}
 
 			if err = transformJSONToModel(modelInMap, &fields); err != nil {
-				return nil, NewErrParsingJSON(err)
+				return nil, webrender.NewErrParsingJSON(err)
 			}
 
 			if jsn, err = json.Marshal(modelInMap); err != nil {
-				return nil, NewErrParsingJSON(err)
+				return nil, webrender.NewErrParsingJSON(err)
 			}
 		}
 	}
 
 	if err = json.Unmarshal(jsn, modelObj); err != nil {
-		return nil, NewErrParsingJSON(err)
+		return nil, webrender.NewErrParsingJSON(err)
 	}
 
 	if v, ok := modelObj.(models.IValidate); ok {
 		who := WhoFromContext(r)
 		http := models.HTTP{Endpoint: r.URL.Path, Method: r.Method}
 		if err := v.Validate(who, http); err != nil {
-			return nil, NewErrValidation(err)
+			return nil, webrender.NewErrValidation(err)
 		}
 	}
 
@@ -335,20 +336,20 @@ func ModelFromJSONBodyNoWhoNoCheckPermissionNoTransform(r *http.Request, typeStr
 	var err error
 
 	if jsn, err = ioutil.ReadAll(r.Body); err != nil {
-		return nil, NewErrReadingBody(err)
+		return nil, webrender.NewErrReadingBody(err)
 	}
 
 	modelObj := models.NewFromTypeString(typeString)
 
 	if err = json.Unmarshal(jsn, modelObj); err != nil {
-		return nil, NewErrParsingJSON(err)
+		return nil, webrender.NewErrParsingJSON(err)
 	}
 
 	if v, ok := modelObj.(models.IValidate); ok {
 		who := WhoFromContext(r)
 		http := models.HTTP{Endpoint: r.URL.Path, Method: r.Method}
 		if err := v.Validate(who, http); err != nil {
-			return nil, NewErrValidation(err)
+			return nil, webrender.NewErrValidation(err)
 		}
 	}
 
@@ -362,7 +363,7 @@ func JSONPatchesFromJSONBody(r *http.Request) ([]models.JSONIDPatch, render.Rend
 	var err error
 
 	if jsn, err = ioutil.ReadAll(r.Body); err != nil {
-		return nil, NewErrReadingBody(err)
+		return nil, webrender.NewErrReadingBody(err)
 	}
 
 	// One jsonPath is an array of patches
@@ -385,7 +386,7 @@ func JSONPatchesFromJSONBody(r *http.Request) ([]models.JSONIDPatch, render.Rend
 	jsObj := jsonSlice{}
 	err = json.Unmarshal(jsn, &jsObj)
 	if err != nil {
-		return nil, NewErrParsingJSON(err)
+		return nil, webrender.NewErrParsingJSON(err)
 	}
 
 	// if v, ok := modelObj.(models.IValidate); ok {
@@ -406,11 +407,11 @@ func IDFromURLQueryString(c *gin.Context) (*datatypes.UUID, render.Renderer) {
 		id := datatypes.UUID{}
 		id.UUID, err = uuid.FromString(idstr)
 		if err != nil {
-			return nil, NewErrURLParameter(err)
+			return nil, webrender.NewErrURLParameter(err)
 		}
 
 		return &id, nil
 	}
 
-	return nil, NewErrURLParameter(errors.New("missing ID in URL query"))
+	return nil, webrender.NewErrURLParameter(errors.New("missing ID in URL query"))
 }

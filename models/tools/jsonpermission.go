@@ -2,7 +2,6 @@ package tools
 
 import (
 	"encoding/json"
-	"log"
 	"reflect"
 
 	"github.com/t2wu/betterrest/libs/utils/jsontrans"
@@ -19,7 +18,8 @@ func ToJSON(typeString string, v models.IModel, r models.UserRole, who models.Wh
 	// Custom permission
 	if modelObjPerm, ok := v.(models.IHasPermissions); ok {
 		permType, fields := modelObjPerm.Permissions(r, who)
-		log.Println("Note: permissionTypeBlackList not supported yet, currently:", permType)
+		// FIXME
+		// log.Println("Note: permissionTypeBlackList not supported yet, currently:", permType)
 
 		// White list or black list, we need to make it available for Transform to control
 		includeCUDDates := true
