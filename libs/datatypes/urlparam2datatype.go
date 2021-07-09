@@ -60,6 +60,18 @@ func TransformFieldValues(typeInString string, fieldValues []string) ([]interfac
 	return fieldValuesRet, nil
 }
 
+// FieldNotInModelError is for GetModelFieldTypeIfValid.
+// if field doesn't exist in the model, return this error
+// We want to go ahead and skip it since this field may be other
+// options that user can read in hookpoints
+type FieldNotInModelError struct {
+	Msg string
+}
+
+func (r *FieldNotInModelError) Error() string {
+	return r.Msg
+}
+
 // GetModelFieldTypeIfValid make sure the fieldName is in the modelObj, and find the correct reflect.Type
 // func GetModelFieldTypeIfValid(modelObj models.IModel, fieldName string) (reflect.Type, error) {
 // If this is an array, get the actual type instead of the array type
@@ -87,7 +99,7 @@ func GetModelFieldTypeIfValid(modelObj interface{}, fieldName string) (reflect.T
 			}
 		}
 		if !found {
-			return nil, fmt.Errorf("field name %s does not exist", fieldName)
+			return nil, &FieldNotInModelError{Msg: fmt.Sprintf("field name %s does not exist", fieldName)}
 		}
 	}
 	return fieldType, nil
@@ -131,7 +143,7 @@ func GetModelFieldTypeIfValid(modelObj interface{}, fieldName string) (reflect.T
 func GetModelFieldTypeElmIfValid(modelObj interface{}, fieldName string) (reflect.Type, error) {
 	fieldType, err := GetModelFieldTypeIfValid(modelObj, fieldName)
 	if err != nil {
-		log.Println("GetModelFieldTypeIfValid err:", err)
+		// log.Println("GetModelFieldTypeIfValid err:", err)
 		return nil, err
 	}
 

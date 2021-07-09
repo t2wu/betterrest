@@ -4,6 +4,7 @@ import (
 	"reflect"
 
 	"github.com/jinzhu/gorm"
+	"github.com/t2wu/betterrest/libs/urlparam"
 )
 
 // BatchHookCargo is payload between batch update and batch delete hookpoints
@@ -64,6 +65,8 @@ type BatchHookPointData struct {
 	Cargo *BatchHookCargo
 	// Role of this user in relation to this data, only available during read
 	Roles []UserRole
+	// URL parameters
+	URLParams *map[urlparam.Param]interface{}
 }
 
 // Reg is a registry item

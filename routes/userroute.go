@@ -12,7 +12,7 @@ func UserRoutes(endpoint string, r *gin.Engine) {
 	typeString := "users"
 	dm := datamapper.SharedUserMapper()
 
-	// r.Get("/", ReadAllHandler("users"))
+	// r.Get("/", GetAllHandler("users"))
 	// r.With(paginate).Get("/", ListArticles)
 	g.POST("", guardMiddleWare(typeString), CreateHandler(typeString, dm))
 
@@ -45,7 +45,7 @@ func UserRoutes(endpoint string, r *gin.Engine) {
 // 	typeString := "users"
 // 	dm := datamapper.SharedUserMapper()
 
-// 	// r.Get("/", ReadAllHandler("users"))
+// 	// r.Get("/", GetAllHandler("users"))
 // 	// r.With(paginate).Get("/", ListArticles)
 // 	g.POST("", guardMiddleWare(typeString), CreateHandler(typeString, dm))
 // 	g.GET("/:id/verifyemail/:code", guardMiddleWare(typeString), EmailVerificationHandler(typeString))

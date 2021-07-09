@@ -9,6 +9,7 @@ import (
 
 	"github.com/stoewer/go-strcase"
 	"github.com/t2wu/betterrest/libs/datatypes"
+	"github.com/t2wu/betterrest/libs/urlparam"
 	"github.com/t2wu/betterrest/libs/utils/jsontrans"
 
 	"github.com/asaskevich/govalidator"
@@ -296,6 +297,8 @@ type HookPointData struct {
 	Cargo *ModelCargo
 	// Role of this user in relation to this data, only available during read
 	Role *UserRole
+	// URL parameters
+	URLParams *map[urlparam.Param]interface{}
 }
 
 // IBeforeLogin has a function that is a hookpoint for actions before login but after marshalling

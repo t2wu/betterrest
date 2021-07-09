@@ -6,71 +6,15 @@ import (
 	"fmt"
 	"log"
 	"net/url"
-	"strconv"
 
 	"github.com/t2wu/betterrest/datamapper/service"
 	"github.com/t2wu/betterrest/libs/datatypes"
+	"github.com/t2wu/betterrest/libs/urlparam"
 	"github.com/t2wu/betterrest/models"
 
 	jsonpatch "github.com/evanphx/json-patch"
 	"github.com/jinzhu/gorm"
 )
-
-// URLParam is the URL parameter
-type URLParam string
-
-const (
-	URLParamOffset        URLParam = "offset"
-	URLParamLimit         URLParam = "limit"
-	URLParamOrder         URLParam = "order"
-	URLParamLatestN       URLParam = "latestn"
-	URLParamCstart        URLParam = "cstart"
-	URLParamCstop         URLParam = "cstop"
-	URLParamHasTotalCount URLParam = "totalcount"
-	URLParamOtherQueries  URLParam = "better_otherqueries"
-
-	// For email verification
-	// URLParamRedirect URLParam = "redirect"
-)
-
-func getOptions(options map[URLParam]interface{}) (offset *int, limit *int, cstart *int, cstop *int, order *string, latestn *int, count bool) {
-	// If key is in it, even if value is nil, ok will be true
-
-	if _, ok := options[URLParamOffset]; ok {
-		offset, _ = options[URLParamOffset].(*int)
-	}
-
-	if _, ok := options[URLParamLimit]; ok {
-		limit, _ = options[URLParamLimit].(*int)
-	}
-
-	if _, ok := options[URLParamOrder]; ok {
-		order, _ = options[URLParamOrder].(*string)
-	}
-
-	if _, ok := options[URLParamCstart]; ok {
-		cstart, _ = options[URLParamCstart].(*int)
-	}
-	if _, ok := options[URLParamCstop]; ok {
-		cstop, _ = options[URLParamCstop].(*int)
-	}
-
-	latestn = nil
-	if n, ok := options[URLParamLatestN]; ok {
-		if n != nil {
-			if n2, err := strconv.Atoi(*(n.(*string))); err == nil {
-				latestn = &n2
-			}
-		}
-	}
-
-	hasTotalCount := false
-	if _, ok := options[URLParamHasTotalCount]; ok {
-		hasTotalCount = options[URLParamHasTotalCount].(bool)
-	}
-
-	return offset, limit, cstart, cstop, order, latestn, hasTotalCount
-}
 
 // TODO: This method repeated twice, not sure where to put it
 func modelNeedsRealDelete(modelObj models.IModel) bool {
@@ -82,8 +26,8 @@ func modelNeedsRealDelete(modelObj models.IModel) bool {
 	return realDelete
 }
 
-func constructInnerFieldParamQueries(db *gorm.DB, typeString string, options map[URLParam]interface{}, latestn *int) (*gorm.DB, error) {
-	if urlParams, ok := options[URLParamOtherQueries].(url.Values); ok && len(urlParams) != 0 {
+func constructInnerFieldParamQueries(db *gorm.DB, typeString string, options *map[urlparam.Param]interface{}, latestn *int) (*gorm.DB, error) {
+	if urlParams, ok := (*options)[urlparam.ParamOtherQueries].(url.Values); ok && len(urlParams) != 0 {
 		var err error
 		// If I want quering into nested data
 		// I need INNER JOIN that table where the field is what we search for,

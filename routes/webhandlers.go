@@ -18,6 +18,7 @@ import (
 	"github.com/t2wu/betterrest/db"
 	"github.com/t2wu/betterrest/libs/security"
 	"github.com/t2wu/betterrest/libs/settings"
+	"github.com/t2wu/betterrest/libs/urlparam"
 	"github.com/t2wu/betterrest/libs/utils/transact"
 	"github.com/t2wu/betterrest/libs/webrender"
 	"github.com/t2wu/betterrest/models"
@@ -47,14 +48,14 @@ func logTransID(tx *gorm.DB, method, url, cardinality string) {
 
 // ---------------------------------------------
 func LimitAndOffsetFromQueryString(values *url.Values) (*int, *int, error) {
-	defer delete(*values, string(datamapper.URLParamOffset))
-	defer delete(*values, string(datamapper.URLParamLimit))
+	defer delete(*values, string(urlparam.ParamOffset))
+	defer delete(*values, string(urlparam.ParamLimit))
 
 	var o, l int
 	var err error
 
-	offset := values.Get(string(datamapper.URLParamOffset))
-	limit := values.Get(string(datamapper.URLParamLimit))
+	offset := values.Get(string(urlparam.ParamOffset))
+	limit := values.Get(string(urlparam.ParamLimit))
 
 	if offset == "" && limit == "" {
 		return nil, nil, nil
@@ -80,9 +81,9 @@ func LimitAndOffsetFromQueryString(values *url.Values) (*int, *int, error) {
 }
 
 func OrderFromQueryString(values *url.Values) *string {
-	defer delete(*values, string(datamapper.URLParamOrder))
+	defer delete(*values, string(urlparam.ParamOrder))
 
-	if order := values.Get(string(datamapper.URLParamOrder)); order != "" {
+	if order := values.Get(string(urlparam.ParamOrder)); order != "" {
 		// Prevent sql injection
 		if order != "desc" && order != "asc" {
 			return nil
@@ -93,9 +94,9 @@ func OrderFromQueryString(values *url.Values) *string {
 }
 
 func LatestnFromQueryString(values *url.Values) *string {
-	defer delete(*values, string(datamapper.URLParamLatestN))
+	defer delete(*values, string(urlparam.ParamLatestN))
 
-	if latestn := values.Get(string(datamapper.URLParamLatestN)); latestn != "" {
+	if latestn := values.Get(string(urlparam.ParamLatestN)); latestn != "" {
 		// Prevent sql injection
 		_, err := strconv.Atoi(latestn)
 		if err != nil {
@@ -107,11 +108,11 @@ func LatestnFromQueryString(values *url.Values) *string {
 }
 
 func CreatedTimeRangeFromQueryString(values *url.Values) (*int, *int, error) {
-	defer delete(*values, string(datamapper.URLParamCstart))
-	defer delete(*values, string(datamapper.URLParamCstop))
+	defer delete(*values, string(urlparam.ParamCstart))
+	defer delete(*values, string(urlparam.ParamCstop))
 
-	if cstart, cstop := values.Get(string(datamapper.URLParamCstart)),
-		values.Get(string(datamapper.URLParamCstop)); cstart != "" && cstop != "" {
+	if cstart, cstop := values.Get(string(urlparam.ParamCstart)),
+		values.Get(string(urlparam.ParamCstop)); cstart != "" && cstop != "" {
 		var err error
 		cStartInt, cStopInt := 0, 0
 		if cstart != "" {
@@ -136,8 +137,8 @@ func CreatedTimeRangeFromQueryString(values *url.Values) (*int, *int, error) {
 }
 
 func hasTotalCountFromQueryString(values *url.Values) bool {
-	defer delete(*values, string(datamapper.URLParamHasTotalCount))
-	if totalCount := values.Get(string(datamapper.URLParamHasTotalCount)); totalCount != "" && totalCount == "true" {
+	defer delete(*values, string(urlparam.ParamHasTotalCount))
+	if totalCount := values.Get(string(urlparam.ParamHasTotalCount)); totalCount != "" && totalCount == "true" {
 		return true
 	}
 	return false
@@ -355,37 +356,37 @@ func UserLoginHandler(typeString string) func(c *gin.Context) {
 // 	}
 // }
 
-func GetOptionByParsingURL(r *http.Request) (map[datamapper.URLParam]interface{}, error) {
-	options := make(map[datamapper.URLParam]interface{})
+func GetOptionByParsingURL(r *http.Request) (map[urlparam.Param]interface{}, error) {
+	options := make(map[urlparam.Param]interface{})
 
 	values := r.URL.Query()
 	if o, l, err := LimitAndOffsetFromQueryString(&values); err == nil {
 		if o != nil && l != nil {
-			options[datamapper.URLParamOffset], options[datamapper.URLParamLimit] = o, l
+			options[urlparam.ParamOffset], options[urlparam.ParamLimit] = o, l
 		}
 	} else if err != nil {
 		return nil, err
 	}
 
 	if order := OrderFromQueryString(&values); order != nil {
-		options[datamapper.URLParamOrder] = order
+		options[urlparam.ParamOrder] = order
 	}
 
 	if latest := LatestnFromQueryString(&values); latest != nil {
-		options[datamapper.URLParamLatestN] = latest
+		options[urlparam.ParamLatestN] = latest
 	}
 
-	options[datamapper.URLParamOtherQueries] = values
+	options[urlparam.ParamOtherQueries] = values
 
 	if cstart, cstop, err := CreatedTimeRangeFromQueryString(&values); err == nil {
 		if cstart != nil && cstop != nil {
-			options[datamapper.URLParamCstart], options[datamapper.URLParamCstop] = cstart, cstop
+			options[urlparam.ParamCstart], options[urlparam.ParamCstop] = cstart, cstop
 		}
 	} else if err != nil {
 		return nil, err
 	}
 
-	options[datamapper.URLParamHasTotalCount] = hasTotalCountFromQueryString(&values)
+	options[urlparam.ParamHasTotalCount] = hasTotalCountFromQueryString(&values)
 
 	return options, nil
 }
@@ -395,8 +396,8 @@ func GetOptionByParsingURL(r *http.Request) (map[datamapper.URLParam]interface{}
 // https://stackoverflow.com/questions/7850140/how-do-you-create-a-new-instance-of-a-struct-from-its-type-at-run-time-in-go
 // https://stackoverflow.com/questions/23030884/is-there-a-way-to-create-an-instance-of-a-struct-from-a-string
 
-// ReadAllHandler returns a Gin handler which fetch multiple records of a resource
-func ReadAllHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin.Context) {
+// GetAllHandler returns a Gin handler which fetch multiple records of a resource
+func GetAllHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin.Context) {
 	return func(c *gin.Context) {
 		w, r := c.Writer, c.Request
 
@@ -404,16 +405,13 @@ func ReadAllHandler(typeString string, mapper datamapper.IDataMapper) func(c *gi
 			if r := recover(); r != nil {
 				debug.PrintStack()
 				render.Render(w, c.Request, webrender.NewErrInternalServerError(nil))
-				fmt.Println("Panic in ReadAllHandler", r)
+				fmt.Println("Panic in GetAllHandler", r)
 			}
 		}()
 
 		var err error
 
-		who := WhoFromContext(r)
-
-		options := make(map[datamapper.URLParam]interface{})
-
+		options := make(map[urlparam.Param]interface{})
 		if options, err = GetOptionByParsingURL(r); err != nil {
 			render.Render(w, r, webrender.NewErrQueryParameter(err))
 			return
@@ -427,7 +425,8 @@ func ReadAllHandler(typeString string, mapper datamapper.IDataMapper) func(c *gi
 			log.Println(fmt.Sprintf("[BetterREST]: %s %s (n), transact: n/a", c.Request.Method, c.Request.URL.String()))
 		}
 
-		modelObjs, roles, no, err = mapper.GetAll(db.Shared(), who, typeString, options)
+		who := WhoFromContext(r)
+		modelObjs, roles, no, err = mapper.GetAll(db.Shared(), who, typeString, &options)
 
 		if err != nil {
 			render.Render(w, r, webrender.NewErrInternalServerError(err))
@@ -452,7 +451,11 @@ func CreateHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin
 			}
 		}()
 
-		var modelObj models.IModel
+		options, err := GetOptionByParsingURL(r)
+		if err != nil {
+			render.Render(w, r, webrender.NewErrQueryParameter(err))
+			return
+		}
 
 		who := WhoFromContext(r)
 
@@ -462,12 +465,14 @@ func CreateHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin
 			return
 		}
 
+		var modelObj models.IModel
+
 		if *isBatch {
 			err := transact.Transact(db.Shared(), func(tx *gorm.DB) error {
 				logTransID(tx, c.Request.Method, c.Request.URL.String(), "n")
 
 				var err2 error
-				if modelObjs, err2 = mapper.CreateMany(tx, who, typeString, modelObjs); err2 != nil {
+				if modelObjs, err2 = mapper.CreateMany(tx, who, typeString, modelObjs, &options); err2 != nil {
 					log.Println("Error in CreateMany:", typeString, err2)
 					return err2
 				}
@@ -490,7 +495,7 @@ func CreateHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin
 			err := transact.Transact(db.Shared(), func(tx *gorm.DB) error {
 				logTransID(tx, c.Request.Method, c.Request.URL.String(), "1")
 
-				if modelObj, err2 = mapper.CreateOne(tx, who, typeString, modelObjs[0]); err2 != nil {
+				if modelObj, err2 = mapper.CreateOne(tx, who, typeString, modelObjs[0], &options); err2 != nil {
 					log.Println("Error in CreateOne:", typeString, err2)
 					return err2
 				}
@@ -526,7 +531,12 @@ func ReadOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *gi
 			return
 		}
 
-		who := WhoFromContext(r)
+		var err error
+		options, err := GetOptionByParsingURL(r)
+		if err != nil {
+			render.Render(w, r, webrender.NewErrQueryParameter(err))
+			return
+		}
 
 		var modelObj models.IModel
 		var role models.UserRole
@@ -535,8 +545,8 @@ func ReadOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *gi
 			log.Println(fmt.Sprintf("[BetterREST]: %s %s (1), transact: n/a", c.Request.Method, c.Request.URL.String()))
 		}
 
-		var err error
-		modelObj, role, err = mapper.GetOneWithID(db.Shared(), who, typeString, id)
+		who := WhoFromContext(r)
+		modelObj, role, err = mapper.GetOneWithID(db.Shared(), who, typeString, id, &options)
 
 		if err != nil && gorm.IsRecordNotFoundError(err) {
 			render.Render(w, r, webrender.NewErrNotFound(err))
@@ -569,6 +579,12 @@ func UpdateOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 			return
 		}
 
+		options, err := GetOptionByParsingURL(r)
+		if err != nil {
+			render.Render(w, r, webrender.NewErrQueryParameter(err))
+			return
+		}
+
 		who := WhoFromContext(r)
 
 		modelObj, httperr := ModelFromJSONBody(r, typeString, who)
@@ -585,10 +601,10 @@ func UpdateOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 		}
 
 		var modelObj2 models.IModel
-		err := transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
+		err = transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
 			logTransID(tx, c.Request.Method, c.Request.URL.String(), "1")
 
-			if modelObj2, err = mapper.UpdateOneWithID(tx, who, typeString, modelObj, id); err != nil {
+			if modelObj2, err = mapper.UpdateOneWithID(tx, who, typeString, modelObj, id, &options); err != nil {
 				log.Println("Error in UpdateOneHandler ErrUpdate:", typeString, err)
 				return err
 			}
@@ -618,6 +634,12 @@ func UpdateManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 			}
 		}()
 
+		options, err := GetOptionByParsingURL(r)
+		if err != nil {
+			render.Render(w, r, webrender.NewErrQueryParameter(err))
+			return
+		}
+
 		who := WhoFromContext(r)
 
 		modelObjs, httperr := ModelsFromJSONBody(r, typeString, who)
@@ -628,10 +650,10 @@ func UpdateManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 		}
 
 		var modelObjs2 []models.IModel
-		err := transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
+		err = transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
 			logTransID(tx, c.Request.Method, c.Request.URL.String(), "n")
 
-			if modelObjs2, err = mapper.UpdateMany(tx, who, typeString, modelObjs); err != nil {
+			if modelObjs2, err = mapper.UpdateMany(tx, who, typeString, modelObjs, &options); err != nil {
 				log.Println("Error in UpdateManyHandler:", typeString, err)
 				return err
 			}
@@ -679,13 +701,19 @@ func PatchOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *g
 			return
 		}
 
+		options, err := GetOptionByParsingURL(r)
+		if err != nil {
+			render.Render(w, r, webrender.NewErrQueryParameter(err))
+			return
+		}
+
 		who := WhoFromContext(r)
 
 		var modelObj models.IModel
 		err = transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
 			logTransID(tx, c.Request.Method, c.Request.URL.String(), "1")
 
-			if modelObj, err = mapper.PatchOneWithID(tx, who, typeString, jsonPatch, id); err != nil {
+			if modelObj, err = mapper.PatchOneWithID(tx, who, typeString, jsonPatch, id, &options); err != nil {
 				log.Println("Error in PatchOneHandler:", typeString, err)
 				return err
 			}
@@ -721,6 +749,12 @@ func PatchManyHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 			}
 		}()
 
+		options, err := GetOptionByParsingURL(r)
+		if err != nil {
+			render.Render(w, r, webrender.NewErrQueryParameter(err))
+			return
+		}
+
 		who := WhoFromContext(r)
 
 		jsonIDPatches, httperr := JSONPatchesFromJSONBody(r)
@@ -731,10 +765,10 @@ func PatchManyHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 		}
 
 		var modelObjs []models.IModel
-		err := transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
+		err = transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
 			logTransID(tx, c.Request.Method, c.Request.URL.String(), "n")
 
-			if modelObjs, err = mapper.PatchMany(tx, who, typeString, jsonIDPatches); err != nil {
+			if modelObjs, err = mapper.PatchMany(tx, who, typeString, jsonIDPatches, &options); err != nil {
 				log.Println("Error in PatchManyHandler:", typeString, err)
 				return err
 			}
@@ -768,6 +802,12 @@ func DeleteOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 			}
 		}()
 
+		options, err := GetOptionByParsingURL(r)
+		if err != nil {
+			render.Render(w, r, webrender.NewErrQueryParameter(err))
+			return
+		}
+
 		id, httperr := IDFromURLQueryString(c)
 		if httperr != nil {
 			render.Render(w, r, httperr)
@@ -777,10 +817,10 @@ func DeleteOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 		who := WhoFromContext(r)
 
 		var modelObj models.IModel
-		err := transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
+		err = transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
 			logTransID(tx, c.Request.Method, c.Request.URL.String(), "1")
 
-			if modelObj, err = mapper.DeleteOneWithID(tx, who, typeString, id); err != nil {
+			if modelObj, err = mapper.DeleteOneWithID(tx, who, typeString, id, &options); err != nil {
 				log.Printf("Error in DeleteOneHandler: %s %+v\n", typeString, err)
 				return err
 			}
@@ -822,7 +862,7 @@ func DeleteManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 		err := transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
 			logTransID(tx, c.Request.Method, c.Request.URL.String(), "n")
 
-			if modelObjs, err = mapper.DeleteMany(tx, who, typeString, modelObjs); err != nil {
+			if modelObjs, err = mapper.DeleteMany(tx, who, typeString, modelObjs, nil); err != nil {
 				log.Println("Error in DeleteOneHandler ErrDelete:", typeString, err)
 				return err
 			}
@@ -1049,7 +1089,7 @@ func PasswordResetHandler(typeString string, mapper datamapper.IResetPasswordMap
 		}
 
 		// values := r.URL.Query()
-		// redirectURL := values.Get(string(datamapper.URLParamRedirect))
+		// redirectURL := values.Get(string(urlparam.ParamRedirect))
 
 		// Remove this code from the db and make this user verified
 		err := transact.Transact(db.Shared(), func(tx *gorm.DB) error {

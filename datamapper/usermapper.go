@@ -11,6 +11,7 @@ import (
 	"github.com/t2wu/betterrest/datamapper/service"
 	"github.com/t2wu/betterrest/libs/datatypes"
 	"github.com/t2wu/betterrest/libs/security"
+	"github.com/t2wu/betterrest/libs/urlparam"
 	"github.com/t2wu/betterrest/libs/utils"
 	"github.com/t2wu/betterrest/models"
 
@@ -60,7 +61,7 @@ type ISendPasswordResetEmail interface {
 
 // CreateOne creates an user model based on json and store it in db
 // Also creates a ownership with admin access
-func (mapper *UserMapper) CreateOne(db *gorm.DB, who models.Who, typeString string, modelObj models.IModel) (models.IModel, error) {
+func (mapper *UserMapper) CreateOne(db *gorm.DB, who models.Who, typeString string, modelObj models.IModel, options *map[urlparam.Param]interface{}) (models.IModel, error) {
 	modelObj, err := mapper.Service.HookBeforeCreateOne(db, who, typeString, modelObj)
 	if err != nil {
 		return nil, err
@@ -91,6 +92,7 @@ func (mapper *UserMapper) CreateOne(db *gorm.DB, who models.Who, typeString stri
 		// oldModelObj: oldModelObj,
 		modelObj: modelObj,
 		crupdOp:  models.CRUPDOpCreate,
+		options:  options,
 	}
 
 	modelObj2, err := opCore(before, after, j, mapper.Service.CreateOneCore)
@@ -117,7 +119,7 @@ func (mapper *UserMapper) CreateOne(db *gorm.DB, who models.Who, typeString stri
 // }
 
 // GetOneWithID get one model object based on its type and its id string
-func (mapper *UserMapper) GetOneWithID(db *gorm.DB, who models.Who, typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error) {
+func (mapper *UserMapper) GetOneWithID(db *gorm.DB, who models.Who, typeString string, id *datatypes.UUID, options *map[urlparam.Param]interface{}) (models.IModel, models.UserRole, error) {
 	log.Println("GetOneWithID...................")
 	modelObj, role, err := mapper.Service.GetOneWithIDCore(db, who, typeString, id)
 	if err != nil {
@@ -137,7 +139,7 @@ func (mapper *UserMapper) GetOneWithID(db *gorm.DB, who models.Who, typeString s
 // UpdateOneWithID updates model based on this json
 // Update DOESN'T change password. It'll load up the password hash and save the same.
 // Update password require special endpoint
-func (mapper *UserMapper) UpdateOneWithID(db *gorm.DB, who models.Who, typeString string, modelObj models.IModel, id *datatypes.UUID) (models.IModel, error) {
+func (mapper *UserMapper) UpdateOneWithID(db *gorm.DB, who models.Who, typeString string, modelObj models.IModel, id *datatypes.UUID, options *map[urlparam.Param]interface{}) (models.IModel, error) {
 	log.Println("userMapper's UpdateOneWithID called")
 	oldModelObj, _, err := loadAndCheckErrorBeforeModify(mapper.Service, db, who, typeString, modelObj, id, []models.UserRole{models.UserRoleAdmin})
 	if err != nil {
@@ -178,7 +180,7 @@ func (mapper *UserMapper) UpdateOneWithID(db *gorm.DB, who models.Who, typeStrin
 }
 
 // DeleteOneWithID deletes the user with the ID
-func (mapper *UserMapper) DeleteOneWithID(db *gorm.DB, who models.Who, typeString string, id *datatypes.UUID) (models.IModel, error) {
+func (mapper *UserMapper) DeleteOneWithID(db *gorm.DB, who models.Who, typeString string, id *datatypes.UUID, options *map[urlparam.Param]interface{}) (models.IModel, error) {
 	modelObj, _, err := loadAndCheckErrorBeforeModify(mapper.Service, db, who, typeString, nil, id, []models.UserRole{models.UserRoleAdmin})
 	if err != nil {
 		return nil, err
@@ -214,6 +216,7 @@ func (mapper *UserMapper) DeleteOneWithID(db *gorm.DB, who models.Who, typeStrin
 		// oldModelObj: oldModelObj,
 		modelObj: modelObj,
 		crupdOp:  models.CRUPDOpDelete,
+		options:  options,
 	}
 
 	return opCore(before, after, j, mapper.Service.DeleteOneCore)
@@ -428,35 +431,35 @@ func preserveEmailPassword(db *gorm.DB, oid *datatypes.UUID, modelObj models.IMo
 }
 
 // CreateMany :-
-func (mapper *UserMapper) CreateMany(db *gorm.DB, who models.Who, typeString string, modelObj []models.IModel) ([]models.IModel, error) {
+func (mapper *UserMapper) CreateMany(db *gorm.DB, who models.Who, typeString string, modelObj []models.IModel, options *map[urlparam.Param]interface{}) ([]models.IModel, error) {
 	return nil, fmt.Errorf("Not implemented")
 }
 
 // GetAll :-
-func (mapper *UserMapper) GetAll(db *gorm.DB, who models.Who, typeString string, options map[URLParam]interface{}) ([]models.IModel, []models.UserRole, *int, error) {
+func (mapper *UserMapper) GetAll(db *gorm.DB, who models.Who, typeString string, options *map[urlparam.Param]interface{}) ([]models.IModel, []models.UserRole, *int, error) {
 	return nil, nil, nil, fmt.Errorf("Not implemented")
 }
 
 // UpdateMany :-
-func (mapper *UserMapper) UpdateMany(db *gorm.DB, who models.Who, typeString string, modelObjs []models.IModel) ([]models.IModel, error) {
+func (mapper *UserMapper) UpdateMany(db *gorm.DB, who models.Who, typeString string, modelObjs []models.IModel, options *map[urlparam.Param]interface{}) ([]models.IModel, error) {
 	return nil, fmt.Errorf("Not implemented")
 }
 
 // PatchMany :-
 func (mapper *UserMapper) PatchMany(db *gorm.DB, who models.Who,
-	typeString string, jsonIDPatches []models.JSONIDPatch) ([]models.IModel, error) {
+	typeString string, jsonIDPatches []models.JSONIDPatch, options *map[urlparam.Param]interface{}) ([]models.IModel, error) {
 	return nil, fmt.Errorf("Not implemented")
 }
 
 // DeleteMany :-
 func (mapper *UserMapper) DeleteMany(db *gorm.DB, who models.Who,
-	typeString string, modelObjs []models.IModel) ([]models.IModel, error) {
+	typeString string, modelObjs []models.IModel, options *map[urlparam.Param]interface{}) ([]models.IModel, error) {
 	return nil, fmt.Errorf("Not implemented")
 }
 
 // PatchOneWithID :-
 func (mapper *UserMapper) PatchOneWithID(db *gorm.DB, who models.Who,
-	typeString string, jsonPatch []byte, id *datatypes.UUID) (models.IModel, error) {
+	typeString string, jsonPatch []byte, id *datatypes.UUID, options *map[urlparam.Param]interface{}) (models.IModel, error) {
 	return nil, fmt.Errorf("Not implemented, todo")
 }
 

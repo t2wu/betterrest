@@ -73,7 +73,7 @@ func AddWhereStmt(db *gorm.DB, typeString string, tableName string, filter Filte
 		letters.CamelCaseToPascalCase(filter.FieldName), urlFieldValues)
 
 	if err != nil {
-		return nil, err
+		return db, err
 	}
 
 	filterdFieldValues, anyNull := filterNullValue(transformedFieldValues)
@@ -205,6 +205,10 @@ func AddLatestJoinWithOneLevelFilter(db *gorm.DB, typeString string, tableName s
 
 		transformedFieldValues, err := getTransformedValueFromValidField(m,
 			letters.CamelCaseToPascalCase(filter.FieldName), urlFieldValues)
+
+		if _, ok := err.(*datatypes.FieldNotInModelError); ok {
+			continue
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -223,6 +227,11 @@ func AddLatestJoinWithOneLevelFilter(db *gorm.DB, typeString string, tableName s
 
 		transformedValues = append(transformedValues, fiterdFieldValues...)
 	}
+
+	if len(transformedValues) == 0 {
+		return db, fmt.Errorf("latestn cannot be used without querying field value")
+	}
+
 	partitionBy := strings.Join(partitionByArr, ", ")
 	whereStmt := strings.Join(whereArr, " AND ")
 

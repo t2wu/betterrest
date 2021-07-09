@@ -15,7 +15,7 @@ func addRoute(r *gin.Engine, typeString string, reg *models.Reg, mapper datamapp
 	{
 		if strings.ContainsAny(reg.BatchMethods, "R") {
 			g.GET("", guardMiddleWare(typeString),
-				ReadAllHandler(typeString, mapper)) // e.g. GET /devices
+				GetAllHandler(typeString, mapper)) // e.g. GET /devices
 		}
 
 		if strings.ContainsAny(reg.BatchMethods, "C") {

@@ -79,7 +79,6 @@ func constructDbFromURLFieldQuery(db *gorm.DB, typeString string, urlParams map[
 	// IF thee IS latestn, then we use INNER JOIN with a dense_rank
 	if latestn == nil {
 		for fieldName, fieldValues := range urlParams {
-
 			// If querying nested field, skip
 			if strings.Contains(fieldName, ".") {
 				continue
@@ -92,6 +91,10 @@ func constructDbFromURLFieldQuery(db *gorm.DB, typeString string, urlParams map[
 
 			// We used the fact that repeatedly call AddWhereStmt genereates only ONE WHERE with multiple filters
 			db, err = sqlbuilder.AddWhereStmt(db, typeString, models.GetTableNameFromTypeString(typeString), *criteria)
+			if _, ok := err.(*datatypes.FieldNotInModelError); ok {
+				// custom url parameter
+				continue
+			}
 			if err != nil {
 				return db, err
 			}
@@ -105,6 +108,10 @@ func constructDbFromURLFieldQuery(db *gorm.DB, typeString string, urlParams map[
 			}
 
 			criteria, err := constructFilterCriteriaFromFieldNameAndFieldValue(fieldName, fieldValues)
+			// if _, ok := err.(*datatypes.FieldNotInModelError); ok {
+			// 	// custom url parameter
+			// 	continue
+			// }
 			if err != nil {
 				return db, err
 			}
