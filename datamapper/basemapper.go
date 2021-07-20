@@ -165,7 +165,7 @@ func (mapper *BaseMapper) GetAll(db *gorm.DB, who models.Who, typeString string,
 	// chain offset and limit
 	if offset != nil && limit != nil {
 		db = db.Offset(*offset).Limit(*limit)
-	} else { // default to 100 maximum
+	} else if cstart == nil && cstop == nil { // default to 100 maximum
 		db = db.Offset(0).Limit(100)
 	}
 
