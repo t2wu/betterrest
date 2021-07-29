@@ -2,6 +2,7 @@ package sqlbuilder
 
 import (
 	"fmt"
+	"log"
 	"reflect"
 	"strings"
 
@@ -174,12 +175,19 @@ func AddNestedQueryJoinStmt(db *gorm.DB, typeString string, criteria TwoLevelFil
 	return db, nil
 }
 
-// AddLatestJoinWithOneLevelFilter generates latest join with one-level filter
-// TODO? Can tablename be part of the "?"
-func AddLatestJoinWithOneLevelFilter(db *gorm.DB, typeString string, tableName string, latestn int, filters []FilterCriteria) (*gorm.DB, error) {
-	partitionByArr := make([]string, 0)
-	whereArr := make([]string, 0)
+func filterHasLateston(filters []FilterCriteria) bool {
+	// if having latestn but no latestnon, old behavior
+	for _, filter := range filters {
+		if filter.FieldName == "latestnon" {
+			return true
+		}
+	}
+	return false
+}
 
+func AddLatestNCTEJoin(db *gorm.DB, typeString string, tableName string, latestn int, filters []FilterCriteria) (*gorm.DB, error) {
+	partitionByArr := make([]string, 0)
+	latestnonWhereArr := make([]string, 0)
 	transformedValues := make([]interface{}, 0)
 
 	for _, filter := range filters {
@@ -210,7 +218,7 @@ func AddLatestJoinWithOneLevelFilter(db *gorm.DB, typeString string, tableName s
 			continue
 		}
 		if err != nil {
-			return nil, err
+			return db, err
 		}
 
 		fiterdFieldValues, anyNull := filterNullValue(transformedFieldValues)
@@ -219,6 +227,124 @@ func AddLatestJoinWithOneLevelFilter(db *gorm.DB, typeString string, tableName s
 		fieldName := strcase.SnakeCase(filter.FieldName)
 		partitionByArr = append(partitionByArr, fieldName)
 
+		// One field is either >= or =, so we split by equality here
+		if hasEquality {
+			latestnonWhereArr = append(latestnonWhereArr, inOpStmt(tableName, fieldName, len(fiterdFieldValues), anyNull)) // "%s.%s IN (%s)
+		} else {
+			latestnonWhereArr = append(latestnonWhereArr, comparisonOpStmt(tableName, strcase.SnakeCase(filter.FieldName), filter.PredicatesArr))
+		}
+
+		transformedValues = append(transformedValues, fiterdFieldValues...)
+
+	}
+
+	if len(transformedValues) == 0 {
+		return db, fmt.Errorf("latestn cannot be used without querying field value")
+	}
+
+	partitionBy := strings.Join(partitionByArr, ", ")
+	latestnonWhereStmt := strings.Join(latestnonWhereArr, " AND ")
+
+	var sb strings.Builder
+	// The latestnon can be here in the WHERE clause
+	sb.WriteString(fmt.Sprintf("INNER JOIN (SELECT id, DENSE_RANK() OVER (PARTITION by %s ORDER BY created_at DESC) FROM %s WHERE %s) AS latestn ",
+		partitionBy, tableName, latestnonWhereStmt)) // WHERE fieldName = fieldValue
+
+	sb.WriteString(fmt.Sprintf("ON %s AND %s.id = latestn.id AND latestn.dense_rank <= ?", latestnonWhereStmt, tableName))
+
+	stmt := sb.String()
+
+	transformedValues = append(transformedValues, transformedValues...)
+	transformedValues = append(transformedValues, latestn)
+
+	db = db.Joins(stmt, transformedValues...)
+	return db, nil
+}
+
+// AddLatestJoinWithOneLevelFilter generates latest join with one-level filter
+// TODO? Can tablename be part of the "?"
+func AddLatestJoinWithOneLevelFilter(db *gorm.DB, typeString string, tableName string, latestn int, filters []FilterCriteria) (*gorm.DB, error) {
+	hasLatestOn := filterHasLateston(filters)
+	var partitionBy, latestnonWhereStmt, whereOnStmt string
+	var transformedValues []interface{}
+	var err error
+	if hasLatestOn {
+		partitionBy, latestnonWhereStmt, whereOnStmt, transformedValues, err = latestnGetPartitionWhereAndTransformedValues2(typeString, tableName, filters)
+		if err != nil {
+			log.Println("AddLatestJoinWithOneLevelFilter error:", err)
+			return db, err
+		}
+	} else {
+		partitionBy, latestnonWhereStmt, transformedValues, err = latestnGetPartitionWhereAndTransformedValues(typeString, tableName, filters)
+		if err != nil {
+			log.Println("AddLatestJoinWithOneLevelFilter error:", err)
+			return db, err
+		}
+	}
+
+	var sb strings.Builder
+	// The latestnon can be here in the WHERE clause
+	sb.WriteString(fmt.Sprintf("INNER JOIN (SELECT id, DENSE_RANK() OVER (PARTITION by %s ORDER BY created_at DESC) FROM %s WHERE %s) AS latestn ",
+		partitionBy, tableName, latestnonWhereStmt)) // WHERE fieldName = fieldValue
+
+	// All "where" clause stuff can go on as "ON" clause here
+	if whereOnStmt != "" {
+		sb.WriteString(fmt.Sprintf("ON %s AND %s.id = latestn.id AND latestn.dense_rank <= ?", whereOnStmt, tableName))
+	} else {
+		sb.WriteString(fmt.Sprintf("ON %s.id = latestn.id AND latestn.dense_rank <= ?", tableName))
+	}
+
+	stmt := sb.String()
+
+	transformedValues = append(transformedValues, latestn)
+
+	db = db.Joins(stmt, transformedValues...)
+	return db, nil
+}
+
+func latestnGetPartitionWhereAndTransformedValues(typeString, tableName string, filters []FilterCriteria) (string, string, []interface{}, error) {
+	partitionByArr := make([]string, 0)
+	whereArr := make([]string, 0)
+	transformedValues := make([]interface{}, 0)
+
+	for _, filter := range filters {
+		// If there is any equality comparison other than equal
+		// there shouldn't be any IN then
+		hasEquality := false
+		for _, predicates := range filter.PredicatesArr {
+			for _, predicate := range predicates {
+				if predicate.PredicateLogic == FilterPredicateLogicEQ {
+					hasEquality = true
+				}
+			}
+		}
+
+		m := models.NewFromTypeString(typeString)
+
+		urlFieldValues := make([]string, 0)
+		for _, predicates := range filter.PredicatesArr {
+			for _, predicate := range predicates {
+				urlFieldValues = append(urlFieldValues, predicate.FieldValue)
+			}
+		}
+
+		transformedFieldValues, err := getTransformedValueFromValidField(m,
+			letters.CamelCaseToPascalCase(filter.FieldName), urlFieldValues)
+
+		if _, ok := err.(*datatypes.FieldNotInModelError); ok {
+			continue
+		}
+		if err != nil {
+			return "", "", nil, err
+		}
+
+		fiterdFieldValues, anyNull := filterNullValue(transformedFieldValues)
+		// If passed, the field is part of the data structure
+
+		fieldName := strcase.SnakeCase(filter.FieldName)
+		partitionByArr = append(partitionByArr, fieldName)
+
+		// One field is either >= or =, so we split by equality here
 		if hasEquality {
 			whereArr = append(whereArr, inOpStmt(tableName, fieldName, len(fiterdFieldValues), anyNull)) // "%s.%s IN (%s)
 		} else {
@@ -229,22 +355,166 @@ func AddLatestJoinWithOneLevelFilter(db *gorm.DB, typeString string, tableName s
 	}
 
 	if len(transformedValues) == 0 {
-		return db, fmt.Errorf("latestn cannot be used without querying field value")
+		return "", "", nil, fmt.Errorf("latestn cannot be used without querying field value")
 	}
 
 	partitionBy := strings.Join(partitionByArr, ", ")
-	whereStmt := strings.Join(whereArr, " AND ")
+	whereOnStmt := strings.Join(whereArr, " AND ")
 
-	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("INNER JOIN (SELECT id, DENSE_RANK() OVER (PARTITION by %s ORDER BY created_at DESC) FROM %s WHERE %s) AS latestn ",
-		partitionBy, tableName, whereStmt)) // WHERE fieldName = fieldValue
-	sb.WriteString(fmt.Sprintf("ON %s.id = latestn.id AND latestn.dense_rank <= ?", tableName))
-	stmt := sb.String()
+	return partitionBy, whereOnStmt, transformedValues, nil
+}
 
-	transformedValues = append(transformedValues, latestn)
+func getLatestnonsAndOthers(filters2 []FilterCriteria) (map[string]bool, []FilterCriteria) {
+	// filter out latestnon, which are not really fields
+	latestnons := make(map[string]bool, 0)
+	filters := make([]FilterCriteria, 0)
+	for _, filter := range filters2 {
+		if filter.FieldName == "latestnon" {
+			for _, predicates := range filter.PredicatesArr {
+				// vals := make([]string, len(predicates))
+				for _, predicate := range predicates {
+					latestnons[predicate.FieldValue] = true
+				}
+			}
+		} else {
+			filters = append(filters, filter)
+		}
+	}
+	return latestnons, filters
+}
 
-	db = db.Joins(stmt, transformedValues...)
-	return db, nil
+func latestnGetPartitionWhereAndTransformedValues2(typeString, tableName string, filters2 []FilterCriteria) (string, string, string, []interface{}, error) {
+	latestnons, filters := getLatestnonsAndOthers(filters2)
+
+	partitionByArr := make([]string, 0)
+	latestnonWhereArr := make([]string, 0)
+	transformedValues := make([]interface{}, 0)
+
+	// First, get latestn filters
+	for _, filter := range filters {
+		if _, ok := latestnons[filter.FieldName]; !ok {
+			// not part of the "latestnon"
+			continue
+		}
+
+		// If there is any equality comparison other than equal
+		// there shouldn't be any IN then
+		hasEquality := false
+		for _, predicates := range filter.PredicatesArr {
+			for _, predicate := range predicates {
+				if predicate.PredicateLogic == FilterPredicateLogicEQ {
+					hasEquality = true
+				}
+			}
+		}
+
+		m := models.NewFromTypeString(typeString)
+
+		urlFieldValues := make([]string, 0)
+		for _, predicates := range filter.PredicatesArr {
+			for _, predicate := range predicates {
+				urlFieldValues = append(urlFieldValues, predicate.FieldValue)
+			}
+		}
+
+		transformedFieldValues, err := getTransformedValueFromValidField(m,
+			letters.CamelCaseToPascalCase(filter.FieldName), urlFieldValues)
+
+		if _, ok := err.(*datatypes.FieldNotInModelError); ok {
+			continue
+		}
+		if err != nil {
+			return "", "", "", nil, err
+		}
+
+		fiterdFieldValues, anyNull := filterNullValue(transformedFieldValues)
+		// If passed, the field is part of the data structure
+
+		fieldName := strcase.SnakeCase(filter.FieldName)
+		partitionByArr = append(partitionByArr, fieldName)
+
+		// One field is either >= or =, so we split by equality here
+		if hasEquality {
+			latestnonWhereArr = append(latestnonWhereArr, inOpStmt(tableName, fieldName, len(fiterdFieldValues), anyNull)) // "%s.%s IN (%s)
+		} else {
+			latestnonWhereArr = append(latestnonWhereArr, comparisonOpStmt(tableName, strcase.SnakeCase(filter.FieldName), filter.PredicatesArr))
+		}
+
+		transformedValues = append(transformedValues, fiterdFieldValues...)
+	}
+
+	// After this point, there is partitionByArr, latestnonWhereArr, and transformedValues,
+
+	if len(transformedValues) == 0 {
+		return "", "", "", nil, fmt.Errorf("latestn cannot be used without querying field value")
+	}
+
+	partitionBy := strings.Join(partitionByArr, ", ")
+	latestnWhereStmt := strings.Join(latestnonWhereArr, " AND ")
+	whereArr := make([]string, 0)
+
+	// Then, get those filtered criteria that's NOT part of the latestnon
+	for _, filter := range filters {
+		if _, ok := latestnons[filter.FieldName]; ok {
+			// if found, skip
+			continue
+		}
+
+		// If there is any equality comparison other than equal
+		// there shouldn't be any IN then
+		hasEquality := false
+		for _, predicates := range filter.PredicatesArr {
+			for _, predicate := range predicates {
+				if predicate.PredicateLogic == FilterPredicateLogicEQ {
+					hasEquality = true
+				}
+			}
+		}
+
+		m := models.NewFromTypeString(typeString)
+
+		urlFieldValues := make([]string, 0)
+		for _, predicates := range filter.PredicatesArr {
+			for _, predicate := range predicates {
+				urlFieldValues = append(urlFieldValues, predicate.FieldValue)
+			}
+		}
+
+		transformedFieldValues, err := getTransformedValueFromValidField(m,
+			letters.CamelCaseToPascalCase(filter.FieldName), urlFieldValues)
+
+		if _, ok := err.(*datatypes.FieldNotInModelError); ok {
+			continue
+		}
+		if err != nil {
+			return "", "", "", nil, err
+		}
+
+		fiterdFieldValues, anyNull := filterNullValue(transformedFieldValues)
+		// If passed, the field is part of the data structure
+
+		fieldName := strcase.SnakeCase(filter.FieldName)
+		// partitionByArr = append(partitionByArr, fieldName)
+
+		// One field is either >= or =, so we split by equality here
+		if hasEquality {
+			whereArr = append(whereArr, inOpStmt(tableName, fieldName, len(fiterdFieldValues), anyNull)) // "%s.%s IN (%s)
+		} else {
+			whereArr = append(whereArr, comparisonOpStmt(tableName, strcase.SnakeCase(filter.FieldName), filter.PredicatesArr))
+		}
+
+		transformedValues = append(transformedValues, fiterdFieldValues...)
+	}
+
+	// if len(transformedValues) == 0 {
+	// 	return "", "", "", nil, fmt.Errorf("latestn cannot be used without querying field value")
+	// }
+
+	// partitionBy := strings.Join(partitionByArr, ", ")
+	whereOnStmt := strings.Join(whereArr, " AND ")
+
+	return partitionBy, latestnWhereStmt, whereOnStmt, transformedValues, nil
+	// return partitionBy, latestnWhereStmt, globalWhereStmt, transformedValues
 }
 
 // AddLatestJoinWithTwoLevelFilter generates latest join with two-level filter
@@ -328,8 +598,10 @@ func comparisonOpStmt(tableName string, fieldName string, predicatesArr [][]Pred
 // and output the field value in correct types
 func getTransformedValueFromValidField(modelObj interface{}, structFieldName string, urlFieldValues []string) ([]interface{}, error) {
 	// Important!! Check if fieldName is actually part of the schema, otherwise risk of sequal injection
+
 	fieldType, err := datatypes.GetModelFieldTypeElmIfValid(modelObj, letters.CamelCaseToPascalCase(structFieldName))
 	if err != nil {
+		log.Println("err:", err)
 		return nil, err
 	}
 

@@ -10,6 +10,7 @@ const (
 	ParamLimit         Param = "limit"
 	ParamOrder         Param = "order"
 	ParamLatestN       Param = "latestn"
+	ParamLatestNOn     Param = "latestnon"
 	ParamCstart        Param = "cstart"
 	ParamCstop         Param = "cstop"
 	ParamHasTotalCount Param = "totalcount"
@@ -19,7 +20,7 @@ const (
 	// ParamRedirect Param = "redirect"
 )
 
-func GetOptions(options map[Param]interface{}) (offset *int, limit *int, cstart *int, cstop *int, order *string, latestn *int, count bool) {
+func GetOptions(options map[Param]interface{}) (offset *int, limit *int, cstart *int, cstop *int, order *string, latestn *int, latestnons []string, count bool) {
 	// If key is in it, even if value is nil, ok will be true
 
 	if _, ok := options[ParamOffset]; ok {
@@ -50,10 +51,14 @@ func GetOptions(options map[Param]interface{}) (offset *int, limit *int, cstart 
 		}
 	}
 
+	if _, ok := options[ParamLatestNOn]; ok {
+		latestnons = options[ParamLatestNOn].([]string)
+	}
+
 	hasTotalCount := false
 	if _, ok := options[ParamHasTotalCount]; ok {
 		hasTotalCount = options[ParamHasTotalCount].(bool)
 	}
 
-	return offset, limit, cstart, cstop, order, latestn, hasTotalCount
+	return offset, limit, cstart, cstop, order, latestn, latestnons, hasTotalCount
 }

@@ -104,7 +104,13 @@ func LatestnFromQueryString(values *url.Values) *string {
 		}
 		return &latestn
 	}
+
 	return nil
+}
+
+func LatestnOnFromQueryString(values *url.Values) []string {
+	defer delete(*values, string(urlparam.ParamLatestNOn))
+	return (*values)[string(urlparam.ParamLatestNOn)]
 }
 
 func CreatedTimeRangeFromQueryString(values *url.Values) (*int, *int, error) {
@@ -372,8 +378,12 @@ func GetOptionByParsingURL(r *http.Request) (map[urlparam.Param]interface{}, err
 		options[urlparam.ParamOrder] = order
 	}
 
-	if latest := LatestnFromQueryString(&values); latest != nil {
-		options[urlparam.ParamLatestN] = latest
+	if latestn := LatestnFromQueryString(&values); latestn != nil {
+		options[urlparam.ParamLatestN] = latestn
+	}
+
+	if latestnon := LatestnOnFromQueryString(&values); latestnon != nil {
+		options[urlparam.ParamLatestNOn] = latestnon
 	}
 
 	options[urlparam.ParamOtherQueries] = values

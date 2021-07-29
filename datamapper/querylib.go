@@ -1,8 +1,8 @@
 package datamapper
 
 import (
-	"errors"
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/jinzhu/gorm"
@@ -72,25 +72,81 @@ func constructFilterCriteriaFromFieldNameAndFieldValue(fieldName string, fieldVa
 	return &criteria, nil
 }
 
-func constructDbFromURLFieldQuery(db *gorm.DB, typeString string, urlParams map[string][]string, latestn *int) (*gorm.DB, error) {
+func createFiltersAndLatestnonFilters(urlParams map[string][]string, latestnons []string) ([]sqlbuilder.FilterCriteria, []sqlbuilder.FilterCriteria, error) {
+	latestnmap := make(map[string]bool)
+	for _, latestnon := range latestnons {
+		latestnmap[latestnon] = true
+	}
+
+	// First, get the latestnon fields vs other fields into two arrays
+	// 1. Get lateston fields and the other fields part
+	filters := make([]sqlbuilder.FilterCriteria, 0)
+	filterslatestnons := make([]sqlbuilder.FilterCriteria, 0)
+	for fieldName, fieldValues := range urlParams {
+		// If querying nested field, skip
+		if strings.Contains(fieldName, ".") {
+			continue
+		}
+
+		// not latestn on fields
+		criteria, err := constructFilterCriteriaFromFieldNameAndFieldValue(fieldName, fieldValues)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		if _, ok := latestnmap[fieldName]; ok {
+			filterslatestnons = append(filterslatestnons, *criteria)
+		} else {
+			filters = append(filters, *criteria)
+		}
+	}
+	return filters, filterslatestnons, nil
+}
+
+func constructDbFromURLFieldQuery(db *gorm.DB, typeString string, urlParams map[string][]string, latestn *int, latestnons []string) (*gorm.DB, error) {
 	var err error
+	filters, filterslatestnons, err := createFiltersAndLatestnonFilters(urlParams, latestnons)
+	if err != nil {
+		return db, err
+	}
 
-	// If there is NO latestn, a simple WHERE clause will suffice
-	// IF thee IS latestn, then we use INNER JOIN with a dense_rank
-	if latestn == nil {
-		for fieldName, fieldValues := range urlParams {
-			// If querying nested field, skip
-			if strings.Contains(fieldName, ".") {
-				continue
-			}
+	for _, filter := range filters {
+		// We used the fact that repeatedly call AddWhereStmt genereates only ONE WHERE with multiple filters
+		db, err = sqlbuilder.AddWhereStmt(db, typeString, models.GetTableNameFromTypeString(typeString), filter)
+		if _, ok := err.(*datatypes.FieldNotInModelError); ok {
+			// custom url parameter
+			continue
+		}
+		if err != nil {
+			return db, err
+		}
+	}
 
-			criteria, err := constructFilterCriteriaFromFieldNameAndFieldValue(fieldName, fieldValues)
-			if err != nil {
-				return db, err
-			}
+	// If there is a latestn clause, construct it
+	// something like this:
+	// INNER JOIN (
+	// 	SELECT id, DENSE_RANK() OVER (PARTITION by model, num_usb_type_as ORDER BY created_at DESC)
+	// 	FROM dock WHERE "dock"."model" IN ('GOOD_WAY_DUD8070') AND "dock"."num_usb_type_as" IN ('3')
+	// ) AS latestn
+	// ON dock.id = latestn.id AND latestn.dense_rank <= 1
 
+	if latestn != nil && len(filterslatestnons) > 0 {
+		// log.Println("filterslatestnons:", filterslatestnons)
+		db, err = sqlbuilder.AddLatestNCTEJoin(db, typeString, models.GetTableNameFromTypeString(typeString), *latestn, filterslatestnons)
+		if err != nil {
+			return db, err
+		}
+	} else if latestn != nil {
+		log.Println("GOING INTO DEPRECATED")
+		// DEPRECATED: old behavior where there may is latestn but not latestnons
+		db, err = sqlbuilder.AddLatestJoinWithOneLevelFilter(db, typeString, models.GetTableNameFromTypeString(typeString), *latestn, filters)
+		if err != nil {
+			return db, err
+		}
+	} else {
+		for _, filter := range filters {
 			// We used the fact that repeatedly call AddWhereStmt genereates only ONE WHERE with multiple filters
-			db, err = sqlbuilder.AddWhereStmt(db, typeString, models.GetTableNameFromTypeString(typeString), *criteria)
+			db, err = sqlbuilder.AddWhereStmt(db, typeString, models.GetTableNameFromTypeString(typeString), filter)
 			if _, ok := err.(*datatypes.FieldNotInModelError); ok {
 				// custom url parameter
 				continue
@@ -98,30 +154,6 @@ func constructDbFromURLFieldQuery(db *gorm.DB, typeString string, urlParams map[
 			if err != nil {
 				return db, err
 			}
-		}
-	} else {
-		filters := make([]sqlbuilder.FilterCriteria, 0)
-		for fieldName, fieldValues := range urlParams {
-			// If querying nested field, skip
-			if strings.Contains(fieldName, ".") {
-				continue
-			}
-
-			criteria, err := constructFilterCriteriaFromFieldNameAndFieldValue(fieldName, fieldValues)
-			// if _, ok := err.(*datatypes.FieldNotInModelError); ok {
-			// 	// custom url parameter
-			// 	continue
-			// }
-			if err != nil {
-				return db, err
-			}
-
-			filters = append(filters, *criteria)
-		}
-
-		db, err = sqlbuilder.AddLatestJoinWithOneLevelFilter(db, typeString, models.GetTableNameFromTypeString(typeString), *latestn, filters)
-		if err != nil {
-			return db, err
 		}
 	}
 
@@ -134,11 +166,11 @@ func constructDbFromURLInnerFieldQuery(db *gorm.DB, typeString string, urlParams
 		return db, err
 	}
 
-	if len(urlParamDic) != 0 {
-		if latestn != nil {
-			return db, errors.New("latestn with two-level query is currently not supported")
-		}
-	}
+	// if len(urlParamDic) != 0 {
+	// 	if latestn != nil {
+	// 		return db, errors.New("latestn with two-level query is currently not supported")
+	// 	}
+	// }
 
 	obj := models.NewFromTypeString(typeString)
 

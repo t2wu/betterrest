@@ -133,7 +133,7 @@ func (mapper *BaseMapper) GetAll(db *gorm.DB, who models.Who, typeString string,
 	dbClean := db
 	db = db.Set("gorm:auto_preload", true)
 
-	offset, limit, cstart, cstop, order, latestn, totalcount := urlparam.GetOptions(*options)
+	offset, limit, cstart, cstop, order, latestn, latestnons, totalcount := urlparam.GetOptions(*options)
 	rtable := models.GetTableNameFromTypeString(typeString)
 
 	if cstart != nil && cstop != nil {
@@ -141,7 +141,7 @@ func (mapper *BaseMapper) GetAll(db *gorm.DB, who models.Who, typeString string,
 	}
 
 	var err error
-	db, err = constructInnerFieldParamQueries(db, typeString, options, latestn)
+	db, err = constructInnerFieldParamQueries(db, typeString, options, latestn, latestnons)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -165,7 +165,7 @@ func (mapper *BaseMapper) GetAll(db *gorm.DB, who models.Who, typeString string,
 	// chain offset and limit
 	if offset != nil && limit != nil {
 		db = db.Offset(*offset).Limit(*limit)
-	} else if cstart == nil && cstop == nil { // default to 100 maximum
+	} else if cstart == nil && cstop == nil { // default to 100 maximum unless time is specified
 		db = db.Offset(0).Limit(100)
 	}
 
