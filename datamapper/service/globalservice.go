@@ -91,7 +91,8 @@ func (service *GlobalService) GetManyWithIDsCore(db *gorm.DB, who models.Who, ty
 
 // GetAllQueryContructCore construct the meat of the query
 func (serv *GlobalService) GetAllQueryContructCore(db *gorm.DB, who models.Who, typeString string) (*gorm.DB, error) {
-	return db, nil // that's it
+	rtable := models.GetTableNameFromTypeString(typeString)
+	return db.Table(rtable), nil // that's it
 }
 
 // GetAllRolesCore gets all roles according to the criteria
