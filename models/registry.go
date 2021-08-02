@@ -98,6 +98,8 @@ type Reg struct {
 	BeforeCUPD func(bhpData BatchHookPointData, op CRUPDOp) error // no R since model doens't exist yet
 	AfterCRUPD func(bhpData BatchHookPointData, op CRUPDOp) error
 
+	AfterTransact func(bhpData BatchHookPointData, op CRUPDOp)
+
 	AfterRead func(bhpData BatchHookPointData) error
 
 	BeforeCreate func(bhpData BatchHookPointData) error

@@ -239,6 +239,21 @@ func (r *Registrar) BatchCRUPDHooks(
 	return r
 }
 
+// BatchCRUPDHooks adds hookpoints which are called before
+// CUPD (no read) and after batch CRUPD. Either one can be left as nil
+func (r *Registrar) BatchAfterTransactHook(
+	hook func(bhpData models.BatchHookPointData, op models.CRUPDOp)) *Registrar {
+	typeString := r.currentTypeString
+
+	if _, ok := models.ModelRegistry[typeString]; !ok {
+		models.ModelRegistry[typeString] = &models.Reg{}
+	}
+
+	models.ModelRegistry[typeString].AfterTransact = hook
+
+	return r
+}
+
 // BatchCreateHooks adds hookpoints which are called before
 // and after batch update. Either one can be left as nil
 func (r *Registrar) BatchCreateHooks(

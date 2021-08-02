@@ -287,13 +287,14 @@ const (
 
 // HookPointData is the data send to single model hookpoints
 type HookPointData struct {
-	// DB handle
+	// DB handle (not available for AfterTransact)
 	DB *gorm.DB
 	// Who is the user information, who is operating this CRUPD right now
 	Who Who
 	// TypeString is the typeString (model string) of this model
 	TypeString string
 	// Cargo between Before and After hookpoints (not used in IAfterRead since there is no IBeforeRead.)
+	// Currently not supported in the AfterTransact hookpoint
 	Cargo *ModelCargo
 	// Role of this user in relation to this data, only available during read
 	Role *UserRole
@@ -387,6 +388,12 @@ type IBeforeCUPD interface {
 // This is called before the individual ops
 type IAfterCRUPD interface {
 	AfterCRUPDDB(hpdata HookPointData, op CRUPDOp) error
+}
+
+// IAfterTransact is the method to be called after data is after the entire CRUPD
+// transaction is done.
+type IAfterTransact interface {
+	AfterTransact(hpdata HookPointData, op CRUPDOp)
 }
 
 // IValidate supports validation with govalidator

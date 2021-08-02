@@ -105,15 +105,17 @@ func (mapper *BaseMapper) GetOneWithID(db *gorm.DB, who models.Who, typeString s
 		return nil, models.UserRoleInvalid, err
 	}
 
+	cargo := models.ModelCargo{}
+
 	// After CRUPD hook
 	if m, ok := modelObj.(models.IAfterCRUPD); ok {
-		hpdata := models.HookPointData{DB: db, Who: who, TypeString: typeString, Role: &role, URLParams: options}
+		hpdata := models.HookPointData{DB: db, Who: who, TypeString: typeString, Cargo: &cargo, Role: &role, URLParams: options}
 		m.AfterCRUPDDB(hpdata, models.CRUPDOpRead)
 	}
 
 	// AfterRead hook
 	if m, ok := modelObj.(models.IAfterRead); ok {
-		hpdata := models.HookPointData{DB: db, Who: who, TypeString: typeString, Role: &role, URLParams: options}
+		hpdata := models.HookPointData{DB: db, Who: who, TypeString: typeString, Cargo: &cargo, Role: &role, URLParams: options}
 		if err := m.AfterReadDB(hpdata); err != nil {
 			return nil, 0, err
 		}
@@ -338,6 +340,9 @@ func (mapper *BaseMapper) PatchMany(db *gorm.DB, who models.Who, typeString stri
 	}
 
 	oldModelObjs, _, err := loadManyAndCheckBeforeModify(mapper.Service, db, who, typeString, ids, []models.UserRole{models.UserRoleAdmin})
+	if err != nil {
+		return nil, err
+	}
 
 	// Hookpoint BEFORE BeforeCRUD and BeforePatch
 	// This is called BEFORE the actual patch
