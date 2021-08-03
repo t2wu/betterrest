@@ -9,31 +9,46 @@ import (
 
 // IDataMapper has all the crud interfaces
 type IDataMapper interface {
-	CreateOne(db *gorm.DB, who models.Who, typeString string, modelObj models.IModel, options *map[urlparam.Param]interface{}) (models.IModel, error)
+	CreateOne(db *gorm.DB, who models.Who, typeString string, modelObj models.IModel,
+		options *map[urlparam.Param]interface{}, cargo *models.ModelCargo) (models.IModel, error)
 
-	CreateMany(db *gorm.DB, who models.Who, typeString string, modelObj []models.IModel, options *map[urlparam.Param]interface{}) ([]models.IModel, error)
+	CreateMany(db *gorm.DB, who models.Who, typeString string, modelObj []models.IModel,
+		options *map[urlparam.Param]interface{}, cargo *models.BatchHookCargo) ([]models.IModel, error)
 
 	GetOneWithID(db *gorm.DB, who models.Who,
-		typeString string, id *datatypes.UUID, options *map[urlparam.Param]interface{}) (models.IModel, models.UserRole, error)
+		typeString string, id *datatypes.UUID, options *map[urlparam.Param]interface{},
+		cargo *models.ModelCargo) (models.IModel, models.UserRole, error)
 
 	GetAll(db *gorm.DB, who models.Who,
-		typeString string, options *map[urlparam.Param]interface{}) ([]models.IModel, []models.UserRole, *int, error)
+		typeString string, options *map[urlparam.Param]interface{},
+		cargo *models.BatchHookCargo) ([]models.IModel, []models.UserRole, *int, error)
 
 	UpdateOneWithID(db *gorm.DB, who models.Who,
-		typeString string, modelobj models.IModel, id *datatypes.UUID, options *map[urlparam.Param]interface{}) (models.IModel, error)
+		typeString string, modelobj models.IModel, id *datatypes.UUID,
+		options *map[urlparam.Param]interface{},
+		cargo *models.ModelCargo) (models.IModel, error)
 
 	UpdateMany(db *gorm.DB, who models.Who,
-		typeString string, modelObjs []models.IModel, options *map[urlparam.Param]interface{}) ([]models.IModel, error)
+		typeString string, modelObjs []models.IModel,
+		options *map[urlparam.Param]interface{},
+		cargo *models.BatchHookCargo) ([]models.IModel, error)
 
 	PatchOneWithID(db *gorm.DB, who models.Who,
-		typeString string, jsonPatch []byte, id *datatypes.UUID, options *map[urlparam.Param]interface{}) (models.IModel, error)
+		typeString string, jsonPatch []byte, id *datatypes.UUID,
+		options *map[urlparam.Param]interface{},
+		cargo *models.ModelCargo) (models.IModel, error)
 
 	PatchMany(db *gorm.DB, who models.Who,
-		typeString string, jsonIDPatches []models.JSONIDPatch, options *map[urlparam.Param]interface{}) ([]models.IModel, error)
+		typeString string, jsonIDPatches []models.JSONIDPatch,
+		options *map[urlparam.Param]interface{},
+		cargo *models.BatchHookCargo) ([]models.IModel, error)
 
 	DeleteOneWithID(db *gorm.DB, who models.Who,
-		typeString string, id *datatypes.UUID, options *map[urlparam.Param]interface{}) (models.IModel, error)
+		typeString string, id *datatypes.UUID, options *map[urlparam.Param]interface{},
+		cargo *models.ModelCargo) (models.IModel, error)
 
 	DeleteMany(db *gorm.DB, who models.Who,
-		typeString string, modelObjs []models.IModel, options *map[urlparam.Param]interface{}) ([]models.IModel, error)
+		typeString string, modelObjs []models.IModel,
+		options *map[urlparam.Param]interface{},
+		cargo *models.BatchHookCargo) ([]models.IModel, error)
 }
