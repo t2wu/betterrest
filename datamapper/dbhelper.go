@@ -1,6 +1,7 @@
 package datamapper
 
 import (
+	"fmt"
 	"reflect"
 
 	"github.com/jinzhu/gorm"
@@ -38,7 +39,7 @@ func batchOpCore(job batchOpJob,
 	ms := make([]models.IModel, len(modelObjs))
 
 	if cargo == nil {
-		cargo = &models.BatchHookCargo{}
+		return nil, fmt.Errorf("cargo shouldn't be nil")
 	}
 
 	// After CUPD hook
@@ -124,7 +125,7 @@ func opCore(
 		job.typeString, job.oldModelObj, job.modelObj, job.crupdOp, job.cargo, job.options
 
 	if cargo == nil {
-		cargo = &models.ModelCargo{}
+		return nil, fmt.Errorf("cargo shouldn't be nil")
 	}
 
 	// Before CRUPD hook

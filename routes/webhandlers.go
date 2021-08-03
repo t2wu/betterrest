@@ -436,14 +436,16 @@ func GetAllHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin
 		}
 
 		who := WhoFromContext(r)
-		modelObjs, roles, no, err = mapper.GetAll(db.Shared(), who, typeString, &options)
+		cargo := models.BatchHookCargo{}
+		modelObjs, roles, no, err = mapper.GetAll(db.Shared(), who, typeString, &options, &cargo)
 
 		if err != nil {
 			render.Render(w, r, webrender.NewErrInternalServerError(err))
 		} else {
 			// the batch afterTransact hookpoint
 			if afterTransact := models.ModelRegistry[typeString].AfterTransact; afterTransact != nil {
-				bhpData := models.BatchHookPointData{Ms: modelObjs, DB: nil, Who: who, TypeString: typeString, Roles: roles, URLParams: &options}
+				bhpData := models.BatchHookPointData{Ms: modelObjs, DB: nil, Who: who,
+					TypeString: typeString, Roles: roles, URLParams: &options, Cargo: &cargo}
 				afterTransact(bhpData, models.CRUPDOpRead)
 			}
 			RenderModelSlice(w, r, typeString, modelObjs, roles, no, who)
@@ -483,11 +485,13 @@ func CreateHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin
 		var modelObj models.IModel
 
 		if *isBatch {
+			cargo := models.BatchHookCargo{}
+
 			err := transact.Transact(db.Shared(), func(tx *gorm.DB) error {
 				logTransID(tx, c.Request.Method, c.Request.URL.String(), "n")
 
 				var err2 error
-				if modelObjs, err2 = mapper.CreateMany(tx, who, typeString, modelObjs, &options); err2 != nil {
+				if modelObjs, err2 = mapper.CreateMany(tx, who, typeString, modelObjs, &options, &cargo); err2 != nil {
 					log.Println("Error in CreateMany:", typeString, err2)
 					return err2
 				}
@@ -505,17 +509,19 @@ func CreateHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin
 				}
 				// the batch afterTransact hookpoint
 				if afterTransact := models.ModelRegistry[typeString].AfterTransact; afterTransact != nil {
-					bhpData := models.BatchHookPointData{Ms: modelObjs, DB: nil, Who: who, TypeString: typeString, Roles: roles, URLParams: &options}
+					bhpData := models.BatchHookPointData{Ms: modelObjs, DB: nil, Who: who,
+						TypeString: typeString, Roles: roles, URLParams: &options, Cargo: &cargo}
 					afterTransact(bhpData, models.CRUPDOpCreate)
 				}
 				RenderModelSlice(w, r, typeString, modelObjs, roles, nil, who)
 			}
 		} else {
+			cargo := models.ModelCargo{}
 			var err2 error
 			err := transact.Transact(db.Shared(), func(tx *gorm.DB) error {
 				logTransID(tx, c.Request.Method, c.Request.URL.String(), "1")
 
-				if modelObj, err2 = mapper.CreateOne(tx, who, typeString, modelObjs[0], &options); err2 != nil {
+				if modelObj, err2 = mapper.CreateOne(tx, who, typeString, modelObjs[0], &options, &cargo); err2 != nil {
 					log.Println("Error in CreateOne:", typeString, err2)
 					return err2
 				}
@@ -526,7 +532,8 @@ func CreateHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin
 				render.Render(w, c.Request, webrender.NewErrCreate(err))
 			} else {
 				if v, ok := modelObj.(models.IAfterTransact); ok {
-					hpdata := models.HookPointData{DB: nil, Who: who, TypeString: typeString, Cargo: nil, URLParams: &options}
+					hpdata := models.HookPointData{DB: nil, Who: who, TypeString: typeString,
+						URLParams: &options, Cargo: &cargo}
 					v.AfterTransact(hpdata, models.CRUPDOpCreate)
 				}
 				RenderModel(w, r, typeString, modelObj, models.UserRoleAdmin, who)
@@ -570,7 +577,8 @@ func ReadOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *gi
 		}
 
 		who := WhoFromContext(r)
-		modelObj, role, err = mapper.GetOneWithID(db.Shared(), who, typeString, id, &options)
+		cargo := models.ModelCargo{}
+		modelObj, role, err = mapper.GetOneWithID(db.Shared(), who, typeString, id, &options, &cargo)
 
 		if err != nil && gorm.IsRecordNotFoundError(err) {
 			render.Render(w, r, webrender.NewErrNotFound(err))
@@ -578,7 +586,8 @@ func ReadOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *gi
 			render.Render(w, r, webrender.NewErrInternalServerError(err))
 		} else {
 			if v, ok := modelObj.(models.IAfterTransact); ok {
-				hpdata := models.HookPointData{DB: nil, Who: who, TypeString: typeString, Cargo: nil, URLParams: &options}
+				hpdata := models.HookPointData{DB: nil, Who: who, TypeString: typeString, Cargo: &cargo,
+					URLParams: &options}
 				v.AfterTransact(hpdata, models.CRUPDOpRead)
 			}
 			RenderModel(w, r, typeString, modelObj, role, who)
@@ -628,11 +637,12 @@ func UpdateOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 			return
 		}
 
+		cargo := models.ModelCargo{}
 		var modelObj2 models.IModel
 		err = transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
 			logTransID(tx, c.Request.Method, c.Request.URL.String(), "1")
 
-			if modelObj2, err = mapper.UpdateOneWithID(tx, who, typeString, modelObj, id, &options); err != nil {
+			if modelObj2, err = mapper.UpdateOneWithID(tx, who, typeString, modelObj, id, &options, &cargo); err != nil {
 				log.Println("Error in UpdateOneHandler ErrUpdate:", typeString, err)
 				return err
 			}
@@ -643,7 +653,8 @@ func UpdateOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 			render.Render(w, r, webrender.NewErrUpdate(err))
 		} else {
 			if v, ok := modelObj.(models.IAfterTransact); ok {
-				hpdata := models.HookPointData{DB: nil, Who: who, TypeString: typeString, Cargo: nil, URLParams: &options}
+				hpdata := models.HookPointData{DB: nil, Who: who, TypeString: typeString,
+					URLParams: &options, Cargo: &cargo}
 				v.AfterTransact(hpdata, models.CRUPDOpUpdate)
 			}
 			RenderModel(w, r, typeString, modelObj2, models.UserRoleAdmin, who)
@@ -681,11 +692,12 @@ func UpdateManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 			return
 		}
 
+		cargo := models.BatchHookCargo{}
 		var modelObjs2 []models.IModel
 		err = transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
 			logTransID(tx, c.Request.Method, c.Request.URL.String(), "n")
 
-			if modelObjs2, err = mapper.UpdateMany(tx, who, typeString, modelObjs, &options); err != nil {
+			if modelObjs2, err = mapper.UpdateMany(tx, who, typeString, modelObjs, &options, &cargo); err != nil {
 				log.Println("Error in UpdateManyHandler:", typeString, err)
 				return err
 			}
@@ -702,7 +714,8 @@ func UpdateManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 			}
 			// the batch afterTransact hookpoint
 			if afterTransact := models.ModelRegistry[typeString].AfterTransact; afterTransact != nil {
-				bhpData := models.BatchHookPointData{Ms: modelObjs, DB: nil, Who: who, TypeString: typeString, Roles: roles, URLParams: &options}
+				bhpData := models.BatchHookPointData{Ms: modelObjs, DB: nil, Who: who,
+					TypeString: typeString, Roles: roles, URLParams: &options, Cargo: &cargo}
 				afterTransact(bhpData, models.CRUPDOpUpdate)
 			}
 
@@ -747,11 +760,12 @@ func PatchOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *g
 
 		who := WhoFromContext(r)
 
+		cargo := models.ModelCargo{}
 		var modelObj models.IModel
 		err = transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
 			logTransID(tx, c.Request.Method, c.Request.URL.String(), "1")
 
-			if modelObj, err = mapper.PatchOneWithID(tx, who, typeString, jsonPatch, id, &options); err != nil {
+			if modelObj, err = mapper.PatchOneWithID(tx, who, typeString, jsonPatch, id, &options, &cargo); err != nil {
 				log.Println("Error in PatchOneHandler:", typeString, err)
 				return err
 			}
@@ -763,7 +777,8 @@ func PatchOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *g
 			render.Render(w, r, webrender.NewErrPatch(err))
 		} else {
 			if v, ok := modelObj.(models.IAfterTransact); ok {
-				hpdata := models.HookPointData{DB: nil, Who: who, TypeString: typeString, Cargo: nil, URLParams: &options}
+				hpdata := models.HookPointData{DB: nil, Who: who, TypeString: typeString,
+					URLParams: &options, Cargo: &cargo}
 				v.AfterTransact(hpdata, models.CRUPDOpPatch)
 			}
 			RenderModel(w, r, typeString, modelObj, models.UserRoleAdmin, who)
@@ -806,11 +821,12 @@ func PatchManyHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 			return
 		}
 
+		cargo := models.BatchHookCargo{}
 		var modelObjs []models.IModel
 		err = transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
 			logTransID(tx, c.Request.Method, c.Request.URL.String(), "n")
 
-			if modelObjs, err = mapper.PatchMany(tx, who, typeString, jsonIDPatches, &options); err != nil {
+			if modelObjs, err = mapper.PatchMany(tx, who, typeString, jsonIDPatches, &options, &cargo); err != nil {
 				log.Println("Error in PatchManyHandler:", typeString, err)
 				return err
 			}
@@ -826,7 +842,8 @@ func PatchManyHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 			}
 			// the batch afterTransact hookpoint
 			if afterTransact := models.ModelRegistry[typeString].AfterTransact; afterTransact != nil {
-				bhpData := models.BatchHookPointData{Ms: modelObjs, DB: nil, Who: who, TypeString: typeString, Roles: roles, URLParams: &options}
+				bhpData := models.BatchHookPointData{Ms: modelObjs, DB: nil, Who: who,
+					TypeString: typeString, Roles: roles, URLParams: &options, Cargo: &cargo}
 				afterTransact(bhpData, models.CRUPDOpPatch)
 			}
 			RenderModelSlice(w, r, typeString, modelObjs, roles, nil, who)
@@ -863,11 +880,12 @@ func DeleteOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 
 		who := WhoFromContext(r)
 
+		cargo := models.ModelCargo{}
 		var modelObj models.IModel
 		err = transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
 			logTransID(tx, c.Request.Method, c.Request.URL.String(), "1")
 
-			if modelObj, err = mapper.DeleteOneWithID(tx, who, typeString, id, &options); err != nil {
+			if modelObj, err = mapper.DeleteOneWithID(tx, who, typeString, id, &options, &cargo); err != nil {
 				log.Printf("Error in DeleteOneHandler: %s %+v\n", typeString, err)
 				return err
 			}
@@ -878,7 +896,8 @@ func DeleteOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 			render.Render(w, r, webrender.NewErrDelete(err))
 		} else {
 			if v, ok := modelObj.(models.IAfterTransact); ok {
-				hpdata := models.HookPointData{DB: nil, Who: who, TypeString: typeString, Cargo: nil, URLParams: &options}
+				hpdata := models.HookPointData{DB: nil, Who: who, TypeString: typeString,
+					URLParams: &options, Cargo: &cargo}
 				v.AfterTransact(hpdata, models.CRUPDOpDelete)
 			}
 			RenderModel(w, r, typeString, modelObj, models.UserRoleAdmin, who)
@@ -910,10 +929,11 @@ func DeleteManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 			return
 		}
 
+		cargo := models.BatchHookCargo{}
 		err := transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
 			logTransID(tx, c.Request.Method, c.Request.URL.String(), "n")
 
-			if modelObjs, err = mapper.DeleteMany(tx, who, typeString, modelObjs, nil); err != nil {
+			if modelObjs, err = mapper.DeleteMany(tx, who, typeString, modelObjs, nil, &cargo); err != nil {
 				log.Println("Error in DeleteOneHandler ErrDelete:", typeString, err)
 				return err
 			}
@@ -929,7 +949,8 @@ func DeleteManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 			}
 			// the batch afterTransact hookpoint
 			if afterTransact := models.ModelRegistry[typeString].AfterTransact; afterTransact != nil {
-				bhpData := models.BatchHookPointData{Ms: modelObjs, DB: nil, Who: who, TypeString: typeString, Roles: roles, URLParams: nil}
+				bhpData := models.BatchHookPointData{Ms: modelObjs, DB: nil, Who: who,
+					TypeString: typeString, Roles: roles, URLParams: nil, Cargo: &cargo}
 				afterTransact(bhpData, models.CRUPDOpDelete)
 			}
 			RenderModelSlice(w, r, typeString, modelObjs, roles, nil, who)
