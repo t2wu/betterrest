@@ -243,13 +243,19 @@ func userHasAdminAccessToOriginalModel(db *gorm.DB, oid *datatypes.UUID, typeStr
 	// We make sure we NOT by checking the original model table
 	// but check link table which we have admin access for
 	rtable := models.GetTableNameFromTypeString(typeString)
+
+	result := struct {
+		ID *datatypes.UUID
+	}{}
+
 	if err := db.Table(rtable).Where("user_id = ? and role = ? and model_id = ?",
-		oid, models.UserRoleAdmin, id).Error; err != nil {
+		oid, models.UserRoleAdmin, id).Scan(&result).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return ErrPermission
 		}
 		return err
 	}
+
 	return nil
 }
 
