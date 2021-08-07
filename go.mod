@@ -15,6 +15,7 @@ require (
 	github.com/jinzhu/gorm v1.9.12
 	github.com/satori/go.uuid v1.2.0
 	github.com/stoewer/go-strcase v1.2.0
+	github.com/stretchr/testify v1.6.1
 	github.com/twpayne/go-geom v1.3.4
 	golang.org/x/crypto v0.0.0-20200323165209-0ec3e9974c59
 )

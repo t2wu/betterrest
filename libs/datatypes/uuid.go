@@ -35,6 +35,12 @@ func NewUUIDFromString(s string) (u *UUID, err error) {
 	return u, err
 }
 
+func NewUUIDFromStringNoErr(s string) (u *UUID) {
+	u = &UUID{}
+	u.UUID, _ = uuid.FromString(s)
+	return u
+}
+
 // Value satisfies the Valuer interace and is responsible for writing data to the database
 func (u *UUID) String() string {
 	return u.UUID.String()
