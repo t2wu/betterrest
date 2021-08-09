@@ -15,7 +15,7 @@ const (
 	port     = "5432"
 	username = "postgres"
 	password = "12345678"
-	dbname   = "dockrest_local"
+	dbname   = "localdb"
 
 	uuid1 = "1e98bfc3-2721-492a-bfd3-09f7dd3c1565"
 	uuid2 = "d113ed09-cfc5-47a5-b35c-6f60c49cbd08"
@@ -50,6 +50,11 @@ func TestMain(m *testing.M) {
 		panic("failed to automigrate TestModel:" + err.Error())
 	}
 
+	// Delete everything
+	if err := db.Delete(&TestModel{}).Error; err != nil {
+		panic("failed delete everything" + err.Error())
+	}
+
 	tm1 := TestModel{BaseModel: models.BaseModel{ID: datatypes.NewUUIDFromStringNoErr(uuid1)}, Name: "first", Age: 1}
 	tm2 := TestModel{BaseModel: models.BaseModel{ID: datatypes.NewUUIDFromStringNoErr(uuid2)}, Name: "second", Age: 3}
 	tm3 := TestModel{BaseModel: models.BaseModel{ID: datatypes.NewUUIDFromStringNoErr(uuid3)}, Name: "same", Age: 3}
@@ -62,7 +67,7 @@ func TestMain(m *testing.M) {
 
 	exitVal := m.Run()
 
-	log.Println("runing delete")
+	log.Println("running delete")
 
 	// Teardown
 	if err := db.Unscoped().Delete(&tm1).Delete(&tm2).Delete(&tm3).Delete(&tm4).Error; err != nil {

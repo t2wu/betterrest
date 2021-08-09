@@ -40,13 +40,9 @@ type Predicate struct {
 
 // FilterCriteria is the criteria to query for first-level field
 type FilterCriteria struct {
-	// TableName   string
-	FieldName string // Field name to match
-	// FieldValues []string // Criteria to match
-	// Predicates  []FilterPredicateLogic // greater than less than, etc.
-
+	FieldName     string        // Field name to match
 	PredicatesArr [][]Predicate // greater than less than, etc., multiple for AND relationship
-
+	// Is it? age > 30 OR age < 20 AND ?
 	// actually if there is predicate that's not FilterPredicateLogicEQ, you can't do FilterPredicateLogicEQ
 }
 

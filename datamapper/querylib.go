@@ -65,8 +65,7 @@ func constructFilterCriteriaFromFieldNameAndFieldValue(fieldName string, fieldVa
 	}
 
 	criteria := sqlbuilder.FilterCriteria{
-		FieldName: fieldName,
-		// FieldValues:   fieldValues,
+		FieldName:     fieldName,
 		PredicatesArr: predicatesArr,
 	}
 	return &criteria, nil
