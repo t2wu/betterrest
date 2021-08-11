@@ -46,16 +46,6 @@ func FirstByFieldQueries(tx *gorm.DB, modelObj models.IModel, args ...interface{
 	return FirstByPredicateRelation(tx, modelObj, builder.Rel)
 }
 
-// FirstByFieldQuery allows query for a table field
-// query is like "name =" or "age >=", value is the correspondonding value to query for
-// func FirstByFieldQuery(tx *gorm.DB, modelObj models.IModel, query string, value interface{}) error {
-// 	rel, err := C(query, value).GetPredicateRelation()
-// 	if err != nil {
-// 		return err
-// 	}
-// 	return FirstByPredicateRelation(tx, modelObj, rel)
-// }
-
 func FirstByPredicateRelation(tx *gorm.DB, modelObj models.IModel, pr *PredicateRelation) error {
 	return byPredicateRelationQueryType(tx, modelObj, pr, QueryTypeFirst)
 }
@@ -98,7 +88,7 @@ func getQueryFunc(tx *gorm.DB, f QueryType) func(interface{}, ...interface{}) *g
 	return nil
 }
 
-// // verifyFieldOnModel verifies that field part of the model
+// verifyFieldOnModel verifies that field part of the model
 // func verifyFieldOnModel(model *models.IModel, field string) bool {
 
 // }

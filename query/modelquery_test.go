@@ -83,21 +83,38 @@ func TestQueryByWrongValue_NotFoundShouldGiveError(t *testing.T) {
 	assert.Fail(t, "should not be found")
 }
 
-// func TestQueryByBothStringAndIntField_should_not_exits(t *testing.T) {
-// 	tests := []struct {
-// 		fqs  []*FieldQuery
-// 		want string
-// 	}{
-// 		{[]*FieldQuery{
-// 			{Name: "name", Value: "first"},
-// 			{Name: "age", Value: "3"},
-// 		}, uuid2},
-// 	}
+// Where would I actually check that the field is part of the model?
+// If I put it in there it seems too much work
+// But then again interface may look nicer
+// Maybe use dependency injection to do the translation?
+// But this interface could be used in places where there is NO need to check.
+// So it doesn't seem right to be used here.
+// Or maybe Init().FieldByFieldQueries()
+// Init().Unchecked().FieldByFieldQueries() for unchecked
+// and default checked.
+// FirstByFieldQueries(db, &tm, "name =", "tim", "inner.name =", "Kyle")
 
-// 	for _, test := range tests {
-// 		tm := TestModel{}
-// 		if err := FirstByFields(db, &tm, test.fqs); err == nil {
-// 			assert.Fail(t, err.Error(), "record should not be found")
-// 		}
-// 	}
-// }
+// Automatically walk the key by type so it means tm has a foreign key to unnestedtable
+// I can walk back by simply querying for struct field in unestedtable{}
+// FirstByFieldQueries(db, &tm, "name =", "tim", "inner.name =", "Kyle").
+// InnerJoin(&UnnestedTable{})
+
+// Q("name =", "tim", "inner.name =", "Kyle").First(&tm)
+// Q("name =", "tim", "inner.name =", "Kyle").Find(&tm)
+// Q("name =", "tim", "inner.name =", "Kyle").
+// InnerJoins(Model(&userownssite).Q("name =", "tim", "inner.name =", "Kyle")).
+// InnerJoins(Modle(&User).Q("id =", "xxx").Find(&tm)
+// (This means innerJoins has to traverse both ways), using xxxID as a model
+// or User struct as a clue or some other tag to be really smart
+
+func TestQueryByNonExistingFieldName_ShouldGiveAnError(t *testing.T) {
+	tm := TestModel{}
+
+	// only name and age should be in there, to make sureinject some other SQL, for example
+	if err := FirstByFieldQueries(db, &tm, "deleteCmdForExample =", "tim"); err != nil {
+		assert.Equal(t, "field not found", err.Error())
+		return
+	}
+
+	assert.Fail(t, "should not be found")
+}

@@ -19,6 +19,14 @@ func TestPredicateBuilder_whenGiven_HasPredicate(t *testing.T) {
 	assert.Equal(t, p.Value, "Christy")
 }
 
+func TestPredicateBuilder_whenGivenWrongValue_HasError(t *testing.T) {
+	// builder := NewPredicateRelationBuilder()
+	b := C("name deleteCmdForExample", "Christy")
+	_, err := b.GetPredicateRelation()
+
+	assert.Error(t, err)
+}
+
 func TestPredicateBuilder_whenCallingCTwice_shouldHaveError(t *testing.T) {
 	// builder := NewPredicateRelationBuilder()
 	b := C("name =", "Christy")
@@ -29,7 +37,6 @@ func TestPredicateBuilder_whenCallingCTwice_shouldHaveError(t *testing.T) {
 }
 
 func TestPredicateBuilder_whenGivenAndTwoPredicates_HasProperPredicateRelations(t *testing.T) {
-	// builder := NewPredicateRelationBuilder()
 	b := C("name =", "Christy").And("age >=", 20)
 	rel, err := b.GetPredicateRelation()
 
@@ -49,7 +56,6 @@ func TestPredicateBuilder_whenGivenAndTwoPredicates_HasProperPredicateRelations(
 }
 
 func TestPredicateBuilder_whenGivenOrTwoPredicates_HasProperPredicateRelations(t *testing.T) {
-	// builder := NewPredicateRelationBuilder()
 	b := C("name =", "Christy").Or("age >=", 20)
 	rel, err := b.GetPredicateRelation()
 
@@ -69,7 +75,6 @@ func TestPredicateBuilder_whenGivenOrTwoPredicates_HasProperPredicateRelations(t
 }
 
 func TestPredicateBuilder_whenGivenAndThreePredicates_HasProperPredicateRelations(t *testing.T) {
-	// builder := NewPredicateRelationBuilder()
 	b := C("name =", "Christy").Or("age >=", 20).And("age <", 60)
 	rel, err := b.GetPredicateRelation()
 
@@ -112,32 +117,3 @@ func TestPredicateBuilder_whenFirstWithNestedBuilder_HasProperPredicateRelations
 	assert.Equal(t, PredicateCondLTEQ, p.Cond)
 	assert.Equal(t, 100, p.Value)
 }
-
-// func TestPredicateBuilder_nestedPredicates_works(t *testing.T) {
-// 	// Christy less than 20 years old or Amy greater tan 60 years gold
-// 	b1 := C("name =", "Christy").And("age <", 20)
-// 	b2 := C("name =", "Amy").And("age >", 60)
-// 	b3 := C(b1).And(b2)
-// 	rel, err := b3.GetPredicateRelation()
-// }
-
-// func foo(){
-// 	/// Predicate is used to represent something like age < 20
-// // type Predicate struct {
-// // 	Field string        // e.g. age
-// // 	Cond  PredicateCond // e.g. <
-// // 	Value interface{}   // e.g. 20
-// // }
-
-// 	.And("age =", 23)
-// 	b2 := NewPredicateRelationBuilder().Build("name =", "Jenny").And("age <", 30)
-
-// 	And(Or("age =", 23, "age <", 3), "name =", "Jenny")
-// 	And(Or("age =", 23, "age <", 3), Or("name =", "Jenny", "name =", "Christy")).And()
-
-// 	b1 := C("age =", 23).Or().C("age <", 3) // age = 23 or age < 3
-// 	b2 := C("gender =", "female")           // gender = female
-// 	C(b1).And(b2)                           // (age = 23 or age < 3) AND (gender = "female")
-// 	C(b1).And(b2).Or(b3)                    // (age = 23 or age < 3) AND (gender = "female") OR xxx // But AND has higher precedence
-// 	c(b1).And(c(b2).Or(b3))                 // equivalent
-// }

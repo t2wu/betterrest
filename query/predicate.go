@@ -20,6 +20,23 @@ const (
 	PredicateCondGTEQ PredicateCond = ">="
 )
 
+func StringToPredicateCond(s string) (PredicateCond, error) {
+	switch s {
+	case string(PredicateCondEQ):
+		return PredicateCondEQ, nil
+	case string(PredicateCondLT):
+		return PredicateCondLT, nil
+	case string(PredicateCondLTEQ):
+		return PredicateCondLTEQ, nil
+	case string(PredicateCondGT):
+		return PredicateCondGT, nil
+	case string(PredicateCondGTEQ):
+		return PredicateCondGTEQ, nil
+	}
+
+	return PredicateCondEQ, fmt.Errorf("not a PredicateCond string")
+}
+
 type PredicateLogic string
 
 const (
@@ -48,9 +65,14 @@ func NewPredicateFromStringAndVal(s string, value interface{}) (*Predicate, erro
 		return nil, fmt.Errorf("PredicateFromString format incorrect")
 	}
 
+	cond, err := StringToPredicateCond(toks[1])
+	if err != nil {
+		return nil, err
+	}
+
 	return &Predicate{
 		Field: toks[0],
-		Cond:  PredicateCond(toks[1]),
+		Cond:  cond,
 		Value: value,
 	}, nil
 }
