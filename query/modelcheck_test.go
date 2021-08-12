@@ -1,7 +1,6 @@
 package query
 
 import (
-	"log"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -158,7 +157,6 @@ func TestIsFieldInModel_GetFieldType_Correct(t *testing.T) {
 	assert.Equal(t, "Contact", typ.Name())
 
 	typ, err = GetModelFieldTypeInModelIfValid(&m, "Contacts2")
-	log.Println("type:", typ)
 	assert.Nil(t, err)
 	assert.Equal(t, "Contact", typ.Name())
 
@@ -170,18 +168,10 @@ func TestIsFieldInModel_GetFieldType_Correct(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, "Pet", typ.Name())
 
-	// typ, err = GetModelFieldTypeInModelIfValid(&m, "ID") // Wow, fieldbyname actually works on embedded
-	// assert.Nil(t, err)
-	// assert.Equal(t, "Contacts", typ.Name())
+	typ, err = GetModelFieldTypeInModelIfValid(&m, "ID") // Wow, fieldbyname actually works on embedded
+	assert.Nil(t, err)
+	assert.Equal(t, "UUID", typ.Name())
 }
-
-// func TestIsFieldInModel_GetFieldType_Correct(t *testing.T) {
-// 	m := Person{}
-// 	typ, err := GetModelFieldTypeInModelIfValid(&m, "Pet.PetToy.Name")
-// 	assert.Nil(t, err)
-
-// 	assert.Equal(t, "string", typ.Name())
-// }
 
 func TestGetModelFieldTypeInModelIfValid_GetFieldTypeNotExists_ThrowError(t *testing.T) {
 	m := Person{}

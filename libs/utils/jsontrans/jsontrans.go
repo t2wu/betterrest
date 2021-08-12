@@ -58,7 +58,7 @@ type IFieldTransformJSONToModel interface {
 }
 
 // Transform performs the following:
-// 1. Cehrry pick only fields we want by the fields specifier
+// 1. Cherry pick only fields we want by the fields specifier
 // when given a json string,
 // I cannot cherry pick struct, because I can't make it generic enough
 // to fit all models
@@ -276,6 +276,7 @@ func TransFromByHidingDateFieldsFromIModel(v reflect.Value, includeCUDDates bool
 			if inside.Kind() == reflect.Struct {
 				// If comfirm to the Marshaler interface, let the JSON handles it
 				// No need to walk further in, expect JSON marshal to take care of it later
+				// (so the struct is not part of the IModel, more of an elementary value)
 				if _, ok := v.Field(i).Interface().(json.Marshaler); ok {
 					if !isOmitEmpty || !isEmptyValue(v.Field(i)) {
 						dataPicked[jsonTag] = v.Field(i).Interface()
