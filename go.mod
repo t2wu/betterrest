@@ -13,6 +13,7 @@ require (
 	github.com/go-playground/validator/v10 v10.2.0
 	github.com/go-sql-driver/mysql v1.4.1
 	github.com/jinzhu/gorm v1.9.12
+	github.com/pkg/errors v0.8.1
 	github.com/satori/go.uuid v1.2.0
 	github.com/stoewer/go-strcase v1.2.0
 	github.com/stretchr/testify v1.6.1

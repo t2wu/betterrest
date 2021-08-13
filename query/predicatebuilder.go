@@ -4,6 +4,8 @@ import (
 	"fmt"
 )
 
+// Predicate builder goes with actual column names
+
 // So we can do something like AND("name =", "Christy").OR("age = ", 2)
 
 // func C(s string, v interface{}) *PredicateRelationBuilder {

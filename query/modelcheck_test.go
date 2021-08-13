@@ -20,13 +20,16 @@ type Person struct {
 
 	Pet  Pet  `json:"pet"`
 	Pet2 *Pet `json:"pet2"`
+
+	MissingJson  string `json:"-"`
+	CustomColumn string `json:"customColumn" gorm:"index;column:My_columnname;"`
 }
 
 type Contact struct {
 	models.BaseModel
 
-	Name      string
-	Name2     *string
+	Name      string  `json:"name"`
+	Name2     *string `json:"name2"`
 	Age       int
 	Age2      *int
 	Email     []string
@@ -37,18 +40,18 @@ type Contact struct {
 
 type Pet struct {
 	models.BaseModel
-	Name  string
-	Name2 *string
+	Name  string  `json:"name"`
+	Name2 *string `json:"name2"`
 	Age   int
 	Age2  *int
 
-	PetToy  PetToy
-	PetToy2 *PetToy
+	PetToy  PetToy  `json:"petToy"`
+	PetToy2 *PetToy `json:"petToy2"`
 }
 
 type PetToy struct {
 	models.BaseModel
-	Name string
+	Name string `json:"name" gorm:"index;column:pet_toy_name;"`
 }
 
 func TestIsFieldInModel_ExistingField_IsTrue(t *testing.T) {

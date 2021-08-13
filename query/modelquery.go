@@ -8,8 +8,9 @@ import (
 	"github.com/t2wu/betterrest/models"
 )
 
-// -----------------------------
+// This library is based on Field name, not actual column name in the db
 
+// -----------------------------
 type QueryType int
 
 const (

@@ -5,6 +5,8 @@ import (
 	"strings"
 )
 
+// Predicate goes with actual column names
+
 type PredicateCond string
 
 const (
