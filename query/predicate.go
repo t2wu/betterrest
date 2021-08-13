@@ -2,6 +2,7 @@ package query
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 )
 
@@ -20,6 +21,8 @@ const (
 	PredicateCondGT PredicateCond = ">"
 	// PredicateCondGTEQ is greater than or equal to
 	PredicateCondGTEQ PredicateCond = ">="
+	// PredicateCondGTEQ is greater than or equal to
+	PredicateCondIN PredicateCond = "IN"
 )
 
 func StringToPredicateCond(s string) (PredicateCond, error) {
@@ -34,6 +37,8 @@ func StringToPredicateCond(s string) (PredicateCond, error) {
 		return PredicateCondGT, nil
 	case string(PredicateCondGTEQ):
 		return PredicateCondGTEQ, nil
+	case string(PredicateCondIN):
+		return PredicateCondIN, nil
 	}
 
 	return PredicateCondEQ, fmt.Errorf("not a PredicateCond string")
@@ -49,12 +54,21 @@ const (
 // Predicate is used to represent something like age < 20
 type Predicate struct {
 	Field string        // e.g. age
-	Cond  PredicateCond // e.g. <
-	Value interface{}   // e.g. 20
+	Cond  PredicateCond // e.g. <, or IN
+	Value interface{}   // e.g. 20 or an array of values
 }
 
 func (p *Predicate) BuildQueryStringAndValue() (string, interface{}) {
-	return fmt.Sprintf("%s %s ?", p.Field, p.Cond), p.Value
+	if p.Cond != PredicateCondIN {
+		return fmt.Sprintf("%s %s ?", p.Field, p.Cond), p.Value
+	}
+	value := reflect.ValueOf(p.Value)
+	var sb strings.Builder
+	sb.WriteString("?")
+	for i := 1; i < value.Len(); i++ {
+		sb.WriteString(", ?")
+	}
+	return fmt.Sprintf("%s %s (%s)", p.Field, p.Cond, sb.String()), p.Value
 }
 
 // NewPredicateFromStringAndVal, turn string like "age <" and value into proper predicate

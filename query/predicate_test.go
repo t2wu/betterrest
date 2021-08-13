@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/t2wu/betterrest/libs/datatypes"
 )
 
 func TestPredicateFromStringAndVal_works(t *testing.T) {
@@ -119,6 +120,45 @@ func TestBuildQueryStringAndValue(t *testing.T) {
 		s, v := test.predicate.BuildQueryStringAndValue()
 		assert.Equal(t, test.want.s, s)
 		assert.Equal(t, test.want.v, v)
+	}
+}
+
+func TestBuildQueryStringAndValueForInClause(t *testing.T) {
+	tests := []struct {
+		predicate *Predicate
+		want      struct {
+			s string
+			v []string
+		}
+	}{
+		{
+			predicate: &Predicate{
+				Field: "id",
+				Cond:  PredicateCondIN,
+				Value: []*datatypes.UUID{
+					datatypes.NewUUIDFromStringNoErr(uuid1),
+					datatypes.NewUUIDFromStringNoErr(uuid2),
+					datatypes.NewUUIDFromStringNoErr(uuid4),
+				},
+			},
+			want: struct {
+				s string
+				v []string
+			}{s: "id IN (?, ?, ?)", v: []string{uuid1, uuid2, uuid4}},
+		},
+	}
+	for _, test := range tests {
+		s, v := test.predicate.BuildQueryStringAndValue()
+		assert.Equal(t, test.want.s, s)
+
+		v2, ok := v.([]*datatypes.UUID)
+		if ok {
+			assert.Equal(t, test.want.v[0], v2[0].String())
+			assert.Equal(t, test.want.v[1], v2[1].String())
+			assert.Equal(t, test.want.v[2], v2[2].String())
+		} else {
+			assert.Fail(t, "wrong type")
+		}
 	}
 }
 
@@ -283,7 +323,7 @@ func TestPredicateRelationStringAndValuesWithFirstNested(t *testing.T) {
 
 func TestFirstByPredicateRelation_works(t *testing.T) {
 	tm := TestModel{}
-	p, _ := NewPredicateFromStringAndVal("name =", "same")
+	p, _ := NewPredicateFromStringAndVal("real_name_column =", "same")
 	rel := &PredicateRelation{
 		PredOrRel: []interface{}{p},
 	}
@@ -291,4 +331,18 @@ func TestFirstByPredicateRelation_works(t *testing.T) {
 		assert.Fail(t, err.Error())
 	}
 	assert.Equal(t, tm.ID.String(), uuid4)
+}
+
+func TestFindByPredicateRelation_works(t *testing.T) {
+	tms := make([]TestModel, 0)
+	p, _ := NewPredicateFromStringAndVal("real_name_column =", "same")
+	rel := &PredicateRelation{
+		PredOrRel: []interface{}{p},
+	}
+	if err := FindByPredicateRelation(db, &tms, rel); err != nil {
+		assert.Fail(t, err.Error())
+	}
+
+	assert.Equal(t, tms[0].ID.String(), uuid4)
+	assert.Equal(t, tms[1].ID.String(), uuid3)
 }

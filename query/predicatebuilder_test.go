@@ -23,7 +23,10 @@ func TestPredicateBuilder_whenGivenWrongValue_HasError(t *testing.T) {
 	// builder := NewPredicateRelationBuilder()
 	b := C("name deleteCmdForExample", "Christy")
 	_, err := b.GetPredicateRelation()
+	assert.Error(t, err)
 
+	b = C("name @#$#", "Christy")
+	_, err = b.GetPredicateRelation()
 	assert.Error(t, err)
 }
 

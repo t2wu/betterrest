@@ -36,7 +36,7 @@ loop:
 
 	if fieldName == "" {
 		// Not found
-		return "", fmt.Errorf("field not found: %s", first)
+		return "", fmt.Errorf("field \"%s\" does not exist", first)
 	}
 
 	// Now, traverse the rest

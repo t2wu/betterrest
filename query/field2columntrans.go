@@ -1,10 +1,10 @@
 package query
 
 import (
+	"fmt"
 	"reflect"
 	"strings"
 
-	"github.com/pkg/errors"
 	"github.com/stoewer/go-strcase"
 	"github.com/t2wu/betterrest/models"
 )
@@ -15,7 +15,7 @@ func FieldNameToColumn(modelObj models.IModel, fieldName string) (string, error)
 
 	structField, ok := reflect.TypeOf(modelObj).Elem().FieldByName(first)
 	if !ok {
-		return "", errors.Errorf("field not found: %s", first)
+		return "", fmt.Errorf("field \"%s\" does not exist", first)
 	}
 
 	columnName := strcase.SnakeCase(first)
