@@ -1,7 +1,6 @@
 package models
 
 import (
-	"log"
 	"reflect"
 	"testing"
 
@@ -65,7 +64,6 @@ func TestJsonTrans_MissingField_TransfromedToNilValue(t *testing.T) {
 	modelObj = &m
 	v := reflect.Indirect(reflect.ValueOf(modelObj))
 	mapping := jsontrans.TransFromByHidingDateFieldsFromIModel(v, true)
-	log.Printf("mapping: %+v\n", mapping)
 	v1, _ := mapping["name1"]
 	v2, _ := mapping["name2"]
 	v3, _ := mapping["age1"]
@@ -113,7 +111,6 @@ func TestJsonTrans_InnerModel_Transformed(t *testing.T) {
 	mapping := jsontrans.TransFromByHidingDateFieldsFromIModel(v, true)
 
 	if inner1, ok := mapping["innerModel1"]; ok {
-		log.Printf("inner1: %+v\n", inner1)
 		if m, ok := inner1.(map[string]interface{}); ok {
 			assert.Equal(t, "inner1name1", m["name1"].(string))
 			if v, ok2 := m["name2"].(*string); ok2 {
@@ -129,7 +126,6 @@ func TestJsonTrans_InnerModel_Transformed(t *testing.T) {
 	}
 
 	if inner2, ok := mapping["innerModel2"]; ok {
-		log.Printf("inner2: %+v\n", inner2)
 		if m, ok := inner2.(map[string]interface{}); ok {
 			assert.Equal(t, "inner2name1", m["name1"].(string))
 			if v, ok2 := m["name2"].(*string); ok2 {
@@ -160,7 +156,6 @@ func TestJsonTrans_InnerModel_NilFieldsAreEmpty(t *testing.T) {
 	mapping := jsontrans.TransFromByHidingDateFieldsFromIModel(v, true)
 
 	if inner1, ok := mapping["innerModel1"]; ok {
-		log.Printf("inner1: %+v\n", inner1)
 		if m, ok := inner1.(map[string]interface{}); ok {
 			assert.Equal(t, "", m["name1"].(string))
 			if v, ok2 := m["name2"].(*string); ok2 {
@@ -176,7 +171,6 @@ func TestJsonTrans_InnerModel_NilFieldsAreEmpty(t *testing.T) {
 	}
 
 	if inner2, ok := mapping["innerModel2"]; ok {
-		log.Printf("inner2: %+v\n", inner2)
 		if m, ok := inner2.(map[string]interface{}); ok {
 			assert.Equal(t, "", m["name1"].(string))
 			if v, ok2 := m["name2"].(*string); ok2 {

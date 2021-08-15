@@ -550,6 +550,10 @@ func GetTableNameFromType(typ reflect.Type) string {
 	return GetTableNameFromIModel(model)
 }
 
+func GetModelTypeNameFromIModel(model IModel) string {
+	return reflect.TypeOf(model).Elem().Name()
+}
+
 // ----------------
 
 func GetTagValueFromModelByTagKeyBetterRestAndValueKey(modelObj interface{}, valueKey string) *string {

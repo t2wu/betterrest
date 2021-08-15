@@ -5,8 +5,6 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/stoewer/go-strcase"
-	"github.com/t2wu/betterrest/libs/datatypes"
 	"github.com/t2wu/betterrest/models"
 )
 
@@ -45,6 +43,7 @@ func GetModelFieldTypeInModelIfValid(modelObj models.IModel, field string) (refl
 	if !ok {
 		return nil, fmt.Errorf("invalid field")
 	}
+
 	typ := structField.Type
 
 	if structField.Type.Kind() == reflect.Slice || structField.Type.Kind() == reflect.Slice {
@@ -74,6 +73,18 @@ func GetModelFieldTypeInModelIfValid(modelObj models.IModel, field string) (refl
 	return typ, err
 }
 
+func GetInnerModelIfValid(modelObj models.IModel, field string) (models.IModel, error) {
+	typ, err := GetModelFieldTypeInModelIfValid(modelObj, field)
+	if err != nil {
+		return nil, err
+	}
+	m, ok := reflect.New(typ).Interface().(models.IModel)
+	if !ok {
+		return nil, fmt.Errorf("not an IModel")
+	}
+	return m, nil
+}
+
 // FieldNotInModelError is for GetModelFieldTypeIfValid.
 // if field doesn't exist in the model, return this error
 // We want to go ahead and skip it since this field may be other
@@ -86,32 +97,32 @@ func (r *FieldNotInModelError) Error() string {
 	return r.Msg
 }
 
-func GetModelFieldTypeIfValid(modelObj models.IModel, fieldName string) (reflect.Type, error) {
-	var fieldType reflect.Type
-	v := reflect.Indirect(reflect.ValueOf(modelObj))
-	structField, ok := v.Type().FieldByName(fieldName)
-	if ok {
-		fieldType = structField.Type
-	} else if fieldName == "id" {
-		fieldType = reflect.TypeOf(&datatypes.UUID{})
-	} else if fieldName == "Id" {
-		fieldType = reflect.TypeOf(&datatypes.UUID{})
-	} else {
-		// It may not exists, or the field name is capitalized. search for JSON tag
-		// v.Type().FieldByIndex(0).Tag
-		found := false
-		snake := strcase.SnakeCase(fieldName)
-		for i := 0; i < v.NumField(); i++ {
-			v2 := v.Type().Field(i)
-			tag := v2.Tag.Get("json")
-			if tag == snake {
-				found = true
-				fieldType = v2.Type
-			}
-		}
-		if !found {
-			return nil, &FieldNotInModelError{Msg: fmt.Sprintf("field name %s does not exist", fieldName)}
-		}
-	}
-	return fieldType, nil
-}
+// func GetModelFieldTypeIfValid(modelObj models.IModel, fieldName string) (reflect.Type, error) {
+// 	var fieldType reflect.Type
+// 	v := reflect.Indirect(reflect.ValueOf(modelObj))
+// 	structField, ok := v.Type().FieldByName(fieldName)
+// 	if ok {
+// 		fieldType = structField.Type
+// 	} else if fieldName == "id" {
+// 		fieldType = reflect.TypeOf(&datatypes.UUID{})
+// 	} else if fieldName == "Id" {
+// 		fieldType = reflect.TypeOf(&datatypes.UUID{})
+// 	} else {
+// 		// It may not exists, or the field name is capitalized. search for JSON tag
+// 		// v.Type().FieldByIndex(0).Tag
+// 		found := false
+// 		snake := strcase.SnakeCase(fieldName)
+// 		for i := 0; i < v.NumField(); i++ {
+// 			v2 := v.Type().Field(i)
+// 			tag := v2.Tag.Get("json")
+// 			if tag == snake {
+// 				found = true
+// 				fieldType = v2.Type
+// 			}
+// 		}
+// 		if !found {
+// 			return nil, &FieldNotInModelError{Msg: fmt.Sprintf("field name %s does not exist", fieldName)}
+// 		}
+// 	}
+// 	return fieldType, nil
+// }

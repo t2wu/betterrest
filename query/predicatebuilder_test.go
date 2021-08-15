@@ -7,92 +7,89 @@ import (
 )
 
 func TestPredicateBuilder_whenGiven_HasPredicate(t *testing.T) {
-	// builder := NewPredicateRelationBuilder()
-	b := C("name =", "Christy")
+	b := C("Name =", "Christy")
 	rel, err := b.GetPredicateRelation()
 
 	assert.Nil(t, err)
-	assert.Equal(t, 1, len(rel.PredOrRel), "there should be 1 predicate")
-	p := rel.PredOrRel[0].(*Predicate)
-	assert.Equal(t, p.Field, "name")
+	assert.Equal(t, 1, len(rel.PredOrRels), "there should be 1 predicate")
+	p := rel.PredOrRels[0].(*Predicate)
+	assert.Equal(t, p.Field, "Name")
 	assert.Equal(t, p.Cond, PredicateCondEQ)
 	assert.Equal(t, p.Value, "Christy")
 }
 
 func TestPredicateBuilder_whenGivenWrongValue_HasError(t *testing.T) {
-	// builder := NewPredicateRelationBuilder()
-	b := C("name deleteCmdForExample", "Christy")
+	b := C("Name deleteCmdForExample", "Christy")
 	_, err := b.GetPredicateRelation()
 	assert.Error(t, err)
 
-	b = C("name @#$#", "Christy")
+	b = C("Name @#$#", "Christy")
 	_, err = b.GetPredicateRelation()
 	assert.Error(t, err)
 }
 
 func TestPredicateBuilder_whenCallingCTwice_shouldHaveError(t *testing.T) {
-	// builder := NewPredicateRelationBuilder()
-	b := C("name =", "Christy")
-	b.C("age =", 3)
+	b := C("Name =", "Christy")
+	b.C("Age =", 3)
 	_, err := b.GetPredicateRelation()
 
 	assert.Error(t, err)
 }
 
 func TestPredicateBuilder_whenGivenAndTwoPredicates_HasProperPredicateRelations(t *testing.T) {
-	b := C("name =", "Christy").And("age >=", 20)
+	b := C("Name =", "Christy").And("Age >=", 20)
 	rel, err := b.GetPredicateRelation()
 
 	assert.Nil(t, err)
-	assert.Equal(t, 2, len(rel.PredOrRel))
+	assert.Equal(t, 2, len(rel.PredOrRels))
 	assert.Equal(t, 1, len(rel.Logics))
 
-	p := rel.PredOrRel[0].(*Predicate)
-	assert.Equal(t, p.Field, "name")
+	p := rel.PredOrRels[0].(*Predicate)
+	assert.Equal(t, p.Field, "Name")
 	assert.Equal(t, p.Cond, PredicateCondEQ)
 	assert.Equal(t, p.Value, "Christy")
-	p2 := rel.PredOrRel[1].(*Predicate)
-	assert.Equal(t, p2.Field, "age")
+	p2 := rel.PredOrRels[1].(*Predicate)
+	assert.Equal(t, p2.Field, "Age")
 	assert.Equal(t, p2.Cond, PredicateCondGTEQ)
 	assert.Equal(t, p2.Value, 20)
 	assert.Equal(t, rel.Logics[0], PredicateLogicAND)
 }
 
 func TestPredicateBuilder_whenGivenOrTwoPredicates_HasProperPredicateRelations(t *testing.T) {
-	b := C("name =", "Christy").Or("age >=", 20)
+	b := C("Name =", "Christy").Or("Age >=", 20)
 	rel, err := b.GetPredicateRelation()
 
 	assert.Nil(t, err)
-	assert.Equal(t, 2, len(rel.PredOrRel))
+	assert.Equal(t, 2, len(rel.PredOrRels))
 	assert.Equal(t, 1, len(rel.Logics))
 
-	p := rel.PredOrRel[0].(*Predicate)
-	assert.Equal(t, p.Field, "name")
+	p := rel.PredOrRels[0].(*Predicate)
+	assert.Equal(t, p.Field, "Name")
 	assert.Equal(t, p.Cond, PredicateCondEQ)
 	assert.Equal(t, p.Value, "Christy")
-	p2 := rel.PredOrRel[1].(*Predicate)
-	assert.Equal(t, p2.Field, "age")
+	p2 := rel.PredOrRels[1].(*Predicate)
+	assert.Equal(t, p2.Field, "Age")
 	assert.Equal(t, p2.Cond, PredicateCondGTEQ)
 	assert.Equal(t, p2.Value, 20)
 	assert.Equal(t, rel.Logics[0], PredicateLogicOR)
 }
 
 func TestPredicateBuilder_whenGivenAndThreePredicates_HasProperPredicateRelations(t *testing.T) {
-	b := C("name =", "Christy").Or("age >=", 20).And("age <", 60)
+	b := C("Name =", "Christy").Or("Age >=", 20).And("Age <", 60)
 	rel, err := b.GetPredicateRelation()
 
 	assert.Nil(t, err)
-	assert.Equal(t, 3, len(rel.PredOrRel))
-	p := rel.PredOrRel[0].(*Predicate)
-	assert.Equal(t, p.Field, "name")
+	assert.Equal(t, 3, len(rel.PredOrRels))
+	p := rel.PredOrRels[0].(*Predicate)
+	assert.Equal(t, p.Field, "Name")
 	assert.Equal(t, p.Cond, PredicateCondEQ)
 	assert.Equal(t, p.Value, "Christy")
-	p2 := rel.PredOrRel[1].(*Predicate)
-	assert.Equal(t, p2.Field, "age")
+	p2 := rel.PredOrRels[1].(*Predicate)
+	assert.Equal(t, p2.Field, "Age")
 	assert.Equal(t, p2.Cond, PredicateCondGTEQ)
 	assert.Equal(t, p2.Value, 20)
-	p3 := rel.PredOrRel[2].(*Predicate)
-	assert.Equal(t, p3.Field, "age")
+	p3 := rel.PredOrRels[2].(*Predicate)
+	assert.Equal(t, p3.Field, "Age")
 	assert.Equal(t, p3.Cond, PredicateCondLT)
 	assert.Equal(t, p3.Value, 60)
 	assert.Equal(t, rel.Logics[0], PredicateLogicOR)
@@ -100,23 +97,40 @@ func TestPredicateBuilder_whenGivenAndThreePredicates_HasProperPredicateRelation
 }
 
 func TestPredicateBuilder_whenFirstWithNestedBuilder_HasProperPredicateRelations(t *testing.T) {
-	bNested := C("name =", "Christy")
-	b := C(bNested).Or("age <=", 100)
+	b := C(C("Age <=", 20).Or("Age >=", 80)).And("Name =", "Christy")
 	rel, err := b.GetPredicateRelation()
 
 	assert.Nil(t, err)
-	assert.Equal(t, 2, len(rel.PredOrRel))
+	if assert.Equal(t, 2, len(rel.PredOrRels)) {
+		// 1: C("Age <=", 20).Or("Age >=", 80)
+		firstCriteria := rel.PredOrRels[0].(*PredicateRelation)
 
-	rel2 := rel.PredOrRel[0].(*PredicateRelation)
-	assert.Equal(t, 0, len(rel2.Logics))
-	assert.Equal(t, 1, len(rel2.PredOrRel))
-	nestedP, _ := rel2.PredOrRel[0].(*Predicate)
-	assert.Equal(t, "name", nestedP.Field)
-	assert.Equal(t, PredicateCondEQ, nestedP.Cond)
-	assert.Equal(t, "Christy", nestedP.Value)
+		{
+			// inner of 1
+			firstCriteriaOfFirst := firstCriteria.PredOrRels[0].(*Predicate)
+			assert.Equal(t, "Age", firstCriteriaOfFirst.Field)
+			assert.Equal(t, PredicateCondLTEQ, firstCriteriaOfFirst.Cond)
+			assert.Equal(t, 20, firstCriteriaOfFirst.Value)
 
-	p := rel.PredOrRel[1].(*Predicate)
-	assert.Equal(t, "age", p.Field)
-	assert.Equal(t, PredicateCondLTEQ, p.Cond)
-	assert.Equal(t, 100, p.Value)
+			if assert.Equal(t, 1, len(firstCriteria.Logics)) {
+				assert.Equal(t, PredicateLogicOR, firstCriteria.Logics[0])
+			}
+
+			secondCriteriaOfFirst := firstCriteria.PredOrRels[1].(*Predicate)
+			assert.Equal(t, "Age", secondCriteriaOfFirst.Field)
+			assert.Equal(t, PredicateCondGTEQ, secondCriteriaOfFirst.Cond)
+			assert.Equal(t, 80, secondCriteriaOfFirst.Value)
+
+			// 2: And
+			if assert.Equal(t, 1, len(rel.Logics)) {
+				assert.Equal(t, PredicateLogicAND, rel.Logics[0])
+			}
+		}
+
+		// 3: Name = Christy
+		secondCriteria := rel.PredOrRels[1].(*Predicate)
+		assert.Equal(t, "Name", secondCriteria.Field)
+		assert.Equal(t, PredicateCondEQ, secondCriteria.Cond)
+		assert.Equal(t, "Christy", secondCriteria.Value)
+	}
 }

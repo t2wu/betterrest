@@ -277,3 +277,31 @@ func TestGetModelFieldTypeInModelIfValid_TwoLevelNestedField_HasCorrectType(t *t
 	assert.Nil(t, err)
 	assert.Equal(t, "string", typ.Name())
 }
+
+// --------------------------- GetInnerModelIfValid ---------------
+
+func TestGetInnerModelIfValid_NestedFieldStruct_HasCorrectType(t *testing.T) {
+	m := Person{}
+
+	m2, err := GetInnerModelIfValid(&m, "Pet.PetToy")
+	_, ok := m2.(*PetToy)
+	assert.Nil(t, err)
+	assert.True(t, ok)
+}
+func TestGetInnerModelIfValid_NestedFieldSlice_HasCorrectType(t *testing.T) {
+	m := Person{}
+
+	m2, err := GetInnerModelIfValid(&m, "Contacts")
+	_, ok := m2.(*Contact)
+	assert.Nil(t, err)
+	assert.True(t, ok)
+}
+
+func TestGetInnerModelIfValid_NestedFieldSlicePtr_HasCorrectType(t *testing.T) {
+	m := Person{}
+
+	m2, err := GetInnerModelIfValid(&m, "Contacts2")
+	_, ok := m2.(*Contact)
+	assert.Nil(t, err)
+	assert.True(t, ok)
+}

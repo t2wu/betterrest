@@ -1,7 +1,6 @@
 package query
 
 import (
-	"log"
 	"os"
 	"testing"
 
@@ -23,7 +22,7 @@ const (
 	uuid4 = "bc3eedae-21a5-478f-93d1-a54dc5ad7559"
 
 	doguuid1 = "a048824f-8728-4c0a-b091-ed8d59390542"
-	doguuid2 = "f126d9b3-c09c-4857-9a88-cf2e34c1024d"
+	doguuid2 = "f126d9b3-c09c-4857-9a608a717a-bb4c-4a89-9038-457c3e4fc5e088-cf2e34c1024d"
 	doguuid3 = "537455a7-c2a9-488a-b671-672c27e47217"
 )
 
@@ -40,8 +39,27 @@ type TestModel struct {
 type Dog struct {
 	models.BaseModel
 
-	Name        string          `json:"name"`
+	Name   string  `json:"name"`
+	Color  string  `json:"color"`
+	DogToy *DogToy `json:"dogToy"`
+
 	TestModelID *datatypes.UUID `gorm:"type:uuid;index;not null;" json:"_"`
+}
+
+type DogToy struct {
+	models.BaseModel
+
+	ToyName string `json:"toyName"`
+
+	TestModelID *datatypes.UUID `gorm:"type:uuid;index;not null;" json:"_"`
+}
+
+type UnNested struct {
+	models.BaseModel
+
+	Name string `json:"name"`
+
+	TestModelID *datatypes.UUID `gorm:"type:uuid;index;" json:"testModelID"`
 }
 
 var db *gorm.DB
@@ -58,30 +76,30 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		panic("failed to connect database:" + err.Error())
 	}
+	db.SingularTable(true)
 
-	if err := db.AutoMigrate(&TestModel{}).AutoMigrate(&Dog{}).Error; err != nil {
+	if err := db.AutoMigrate(&TestModel{}).AutoMigrate(&Dog{}).
+		AutoMigrate(&DogToy{}).AutoMigrate(&UnNested{}).Error; err != nil {
 		panic("failed to automigrate TestModel:" + err.Error())
-	}
-
-	// Delete everything
-	if err := db.Delete(&TestModel{}).Error; err != nil {
-		panic("failed delete everything" + err.Error())
 	}
 
 	dog1 := Dog{
 		BaseModel:   models.BaseModel{ID: datatypes.NewUUIDFromStringNoErr(doguuid1)},
 		Name:        "Doggie1",
+		Color:       "red",
 		TestModelID: datatypes.NewUUIDFromStringNoErr(uuid1),
 	}
 
 	dog2 := Dog{
 		BaseModel:   models.BaseModel{ID: datatypes.NewUUIDFromStringNoErr(doguuid2)},
 		Name:        "Doggie2",
+		Color:       "green",
 		TestModelID: datatypes.NewUUIDFromStringNoErr(uuid1),
 	}
 	dog3 := Dog{
 		BaseModel:   models.BaseModel{ID: datatypes.NewUUIDFromStringNoErr(doguuid3)},
 		Name:        "Doggie3",
+		Color:       "blue",
 		TestModelID: datatypes.NewUUIDFromStringNoErr(uuid1),
 	}
 
@@ -97,18 +115,33 @@ func TestMain(m *testing.M) {
 		Name:      "same", Age: 4, Dogs: []Dog{dog3},
 	}
 
-	if err := db.Create(&tm1).Create(&tm2).Create(&tm3).Create(&tm4).Error; err != nil {
+	unnesteduuid1 := "7192f73d-e56f-4a33-a7fb-eb9d605bc731"
+	unnested1 := UnNested{
+		BaseModel: models.BaseModel{
+			ID: datatypes.NewUUIDFromStringNoErr(unnesteduuid1),
+		},
+		Name:        "unnested1",
+		TestModelID: datatypes.NewUUIDFromStringNoErr(uuid1),
+	}
+	unnesteduuid2 := "6cdb2b20-b6c6-4f8f-9c2f-632888887865"
+	unnested2 := UnNested{
+		BaseModel: models.BaseModel{
+			ID: datatypes.NewUUIDFromStringNoErr(unnesteduuid2),
+		},
+		Name:        "unnested2",
+		TestModelID: datatypes.NewUUIDFromStringNoErr(uuid2),
+	}
+
+	if err := db.Create(&tm1).Create(&tm2).Create(&tm3).Create(&tm4).
+		Create(&unnested1).Create(&unnested2).Error; err != nil {
 		panic("something wrong with populating the db:" + err.Error())
 	}
 
-	log.Println("before run")
-
 	exitVal := m.Run()
 
-	log.Println("running delete")
-
 	// Teardown
-	if err := db.Unscoped().Delete(&tm1).Delete(&tm2).Delete(&tm3).Delete(&tm4).Delete(&dog1).Delete(&dog2).Error; err != nil {
+	if err := db.Unscoped().Delete(&tm1).Delete(&tm2).Delete(&tm3).Delete(&tm4).
+		Delete(&dog1).Delete(&dog2).Delete(&dog3).Delete(&unnested1).Delete(&unnested2).Error; err != nil {
 		panic("something wrong with removing data from the db:" + err.Error())
 	}
 
