@@ -171,6 +171,7 @@ func (mapper *BaseMapper) GetAll(db *gorm.DB, who models.Who, typeString string,
 		db = db.Offset(0).Limit(100)
 	}
 
+	// Actual quer in the following line
 	outmodels, err := models.NewSliceFromDBByTypeString(typeString, db.Find)
 	if err != nil {
 		return nil, nil, nil, err

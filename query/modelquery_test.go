@@ -1,10 +1,14 @@
 package query
 
 import (
+	"errors"
 	"testing"
 
+	"github.com/getlantern/deepcopy"
+	"github.com/jinzhu/gorm"
 	"github.com/stretchr/testify/assert"
 	"github.com/t2wu/betterrest/libs/datatypes"
+	"github.com/t2wu/betterrest/models"
 )
 
 func TestQueryFirst_ByID(t *testing.T) {
@@ -20,7 +24,6 @@ func TestQueryFirst_ByID(t *testing.T) {
 func TestQueryFirst_ByWrongID_ShouldNotBeFoundAndGiveError(t *testing.T) {
 	tm := TestModel{}
 	uuid := datatypes.NewUUIDFromStringNoErr("3587f5f3-efcb-4937-8783-b66a434104bd")
-	// if err := ByID(db, &tm, uuid); err != nil {
 	if err := Q(db, C("ID =", uuid)).First(&tm).Error; err != nil {
 		assert.Error(t, err)
 		return
@@ -53,7 +56,7 @@ func TestQueryFirst_ByOneStringField(t *testing.T) {
 		val   string
 		want  string
 	}{
-		{"Name =", "same", uuid4},
+		{"Name =", "same", uuid5},
 		{"Name =", "first", uuid1},
 	}
 
@@ -61,6 +64,7 @@ func TestQueryFirst_ByOneStringField(t *testing.T) {
 		tm := TestModel{}
 		if err := Q(db, C(test.query, test.val)).First(&tm).Error; err != nil {
 			assert.Fail(t, err.Error(), "record not found")
+			return
 		}
 		assert.Equal(t, test.want, tm.ID.String())
 	}
@@ -78,7 +82,7 @@ func TestQueryFirst_ByWrongValue_NotFoundShouldGiveError(t *testing.T) {
 	tm := TestModel{}
 
 	if err := Q(db, C("Name =", "tim")).First(&tm).Error; err != nil {
-		assert.Error(t, err)
+		assert.Equal(t, true, errors.Is(err, gorm.ErrRecordNotFound))
 		return
 	}
 
@@ -125,8 +129,11 @@ func TestQueryFind_ShouldGiveMultiple(t *testing.T) {
 		return
 	}
 
-	assert.Equal(t, uuid4, tms[0].ID.String())
-	assert.Equal(t, uuid3, tms[1].ID.String())
+	if assert.Equal(t, 3, len(tms)) {
+		assert.Equal(t, uuid5, tms[0].ID.String())
+		assert.Equal(t, uuid4, tms[1].ID.String())
+		assert.Equal(t, uuid3, tms[2].ID.String())
+	}
 }
 
 func TestQueryFind_WhenNotFound_ShouldNotGiveAnError(t *testing.T) {
@@ -138,22 +145,148 @@ func TestQueryFind_WhenNotFound_ShouldNotGiveAnError(t *testing.T) {
 	assert.Equal(t, 0, len(tms))
 }
 
+func TestQueryFind_WithoutCriteria_ShouldGetAll(t *testing.T) {
+	tms := make([]TestModel, 0)
+
+	if err := Q(db).Find(&tms).Error; err != nil {
+		assert.Error(t, err)
+		return
+	}
+
+	if assert.Equal(t, 5, len(tms)) {
+		assert.Equal(t, uuid5, tms[0].ID.String())
+		assert.Equal(t, uuid4, tms[1].ID.String())
+		assert.Equal(t, uuid3, tms[2].ID.String())
+		assert.Equal(t, uuid2, tms[3].ID.String())
+		assert.Equal(t, uuid1, tms[4].ID.String())
+	}
+}
+
+func TestQueryFind_Limit_ShouldWork(t *testing.T) {
+	tms := make([]TestModel, 0)
+
+	if err := Q(db).Limit(3).Find(&tms).Error; err != nil {
+		assert.Error(t, err)
+		return
+	}
+
+	if assert.Equal(t, 3, len(tms)) {
+		assert.Equal(t, uuid5, tms[0].ID.String())
+		assert.Equal(t, uuid4, tms[1].ID.String())
+		assert.Equal(t, uuid3, tms[2].ID.String())
+	}
+}
+
+func TestQueryFind_LimitAndOffset_ShouldWork(t *testing.T) {
+	tms := make([]TestModel, 0)
+
+	if err := Q(db).Offset(2).Limit(2).Find(&tms).Error; err != nil {
+		assert.Error(t, err)
+		return
+	}
+
+	if assert.Equal(t, 2, len(tms)) {
+		assert.Equal(t, uuid3, tms[0].ID.String())
+		assert.Equal(t, uuid2, tms[1].ID.String())
+	}
+}
+
+func TestQueryFind_Offset_ShouldWork(t *testing.T) {
+	tms := make([]TestModel, 0)
+
+	if err := Q(db).Offset(2).Find(&tms).Error; err != nil {
+		assert.Error(t, err)
+		return
+	}
+
+	if assert.Equal(t, 3, len(tms)) {
+		assert.Equal(t, uuid3, tms[0].ID.String())
+		assert.Equal(t, uuid2, tms[1].ID.String())
+		assert.Equal(t, uuid1, tms[2].ID.String())
+	}
+}
+
 func TestQueryFirst_Nested_Query(t *testing.T) {
 	tm := TestModel{}
 
 	err := Q(db, C("Dogs.Name =", "Doggie1")).First(&tm).Error
 	assert.Nil(t, err)
 	if err == nil {
-		assert.Equal(t, uuid3, tm.ID.UUID.String())
+		assert.Equal(t, uuid3, tm.ID.String())
 	}
 }
 
-func TestQueryFirst_InnerJoin_Works(t *testing.T) {
+func TestFirst_InnerJoin_Works(t *testing.T) {
 	tm := TestModel{}
 
 	err := Q(db).InnerJoin(&UnNested{}, &TestModel{}, C("Name =", "unnested2")).First(&tm).Error
 	assert.Nil(t, err)
 	if err == nil {
-		assert.Equal(t, uuid2, tm.ID.UUID.String())
+		assert.Equal(t, uuid2, tm.ID.String())
+	}
+}
+
+func TestCreateAndDelete_Works(t *testing.T) {
+	uuid := "046bcadb-7127-47b1-9c1e-ff92ccea44b8"
+	tm := TestModel{BaseModel: models.BaseModel{ID: datatypes.NewUUIDFromStringNoErr(uuid)}, Name: "MyTestModel", Age: 1}
+
+	err := Q(db).Create(&tm).Error
+	if !assert.Nil(t, err) {
+		return
+	}
+
+	searched := TestModel{}
+	if err := Q(db, C("ID =", uuid)).First(&searched).Error; err != nil {
+		assert.Nil(t, err)
+		return
+	}
+
+	assert.Equal(t, uuid, searched.ID.String())
+
+	// -- delete ---
+	err = Q(db).Delete(&tm).Error
+	if !assert.Nil(t, err) {
+		return
+	}
+
+	searched = TestModel{}
+	err = Q(db, C("ID =", uuid)).First(&searched).Error
+	if assert.Error(t, err) {
+		assert.Equal(t, true, errors.Is(err, gorm.ErrRecordNotFound))
+	}
+}
+
+func TestSave_Works(t *testing.T) {
+	uuid2 := "d113ed09-cfc5-47a5-b35c-6f60c49cbd08"
+	tm := TestModel{}
+	if err := Q(db, C("ID =", uuid2)).First(&tm).Error; err != nil {
+		assert.Nil(t, err)
+		return
+	}
+
+	backup := TestModel{}
+	if err := deepcopy.Copy(&backup, &tm); err != nil {
+		assert.Nil(t, err)
+	}
+
+	// Change the name to something else
+	tm.Name = "TestSave_Works"
+	if err := Q(db).Save(&tm).Error; err != nil {
+		assert.Nil(t, err)
+		return
+	}
+
+	// Find it back to make sure it has been changed
+	searched := TestModel{}
+	if err := Q(db, C("ID =", uuid2)).First(&searched).Error; err != nil {
+		assert.Nil(t, err)
+		return
+	}
+
+	assert.Equal(t, "TestSave_Works", searched.Name)
+
+	if err := Q(db).Save(&backup).Error; err != nil {
+		assert.Nil(t, err)
+		return
 	}
 }

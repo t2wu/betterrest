@@ -2,6 +2,7 @@ package query
 
 import (
 	"fmt"
+	"log"
 	"reflect"
 	"strings"
 
@@ -47,7 +48,10 @@ func Q(db *gorm.DB, args ...interface{}) *Query {
 type Query struct {
 	db *gorm.DB // Gorm db object can be a transaction
 	// args  []interface{}
-	Error error
+	Error  error
+	order  *string // custom order to Gorm instead of "created_at DESC"
+	limit  *int    // custom limit
+	offset *int    // custom offset
 
 	mbs []ModelAndBuilder
 }
@@ -55,6 +59,30 @@ type Query struct {
 type ModelAndBuilder struct {
 	ModelObj models.IModel // THe model this predicate relation applies to
 	Builder  *PredicateRelationBuilder
+}
+
+func (q *Query) Order(order string) *Query {
+	if q.order != nil {
+		log.Println("warning: query order already set")
+	}
+	q.order = &order
+	return q
+}
+
+func (q *Query) Limit(limit int) *Query {
+	if q.limit != nil {
+		log.Println("warning: query limit already set")
+	}
+	q.limit = &limit
+	return q
+}
+
+func (q *Query) Offset(offset int) *Query {
+	if q.offset != nil {
+		log.Println("warning: query offset already set")
+	}
+	q.offset = &offset
+	return q
 }
 
 // args can be multiple C(), but each C() works on one-level of modelObj
@@ -99,23 +127,6 @@ func (q *Query) InnerJoin(modelObj models.IModel, foreignObj models.IModel, args
 	}
 
 	return q
-}
-
-// hacky...
-func FindFieldNameToStructAndStructFieldNameIfAny(rel *PredicateRelation) (*string, *string) {
-	for _, pr := range rel.PredOrRels {
-		if p, ok := pr.(*Predicate); ok {
-			if strings.Contains(p.Field, ".") {
-				toks := strings.Split(p.Field, ".")
-				name := toks[len(toks)-2] // next to alst
-				return &name, &toks[len(toks)-1]
-			}
-		}
-		if rel2, ok := pr.(*PredicateRelation); ok {
-			return FindFieldNameToStructAndStructFieldNameIfAny(rel2)
-		}
-	}
-	return nil, nil
 }
 
 func (q *Query) First(modelObj models.IModel) *Query {
@@ -266,9 +277,51 @@ func (q *Query) buildQueryCore(modelObj models.IModel) (*gorm.DB, error) {
 		db = db.Joins(fmt.Sprintf("INNER JOIN %s ON %s", tblName, s), vals...)
 	}
 
-	order := fmt.Sprintf("\"%s\".created_at DESC", models.GetTableNameFromIModel(modelObj))
+	order := ""
+	if q.order != nil {
+		order = *q.order
+	} else {
+		order = fmt.Sprintf("\"%s\".created_at DESC", models.GetTableNameFromIModel(modelObj))
+	}
+
 	db = db.Order(order)
+
+	if q.offset != nil {
+		db = db.Offset(*q.offset)
+	}
+
+	if q.limit != nil {
+		db = db.Limit(*q.limit)
+	}
+
 	return db, nil
+}
+
+func (q *Query) Create(modelObj models.IModel) *Query {
+	if q.Error != nil {
+		return q
+	}
+
+	q.Error = q.db.Create(modelObj).Error
+	return q
+}
+
+func (q *Query) Delete(modelObj models.IModel) *Query {
+	if q.Error != nil {
+		return q
+	}
+
+	q.Error = q.db.Delete(modelObj).Error
+	return q
+}
+
+func (q *Query) Save(modelObj models.IModel) *Query {
+	if q.Error != nil {
+		return q
+	}
+
+	q.Error = q.db.Save(modelObj).Error
+	return q
 }
 
 type TableAndArgs struct {
@@ -290,4 +343,21 @@ func getQueryFunc(tx *gorm.DB, f QueryType) func(interface{}, ...interface{}) *g
 	}
 
 	return nil
+}
+
+// hacky...
+func FindFieldNameToStructAndStructFieldNameIfAny(rel *PredicateRelation) (*string, *string) {
+	for _, pr := range rel.PredOrRels {
+		if p, ok := pr.(*Predicate); ok {
+			if strings.Contains(p.Field, ".") {
+				toks := strings.Split(p.Field, ".")
+				name := toks[len(toks)-2] // next to alst
+				return &name, &toks[len(toks)-1]
+			}
+		}
+		if rel2, ok := pr.(*PredicateRelation); ok {
+			return FindFieldNameToStructAndStructFieldNameIfAny(rel2)
+		}
+	}
+	return nil, nil
 }

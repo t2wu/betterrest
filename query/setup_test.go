@@ -20,10 +20,12 @@ const (
 	uuid2 = "d113ed09-cfc5-47a5-b35c-6f60c49cbd08"
 	uuid3 = "608a717a-bb4c-4a89-9038-457c3e4fc5e0"
 	uuid4 = "bc3eedae-21a5-478f-93d1-a54dc5ad7559"
+	uuid5 = "ec2e60a2-ed23-4121-b1b4-133c2d7ca167"
 
 	doguuid1 = "a048824f-8728-4c0a-b091-ed8d59390542"
 	doguuid2 = "f126d9b3-c09c-4857-9a608a717a-bb4c-4a89-9038-457c3e4fc5e088-cf2e34c1024d"
 	doguuid3 = "537455a7-c2a9-488a-b671-672c27e47217"
+	doguuid4 = "82df2ace-19c2-4e78-a1c9-b75697fc813f"
 )
 
 // Use a real db for tests, better than nothing XD
@@ -102,6 +104,12 @@ func TestMain(m *testing.M) {
 		Color:       "blue",
 		TestModelID: datatypes.NewUUIDFromStringNoErr(uuid1),
 	}
+	dog4 := Dog{
+		BaseModel:   models.BaseModel{ID: datatypes.NewUUIDFromStringNoErr(doguuid4)},
+		Name:        "Doggie4",
+		Color:       "green",
+		TestModelID: datatypes.NewUUIDFromStringNoErr(uuid5),
+	}
 
 	tm1 := TestModel{BaseModel: models.BaseModel{ID: datatypes.NewUUIDFromStringNoErr(uuid1)}, Name: "first", Age: 1}
 	tm2 := TestModel{BaseModel: models.BaseModel{ID: datatypes.NewUUIDFromStringNoErr(uuid2)}, Name: "second", Age: 3}
@@ -113,6 +121,10 @@ func TestMain(m *testing.M) {
 	tm4 := TestModel{
 		BaseModel: models.BaseModel{ID: datatypes.NewUUIDFromStringNoErr(uuid4)},
 		Name:      "same", Age: 4, Dogs: []Dog{dog3},
+	}
+	tm5 := TestModel{
+		BaseModel: models.BaseModel{ID: datatypes.NewUUIDFromStringNoErr(uuid5)},
+		Name:      "same", Age: 4, Dogs: []Dog{dog4},
 	}
 
 	unnesteduuid1 := "7192f73d-e56f-4a33-a7fb-eb9d605bc731"
@@ -132,7 +144,7 @@ func TestMain(m *testing.M) {
 		TestModelID: datatypes.NewUUIDFromStringNoErr(uuid2),
 	}
 
-	if err := db.Create(&tm1).Create(&tm2).Create(&tm3).Create(&tm4).
+	if err := db.Create(&tm1).Create(&tm2).Create(&tm3).Create(&tm4).Create(&tm5).
 		Create(&unnested1).Create(&unnested2).Error; err != nil {
 		panic("something wrong with populating the db:" + err.Error())
 	}
@@ -140,8 +152,8 @@ func TestMain(m *testing.M) {
 	exitVal := m.Run()
 
 	// Teardown
-	if err := db.Unscoped().Delete(&tm1).Delete(&tm2).Delete(&tm3).Delete(&tm4).
-		Delete(&dog1).Delete(&dog2).Delete(&dog3).Delete(&unnested1).Delete(&unnested2).Error; err != nil {
+	if err := db.Unscoped().Delete(&tm1).Delete(&tm2).Delete(&tm3).Delete(&tm4).Delete(&tm5).
+		Delete(&dog1).Delete(&dog2).Delete(&dog3).Delete(&dog4).Delete(&unnested1).Delete(&unnested2).Error; err != nil {
 		panic("something wrong with removing data from the db:" + err.Error())
 	}
 

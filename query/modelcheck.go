@@ -96,33 +96,3 @@ type FieldNotInModelError struct {
 func (r *FieldNotInModelError) Error() string {
 	return r.Msg
 }
-
-// func GetModelFieldTypeIfValid(modelObj models.IModel, fieldName string) (reflect.Type, error) {
-// 	var fieldType reflect.Type
-// 	v := reflect.Indirect(reflect.ValueOf(modelObj))
-// 	structField, ok := v.Type().FieldByName(fieldName)
-// 	if ok {
-// 		fieldType = structField.Type
-// 	} else if fieldName == "id" {
-// 		fieldType = reflect.TypeOf(&datatypes.UUID{})
-// 	} else if fieldName == "Id" {
-// 		fieldType = reflect.TypeOf(&datatypes.UUID{})
-// 	} else {
-// 		// It may not exists, or the field name is capitalized. search for JSON tag
-// 		// v.Type().FieldByIndex(0).Tag
-// 		found := false
-// 		snake := strcase.SnakeCase(fieldName)
-// 		for i := 0; i < v.NumField(); i++ {
-// 			v2 := v.Type().Field(i)
-// 			tag := v2.Tag.Get("json")
-// 			if tag == snake {
-// 				found = true
-// 				fieldType = v2.Type
-// 			}
-// 		}
-// 		if !found {
-// 			return nil, &FieldNotInModelError{Msg: fmt.Sprintf("field name %s does not exist", fieldName)}
-// 		}
-// 	}
-// 	return fieldType, nil
-// }
