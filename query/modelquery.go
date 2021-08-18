@@ -21,7 +21,7 @@ const (
 // It would be Q(db, C(...), C(...)...).First() or Q(db).First() with empty PredicateRelationBuilder
 // Use multiple C() when working on inner fields (one C() per struct field)
 func Q(db *gorm.DB, args ...interface{}) IQuery {
-	q := &Query{db: db}
+	q := &Query{db: db, dbori: db}
 
 	for _, arg := range args {
 		b, ok := arg.(*PredicateRelationBuilder)
@@ -42,7 +42,7 @@ func Q(db *gorm.DB, args ...interface{}) IQuery {
 // Instead of Q() directly, we can use DB().Q()
 // This is so it's easier to stubb out when testing
 func DB(db *gorm.DB) IQuery {
-	return &Query{db: db}
+	return &Query{db: db, dbori: db}
 }
 
 // Q is the query struct
@@ -51,7 +51,8 @@ func DB(db *gorm.DB) IQuery {
 // Query by field name, and prevent SQL injection by making sure that fields are part of the
 // model
 type Query struct {
-	db *gorm.DB // Gorm db object can be a transaction
+	db    *gorm.DB // Gorm db object can be a transaction
+	dbori *gorm.DB // So we can reset it for another query if needed.
 	// args  []interface{}
 	err    error
 	order  *string // custom order to Gorm instead of "created_at DESC"
@@ -64,6 +65,11 @@ type Query struct {
 type ModelAndBuilder struct {
 	ModelObj models.IModel // THe model this predicate relation applies to
 	Builder  *PredicateRelationBuilder
+}
+
+func (q *Query) Reset() IQuery {
+	q.db = q.dbori
+	return q
 }
 
 func (q *Query) Q(args ...interface{}) IQuery {
