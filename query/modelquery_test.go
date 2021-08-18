@@ -78,6 +78,14 @@ func TestQueryFirst_ByBothStringAndIntField(t *testing.T) {
 	assert.Equal(t, uuid2, tm.ID.String())
 }
 
+func TestQuery_ByDB_ThenQ_Works(t *testing.T) {
+	tm := TestModel{}
+	if err := DB(db).Q(C("Name =", "second").And("Age =", 3)).First(&tm).Error(); err != nil {
+		assert.Fail(t, err.Error(), "record not found")
+	}
+	assert.Equal(t, uuid2, tm.ID.String())
+}
+
 func TestQueryFirst_ByWrongValue_NotFoundShouldGiveError(t *testing.T) {
 	tm := TestModel{}
 

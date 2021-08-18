@@ -346,6 +346,15 @@ func (q *Query) Save(modelObj models.IModel) IQuery {
 	return q
 }
 
+func (q *Query) Update(attrs ...interface{}) IQuery {
+	if q.err != nil {
+		return q
+	}
+
+	q.err = q.db.Update(attrs...).Error
+	return q
+}
+
 func (q *Query) Error() error {
 	return q.err
 }

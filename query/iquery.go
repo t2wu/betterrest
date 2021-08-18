@@ -16,5 +16,6 @@ type IQuery interface {
 	Create(modelObj models.IModel) IQuery
 	Delete(modelObj models.IModel) IQuery
 	Save(modelObj models.IModel) IQuery
+	Update(attrs ...interface{}) IQuery
 	Error() error
 }
