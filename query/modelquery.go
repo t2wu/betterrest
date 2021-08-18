@@ -20,14 +20,13 @@ const (
 
 // It would be Q(db, C(...), C(...)...).First() or Q(db).First() with empty PredicateRelationBuilder
 // Use multiple C() when working on inner fields (one C() per struct field)
-func Q(db *gorm.DB, args ...interface{}) *Query {
-	var err error
-	q := &Query{db: db, Error: err}
+func Q(db *gorm.DB, args ...interface{}) IQuery {
+	q := &Query{db: db}
 
 	for _, arg := range args {
 		b, ok := arg.(*PredicateRelationBuilder)
 		if !ok {
-			q.Error = fmt.Errorf("incorrect arguments for Q()")
+			q.err = fmt.Errorf("incorrect arguments for Q()")
 			return q
 		}
 
@@ -40,6 +39,12 @@ func Q(db *gorm.DB, args ...interface{}) *Query {
 	return q
 }
 
+// Instead of Q() directly, we can use DB().Q()
+// This is so it's easier to stubb out when testing
+func DB(db *gorm.DB) IQuery {
+	return &Query{db: db}
+}
+
 // Q is the query struct
 // Q(db).By("Name IN", []strings{name1, name2}, "Age >=", 18).Find(&model).Error
 // This is a wrapper over Gorm's.
@@ -48,7 +53,7 @@ func Q(db *gorm.DB, args ...interface{}) *Query {
 type Query struct {
 	db *gorm.DB // Gorm db object can be a transaction
 	// args  []interface{}
-	Error  error
+	err    error
 	order  *string // custom order to Gorm instead of "created_at DESC"
 	limit  *int    // custom limit
 	offset *int    // custom offset
@@ -61,7 +66,24 @@ type ModelAndBuilder struct {
 	Builder  *PredicateRelationBuilder
 }
 
-func (q *Query) Order(order string) *Query {
+func (q *Query) Q(args ...interface{}) IQuery {
+	for _, arg := range args {
+		b, ok := arg.(*PredicateRelationBuilder)
+		if !ok {
+			q.err = fmt.Errorf("incorrect arguments for Q()")
+			return q
+		}
+
+		// Leave model empty because it is not going to be filled until
+		// Find() or First()
+		mb := ModelAndBuilder{Builder: b}
+		q.mbs = append(q.mbs, mb)
+	}
+
+	return q
+}
+
+func (q *Query) Order(order string) IQuery {
 	if q.order != nil {
 		log.Println("warning: query order already set")
 	}
@@ -69,7 +91,7 @@ func (q *Query) Order(order string) *Query {
 	return q
 }
 
-func (q *Query) Limit(limit int) *Query {
+func (q *Query) Limit(limit int) IQuery {
 	if q.limit != nil {
 		log.Println("warning: query limit already set")
 	}
@@ -77,7 +99,7 @@ func (q *Query) Limit(limit int) *Query {
 	return q
 }
 
-func (q *Query) Offset(offset int) *Query {
+func (q *Query) Offset(offset int) IQuery {
 	if q.offset != nil {
 		log.Println("warning: query offset already set")
 	}
@@ -87,8 +109,8 @@ func (q *Query) Offset(offset int) *Query {
 
 // args can be multiple C(), but each C() works on one-level of modelObj
 // assuming first is top-level, if given
-func (q *Query) InnerJoin(modelObj models.IModel, foreignObj models.IModel, args ...interface{}) *Query {
-	if q.Error != nil {
+func (q *Query) InnerJoin(modelObj models.IModel, foreignObj models.IModel, args ...interface{}) IQuery {
+	if q.err != nil {
 		return q
 	}
 
@@ -104,7 +126,7 @@ func (q *Query) InnerJoin(modelObj models.IModel, foreignObj models.IModel, args
 	if len(args) > 0 {
 		b, ok = args[0].(*PredicateRelationBuilder)
 		if !ok {
-			q.Error = fmt.Errorf("incorrect arguments for Q()")
+			q.err = fmt.Errorf("incorrect arguments for Q()")
 			return q
 		}
 
@@ -119,7 +141,7 @@ func (q *Query) InnerJoin(modelObj models.IModel, foreignObj models.IModel, args
 	for i := 1; i < len(args); i++ {
 		b, ok := args[i].(*PredicateRelationBuilder)
 		if !ok {
-			q.Error = fmt.Errorf("incorrect arguments for Q()")
+			q.err = fmt.Errorf("incorrect arguments for Q()")
 			return q
 		}
 		mb := ModelAndBuilder{ModelObj: modelObj, Builder: b}
@@ -129,32 +151,32 @@ func (q *Query) InnerJoin(modelObj models.IModel, foreignObj models.IModel, args
 	return q
 }
 
-func (q *Query) First(modelObj models.IModel) *Query {
-	if q.Error != nil {
+func (q *Query) First(modelObj models.IModel) IQuery {
+	if q.err != nil {
 		return q
 	}
 	var err error
 	q.db, err = q.buildQueryCore(modelObj)
 	if err != nil {
-		q.Error = err
+		q.err = err
 		return q
 	}
 
 	f := getQueryFunc(q.db, QueryTypeFirst)
 	if f == nil {
-		q.Error = fmt.Errorf("wrong QueryType")
+		q.err = fmt.Errorf("wrong QueryType")
 		return q
 	}
 
 	if f != nil {
-		q.Error = f(modelObj).Error
+		q.err = f(modelObj).Error
 	}
 
 	return q
 }
 
-func (q *Query) Find(modelObjs interface{}) *Query {
-	if q.Error != nil {
+func (q *Query) Find(modelObjs interface{}) IQuery {
+	if q.err != nil {
 		return q
 	}
 
@@ -176,18 +198,18 @@ loop:
 	var err error
 	q.db, err = q.buildQueryCore(modelObj)
 	if err != nil {
-		q.Error = err
+		q.err = err
 		return q
 	}
 
 	f := getQueryFunc(q.db, QueryTypeFind)
 	if f == nil {
-		q.Error = fmt.Errorf("wrong QueryType")
+		q.err = fmt.Errorf("wrong QueryType")
 		return q
 	}
 
 	if f != nil {
-		q.Error = f(modelObjs).Error
+		q.err = f(modelObjs).Error
 	}
 
 	return q
@@ -297,31 +319,35 @@ func (q *Query) buildQueryCore(modelObj models.IModel) (*gorm.DB, error) {
 	return db, nil
 }
 
-func (q *Query) Create(modelObj models.IModel) *Query {
-	if q.Error != nil {
+func (q *Query) Create(modelObj models.IModel) IQuery {
+	if q.err != nil {
 		return q
 	}
 
-	q.Error = q.db.Create(modelObj).Error
+	q.err = q.db.Create(modelObj).Error
 	return q
 }
 
-func (q *Query) Delete(modelObj models.IModel) *Query {
-	if q.Error != nil {
+func (q *Query) Delete(modelObj models.IModel) IQuery {
+	if q.err != nil {
 		return q
 	}
 
-	q.Error = q.db.Delete(modelObj).Error
+	q.err = q.db.Delete(modelObj).Error
 	return q
 }
 
-func (q *Query) Save(modelObj models.IModel) *Query {
-	if q.Error != nil {
+func (q *Query) Save(modelObj models.IModel) IQuery {
+	if q.err != nil {
 		return q
 	}
 
-	q.Error = q.db.Save(modelObj).Error
+	q.err = q.db.Save(modelObj).Error
 	return q
+}
+
+func (q *Query) Error() error {
+	return q.err
 }
 
 type TableAndArgs struct {
