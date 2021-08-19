@@ -69,11 +69,17 @@ type ModelAndBuilder struct {
 
 func (q *Query) Reset() IQuery {
 	q.db = q.dbori
+	q.err = nil
+	q.order = nil
+	q.limit = nil
+	q.offset = nil
+
+	q.mbs = make([]ModelAndBuilder, 0)
 	return q
 }
 
 func (q *Query) Q(args ...interface{}) IQuery {
-	q.db = q.dbori // always reset with Q()
+	q.Reset() // always reset with Q()
 
 	for _, arg := range args {
 		b, ok := arg.(*PredicateRelationBuilder)
@@ -468,12 +474,9 @@ func getQueryFunc(tx *gorm.DB, f QueryType) func(interface{}, ...interface{}) *g
 func FindFieldNameToStructAndStructFieldNameIfAny(rel *PredicateRelation) (*string, *string) {
 	for _, pr := range rel.PredOrRels {
 		if p, ok := pr.(*Predicate); ok {
-			log.Println("tim p.Field?", p.Field)
 			if strings.Contains(p.Field, ".") {
-				log.Println("tim here.................1")
 				toks := strings.Split(p.Field, ".")
 				name := toks[len(toks)-2] // next to alst
-				log.Println("tim name:", name)
 				return &name, &toks[len(toks)-1]
 			}
 		}
