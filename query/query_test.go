@@ -269,6 +269,17 @@ func TestQueryFind_Offset_ShouldWork(t *testing.T) {
 	}
 }
 
+// // Tim
+// func TestQueryFind_TwoLevelNested_Query(t *testing.T) { // FIXME not work yet
+// 	tms := make([]TestModel, 0)
+
+// 	err := Q(db, C("Dogs.DogToys.ToyName =", "DogToySameName")).Find(&tms).Error
+// 	if assert.Nil(t, err) && assert.Equal(t, 2, len(tms)) {
+// 		assert.Equal(t, uuid3, tms[0].ID.String())
+// 		assert.Equal(t, uuid5, tms[0].ID.String())
+// 	}
+// }
+
 func TestQueryFirst_Nested_Query(t *testing.T) {
 	tm := TestModel{}
 
