@@ -378,7 +378,7 @@ func (q *Query) Create(modelObj models.IModel) IQuery {
 		return q
 	}
 
-	q.err = q.db.Create(modelObj).Error
+	q.err = q.dbori.Create(modelObj).Error
 	return q
 }
 
@@ -387,7 +387,7 @@ func (q *Query) Delete(modelObj models.IModel) IQuery {
 		return q
 	}
 
-	q.err = q.db.Delete(modelObj).Error
+	q.err = q.dbori.Delete(modelObj).Error
 	return q
 }
 
