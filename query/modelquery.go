@@ -67,17 +67,6 @@ type ModelAndBuilder struct {
 	Builder  *PredicateRelationBuilder
 }
 
-func (q *Query) Reset() IQuery {
-	q.db = q.dbori
-	q.err = nil
-	q.order = nil
-	q.limit = nil
-	q.offset = nil
-
-	q.mbs = make([]ModelAndBuilder, 0)
-	return q
-}
-
 func (q *Query) Q(args ...interface{}) IQuery {
 	q.Reset() // always reset with Q()
 
@@ -442,6 +431,25 @@ func (q *Query) Update(modelObj models.IModel, p *PredicateRelationBuilder) IQue
 
 	q.err = q.db.Update(updateMap).Error
 
+	return q
+}
+
+func (q *Query) GetDB() *gorm.DB {
+	return q.db
+}
+
+func (q *Query) GetDBOri() *gorm.DB {
+	return q.dbori
+}
+
+func (q *Query) Reset() IQuery {
+	q.db = q.dbori
+	q.err = nil
+	q.order = nil
+	q.limit = nil
+	q.offset = nil
+
+	q.mbs = make([]ModelAndBuilder, 0)
 	return q
 }
 

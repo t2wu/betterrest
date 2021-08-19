@@ -1,6 +1,7 @@
 package query
 
 import (
+	"github.com/jinzhu/gorm"
 	"github.com/t2wu/betterrest/models"
 )
 
@@ -18,6 +19,8 @@ type IQuery interface {
 	Save(modelObj models.IModel) IQuery
 	// Update(modelObjs interface{}, attrs ...interface{}) IQuery
 	Update(modelObj models.IModel, p *PredicateRelationBuilder) IQuery
+	GetDB() *gorm.DB
+	GetDBOri() *gorm.DB
 	Reset() IQuery
 	Error() error
 }
