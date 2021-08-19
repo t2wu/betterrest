@@ -29,7 +29,8 @@ const (
 )
 
 func StringToPredicateCond(s string) (PredicateCond, error) {
-	switch s {
+	s2 := strings.ToUpper(string(s))
+	switch s2 {
 	case string(PredicateCondEQ):
 		return PredicateCondEQ, nil
 	case string(PredicateCondLT):
@@ -56,6 +57,14 @@ const (
 
 type Criteria interface {
 	BuildQueryStringAndValues(modelObj models.IModel) (string, []interface{}, error)
+
+	// GetDesignatedModel gets the inner model within this modelObj designated by the criteria
+	// If it's on the first-level, modelObj itself is returned
+	GetDesignatedModel(modelObj models.IModel) (models.IModel, error)
+
+	// GetDesignatedField gets the name of the current Field designator for the inner model
+	// or empty string if it is modelObj itself
+	GetDesignatedField(modelObj models.IModel) string
 }
 
 // Predicate is used to represent something like Age < 20
@@ -116,6 +125,28 @@ func (p *Predicate) BuildQueryStringAndValues(modelObj models.IModel) (string, [
 		sb.WriteString(", ?")
 	}
 	return fmt.Sprintf("\"%s\".%s %s (%s)", tblName, col, p.Cond, sb.String()), []interface{}{p.Value}, nil
+}
+
+func (p *Predicate) GetDesignatedModel(modelObj models.IModel) (models.IModel, error) {
+	if strings.Contains(p.Field, ".") {
+		// nested model
+		toks := strings.Split(p.Field, ".")
+		modelField := strings.Join(toks[:len(toks)-1], ".")
+		return GetInnerModelIfValid(modelObj, modelField)
+	} else {
+		return modelObj, nil
+	}
+}
+
+func (p *Predicate) GetDesignatedField(modelObj models.IModel) string {
+	if strings.Contains(p.Field, ".") {
+		// nested model
+		toks := strings.Split(p.Field, ".")
+		modelField := strings.Join(toks[:len(toks)-1], ".")
+		return modelField
+	} else {
+		return ""
+	}
 }
 
 // NewPredicateFromStringAndVal, turn string like "age <" and value into proper predicate
@@ -194,6 +225,18 @@ func (pr *PredicateRelation) BuildQueryStringAndValues(modelObj models.IModel) (
 	}
 
 	return sb.String(), values, nil
+}
+
+func (pr *PredicateRelation) GetDesignatedModel(modelObj models.IModel) (models.IModel, error) {
+	// All desigations are to the same model, so only need to grab one and check
+	operand := pr.PredOrRels[0]
+	return operand.GetDesignatedModel(modelObj)
+}
+
+func (pr *PredicateRelation) GetDesignatedField(modelObj models.IModel) string {
+	// All desigations are to the same model, so only need to grab one and check
+	operand := pr.PredOrRels[0]
+	return operand.GetDesignatedField(modelObj)
 }
 
 // normalize query to column name query

@@ -8,8 +8,7 @@ import (
 )
 
 func TestJSONKeysToFieldName_OneLevelTag_found(t *testing.T) {
-	p := Person{}
-	var v models.IModel = &p
+	var v models.IModel = &Person{}
 	fieldName, err := JSONKeysToFieldName(v, "surname")
 	assert.Nil(t, err)
 	assert.Equal(t, "LastName", fieldName)
@@ -28,22 +27,19 @@ func TestJSONKeysToFieldName_OneLevelTag_found(t *testing.T) {
 }
 
 func TestJSONKeysToFieldName_FieldWithoutJSONTag_HasError(t *testing.T) {
-	p := Person{}
-	var v models.IModel = &p
+	var v models.IModel = &Person{}
 	_, err := JSONKeysToFieldName(v, "missingJson")
 	assert.Error(t, err)
 }
 
 func TestJSONKeysToFieldName_WrongJSONTag_HasError(t *testing.T) {
-	p := Person{}
-	var v models.IModel = &p
+	var v models.IModel = &Person{}
 	_, err := JSONKeysToFieldName(v, "lastName")
 	assert.Error(t, err)
 }
 
 func TestJSONKeysToFieldName_TwoLevelTag_found(t *testing.T) {
-	p := Person{}
-	var v models.IModel = &p
+	var v models.IModel = &Person{}
 	fieldName, err := JSONKeysToFieldName(v, "pet.name")
 	assert.Nil(t, err)
 	assert.Equal(t, "Pet.Name", fieldName)
@@ -78,9 +74,7 @@ func TestJSONKeysToFieldName_TwoLevelTag_found(t *testing.T) {
 }
 
 func TestJSONKeysToFieldName_ThreeLevel_Found(t *testing.T) {
-	p := Person{}
-	var v models.IModel = &p
-	fieldName, err := JSONKeysToFieldName(v, "pet.petToy.name")
+	fieldName, err := JSONKeysToFieldName(&Person{}, "pet.petToy.name")
 	assert.Nil(t, err)
 	assert.Equal(t, "Pet.PetToy.Name", fieldName)
 }

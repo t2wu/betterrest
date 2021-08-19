@@ -36,6 +36,26 @@ func TestPredicateBuilder_whenCallingCTwice_shouldHaveError(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestPredicateBuilder_In_Works(t *testing.T) {
+	b := C("Name IN", []string{"Christy", "Tina"})
+	rel, err := b.GetPredicateRelation()
+
+	assert.Nil(t, err)
+	if !assert.Equal(t, 1, len(rel.PredOrRels), "there should be 1 predicate") {
+		return
+	}
+
+	p := rel.PredOrRels[0].(*Predicate)
+	assert.Equal(t, "Name", p.Field)
+	assert.Equal(t, PredicateCondIN, p.Cond)
+	if p2, ok := p.Value.([]string); ok {
+		if assert.Equal(t, 2, len(p2)) {
+			assert.Equal(t, "Christy", p2[0])
+			assert.Equal(t, "Tina", p2[1])
+		}
+	}
+}
+
 func TestPredicateBuilder_whenGivenAndTwoPredicates_HasProperPredicateRelations(t *testing.T) {
 	b := C("Name =", "Christy").And("Age >=", 20)
 	rel, err := b.GetPredicateRelation()
@@ -132,5 +152,22 @@ func TestPredicateBuilder_whenFirstWithNestedBuilder_HasProperPredicateRelations
 		assert.Equal(t, "Name", secondCriteria.Field)
 		assert.Equal(t, PredicateCondEQ, secondCriteria.Cond)
 		assert.Equal(t, "Christy", secondCriteria.Value)
+	}
+}
+
+func TestPredicateBuilder_whenFirstWithNestedModel_HasProperPredicateRelations(t *testing.T) {
+	b := C("Dogs.DogToys.ToyName =", "DogToySameName")
+	rel, err := b.GetPredicateRelation()
+	if !assert.Nil(t, err) {
+		return
+	}
+	s, vals, err := rel.BuildQueryStringAndValues(&TestModel{})
+	if !assert.Nil(t, err) {
+		return
+	}
+
+	assert.Equal(t, "\"dog_toy\".toy_name = ?", s) // table name + field name
+	if assert.Equal(t, 1, len(vals)) {
+		assert.Equal(t, "DogToySameName", vals[0])
 	}
 }

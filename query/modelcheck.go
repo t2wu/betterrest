@@ -2,7 +2,9 @@ package query
 
 import (
 	"fmt"
+	"log"
 	"reflect"
+	"runtime/debug"
 	"strings"
 
 	"github.com/t2wu/betterrest/models"
@@ -41,6 +43,7 @@ func GetModelFieldTypeInModelIfValid(modelObj models.IModel, field string) (refl
 
 	structField, ok := reflect.TypeOf(modelObj).Elem().FieldByName(first)
 	if !ok {
+		debug.PrintStack()
 		return nil, fmt.Errorf("invalid field")
 	}
 
@@ -78,6 +81,8 @@ func GetInnerModelIfValid(modelObj models.IModel, field string) (models.IModel, 
 	if err != nil {
 		return nil, err
 	}
+	log.Println("typ:", typ.String())
+
 	m, ok := reflect.New(typ).Interface().(models.IModel)
 	if !ok {
 		return nil, fmt.Errorf("not an IModel")

@@ -2,8 +2,6 @@ package query
 
 import (
 	"fmt"
-
-	"github.com/t2wu/betterrest/models"
 )
 
 // args is either two arguments: "Name =" "Christy", or another predicate builder C()
@@ -36,14 +34,6 @@ func C(args ...interface{}) *PredicateRelationBuilder {
 type PredicateRelationBuilder struct {
 	Rel   *PredicateRelation
 	Error error // This allow us to chain and eventually discover any error by querying for Error
-}
-
-func (p *PredicateRelationBuilder) BuildQueryStringAndValues(model models.IModel) (string, []interface{}, error) {
-	rel, err := p.GetPredicateRelation()
-	if err != nil {
-		return "", nil, err
-	}
-	return rel.BuildQueryStringAndValues(model)
 }
 
 func (p *PredicateRelationBuilder) GetPredicateRelation() (*PredicateRelation, error) {

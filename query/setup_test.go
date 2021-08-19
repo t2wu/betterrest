@@ -1,6 +1,7 @@
 package query
 
 import (
+	"log"
 	"os"
 	"testing"
 
@@ -23,9 +24,12 @@ const (
 	uuid5 = "ec2e60a2-ed23-4121-b1b4-133c2d7ca167"
 
 	doguuid1 = "a048824f-8728-4c0a-b091-ed8d59390542"
-	doguuid2 = "f126d9b3-c09c-4857-9a608a717a-bb4c-4a89-9038-457c3e4fc5e088-cf2e34c1024d"
+	doguuid2 = "5d95fae9-8ca4-4a81-bf15-0e5106ac6aa2"
 	doguuid3 = "537455a7-c2a9-488a-b671-672c27e47217"
 	doguuid4 = "82df2ace-19c2-4e78-a1c9-b75697fc813f"
+
+	dogtoyuuid1 = "db79acab-5db8-4527-a34f-c494aa4e7a6c"
+	dogtoyuuid2 = "a4b295a5-b156-447c-a065-3acd6f198dfe"
 )
 
 // Use a real db for tests, better than nothing XD
@@ -41,9 +45,9 @@ type TestModel struct {
 type Dog struct {
 	models.BaseModel
 
-	Name   string  `json:"name"`
-	Color  string  `json:"color"`
-	DogToy *DogToy `json:"dogToy"`
+	Name    string   `json:"name"`
+	Color   string   `json:"color"`
+	DogToys []DogToy `json:"dogToy"`
 
 	TestModelID *datatypes.UUID `gorm:"type:uuid;index;not null;" json:"_"`
 }
@@ -53,7 +57,7 @@ type DogToy struct {
 
 	ToyName string `json:"toyName"`
 
-	TestModelID *datatypes.UUID `gorm:"type:uuid;index;not null;" json:"_"`
+	DogID *datatypes.UUID `gorm:"type:uuid;index;not null;" json:"_"`
 }
 
 type UnNested struct {
@@ -61,7 +65,7 @@ type UnNested struct {
 
 	Name string `json:"name"`
 
-	TestModelID *datatypes.UUID `gorm:"type:uuid;index;" json:"testModelID"`
+	TestModelID *datatypes.UUID `gorm:"type:uuid;index;not null;" json:"-"`
 }
 
 var db *gorm.DB
@@ -85,17 +89,31 @@ func TestMain(m *testing.M) {
 		panic("failed to automigrate TestModel:" + err.Error())
 	}
 
+	// Both dog toys are under green Dogs
+	log.Println("datatypes.NewUUIDFromStringNoErr(dogtoyuuid1):", datatypes.NewUUIDFromStringNoErr(dogtoyuuid1))
+	log.Println("datatypes.NewUUIDFromStringNoErr(doguuid2):", datatypes.NewUUIDFromStringNoErr(doguuid2))
+	dogToy1 := DogToy{
+		BaseModel: models.BaseModel{ID: datatypes.NewUUIDFromStringNoErr(dogtoyuuid1)},
+		ToyName:   "DogToySameName",
+		DogID:     datatypes.NewUUIDFromStringNoErr(doguuid2),
+	}
+	dogToy2 := DogToy{
+		BaseModel: models.BaseModel{ID: datatypes.NewUUIDFromStringNoErr(dogtoyuuid2)},
+		ToyName:   "DogToySameName",
+		DogID:     datatypes.NewUUIDFromStringNoErr(doguuid4),
+	}
+
 	dog1 := Dog{
 		BaseModel:   models.BaseModel{ID: datatypes.NewUUIDFromStringNoErr(doguuid1)},
 		Name:        "Doggie1",
 		Color:       "red",
 		TestModelID: datatypes.NewUUIDFromStringNoErr(uuid1),
 	}
-
 	dog2 := Dog{
-		BaseModel:   models.BaseModel{ID: datatypes.NewUUIDFromStringNoErr(doguuid2)},
-		Name:        "Doggie2",
-		Color:       "green",
+		BaseModel: models.BaseModel{ID: datatypes.NewUUIDFromStringNoErr(doguuid2)},
+		Name:      "Doggie2",
+		Color:     "green",
+		// DogToys:     []DogToy{dogToy1},
 		TestModelID: datatypes.NewUUIDFromStringNoErr(uuid1),
 	}
 	dog3 := Dog{
@@ -105,9 +123,10 @@ func TestMain(m *testing.M) {
 		TestModelID: datatypes.NewUUIDFromStringNoErr(uuid1),
 	}
 	dog4 := Dog{
-		BaseModel:   models.BaseModel{ID: datatypes.NewUUIDFromStringNoErr(doguuid4)},
-		Name:        "Doggie4",
-		Color:       "green",
+		BaseModel: models.BaseModel{ID: datatypes.NewUUIDFromStringNoErr(doguuid4)},
+		Name:      "Doggie4",
+		Color:     "green",
+		// DogToys:     []DogToy{dogToy2},
 		TestModelID: datatypes.NewUUIDFromStringNoErr(uuid5),
 	}
 
@@ -144,8 +163,21 @@ func TestMain(m *testing.M) {
 		TestModelID: datatypes.NewUUIDFromStringNoErr(uuid2),
 	}
 
-	if err := db.Create(&tm1).Create(&tm2).Create(&tm3).Create(&tm4).Create(&tm5).
-		Create(&unnested1).Create(&unnested2).Error; err != nil {
+	log.Println(tm1, tm2, tm3, tm4, tm5, unnested1, unnested2, dogToy1, dogToy2)
+
+	if err := db.Create(&tm1).Error; err != nil {
+		panic("something wrong with populating the db:" + err.Error())
+	}
+	if err := db.Create(&tm2).Create(&tm3).Error; err != nil {
+		panic("something wrong with populating the db:" + err.Error())
+	}
+	if err := db.Create(&tm4).Create(&tm5).Error; err != nil {
+		panic("something wrong with populating the db:" + err.Error())
+	}
+	if err := db.Create(&unnested1).Create(&unnested2).Error; err != nil {
+		panic("something wrong with populating the db:" + err.Error())
+	}
+	if err := db.Create(&dogToy1).Create(&dogToy2).Error; err != nil {
 		panic("something wrong with populating the db:" + err.Error())
 	}
 

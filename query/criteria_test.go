@@ -23,7 +23,35 @@ func TestPredicateFromStringAndVal_works(t *testing.T) {
 				Field: "Age",
 				Cond:  PredicateCondGT,
 				Value: 20,
-			}},
+			},
+		},
+		{
+			query: "Age >=",
+			value: 20,
+			want: &Predicate{
+				Field: "Age",
+				Cond:  PredicateCondGTEQ,
+				Value: 20,
+			},
+		},
+		{
+			query: "Age <",
+			value: 20,
+			want: &Predicate{
+				Field: "Age",
+				Cond:  PredicateCondLT,
+				Value: 20,
+			},
+		},
+		{
+			query: "Age <=",
+			value: 20,
+			want: &Predicate{
+				Field: "Age",
+				Cond:  PredicateCondLTEQ,
+				Value: 20,
+			},
+		},
 		{
 			query: "Name =",
 			value: "Christy",
@@ -31,13 +59,54 @@ func TestPredicateFromStringAndVal_works(t *testing.T) {
 				Field: "Name",
 				Cond:  PredicateCondEQ,
 				Value: "Christy",
-			}},
+			},
+		},
 	}
 
 	for _, test := range tests {
 		result, _ := NewPredicateFromStringAndVal(test.query, test.value)
 		isTrue := reflect.DeepEqual(test.want, result)
 		assert.True(t, isTrue)
+	}
+}
+
+func TestPredicateFromStringAndVal_INClause_works(t *testing.T) {
+	tests := []struct {
+		query string
+		value interface{}
+		want  *Predicate
+	}{
+		{
+			query: "Name IN",
+			value: []string{"Christy", "Joseph"},
+			want: &Predicate{
+				Field: "Name",
+				Cond:  PredicateCondEQ,
+				Value: []string{"Christy", "Joseph"},
+			},
+		},
+		{
+			query: "Name in", // lower case
+			value: []string{"Christy", "Joseph"},
+			want: &Predicate{
+				Field: "Name",
+				Cond:  PredicateCondEQ,
+				Value: []string{"Christy", "Joseph"},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		result, _ := NewPredicateFromStringAndVal(test.query, test.value)
+		if v, ok := result.Value.([]string); ok {
+			if assert.Equal(t, 2, len(v)) {
+				wantv := test.want.Value.([]string)
+				assert.Equal(t, wantv[0], v[0])
+				assert.Equal(t, wantv[1], v[1])
+			}
+		} else {
+			assert.Fail(t, "value not expected")
+		}
 	}
 }
 
@@ -271,7 +340,7 @@ func TestBuildQueryString_Level2InnerStructQuery_Works(t *testing.T) {
 	}{
 		{
 			predicate: &Predicate{
-				Field: "Dogs.DogToy.ToyName",
+				Field: "Dogs.DogToys.ToyName",
 				Cond:  PredicateCondEQ,
 				Value: "MyToy",
 			},
@@ -283,12 +352,74 @@ func TestBuildQueryString_Level2InnerStructQuery_Works(t *testing.T) {
 	}
 	for _, test := range tests {
 		s, vals, err := test.predicate.BuildQueryStringAndValues(&TestModel{})
-		assert.Nil(t, err)
-		assert.Equal(t, test.want.s, s)
-		if assert.Equal(t, len(vals), 1) {
-			assert.Equal(t, test.want.v, vals[0])
+		if assert.Nil(t, err) {
+			assert.Equal(t, test.want.s, s)
+			if assert.Equal(t, len(vals), 1) {
+				assert.Equal(t, test.want.v, vals[0])
+			}
 		}
 	}
+}
+
+func TestPredicate_GetDesignatedModel_Works(t *testing.T) {
+	tests := []struct {
+		predicate *Predicate
+	}{
+		{
+			predicate: &Predicate{
+				Field: "Dogs.DogToys.ToyName",
+				Cond:  PredicateCondEQ,
+				Value: "MyToy",
+			},
+		},
+		{
+			predicate: &Predicate{
+				Field: "Name",
+				Cond:  PredicateCondEQ,
+				Value: "SomeName",
+			},
+		},
+	}
+	test1 := tests[0]
+	m, err := test1.predicate.GetDesignatedModel(&TestModel{})
+	if assert.Nil(t, err) {
+		_, ok := m.(*DogToy)
+		assert.True(t, ok)
+	}
+	test2 := tests[1]
+	m, err = test2.predicate.GetDesignatedModel(&TestModel{})
+	if assert.Nil(t, err) {
+		_, ok := m.(*TestModel)
+		assert.True(t, ok)
+	}
+}
+
+func TestPredicate_GetDesignatedField_Works(t *testing.T) {
+	tests := []struct {
+		predicate *Predicate
+	}{
+		{
+			predicate: &Predicate{
+				Field: "Dogs.DogToys.ToyName",
+				Cond:  PredicateCondEQ,
+				Value: "MyToy",
+			},
+		},
+		{
+			predicate: &Predicate{
+				Field: "Name",
+				Cond:  PredicateCondEQ,
+				Value: "SomeName",
+			},
+		},
+	}
+	test1 := tests[0]
+	s := test1.predicate.GetDesignatedField(&TestModel{})
+	assert.Equal(t, "Dogs.DogToys", s)
+
+	test2 := tests[1]
+	s = test2.predicate.GetDesignatedField(&TestModel{})
+	assert.Equal(t, "", s)
 }
 
 // --- PredicateRelation ---
@@ -439,4 +570,52 @@ func TestBuildQueryString_DifferentLevelOfNesting_ReturnError(t *testing.T) {
 
 	_, _, err := rel.BuildQueryStringAndValues(&TestModel{})
 	assert.Error(t, err)
+}
+
+func TestPredicateRelation_GetDesignatedModel_Works(t *testing.T) {
+	rel := &PredicateRelation{
+		PredOrRels: []Criteria{
+			&Predicate{
+				Field: "Dogs.DogToys.ToyName",
+				Cond:  PredicateCondEQ,
+				Value: "Something",
+			},
+		},
+		Logics: []PredicateLogic{PredicateLogicAND, PredicateLogicAND},
+	}
+
+	m, err := rel.GetDesignatedModel(&TestModel{})
+	if assert.Nil(t, err) {
+		_, ok := m.(*DogToy)
+		assert.True(t, ok)
+	}
+}
+
+func TestPredicateRelation_GetDesignatedField_Works(t *testing.T) {
+	rel1 := &PredicateRelation{
+		PredOrRels: []Criteria{
+			&Predicate{
+				Field: "Dogs.DogToys.ToyName",
+				Cond:  PredicateCondEQ,
+				Value: "Something",
+			},
+		},
+		Logics: []PredicateLogic{PredicateLogicAND, PredicateLogicAND},
+	}
+
+	rel2 := &PredicateRelation{
+		PredOrRels: []Criteria{
+			&Predicate{
+				Field: "Name",
+				Cond:  PredicateCondEQ,
+				Value: "Something",
+			},
+		},
+		Logics: []PredicateLogic{PredicateLogicAND, PredicateLogicAND},
+	}
+
+	field := rel1.GetDesignatedField(&TestModel{})
+	assert.Equal(t, "Dogs.DogToys", field)
+	field = rel2.GetDesignatedField(&TestModel{})
+	assert.Equal(t, "", field)
 }
