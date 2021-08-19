@@ -73,6 +73,8 @@ func (q *Query) Reset() IQuery {
 }
 
 func (q *Query) Q(args ...interface{}) IQuery {
+	q.db = q.dbori // always reset with Q()
+
 	for _, arg := range args {
 		b, ok := arg.(*PredicateRelationBuilder)
 		if !ok {
