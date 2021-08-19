@@ -344,7 +344,6 @@ func (q *Query) buildQueryOrderOffSetAndLimit(db *gorm.DB, modelObj models.IMode
 		}
 
 		tableName := models.GetTableNameFromIModel(modelObj)
-		order = *q.order
 		order = fmt.Sprintf("\"%s\".%s %s", tableName, col, rest)
 	} else {
 		order = fmt.Sprintf("\"%s\".created_at DESC", models.GetTableNameFromIModel(modelObj))
@@ -376,8 +375,51 @@ func (q *Query) Delete(modelObj models.IModel) IQuery {
 		return q
 	}
 
-	q.err = q.dbori.Delete(modelObj).Error
+	// Won't work, builtqueryCore has "ORDER BY Clause"
+	var err error
+	q.db = q.db.Unscoped()
+	q.db, err = q.buildQueryCore(q.db, modelObj)
+	if err != nil {
+		q.err = err
+		return q
+	}
+
+	// updateMap := make(map[string]interface{})
+	// rel, err := p.GetPredicateRelation()
+	// if err != nil {
+	// 	q.err = err
+	// 	return q
+	// }
+
+	// field2Struct, _ := FindFieldNameToStructAndStructFieldNameIfAny(rel) // hacky
+	// if field2Struct != nil {
+	// 	q.err = fmt.Errorf("dot notation in update")
+	// 	return q
+	// }
+
+	// qstr, values, err := rel.BuildQueryStringAndValues(modelObj)
+	// if err != nil {
+	// 	q.err = err
+	// 	return q
+	// }
+
+	// toks := strings.Split(qstr, " = ?")
+
+	// for i, tok := range toks[:len(toks)-1] { // last tok is anempty str
+	// 	s := strings.Split(tok, ".")[1] // strip away the table name
+	// 	updateMap[s] = values[i]
+	// }
+
+	q.err = q.db.Delete(modelObj).Error
+
 	return q
+
+	// if q.err != nil {
+	// 	return q
+	// }
+
+	// q.err = q.dbori.Delete(modelObj).Error
+	// return q
 }
 
 func (q *Query) Save(modelObj models.IModel) IQuery {

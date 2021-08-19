@@ -10,8 +10,6 @@ import (
 func Test_IQuery_QueryComformsToIQuery_Works(t *testing.T) {
 	var db *gorm.DB
 	q := DB(db)
-	var iquery IQuery
-	iquery = q // well, if not conforms this already fails.
-	_, ok := iquery.(IQuery)
+	_, ok := q.(IQuery)
 	assert.True(t, ok)
 }

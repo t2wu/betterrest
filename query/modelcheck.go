@@ -46,7 +46,7 @@ func GetModelFieldTypeInModelIfValid(modelObj models.IModel, field string) (refl
 
 	typ := structField.Type
 
-	if structField.Type.Kind() == reflect.Slice || structField.Type.Kind() == reflect.Slice {
+	if structField.Type.Kind() == reflect.Ptr || structField.Type.Kind() == reflect.Slice {
 		typ = structField.Type.Elem()
 	}
 

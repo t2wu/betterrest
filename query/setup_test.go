@@ -152,8 +152,8 @@ func TestMain(m *testing.M) {
 	exitVal := m.Run()
 
 	// Teardown
-	if err := db.Unscoped().Delete(&tm1).Delete(&tm2).Delete(&tm3).Delete(&tm4).Delete(&tm5).
-		Delete(&dog1).Delete(&dog2).Delete(&dog3).Delete(&dog4).Delete(&unnested1).Delete(&unnested2).Error; err != nil {
+	if err := db.Unscoped().Delete(&TestModel{}).
+		Delete(&Dog{}).Delete(&DogToy{}).Delete(&UnNested{}).Error; err != nil {
 		panic("something wrong with removing data from the db:" + err.Error())
 	}
 

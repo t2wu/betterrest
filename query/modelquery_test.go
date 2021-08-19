@@ -292,39 +292,97 @@ func TestFirst_InnerJoin_Works(t *testing.T) {
 func TestCreateAndDelete_Works(t *testing.T) {
 	uuid := "046bcadb-7127-47b1-9c1e-ff92ccea44b8"
 	tm := TestModel{BaseModel: models.BaseModel{ID: datatypes.NewUUIDFromStringNoErr(uuid)}, Name: "MyTestModel", Age: 1}
+	tx := db.Begin()
 
-	db2 := db
-
-	err := Q(db).Create(&tm).Error()
+	err := Q(tx).Create(&tm).Error()
 	if !assert.Nil(t, err) {
 		return
 	}
 
 	searched := TestModel{}
-	if err := Q(db, C("ID =", uuid)).First(&searched).Error(); err != nil {
+	if err := Q(tx, C("ID =", uuid)).First(&searched).Error(); err != nil {
 		assert.Nil(t, err)
 		return
 	}
 
 	assert.Equal(t, uuid, searched.ID.String())
 
-	// -- delete ---
-	err = Q(db2).Delete(&tm).Error()
+	tx.Rollback()
+}
+func TestDelete_Works(t *testing.T) {
+	uuid := "046bcadb-7127-47b1-9c1e-ff92ccea44b8"
+	tm := TestModel{BaseModel: models.BaseModel{ID: datatypes.NewUUIDFromStringNoErr(uuid)}, Name: "MyTestModel", Age: 1}
+
+	tx := db.Begin()
+
+	err := Q(tx).Create(&tm).Delete(&tm).Error()
 	if !assert.Nil(t, err) {
 		return
 	}
 
-	searched = TestModel{}
+	searched := TestModel{}
 	err = Q(db, C("ID =", uuid)).First(&searched).Error()
 	if assert.Error(t, err) {
 		assert.Equal(t, true, errors.Is(err, gorm.ErrRecordNotFound))
 	}
+
+	tx.Rollback()
+}
+
+func TestDelete_criteria_works(t *testing.T) {
+	id1 := "046bcadb-7127-47b1-9c1e-ff92ccea44b8"
+	id2 := "395857f2-8d15-4808-a45e-76eca2d07994"
+	id3 := "2a8332b8-42a9-4115-8be7-55ba625fe574"
+	tm1 := TestModel{BaseModel: models.BaseModel{ID: datatypes.NewUUIDFromStringNoErr(id1)}, Name: "MyTestModel", Age: 1}
+	tm2 := TestModel{BaseModel: models.BaseModel{ID: datatypes.NewUUIDFromStringNoErr(id2)}, Name: "MyTestModel", Age: 1}
+	tm3 := TestModel{BaseModel: models.BaseModel{ID: datatypes.NewUUIDFromStringNoErr(id3)}, Name: "MyTestModel", Age: 3}
+
+	err := Q(db).Create(&tm1).Create(&tm2).Create(&tm3).Error()
+	if !assert.Nil(t, err) {
+		return
+	}
+
+	tms := make([]TestModel, 0)
+	err = Q(db, C("Age =", 3)).Find(&tms).Error()
+	if !assert.Nil(t, err) {
+		return
+	}
+
+	assert.Equal(t, 3, len(tms), "initial condition should be 5")
+
+	err = Q(db, C("Age =", 3).And("Name =", "MyTestModel")).Delete(&TestModel{}).Error()
+	if !assert.Nil(t, err) {
+		return
+	}
+
+	tms = make([]TestModel, 0)
+	if err := Q(db, C("Name =", "MyTestModel")).Find(&tms).Error(); err != nil {
+		assert.Nil(t, err)
+		return
+	}
+
+	if assert.Equal(t, 2, len(tms), "Should still have 2 left after one is deleted") {
+		assert.Equal(t, id2, tms[0].ID.String())
+		assert.Equal(t, id1, tms[1].ID.String())
+	}
+
+	tms = make([]TestModel, 0)
+	err = Q(db, C("Age =", 3).And("Name =", "same")).Find(&tms).Error()
+	if assert.Nil(t, err) {
+		return
+	}
+
+	assert.Equal(t, 1, len(tms), "The one in setup() should still be left intact")
+
+	// cleanup
+	err = Q(db).Delete(&tm1).Delete(&tm2).Error()
+	assert.Nil(t, err, "clean up having an error")
 }
 
 func TestSave_Works(t *testing.T) {
-	uuid2 := "d113ed09-cfc5-47a5-b35c-6f60c49cbd08"
+	id2 := "d113ed09-cfc5-47a5-b35c-6f60c49cbd08"
 	tm := TestModel{}
-	if err := Q(db, C("ID =", uuid2)).First(&tm).Error(); err != nil {
+	if err := Q(db, C("ID =", id2)).First(&tm).Error(); err != nil {
 		assert.Nil(t, err)
 		return
 	}
@@ -343,39 +401,35 @@ func TestSave_Works(t *testing.T) {
 
 	// Find it back to make sure it has been changed
 	searched := TestModel{}
-	if err := Q(db, C("ID =", uuid2)).First(&searched).Error(); err != nil {
+	if err := Q(db, C("ID =", id2)).First(&searched).Error(); err != nil {
 		assert.Nil(t, err)
 		return
 	}
 
 	assert.Equal(t, "TestSave_Works", searched.Name)
 
-	if err := Q(db).Save(&backup).Error(); err != nil {
+	if err := Q(db).Save(&backup).Error(); err != nil { // this is updating an existing record
 		assert.Nil(t, err)
 		return
 	}
 }
 
 func TestUpdate_Field_Works(t *testing.T) {
-	// Name:        "Doggie2",
-	if err := Q(db, C("Name =", "second")).Update(&TestModel{}, C("Age =", 120)).Error(); err != nil {
+	tx := db.Begin()
+	if err := Q(tx, C("Name =", "second")).Update(&TestModel{}, C("Age =", 120)).Error(); err != nil {
 		assert.Nil(t, err)
 		return
 	}
 
 	check := TestModel{}
-	if err := Q(db, C("Name =", "second")).First(&check).Error(); err != nil {
+	if err := Q(tx, C("Name =", "second")).First(&check).Error(); err != nil {
 		assert.Nil(t, err)
 		return
 	}
 
 	assert.Equal(t, 120, check.Age)
 
-	// Change it back
-	if err := Q(db, C("Name =", "second")).Update(&TestModel{}, C("Age =", 3)).Error(); err != nil {
-		assert.Nil(t, err)
-		return
-	}
+	tx.Rollback()
 }
 
 func TestUpdate_NestedField_ShouldGiveWarning(t *testing.T) {

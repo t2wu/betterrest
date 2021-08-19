@@ -9,8 +9,7 @@ import (
 
 func TestFieldNameToColumn_works(t *testing.T) {
 	p := Person{}
-	var v models.IModel
-	v = &p
+	var v models.IModel = &p
 	columnName, err := FieldNameToColumn(v, "FirstName")
 	assert.Nil(t, err)
 	assert.Equal(t, "first_name", columnName)
@@ -18,8 +17,7 @@ func TestFieldNameToColumn_works(t *testing.T) {
 
 func TestFieldNameToCustomColumn_works(t *testing.T) {
 	p := Person{}
-	var v models.IModel
-	v = &p
+	var v models.IModel = &p
 	columnName, err := FieldNameToColumn(v, "CustomColumn")
 	assert.Nil(t, err)
 	assert.Equal(t, "My_columnname", columnName)
@@ -27,8 +25,7 @@ func TestFieldNameToCustomColumn_works(t *testing.T) {
 
 func TestFieldNameToColumn_NestedThreeLevel_Works(t *testing.T) {
 	p := Person{}
-	var v models.IModel
-	v = &p
+	var v models.IModel = &p
 	columnName, err := FieldNameToColumn(v, "Contacts.Name")
 	assert.Nil(t, err)
 	assert.Equal(t, "contacts.name", columnName)
@@ -64,8 +61,7 @@ func TestFieldNameToColumn_NestedThreeLevel_Works(t *testing.T) {
 
 func TestFieldNameToColumn_NestedThreeLevelAndCustom_Works(t *testing.T) {
 	p := Person{}
-	var v models.IModel
-	v = &p
+	var v models.IModel = &p
 	columnName, err := FieldNameToColumn(v, "Pet.PetToy.Name")
 	assert.Nil(t, err)
 	assert.Equal(t, "pet.pet_toy.pet_toy_name", columnName)
