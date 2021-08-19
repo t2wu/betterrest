@@ -133,7 +133,7 @@ func TestQueryFind_ShouldGiveMultiple(t *testing.T) {
 	tms := make([]TestModel, 0)
 
 	if err := Q(db, C("Name =", "same")).Find(&tms).Error(); err != nil {
-		assert.Error(t, err)
+		assert.Nil(t, err)
 		return
 	}
 
@@ -142,6 +142,61 @@ func TestQueryFind_ShouldGiveMultiple(t *testing.T) {
 		assert.Equal(t, uuid4, tms[1].ID.String())
 		assert.Equal(t, uuid3, tms[2].ID.String())
 	}
+}
+
+func TestQueryFindOffset_ShouldBeCorrect(t *testing.T) {
+	tms := make([]TestModel, 0)
+
+	if err := Q(db, C("Name =", "same")).Offset(1).Find(&tms).Error(); err != nil {
+		assert.Nil(t, err)
+		return
+	}
+
+	if assert.Equal(t, 2, len(tms)) {
+		assert.Equal(t, uuid4, tms[0].ID.String())
+		assert.Equal(t, uuid3, tms[1].ID.String())
+	}
+}
+
+func TestQueryFindLimit_ShouldBeCorrect(t *testing.T) {
+	tms := make([]TestModel, 0)
+
+	if err := Q(db, C("Name =", "same")).Limit(2).Find(&tms).Error(); err != nil {
+		assert.Nil(t, err)
+		return
+	}
+
+	if assert.Equal(t, 2, len(tms)) {
+		assert.Equal(t, uuid5, tms[0].ID.String())
+		assert.Equal(t, uuid4, tms[1].ID.String())
+	}
+}
+
+func TestQueryFindOrderBy_ShouldBeCorrect(t *testing.T) {
+	tms := make([]TestModel, 0)
+
+	if err := Q(db, C("Name =", "same")).Order("CreatedAt ASC").Find(&tms).Error(); err != nil {
+		assert.Nil(t, err)
+		return
+	}
+
+	if assert.Equal(t, 3, len(tms)) {
+		assert.Equal(t, uuid3, tms[0].ID.String())
+		assert.Equal(t, uuid4, tms[1].ID.String())
+		assert.Equal(t, uuid5, tms[2].ID.String())
+	}
+}
+
+func TestQueryFindOrderBy_BogusFieldShouldHaveError(t *testing.T) {
+	tms := make([]TestModel, 0)
+
+	// Currently order works not by field.
+	if err := Q(db, C("Name =", "same")).Order("Bogus ASC").Find(&tms).Error(); err != nil {
+		assert.Error(t, err)
+		return
+	}
+
+	assert.Fail(t, "should not be here")
 }
 
 func TestQueryFind_WhenNotFound_ShouldNotGiveAnError(t *testing.T) {
@@ -157,7 +212,7 @@ func TestQueryFind_WithoutCriteria_ShouldGetAll(t *testing.T) {
 	tms := make([]TestModel, 0)
 
 	if err := Q(db).Find(&tms).Error(); err != nil {
-		assert.Error(t, err)
+		assert.Nil(t, err)
 		return
 	}
 
@@ -174,7 +229,7 @@ func TestQueryFind_Limit_ShouldWork(t *testing.T) {
 	tms := make([]TestModel, 0)
 
 	if err := Q(db).Limit(3).Find(&tms).Error(); err != nil {
-		assert.Error(t, err)
+		assert.Nil(t, err)
 		return
 	}
 
@@ -189,7 +244,7 @@ func TestQueryFind_LimitAndOffset_ShouldWork(t *testing.T) {
 	tms := make([]TestModel, 0)
 
 	if err := Q(db).Offset(2).Limit(2).Find(&tms).Error(); err != nil {
-		assert.Error(t, err)
+		assert.Nil(t, err)
 		return
 	}
 
@@ -203,7 +258,7 @@ func TestQueryFind_Offset_ShouldWork(t *testing.T) {
 	tms := make([]TestModel, 0)
 
 	if err := Q(db).Offset(2).Find(&tms).Error(); err != nil {
-		assert.Error(t, err)
+		assert.Nil(t, err)
 		return
 	}
 
@@ -238,6 +293,8 @@ func TestCreateAndDelete_Works(t *testing.T) {
 	uuid := "046bcadb-7127-47b1-9c1e-ff92ccea44b8"
 	tm := TestModel{BaseModel: models.BaseModel{ID: datatypes.NewUUIDFromStringNoErr(uuid)}, Name: "MyTestModel", Age: 1}
 
+	db2 := db
+
 	err := Q(db).Create(&tm).Error()
 	if !assert.Nil(t, err) {
 		return
@@ -252,7 +309,7 @@ func TestCreateAndDelete_Works(t *testing.T) {
 	assert.Equal(t, uuid, searched.ID.String())
 
 	// -- delete ---
-	err = Q(db).Delete(&tm).Error()
+	err = Q(db2).Delete(&tm).Error()
 	if !assert.Nil(t, err) {
 		return
 	}
@@ -297,4 +354,36 @@ func TestSave_Works(t *testing.T) {
 		assert.Nil(t, err)
 		return
 	}
+}
+
+func TestUpdate_Field_Works(t *testing.T) {
+	// Name:        "Doggie2",
+	if err := Q(db, C("Name =", "second")).Update(&TestModel{}, C("Age =", 120)).Error(); err != nil {
+		assert.Nil(t, err)
+		return
+	}
+
+	check := TestModel{}
+	if err := Q(db, C("Name =", "second")).First(&check).Error(); err != nil {
+		assert.Nil(t, err)
+		return
+	}
+
+	assert.Equal(t, 120, check.Age)
+
+	// Change it back
+	if err := Q(db, C("Name =", "second")).Update(&TestModel{}, C("Age =", 3)).Error(); err != nil {
+		assert.Nil(t, err)
+		return
+	}
+}
+
+func TestUpdate_NestedField_ShouldGiveWarning(t *testing.T) {
+	// Name:        "Doggie2",
+	if err := Q(db, C("Name =", "second")).Update(&TestModel{}, C("Dogs.Color =", "purple")).Error(); err != nil {
+		assert.Equal(t, "dot notation in update", err.Error())
+		return
+	}
+
+	assert.Fail(t, "should not be here")
 }

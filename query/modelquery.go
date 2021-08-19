@@ -93,6 +93,12 @@ func (q *Query) Order(order string) IQuery {
 	if q.order != nil {
 		log.Println("warning: query order already set")
 	}
+
+	if strings.Contains(order, ".") {
+		q.err = fmt.Errorf("dot notation in order")
+		return q
+	}
+
 	q.order = &order
 	return q
 }
@@ -162,11 +168,13 @@ func (q *Query) First(modelObj models.IModel) IQuery {
 		return q
 	}
 	var err error
-	q.db, err = q.buildQueryCore(modelObj)
+	q.db, err = q.buildQueryCore(q.db, modelObj)
 	if err != nil {
 		q.err = err
 		return q
 	}
+
+	q.db = q.buildQueryOrderOffSetAndLimit(q.db, modelObj)
 
 	f := getQueryFunc(q.db, QueryTypeFirst)
 	if f == nil {
@@ -202,11 +210,13 @@ loop:
 	modelObj := reflect.New(typ).Interface().(models.IModel)
 
 	var err error
-	q.db, err = q.buildQueryCore(modelObj)
+	q.db, err = q.buildQueryCore(q.db, modelObj)
 	if err != nil {
 		q.err = err
 		return q
 	}
+
+	q.db = q.buildQueryOrderOffSetAndLimit(q.db, modelObj)
 
 	f := getQueryFunc(q.db, QueryTypeFind)
 	if f == nil {
@@ -221,8 +231,8 @@ loop:
 	return q
 }
 
-func (q *Query) buildQueryCore(modelObj models.IModel) (*gorm.DB, error) {
-	db := buildPreload(q.db)
+func (q *Query) buildQueryCore(db *gorm.DB, modelObj models.IModel) (*gorm.DB, error) {
+	db = buildPreload(db)
 	modelTypeName := models.GetModelTypeNameFromIModel(modelObj)
 	firstOneProcessed := false
 
@@ -305,9 +315,40 @@ func (q *Query) buildQueryCore(modelObj models.IModel) (*gorm.DB, error) {
 		db = db.Joins(fmt.Sprintf("INNER JOIN %s ON %s", tblName, s), vals...)
 	}
 
+	// order := ""
+	// if q.order != nil {
+	// 	order = *q.order
+	// } else {
+	// 	order = fmt.Sprintf("\"%s\".created_at DESC", models.GetTableNameFromIModel(modelObj))
+	// }
+
+	// db = db.Order(order)
+
+	// if q.offset != nil {
+	// 	db = db.Offset(*q.offset)
+	// }
+
+	// if q.limit != nil {
+	// 	db = db.Limit(*q.limit)
+	// }
+
+	return db, nil
+}
+
+func (q *Query) buildQueryOrderOffSetAndLimit(db *gorm.DB, modelObj models.IModel) *gorm.DB {
 	order := ""
 	if q.order != nil {
+		toks := strings.Split(*q.order, " ")
+		fieldName := toks[0]
+		rest := toks[1] // DESC or ASC
+		col, err := FieldNameToColumn(modelObj, fieldName)
+		if err != nil {
+			q.err = err
+		}
+
+		tableName := models.GetTableNameFromIModel(modelObj)
 		order = *q.order
+		order = fmt.Sprintf("\"%s\".%s %s", tableName, col, rest)
 	} else {
 		order = fmt.Sprintf("\"%s\".created_at DESC", models.GetTableNameFromIModel(modelObj))
 	}
@@ -321,8 +362,7 @@ func (q *Query) buildQueryCore(modelObj models.IModel) (*gorm.DB, error) {
 	if q.limit != nil {
 		db = db.Limit(*q.limit)
 	}
-
-	return db, nil
+	return db
 }
 
 func (q *Query) Create(modelObj models.IModel) IQuery {
@@ -352,12 +392,48 @@ func (q *Query) Save(modelObj models.IModel) IQuery {
 	return q
 }
 
-func (q *Query) Update(attrs ...interface{}) IQuery {
+// Update only allow one level of builder
+func (q *Query) Update(modelObj models.IModel, p *PredicateRelationBuilder) IQuery {
 	if q.err != nil {
 		return q
 	}
 
-	q.err = q.db.Update(attrs...).Error
+	// Won't work, builtqueryCore has "ORDER BY Clause"
+	var err error
+	q.db, err = q.buildQueryCore(q.db, modelObj)
+	if err != nil {
+		q.err = err
+		return q
+	}
+
+	updateMap := make(map[string]interface{})
+	rel, err := p.GetPredicateRelation()
+	if err != nil {
+		q.err = err
+		return q
+	}
+
+	field2Struct, _ := FindFieldNameToStructAndStructFieldNameIfAny(rel) // hacky
+	if field2Struct != nil {
+		q.err = fmt.Errorf("dot notation in update")
+		return q
+	}
+
+	qstr, values, err := rel.BuildQueryStringAndValues(modelObj)
+	if err != nil {
+		q.err = err
+		return q
+	}
+
+	toks := strings.Split(qstr, " = ?")
+
+	for i, tok := range toks[:len(toks)-1] { // last tok is anempty str
+		s := strings.Split(tok, ".")[1] // strip away the table name
+		updateMap[s] = values[i]
+	}
+
+	q.err = q.db.Update(updateMap).Error
+
 	return q
 }
 
@@ -390,9 +466,12 @@ func getQueryFunc(tx *gorm.DB, f QueryType) func(interface{}, ...interface{}) *g
 func FindFieldNameToStructAndStructFieldNameIfAny(rel *PredicateRelation) (*string, *string) {
 	for _, pr := range rel.PredOrRels {
 		if p, ok := pr.(*Predicate); ok {
+			log.Println("tim p.Field?", p.Field)
 			if strings.Contains(p.Field, ".") {
+				log.Println("tim here.................1")
 				toks := strings.Split(p.Field, ".")
 				name := toks[len(toks)-2] // next to alst
+				log.Println("tim name:", name)
 				return &name, &toks[len(toks)-1]
 			}
 		}

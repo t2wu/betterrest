@@ -16,7 +16,8 @@ type IQuery interface {
 	Create(modelObj models.IModel) IQuery
 	Delete(modelObj models.IModel) IQuery
 	Save(modelObj models.IModel) IQuery
-	Update(attrs ...interface{}) IQuery
+	// Update(modelObjs interface{}, attrs ...interface{}) IQuery
+	Update(modelObj models.IModel, p *PredicateRelationBuilder) IQuery
 	Reset() IQuery
 	Error() error
 }
