@@ -8,8 +8,17 @@ import (
 
 // ---------------------------------------
 
-var onceGlobal sync.Once
-var crudGlobal IDataMapper
+var (
+	onceGlobal sync.Once
+	crudGlobal IDataMapper
+)
+
+// SetSharedGlobalMapper allows one to mock SharedGlobalMapper for testing
+func SetSharedGlobalMapper(mapper IDataMapper) {
+	onceGlobal.Do(func() {
+		crudGlobal = mapper
+	})
+}
 
 // SharedGlobalMapper creats a singleton of Crud object
 func SharedGlobalMapper() IDataMapper {

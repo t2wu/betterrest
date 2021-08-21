@@ -8,8 +8,17 @@ import (
 
 // ---------------------------------------
 
-var onceOwnership sync.Once
-var crudOwnership IDataMapper
+var (
+	onceOwnership sync.Once
+	crudOwnership IDataMapper
+)
+
+// SetMockOwnershipMapper allows one to mock OrganizationMapper for testing
+func SetMockOwnershipMapper(mapper IDataMapper) {
+	onceOwnership.Do(func() {
+		crudOwnership = mapper
+	})
+}
 
 // SharedOwnershipMapper creats a singleton of Crud object
 func SharedOwnershipMapper() IDataMapper {

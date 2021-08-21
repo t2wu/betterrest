@@ -21,8 +21,17 @@ import (
 
 // ---------------------------------------
 
-var onceUser sync.Once
-var usercrud *UserMapper
+var (
+	onceUser sync.Once
+	usercrud IDataMapper
+)
+
+// SetUserMapper allows one to mock UserMapper for testing
+func SetUserMapper(mapper IDataMapper) {
+	onceUser.Do(func() {
+		usercrud = mapper
+	})
+}
 
 // UserMapper is a User CRUD manager
 type UserMapper struct {
@@ -30,7 +39,7 @@ type UserMapper struct {
 }
 
 // SharedUserMapper creats a singleton of Crud object
-func SharedUserMapper() *UserMapper {
+func SharedUserMapper() IDataMapper {
 	onceUser.Do(func() {
 		usercrud = &UserMapper{Service: &service.UserService{BaseService: service.BaseService{}}}
 	})

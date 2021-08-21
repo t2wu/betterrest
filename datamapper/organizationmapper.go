@@ -8,8 +8,17 @@ import (
 
 // ---------------------------------------
 
-var onceOrganizationMapper sync.Once
-var organizationMapper IDataMapper
+var (
+	onceOrganizationMapper sync.Once
+	organizationMapper     IDataMapper
+)
+
+// SetOrganizationMapper allows one to mock OrganizationMapper for testing
+func SetOrganizationMapper(mapper IDataMapper) {
+	onceOrganizationMapper.Do(func() {
+		organizationMapper = mapper
+	})
+}
 
 // SharedOrganizationMapper creats a singleton of Crud object
 func SharedOrganizationMapper() IDataMapper {
