@@ -359,7 +359,7 @@ func TestDelete_criteria_works(t *testing.T) {
 		return
 	}
 
-	assert.Equal(t, 3, len(tms), "initial condition should be 5")
+	assert.Equal(t, 3, len(tms), "initial condition should be 3")
 
 	err = Q(db, C("Age =", 3).And("Name =", "MyTestModel")).Delete(&TestModel{}).Error()
 	if !assert.Nil(t, err) {

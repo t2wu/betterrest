@@ -362,19 +362,13 @@ func (q *Query) buildQueryOrderOffSetAndLimit(db *gorm.DB, modelObj models.IMode
 }
 
 func (q *Query) Create(modelObj models.IModel) IQuery {
-	if q.err != nil {
-		return q
-	}
+	q.Reset()
 
-	q.err = q.dbori.Create(modelObj).Error
+	q.err = q.db.Create(modelObj).Error
 	return q
 }
 
 func (q *Query) Delete(modelObj models.IModel) IQuery {
-	if q.err != nil {
-		return q
-	}
-
 	// Won't work, builtqueryCore has "ORDER BY Clause"
 	var err error
 	q.db = q.db.Unscoped()
