@@ -23,15 +23,15 @@ import (
 
 var (
 	onceUser sync.Once
-	usercrud IDataMapper
+	usercrud *UserMapper
 )
 
 // SetUserMapper allows one to mock UserMapper for testing
-func SetUserMapper(mapper IDataMapper) {
-	onceUser.Do(func() {
-		usercrud = mapper
-	})
-}
+// func SetUserMapper(mapper IDataMapper) {
+// 	onceUser.Do(func() {
+// 		usercrud = mapper
+// 	})
+// }
 
 // UserMapper is a User CRUD manager
 type UserMapper struct {
@@ -39,7 +39,7 @@ type UserMapper struct {
 }
 
 // SharedUserMapper creats a singleton of Crud object
-func SharedUserMapper() IDataMapper {
+func SharedUserMapper() *UserMapper {
 	onceUser.Do(func() {
 		usercrud = &UserMapper{Service: &service.UserService{BaseService: service.BaseService{}}}
 	})
@@ -129,7 +129,6 @@ func (mapper *UserMapper) CreateOne(db *gorm.DB, who models.Who, typeString stri
 
 // GetOneWithID get one model object based on its type and its id string
 func (mapper *UserMapper) GetOneWithID(db *gorm.DB, who models.Who, typeString string, id *datatypes.UUID, options *map[urlparam.Param]interface{}) (models.IModel, models.UserRole, error) {
-	log.Println("GetOneWithID...................")
 	modelObj, role, err := mapper.Service.GetOneWithIDCore(db, who, typeString, id)
 	if err != nil {
 		return nil, 0, err
