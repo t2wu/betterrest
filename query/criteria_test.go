@@ -422,6 +422,74 @@ func TestPredicate_GetDesignatedField_Works(t *testing.T) {
 	assert.Equal(t, "", s)
 }
 
+func Test_GetAllUnqueStructFieldDesignator_whenHavingDot_works(t *testing.T) {
+	tests := []struct {
+		predicate *Predicate
+		wants     []string
+	}{
+		{
+			predicate: &Predicate{
+				Field: "A.B.C",
+				Cond:  PredicateCondEQ,
+				Value: "what",
+			},
+			wants: []string{"A.B", "A"},
+		},
+		{
+			predicate: &Predicate{
+				Field: "A.B",
+				Cond:  PredicateCondEQ,
+				Value: "what",
+			},
+			wants: []string{"A"},
+		},
+	}
+
+	for _, test := range tests {
+		m := test.predicate.GetAllUnqueStructFieldDesignator()
+		if assert.Equal(t, len(test.wants), len(m)) {
+			for _, want := range test.wants {
+				found := false
+				for designator := range m {
+					if want == designator {
+						found = true
+					}
+				}
+				assert.True(t, found)
+			}
+		}
+	}
+}
+
+func Test_GetAllUnqueStructFieldDesignator_whenOnlyOneLevel_returnEmptyMap(t *testing.T) {
+	predicate := &Predicate{
+		Field: "A",
+		Cond:  PredicateCondEQ,
+		Value: "what",
+	}
+
+	m := predicate.GetAllUnqueStructFieldDesignator()
+	assert.Equal(t, 0, len(m))
+}
+
+func Test_Predicate_NestedLevel(t *testing.T) {
+	predicate := &Predicate{
+		Field: "A.B.C",
+		Cond:  PredicateCondEQ,
+		Value: "what",
+	}
+
+	assert.Equal(t, 3, predicate.GetNestedLevel())
+
+	predicate = &Predicate{
+		Field: "A",
+		Cond:  PredicateCondEQ,
+		Value: "what",
+	}
+
+	assert.Equal(t, 1, predicate.GetNestedLevel())
+}
+
 // --- PredicateRelation ---
 
 func TestPredicateRelationStringAndValuesOnePredicte(t *testing.T) {
@@ -618,4 +686,47 @@ func TestPredicateRelation_GetDesignatedField_Works(t *testing.T) {
 	assert.Equal(t, "Dogs.DogToys", field)
 	field = rel2.GetDesignatedField(&TestModel{})
 	assert.Equal(t, "", field)
+}
+
+func TestRelation_GetAllUnqueStructFieldDesignator_Works(t *testing.T) {
+	rel := &PredicateRelation{
+		PredOrRels: []Criteria{
+			&Predicate{
+				Field: "Dogs.DogToys.ToyToy",
+				Cond:  PredicateCondEQ,
+				Value: "Something",
+			},
+			&Predicate{
+				Field: "A.B.C",
+				Cond:  PredicateCondEQ,
+				Value: "Something",
+			},
+			&PredicateRelation{
+				PredOrRels: []Criteria{
+					&Predicate{
+						Field: "Dogs.DogToys.Ant.Bat.Cat",
+						Cond:  PredicateCondEQ,
+						Value: "Something",
+					},
+				},
+			},
+		},
+		Logics: []PredicateLogic{PredicateLogicAND, PredicateLogicAND},
+	}
+
+	want := []string{"Dogs", "Dogs.DogToys", "A.B", "A", "Dogs.DogToys.Ant", "Dogs.DogToys.Ant.Bat"}
+
+	m := rel.GetAllUnqueStructFieldDesignator()
+	if assert.Equal(t, len(want), len(m)) {
+		for _, want := range want {
+			found := false
+			for designator := range m {
+				if want == designator {
+					found = true
+				}
+			}
+			assert.True(t, found)
+		}
+	}
+
 }

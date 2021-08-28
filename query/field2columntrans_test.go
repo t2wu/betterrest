@@ -69,3 +69,10 @@ func TestFieldNameToColumn_NestedThreeLevelAndCustom_Works(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, "pet.pet_toy2.pet_toy_name", columnName)
 }
+
+func TestFieldNameToColumnWrongName_Error(t *testing.T) {
+	p := Person{}
+	var v models.IModel = &p
+	_, err := FieldNameToColumn(v, "NotHere")
+	assert.Error(t, err)
+}

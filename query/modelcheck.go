@@ -2,7 +2,6 @@ package query
 
 import (
 	"fmt"
-	"log"
 	"reflect"
 	"runtime/debug"
 	"strings"
@@ -58,14 +57,6 @@ func GetModelFieldTypeInModelIfValid(modelObj models.IModel, field string) (refl
 		typ = typ.Elem()
 	}
 
-	// getInnerType := func(structField reflect.StructField) reflect.Type {
-	// 	if structField.Type.Kind() == reflect.Ptr || structField.Type.Kind() == reflect.Slice {
-	// 		return structField.Type.Elem()
-	// 	} else {
-	// 		return structField.Type
-	// 	}
-	// }
-
 	var err error
 	if ok && len(toks) > 1 && toks[1] != "" { // has nested field
 		innerModel := reflect.New(typ).Interface().(models.IModel)
@@ -76,12 +67,19 @@ func GetModelFieldTypeInModelIfValid(modelObj models.IModel, field string) (refl
 	return typ, err
 }
 
+func GetModelTableNameInModelIfValid(modelObj models.IModel, field string) (string, error) {
+	typ, err := GetModelFieldTypeInModelIfValid(modelObj, field)
+	if err != nil {
+		return "", err
+	}
+	return models.GetTableNameFromType(typ), nil
+}
+
 func GetInnerModelIfValid(modelObj models.IModel, field string) (models.IModel, error) {
 	typ, err := GetModelFieldTypeInModelIfValid(modelObj, field)
 	if err != nil {
 		return nil, err
 	}
-	log.Println("typ:", typ.String())
 
 	m, ok := reflect.New(typ).Interface().(models.IModel)
 	if !ok {

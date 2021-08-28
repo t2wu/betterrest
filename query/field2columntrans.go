@@ -3,7 +3,6 @@ package query
 import (
 	"fmt"
 	"reflect"
-	"runtime/debug"
 	"strings"
 
 	"github.com/stoewer/go-strcase"
@@ -16,7 +15,7 @@ func FieldNameToColumn(modelObj models.IModel, fieldName string) (string, error)
 
 	structField, ok := reflect.TypeOf(modelObj).Elem().FieldByName(first)
 	if !ok {
-		debug.PrintStack()
+		// debug.PrintStack()
 		return "", fmt.Errorf("field \"%s\" does not exist", first)
 	}
 

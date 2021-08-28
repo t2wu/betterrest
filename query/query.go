@@ -22,21 +22,7 @@ const (
 // Use multiple C() when working on inner fields (one C() per struct field)
 func Q(db *gorm.DB, args ...interface{}) IQuery {
 	q := &Query{db: db, dbori: db}
-
-	for _, arg := range args {
-		b, ok := arg.(*PredicateRelationBuilder)
-		if !ok {
-			q.err = fmt.Errorf("incorrect arguments for Q()")
-			return q
-		}
-
-		// Leave model empty because it is not going to be filled until
-		// Find() or First()
-		mb := ModelAndBuilder{Builder: b}
-		q.mbs = append(q.mbs, mb)
-	}
-
-	return q
+	return q.Q(args...)
 }
 
 // Instead of Q() directly, we can use DB().Q()
@@ -54,34 +40,36 @@ type Query struct {
 	db    *gorm.DB // Gorm db object can be a transaction
 	dbori *gorm.DB // So we can reset it for another query if needed.
 	// args  []interface{}
-	err    error
+	Err    error
 	order  *string // custom order to Gorm instead of "created_at DESC"
 	limit  *int    // custom limit
 	offset *int    // custom offset
 
-	mbs []ModelAndBuilder
-}
-
-type ModelAndBuilder struct {
-	ModelObj models.IModel // THe model this predicate relation applies to
-	Builder  *PredicateRelationBuilder
+	mainMB *ModelAndBuilder  // the builder on the main model (including the nested one)
+	mbs    []ModelAndBuilder // the builder for non-nested models, each one is a separate non-nested model
 }
 
 func (q *Query) Q(args ...interface{}) IQuery {
 	q.Reset() // always reset with Q()
 
+	mb := ModelAndBuilder{}
 	for _, arg := range args {
 		b, ok := arg.(*PredicateRelationBuilder)
 		if !ok {
-			q.err = fmt.Errorf("incorrect arguments for Q()")
+			q.Err = fmt.Errorf("incorrect arguments for Q()")
 			return q
 		}
 
 		// Leave model empty because it is not going to be filled until
 		// Find() or First()
-		mb := ModelAndBuilder{Builder: b}
-		q.mbs = append(q.mbs, mb)
+		binfo := BuilderInfo{
+			builder:   b,
+			processed: false,
+		}
+		mb.builderInfos = append(mb.builderInfos, binfo)
 	}
+
+	q.mainMB = &mb
 
 	return q
 }
@@ -92,7 +80,7 @@ func (q *Query) Order(order string) IQuery {
 	}
 
 	if strings.Contains(order, ".") {
-		q.err = fmt.Errorf("dot notation in order")
+		q.Err = fmt.Errorf("dot notation in order")
 		return q
 	}
 
@@ -116,10 +104,12 @@ func (q *Query) Offset(offset int) IQuery {
 	return q
 }
 
-// args can be multiple C(), but each C() works on one-level of modelObj
-// assuming first is top-level, if given
+// args can be multiple C(), each C() works on one-level of modelObj
+// The args are to select the query of modelObj designated, it could work
+// on nested level inside the modelObj
+// assuming first is top-level, if given.
 func (q *Query) InnerJoin(modelObj models.IModel, foreignObj models.IModel, args ...interface{}) IQuery {
-	if q.err != nil {
+	if q.Err != nil {
 		return q
 	}
 
@@ -132,42 +122,71 @@ func (q *Query) InnerJoin(modelObj models.IModel, foreignObj models.IModel, args
 	tbl := models.GetTableNameFromIModel(foreignObj)
 	esc := &Escape{Value: fmt.Sprintf("\"%s\".id", tbl)}
 
+	// Prepare for PredicateRelationBuilder which will be use to generate inner join statement
+	// between the modelobj at hand and foreignObj (when joining the immediate table, the forignObj is
+	// the modelObj within Find() and First())
 	if len(args) > 0 {
 		b, ok = args[0].(*PredicateRelationBuilder)
 		if !ok {
-			q.err = fmt.Errorf("incorrect arguments for Q()")
+			q.Err = fmt.Errorf("incorrect arguments for Q()")
 			return q
 		}
 
-		b = b.And(typeName+"ID = ", esc)
+		// Check if the designator is about inner field or the outer-most level field
+		rel, err := b.GetPredicateRelation()
+		if err != nil {
+			q.Err = err
+			return q
+		}
+		field2Struct, _ := FindFieldNameToStructAndStructFieldNameIfAny(rel) // hacky
+		if field2Struct == nil {                                             // outer-level field
+			args[0] = b.And(typeName+"ID = ", esc)
+		} else {
+			// No other criteria, it is just a join by itself
+			args = append(args, C(typeName+"ID = ", esc))
+			// mb := ModelAndBuilder{ModelObj: modelObj, Builder: b}
+			// q.mbs = append(q.mbs, mb)
+		}
 	} else { // No PredicateRelationBuilder given, build one from scratch
-		b = C(typeName+"ID = ", esc)
+		args = append(args, C(typeName+"ID = ", esc))
+		// mb := ModelAndBuilder{ModelObj: modelObj, Builder: b}
+		// q.mbs = append(q.mbs, mb)
 	}
 
-	mb := ModelAndBuilder{ModelObj: modelObj, Builder: b}
-	q.mbs = append(q.mbs, mb)
+	mb := ModelAndBuilder{}
+	mb.modelObj = modelObj
 
-	for i := 1; i < len(args); i++ {
+	for i := 0; i < len(args); i++ {
 		b, ok := args[i].(*PredicateRelationBuilder)
 		if !ok {
-			q.err = fmt.Errorf("incorrect arguments for Q()")
+			q.Err = fmt.Errorf("incorrect arguments for Q()")
 			return q
 		}
-		mb := ModelAndBuilder{ModelObj: modelObj, Builder: b}
-		q.mbs = append(q.mbs, mb)
+		binfo := BuilderInfo{
+			builder:   b,
+			processed: false,
+		}
+		mb.builderInfos = append(mb.builderInfos, binfo)
 	}
+
+	q.mbs = append(q.mbs, mb)
 
 	return q
 }
 
 func (q *Query) First(modelObj models.IModel) IQuery {
-	if q.err != nil {
+	if q.Err != nil {
 		return q
 	}
+
+	if q.mainMB != nil {
+		q.mainMB.modelObj = modelObj
+	}
+
 	var err error
 	q.db, err = q.buildQueryCore(q.db, modelObj)
 	if err != nil {
-		q.err = err
+		q.Err = err
 		return q
 	}
 
@@ -175,19 +194,19 @@ func (q *Query) First(modelObj models.IModel) IQuery {
 
 	f := getQueryFunc(q.db, QueryTypeFirst)
 	if f == nil {
-		q.err = fmt.Errorf("wrong QueryType")
+		q.Err = fmt.Errorf("wrong QueryType")
 		return q
 	}
 
 	if f != nil {
-		q.err = f(modelObj).Error
+		q.Err = f(modelObj).Error
 	}
 
 	return q
 }
 
 func (q *Query) Find(modelObjs interface{}) IQuery {
-	if q.err != nil {
+	if q.Err != nil {
 		return q
 	}
 
@@ -206,10 +225,14 @@ loop:
 
 	modelObj := reflect.New(typ).Interface().(models.IModel)
 
+	if q.mainMB != nil {
+		q.mainMB.modelObj = modelObj
+	}
+
 	var err error
 	q.db, err = q.buildQueryCore(q.db, modelObj)
 	if err != nil {
-		q.err = err
+		q.Err = err
 		return q
 	}
 
@@ -217,117 +240,162 @@ loop:
 
 	f := getQueryFunc(q.db, QueryTypeFind)
 	if f == nil {
-		q.err = fmt.Errorf("wrong QueryType")
+		q.Err = fmt.Errorf("wrong QueryType")
 		return q
 	}
 
 	if f != nil {
-		q.err = f(modelObjs).Error
+		q.Err = f(modelObjs).Error
 	}
 
 	return q
 }
 
 func (q *Query) buildQueryCore(db *gorm.DB, modelObj models.IModel) (*gorm.DB, error) {
-	db = buildPreload(db)
-	modelTypeName := models.GetModelTypeNameFromIModel(modelObj)
-	firstOneProcessed := false
+	var err error
+	db = buildPreload(db).Model(modelObj)
 
-	if len(q.mbs) > 0 {
-		// If no dot notation, and no table designator, then it's modelObj
-		// Else if dot notation, and no table designator, then it's a nested modelObj of this modelObj
+	// handles main modelObj
+	q.mainMB.SortBuilderInfosByLevel() // now sorted, so our join statement can join in correct order
 
-		// But if the first one is nested table, that means there is no where clause
-		// I need to get the name of the table directly.
-		if q.mbs[0].ModelObj == nil {
-			firstOneProcessed = true
-			q.mbs[0].ModelObj = modelObj // It's definitely the main modelObj we want to search for
+	// First-level queries that have no explicit join table
+	for _, buildInfo := range q.mainMB.builderInfos {
+		rel, err := buildInfo.builder.GetPredicateRelation()
+		if err != nil {
+			return db, err
+		}
 
-			// Now if there is a dot notation, it means we'd be using the join clause to find the nested
-			// one, and that means we need the table name.
-			// Any dot notation? Need to find just one Predicator
-			rel, err := q.mbs[0].Builder.GetPredicateRelation()
+		if !DesignatorContainsDot(rel) { // where clause
+			s, vals, err := rel.BuildQueryStringAndValues(q.mainMB.modelObj)
 			if err != nil {
 				return db, err
 			}
-			field2Struct, _ := FindFieldNameToStructAndStructFieldNameIfAny(rel) // hacky
-			if field2Struct != nil {                                             // has dot notation and so has an inner field
-				nestedModel, err := GetInnerModelIfValid(modelObj, *field2Struct)
-				if err != nil {
-					return db, err
-				}
-				nestedTableName := models.GetTableNameFromIModel(nestedModel)
-				mainTableName := models.GetTableNameFromIModel(modelObj)
+			db = db.Where(s, vals...)
+		}
+	}
 
-				foreignKeyQueryStr := fmt.Sprintf("%s.%sID =", *field2Struct, modelTypeName)
-				foreignKeyQueryValue := fmt.Sprintf("%s.ID", mainTableName)
-				esc := &Escape{Value: foreignKeyQueryValue}
+	db, err = q.buildQueryCoreInnerJoin(db, q.mainMB)
+	if err != nil {
+		return db, err
+	}
 
-				rel, err := q.mbs[0].Builder.And(foreignKeyQueryStr, esc).GetPredicateRelation()
-				if err != nil {
-					return db, err
-				}
+	// Other non-nested tables
+	// where we need table joins for sure and no where clause
+	// But join statements foreign keys ha salready been made
+	for _, mb := range q.mbs { // Now we work on mb.modelObj
+		mb.SortBuilderInfosByLevel()
 
-				s, vals, err := rel.BuildQueryStringAndValues(modelObj)
-				if err != nil {
-					return db, err
-				}
+		for _, buildInfo := range mb.builderInfos { // each of this is on one-level (outer or nested)
+			rel, err := buildInfo.builder.GetPredicateRelation()
+			if err != nil {
+				return db, err
+			}
 
-				db = db.Model(modelObj).Joins(fmt.Sprintf("INNER JOIN %s ON %s", nestedTableName, s), vals...)
-			} else { // No dot notation, so it is the modelObj itself
-				rel, err := q.mbs[0].Builder.GetPredicateRelation()
-				if err != nil {
-					return db, err
-				}
-
-				s, vals, err := rel.BuildQueryStringAndValues(q.mbs[0].ModelObj)
-
+			if !DesignatorContainsDot(rel) {
+				// first level, but since this is the other non-nested table
+				// we use a join, and the foriegn key join is already set up
+				// when we call query.Join
+				s, vals, err := rel.BuildQueryStringAndValues(mb.modelObj)
 				if err != nil {
 					return db, err
 				}
 
-				db = db.Model(modelObj).Where(s, vals...)
+				tblName := models.GetTableNameFromIModel(mb.modelObj)
+				db = db.Joins(fmt.Sprintf("INNER JOIN \"%s\" ON %s", tblName, s), vals...)
 			}
 		}
+
+		db, err = q.buildQueryCoreInnerJoin(db, &mb)
+		if err != nil {
+			return db, err
+		}
 	}
 
-	start := 0
-	if firstOneProcessed {
-		start = 1
+	return db, nil
+}
+
+func (q *Query) buildQueryCoreInnerJoin(db *gorm.DB, mb *ModelAndBuilder) (*gorm.DB, error) {
+	// There may not be any builder for the level of join
+	// for example, when querying for 3rd level field, 2nd level also
+	// needs to join with the first level
+	designators, err := mb.GetAllPotentialJoinStructDesignators()
+	if err != nil {
+		return db, err
 	}
 
-	for i := start; i < len(q.mbs); i++ {
-		// modelObj := q.mbs[i].ModelObj
-		rel, err := q.mbs[i].Builder.GetPredicateRelation()
+	for _, designator := range designators { // this only loops tables which has joins
+		found := false
+		for _, buildInfo := range mb.builderInfos {
+			rel, err := buildInfo.builder.GetPredicateRelation()
+			if err != nil {
+				return db, err
+			}
+
+			designatedField := rel.GetDesignatedField(mb.modelObj)
+			if designator == designatedField { // OK, with this level we have search criteria to go along with it
+				found = true
+				s, vals, err := rel.BuildQueryStringAndValues(mb.modelObj)
+				if err != nil {
+					return db, err
+				}
+
+				// If it's one-level nested, we can join, but
+				innerModel, err := rel.GetDesignatedModel(mb.modelObj)
+				if err != nil {
+					return db, err
+				}
+				tblName := models.GetTableNameFromIModel(innerModel)
+				// get the outer table name
+				outerTableName, err := GetOuterTableName(mb.modelObj, designatedField)
+				if err != nil {
+					return db, err
+				}
+
+				db = db.Joins(fmt.Sprintf("INNER JOIN \"%s\" ON \"%s\".%s_id = \"%s\".id AND (%s)", tblName, tblName,
+					outerTableName, outerTableName, s), vals...)
+			}
+		}
+		if !found { // no search critiria, just pure join statement
+			toks := strings.Split(designator, ".") // A.B.C then we're concerened about joinnig B & C, A has been done
+			// field := toks[len(toks)-1]
+
+			upperTableName := ""
+			if len(toks) == 1 {
+				upperTableName = models.GetTableNameFromIModel(mb.modelObj)
+			} else {
+				designatorForUpperModel := strings.Join(toks[:len(toks)-1], ".")
+				upperTableName, err = GetModelTableNameInModelIfValid(mb.modelObj, designatorForUpperModel)
+				if err != nil {
+					return db, err
+				}
+			}
+
+			currTableName, err := GetModelTableNameInModelIfValid(mb.modelObj, designator)
+			if err != nil {
+				return db, err
+			}
+
+			db = db.Joins(fmt.Sprintf("INNER JOIN \"%s\" ON \"%s\".%s_id = \"%s\".id",
+				currTableName, currTableName,
+				upperTableName, upperTableName))
+		}
+	}
+
+	// There are still first-level queries that have no explicit join table
+	for _, buildInfo := range mb.builderInfos {
+		rel, err := buildInfo.builder.GetPredicateRelation()
 		if err != nil {
 			return db, err
 		}
 
-		s, vals, err := rel.BuildQueryStringAndValues(q.mbs[i].ModelObj)
-		if err != nil {
-			return db, err
+		if !DesignatorContainsDot(rel) { // where clause
+			s, vals, err := rel.BuildQueryStringAndValues(mb.modelObj)
+			if err != nil {
+				return db, err
+			}
+			db = db.Model(mb.modelObj).Where(s, vals...)
 		}
-
-		tblName := models.GetTableNameFromIModel(q.mbs[i].ModelObj)
-		db = db.Joins(fmt.Sprintf("INNER JOIN %s ON %s", tblName, s), vals...)
 	}
-
-	// order := ""
-	// if q.order != nil {
-	// 	order = *q.order
-	// } else {
-	// 	order = fmt.Sprintf("\"%s\".created_at DESC", models.GetTableNameFromIModel(modelObj))
-	// }
-
-	// db = db.Order(order)
-
-	// if q.offset != nil {
-	// 	db = db.Offset(*q.offset)
-	// }
-
-	// if q.limit != nil {
-	// 	db = db.Limit(*q.limit)
-	// }
 
 	return db, nil
 }
@@ -340,7 +408,7 @@ func (q *Query) buildQueryOrderOffSetAndLimit(db *gorm.DB, modelObj models.IMode
 		rest := toks[1] // DESC or ASC
 		col, err := FieldNameToColumn(modelObj, fieldName)
 		if err != nil {
-			q.err = err
+			q.Err = err
 		}
 
 		tableName := models.GetTableNameFromIModel(modelObj)
@@ -364,97 +432,76 @@ func (q *Query) buildQueryOrderOffSetAndLimit(db *gorm.DB, modelObj models.IMode
 func (q *Query) Create(modelObj models.IModel) IQuery {
 	q.Reset()
 
-	q.err = q.db.Create(modelObj).Error
+	q.Err = q.db.Create(modelObj).Error
 	return q
 }
 
 func (q *Query) Delete(modelObj models.IModel) IQuery {
+	if q.Err != nil {
+		return q
+	}
+
+	if q.mainMB != nil {
+		q.mainMB.modelObj = modelObj
+	}
+
 	// Won't work, builtqueryCore has "ORDER BY Clause"
 	var err error
 	q.db = q.db.Unscoped()
 	q.db, err = q.buildQueryCore(q.db, modelObj)
 	if err != nil {
-		q.err = err
+		q.Err = err
 		return q
 	}
 
-	// updateMap := make(map[string]interface{})
-	// rel, err := p.GetPredicateRelation()
-	// if err != nil {
-	// 	q.err = err
-	// 	return q
-	// }
-
-	// field2Struct, _ := FindFieldNameToStructAndStructFieldNameIfAny(rel) // hacky
-	// if field2Struct != nil {
-	// 	q.err = fmt.Errorf("dot notation in update")
-	// 	return q
-	// }
-
-	// qstr, values, err := rel.BuildQueryStringAndValues(modelObj)
-	// if err != nil {
-	// 	q.err = err
-	// 	return q
-	// }
-
-	// toks := strings.Split(qstr, " = ?")
-
-	// for i, tok := range toks[:len(toks)-1] { // last tok is anempty str
-	// 	s := strings.Split(tok, ".")[1] // strip away the table name
-	// 	updateMap[s] = values[i]
-	// }
-
-	q.err = q.db.Delete(modelObj).Error
+	q.Err = q.db.Delete(modelObj).Error
 
 	return q
-
-	// if q.err != nil {
-	// 	return q
-	// }
-
-	// q.err = q.dbori.Delete(modelObj).Error
-	// return q
 }
 
 func (q *Query) Save(modelObj models.IModel) IQuery {
-	if q.err != nil {
+	if q.Err != nil {
 		return q
 	}
 
-	q.err = q.db.Save(modelObj).Error
+	q.Err = q.db.Save(modelObj).Error
 	return q
 }
 
 // Update only allow one level of builder
 func (q *Query) Update(modelObj models.IModel, p *PredicateRelationBuilder) IQuery {
-	if q.err != nil {
+	if q.Err != nil {
 		return q
+	}
+
+	if q.mainMB != nil {
+		q.mainMB.modelObj = modelObj
 	}
 
 	// Won't work, builtqueryCore has "ORDER BY Clause"
 	var err error
 	q.db, err = q.buildQueryCore(q.db, modelObj)
 	if err != nil {
-		q.err = err
+		q.Err = err
 		return q
 	}
 
 	updateMap := make(map[string]interface{})
 	rel, err := p.GetPredicateRelation()
 	if err != nil {
-		q.err = err
+		q.Err = err
 		return q
 	}
 
 	field2Struct, _ := FindFieldNameToStructAndStructFieldNameIfAny(rel) // hacky
 	if field2Struct != nil {
-		q.err = fmt.Errorf("dot notation in update")
+		q.Err = fmt.Errorf("dot notation in update")
 		return q
 	}
 
 	qstr, values, err := rel.BuildQueryStringAndValues(modelObj)
 	if err != nil {
-		q.err = err
+		q.Err = err
 		return q
 	}
 
@@ -465,7 +512,7 @@ func (q *Query) Update(modelObj models.IModel, p *PredicateRelationBuilder) IQue
 		updateMap[s] = values[i]
 	}
 
-	q.err = q.db.Update(updateMap).Error
+	q.Err = q.db.Update(updateMap).Error
 
 	return q
 }
@@ -480,7 +527,7 @@ func (q *Query) GetDBOri() *gorm.DB {
 
 func (q *Query) Reset() IQuery {
 	q.db = q.dbori
-	q.err = nil
+	q.Err = nil
 	q.order = nil
 	q.limit = nil
 	q.offset = nil
@@ -490,7 +537,7 @@ func (q *Query) Reset() IQuery {
 }
 
 func (q *Query) Error() error {
-	return q.err
+	return q.Err
 }
 
 type TableAndArgs struct {
@@ -529,4 +576,25 @@ func FindFieldNameToStructAndStructFieldNameIfAny(rel *PredicateRelation) (*stri
 		}
 	}
 	return nil, nil
+}
+
+func DesignatorContainsDot(rel *PredicateRelation) bool {
+	_, structFieldName := FindFieldNameToStructAndStructFieldNameIfAny(rel)
+	return structFieldName != nil
+}
+
+func GetOuterTableName(modelObj models.IModel, fieldNameDesignator string) (string, error) {
+	outerTableName := ""
+	if strings.Contains(fieldNameDesignator, ".") {
+		toks := strings.Split(fieldNameDesignator, ".")
+		outerFieldNameToStruct := strings.Join(toks[:len(toks)-1], ".")
+		typ2, err := GetModelFieldTypeInModelIfValid(modelObj, outerFieldNameToStruct)
+		if err != nil {
+			return "", err
+		}
+		outerTableName = models.GetTableNameFromType(typ2)
+	} else {
+		outerTableName = models.GetTableNameFromIModel(modelObj)
+	}
+	return outerTableName, nil
 }

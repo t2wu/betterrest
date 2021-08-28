@@ -87,5 +87,3 @@ func (p *PredicateRelationBuilder) addPredicate(s string, v interface{}) {
 		p.Rel.PredOrRels = append(p.Rel.PredOrRels, pred)
 	}
 }
-
-// ---------------------------------------------------

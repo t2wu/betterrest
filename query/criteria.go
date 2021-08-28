@@ -65,6 +65,15 @@ type Criteria interface {
 	// GetDesignatedField gets the name of the current Field designator for the inner model
 	// or empty string if it is modelObj itself
 	GetDesignatedField(modelObj models.IModel) string
+
+	// GetAllUnqueStructFieldDesignator returns the struct fields designators (used for buliding joins within
+	// nested table). For example, A.B.C returns A.B. and A.
+	// Returns map because what we really want is a unique set. The value of the map is not important.
+	GetAllUnqueStructFieldDesignator() map[string]interface{}
+
+	// GetNestedLevel is the level the criteria designates
+	// The top-most level is 1
+	GetNestedLevel() int
 }
 
 // Predicate is used to represent something like Age < 20
@@ -147,6 +156,22 @@ func (p *Predicate) GetDesignatedField(modelObj models.IModel) string {
 	} else {
 		return ""
 	}
+}
+
+func (p *Predicate) GetAllUnqueStructFieldDesignator() map[string]interface{} {
+	// Array here, but really it could only be a maximum of 1 for predicate
+	m := make(map[string]interface{})
+	if strings.Contains(p.Field, ".") {
+		toks := strings.Split(strings.TrimSpace(p.Field), ".")
+		for i := 1; i < len(toks); i++ {
+			m[strings.Join(toks[:i], ".")] = nil
+		}
+	}
+	return m
+}
+
+func (p *Predicate) GetNestedLevel() int {
+	return strings.Count(p.Field, ".") + 1
 }
 
 // NewPredicateFromStringAndVal, turn string like "age <" and value into proper predicate
@@ -237,6 +262,28 @@ func (pr *PredicateRelation) GetDesignatedField(modelObj models.IModel) string {
 	// All desigations are to the same model, so only need to grab one and check
 	operand := pr.PredOrRels[0]
 	return operand.GetDesignatedField(modelObj)
+}
+
+func (pr *PredicateRelation) GetNestedLevel() int {
+	// All desigations are to the same model, so only need to grab one and check
+	operand := pr.PredOrRels[0]
+	return operand.GetNestedLevel()
+}
+
+// GetAllUnqueStructFieldDesignator returns all unique designators which are struct field
+// Example:
+// Dogs.DogToy.Name, Dogs.DogToy.Color, Name, furniture.Type
+// will return Dogs.DogToy, Furniture
+// This function is needed to figure out the join statement we need to issue
+func (pr *PredicateRelation) GetAllUnqueStructFieldDesignator() map[string]interface{} {
+	m := make(map[string]interface{})
+	for _, criteria := range pr.PredOrRels {
+		dic := criteria.GetAllUnqueStructFieldDesignator()
+		for designator := range dic {
+			m[designator] = nil
+		}
+	}
+	return m
 }
 
 // normalize query to column name query

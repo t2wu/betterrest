@@ -16,6 +16,7 @@ func TestQueryFirst_ByID(t *testing.T) {
 	uuid := datatypes.NewUUIDFromStringNoErr(uuid2)
 	if err := Q(db, C("ID =", uuid)).First(&tm).Error(); err != nil {
 		assert.Fail(t, err.Error())
+		return
 	}
 
 	assert.Equal(t, "second", tm.Name)
@@ -45,6 +46,7 @@ func TestQueryFirst_ByOneIntField(t *testing.T) {
 		tm := TestModel{}
 		if err := Q(db, C(test.query, test.val)).First(&tm).Error(); err != nil {
 			assert.Fail(t, err.Error(), "record not found")
+			return
 		}
 		assert.Equal(t, test.want, tm.ID.String())
 	}
@@ -96,16 +98,6 @@ func TestQueryFirst_ByWrongValue_NotFoundShouldGiveError(t *testing.T) {
 
 	assert.Fail(t, "should not be found")
 }
-
-// I can assume modelObj2 has a modelObjID field?
-// Q(db, C("Name =", "tim").And("Inner.Name =", "Kyle")).
-//  InnerJoin(modelObj2, modelObj, C("ModelObj2Field1 =", "Claire")). // On clause is automatically inferred
-//  InnerJoin(modelObj3, modelObj, C("...")).
-//  InnerJoin(modelObj2, modelObj4, C("...")).First(&modelObj)
-
-// So in every PredicateBuilder such s "C", some could actually be inner field
-// but originally I designed it so that it's not inner...
-//
 
 func TestQueryFirst_ByNonExistingFieldName_ShouldGiveAnError(t *testing.T) {
 	tm := TestModel{}
@@ -269,23 +261,33 @@ func TestQueryFind_Offset_ShouldWork(t *testing.T) {
 	}
 }
 
-// // Tim
-// func TestQueryFind_TwoLevelNested_Query(t *testing.T) { // FIXME not work yet
-// 	tms := make([]TestModel, 0)
+func TestQueryFind_TwoLevelNested_Query(t *testing.T) { // FIXME not work yet
+	tms := make([]TestModel, 0)
 
-// 	err := Q(db, C("Dogs.DogToys.ToyName =", "DogToySameName")).Find(&tms).Error
-// 	if assert.Nil(t, err) && assert.Equal(t, 2, len(tms)) {
-// 		assert.Equal(t, uuid3, tms[0].ID.String())
-// 		assert.Equal(t, uuid5, tms[0].ID.String())
-// 	}
-// }
+	err := Q(db, C("Dogs.DogToys.ToyName =", "DogToySameName")).Find(&tms).Error()
+	if assert.Nil(t, err) && assert.Equal(t, 2, len(tms)) {
+		assert.Equal(t, uuid5, tms[0].ID.String())
+		assert.Equal(t, uuid3, tms[1].ID.String())
+	}
+}
+
+func TestFind_NestedQueryWithInnerJoin_Works(t *testing.T) {
+	tms := make([]TestModel, 0)
+
+	err := Q(db).InnerJoin(&UnNested{}, &TestModel{}, C("UnNestedInner.Name =", "UnNestedInnerSameNameWith1&2")).Find(&tms).Error()
+	if assert.Nil(t, err) {
+		assert.Equal(t, uuid2, tms[0].ID.String())
+		assert.Equal(t, uuid1, tms[1].ID.String())
+	}
+}
+
+// -------------------
 
 func TestQueryFirst_Nested_Query(t *testing.T) {
 	tm := TestModel{}
 
 	err := Q(db, C("Dogs.Name =", "Doggie1")).First(&tm).Error()
-	assert.Nil(t, err)
-	if err == nil {
+	if assert.Nil(t, err) {
 		assert.Equal(t, uuid3, tm.ID.String())
 	}
 }
@@ -297,6 +299,15 @@ func TestFirst_InnerJoin_Works(t *testing.T) {
 	assert.Nil(t, err)
 	if err == nil {
 		assert.Equal(t, uuid2, tm.ID.String())
+	}
+}
+
+func TestFirst_NestedQueryWithInnerJoinWithCriteriaOnMainTable_Works(t *testing.T) {
+	tm := TestModel{}
+
+	err := Q(db, C("Dogs.Name =", "Doggie0")).InnerJoin(&UnNested{}, &TestModel{}, C("UnNestedInner.Name =", "UnNestedInnerSameNameWith1&2")).First(&tm).Error()
+	if assert.Nil(t, err) {
+		assert.Equal(t, uuid1, tm.ID.String())
 	}
 }
 
@@ -331,13 +342,13 @@ func TestDelete_Works(t *testing.T) {
 		return
 	}
 
-	searched := TestModel{}
-	err = Q(db, C("ID =", uuid)).First(&searched).Error()
-	if assert.Error(t, err) {
-		assert.Equal(t, true, errors.Is(err, gorm.ErrRecordNotFound))
+	err = Q(tx, C("ID =", uuid)).First(&TestModel{}).Error()
+	if assert.Error(nil, err) {
+		assert.True(t, errors.Is(err, gorm.ErrRecordNotFound))
 	}
 
 	tx.Rollback()
+	// assert.Fail(t, "on purpose")
 }
 
 func TestDelete_criteria_works(t *testing.T) {
