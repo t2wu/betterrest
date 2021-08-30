@@ -105,7 +105,7 @@ func cherryPickCore(data map[string]interface{}, f *JSONFields, dataPicked map[s
 				log.Println("cherryPickCore probably never here ")
 				dataPicked[k] = make([]interface{}, 0)
 			}
-		} else if data[k] == nil {
+		} else if isNil(data[k]) {
 			// since value is interface{}, if we never insert it, it comes out to be nil
 			// technically since run through TransFromByHidingDateFieldsFromIModel() now,
 			// we now should rely on json tag, but of course user might want to configure this
@@ -116,8 +116,26 @@ func cherryPickCore(data map[string]interface{}, f *JSONFields, dataPicked map[s
 			} else if v2, ok := v.(int); ok {
 				// if nil, change to this int
 				dataPicked[k] = v2
+			} else if v2, ok := v.(int8); ok {
+				// if nil, change to this int
+				dataPicked[k] = v2
+			} else if v2, ok := v.(int32); ok {
+				// if nil, change to this int32
+				dataPicked[k] = v2
+			} else if v2, ok := v.(int64); ok {
+				// if nil, change to this int64
+				dataPicked[k] = v2
+			} else if v2, ok := v.(uint); ok {
+				// if nil, change to this uint
+				dataPicked[k] = v2
 			} else if v2, ok := v.(bool); ok {
 				// if nil, change to this boolean
+				dataPicked[k] = v2
+			} else if v2, ok := v.(float32); ok {
+				// if nil, change to this float32
+				dataPicked[k] = v2
+			} else if v2, ok := v.(float64); ok {
+				// if nil, change to this float32
 				dataPicked[k] = v2
 			} else if v == nil {
 				// if nil, change to this int
@@ -170,12 +188,17 @@ func cherryPickCore(data map[string]interface{}, f *JSONFields, dataPicked map[s
 	return nil
 }
 
+func isNil(a interface{}) bool {
+	defer func() { recover() }()
+	return a == nil || reflect.ValueOf(a).IsNil()
+}
+
 // ContainsIFieldTransformModelToJSON check if f contains any struct comforms to IFieldTransformModelToJSON
 func ContainsIFieldTransformModelToJSON(f *JSONFields) bool {
 	for _, v := range *f {
 		if newF, ok := v.(JSONFields); ok { // an object
 			result := ContainsIFieldTransformModelToJSON(&newF)
-			if result == true {
+			if result {
 				return true
 			}
 		} else if _, ok := v.(IFieldTransformModelToJSON); ok {
