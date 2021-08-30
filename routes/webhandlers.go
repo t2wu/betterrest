@@ -437,7 +437,7 @@ func GetAllHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin
 
 		who := WhoFromContext(r)
 		cargo := models.BatchHookCargo{}
-		modelObjs, roles, no, err = mapper.GetAll(db.Shared(), who, typeString, &options, &cargo)
+		modelObjs, roles, no, err = mapper.ReadMany(db.Shared(), who, typeString, &options, &cargo)
 
 		if err != nil {
 			render.Render(w, r, webrender.NewErrInternalServerError(err))
@@ -578,7 +578,7 @@ func ReadOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *gi
 
 		who := WhoFromContext(r)
 		cargo := models.ModelCargo{}
-		modelObj, role, err = mapper.GetOneWithID(db.Shared(), who, typeString, id, &options, &cargo)
+		modelObj, role, err = mapper.ReadOne(db.Shared(), who, typeString, id, &options, &cargo)
 
 		if err != nil && gorm.IsRecordNotFoundError(err) {
 			render.Render(w, r, webrender.NewErrNotFound(err))
@@ -642,7 +642,7 @@ func UpdateOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 		err = transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
 			logTransID(tx, c.Request.Method, c.Request.URL.String(), "1")
 
-			if modelObj2, err = mapper.UpdateOneWithID(tx, who, typeString, modelObj, id, &options, &cargo); err != nil {
+			if modelObj2, err = mapper.UpdateOne(tx, who, typeString, modelObj, id, &options, &cargo); err != nil {
 				log.Println("Error in UpdateOneHandler ErrUpdate:", typeString, err)
 				return err
 			}
@@ -765,7 +765,7 @@ func PatchOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *g
 		err = transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
 			logTransID(tx, c.Request.Method, c.Request.URL.String(), "1")
 
-			if modelObj, err = mapper.PatchOneWithID(tx, who, typeString, jsonPatch, id, &options, &cargo); err != nil {
+			if modelObj, err = mapper.PatchOne(tx, who, typeString, jsonPatch, id, &options, &cargo); err != nil {
 				log.Println("Error in PatchOneHandler:", typeString, err)
 				return err
 			}
@@ -885,7 +885,7 @@ func DeleteOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 		err = transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
 			logTransID(tx, c.Request.Method, c.Request.URL.String(), "1")
 
-			if modelObj, err = mapper.DeleteOneWithID(tx, who, typeString, id, &options, &cargo); err != nil {
+			if modelObj, err = mapper.DeleteOne(tx, who, typeString, id, &options, &cargo); err != nil {
 				log.Printf("Error in DeleteOneHandler: %s %+v\n", typeString, err)
 				return err
 			}

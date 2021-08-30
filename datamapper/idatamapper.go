@@ -15,15 +15,15 @@ type IDataMapper interface {
 	CreateMany(db *gorm.DB, who models.Who, typeString string, modelObj []models.IModel,
 		options *map[urlparam.Param]interface{}, cargo *models.BatchHookCargo) ([]models.IModel, error)
 
-	GetOneWithID(db *gorm.DB, who models.Who,
+	ReadOne(db *gorm.DB, who models.Who,
 		typeString string, id *datatypes.UUID, options *map[urlparam.Param]interface{},
 		cargo *models.ModelCargo) (models.IModel, models.UserRole, error)
 
-	GetAll(db *gorm.DB, who models.Who,
+	ReadMany(db *gorm.DB, who models.Who,
 		typeString string, options *map[urlparam.Param]interface{},
 		cargo *models.BatchHookCargo) ([]models.IModel, []models.UserRole, *int, error)
 
-	UpdateOneWithID(db *gorm.DB, who models.Who,
+	UpdateOne(db *gorm.DB, who models.Who,
 		typeString string, modelobj models.IModel, id *datatypes.UUID,
 		options *map[urlparam.Param]interface{},
 		cargo *models.ModelCargo) (models.IModel, error)
@@ -33,7 +33,7 @@ type IDataMapper interface {
 		options *map[urlparam.Param]interface{},
 		cargo *models.BatchHookCargo) ([]models.IModel, error)
 
-	PatchOneWithID(db *gorm.DB, who models.Who,
+	PatchOne(db *gorm.DB, who models.Who,
 		typeString string, jsonPatch []byte, id *datatypes.UUID,
 		options *map[urlparam.Param]interface{},
 		cargo *models.ModelCargo) (models.IModel, error)
@@ -43,7 +43,7 @@ type IDataMapper interface {
 		options *map[urlparam.Param]interface{},
 		cargo *models.BatchHookCargo) ([]models.IModel, error)
 
-	DeleteOneWithID(db *gorm.DB, who models.Who,
+	DeleteOne(db *gorm.DB, who models.Who,
 		typeString string, id *datatypes.UUID, options *map[urlparam.Param]interface{},
 		cargo *models.ModelCargo) (models.IModel, error)
 

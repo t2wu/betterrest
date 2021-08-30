@@ -35,8 +35,8 @@ func (serv *GlobalService) HookBeforeDeleteMany(db *gorm.DB, who models.Who, typ
 	return modelObjs, nil
 }
 
-// GetOneWithIDCore get one model object based on its type and its id string
-func (service *GlobalService) GetOneWithIDCore(db *gorm.DB, who models.Who, typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error) {
+// ReadOneCore get one model object based on its type and its id string
+func (service *GlobalService) ReadOneCore(db *gorm.DB, who models.Who, typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error) {
 	modelObj := models.NewFromTypeString(typeString)
 	modelObj.SetID(id)
 
@@ -60,7 +60,7 @@ func (service *GlobalService) GetOneWithIDCore(db *gorm.DB, who models.Who, type
 	return modelObj, role, err
 }
 
-func (service *GlobalService) GetManyWithIDsCore(db *gorm.DB, who models.Who, typeString string, ids []*datatypes.UUID) ([]models.IModel, []models.UserRole, error) {
+func (service *GlobalService) GetManyCore(db *gorm.DB, who models.Who, typeString string, ids []*datatypes.UUID) ([]models.IModel, []models.UserRole, error) {
 	rtable := models.GetTableNameFromTypeString(typeString)
 	db = db.Table(rtable).Where(fmt.Sprintf("\"%s\".\"id\" IN (?)", rtable), ids).Set("gorm:auto_preload", true)
 
@@ -138,7 +138,7 @@ func (serv *GlobalService) UpdateOneCore(db *gorm.DB, who models.Who, typeString
 
 	// This loads the IDs
 	// This so we have the preloading.
-	modelObj2, _, err = serv.GetOneWithIDCore(db, who, typeString, id)
+	modelObj2, _, err = serv.ReadOneCore(db, who, typeString, id)
 	if err != nil { // Error is "record not found" when not found
 		log.Println("Error:", err)
 		return nil, err

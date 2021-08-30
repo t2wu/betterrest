@@ -21,8 +21,8 @@ type IService interface {
 	UpdateOneCore(db *gorm.DB, who models.Who, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObj models.IModel) (modelObj2 models.IModel, err error)
 	DeleteOneCore(db *gorm.DB, who models.Who, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObjs models.IModel) (models.IModel, error)
 
-	GetOneWithIDCore(db *gorm.DB, who models.Who, typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error)
-	GetManyWithIDsCore(db *gorm.DB, who models.Who, typeString string, ids []*datatypes.UUID) ([]models.IModel, []models.UserRole, error)
+	ReadOneCore(db *gorm.DB, who models.Who, typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error)
+	GetManyCore(db *gorm.DB, who models.Who, typeString string, ids []*datatypes.UUID) ([]models.IModel, []models.UserRole, error)
 
 	GetAllQueryContructCore(db *gorm.DB, who models.Who, typeString string) (*gorm.DB, error)
 	GetAllRolesCore(dbChained *gorm.DB, dbClean *gorm.DB, who models.Who, typeString string, modelObjs []models.IModel) ([]models.UserRole, error)
@@ -91,7 +91,7 @@ func (serv *BaseService) UpdateOneCore(db *gorm.DB, who models.Who, typeString s
 
 	// This loads the IDs
 	// This so we have the preloading.
-	modelObj2, _, err = serv.GetOneWithIDCore(db, who, typeString, id)
+	modelObj2, _, err = serv.ReadOneCore(db, who, typeString, id)
 	if err != nil { // Error is "record not found" when not found
 		log.Println("Error:", err)
 		return nil, err
@@ -118,6 +118,6 @@ func (serv *BaseService) DeleteOneCore(db *gorm.DB, who models.Who, typeString s
 	return modelObj, nil
 }
 
-func (serv *BaseService) GetOneWithIDCore(db *gorm.DB, who models.Who, typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error) {
-	return nil, models.UserRoleInvalid, fmt.Errorf("GetOneWithIDCore to be overrridden shouldn't be called")
+func (serv *BaseService) ReadOneCore(db *gorm.DB, who models.Who, typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error) {
+	return nil, models.UserRoleInvalid, fmt.Errorf("ReadOneCore to be overrridden shouldn't be called")
 }

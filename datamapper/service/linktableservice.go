@@ -74,8 +74,8 @@ func (serv *LinkTableService) HookBeforeDeleteMany(db *gorm.DB, who models.Who, 
 	return modelObjs, nil
 }
 
-// getOneWithIDCore get one model object based on its type and its id string
-func (service *LinkTableService) GetOneWithIDCore(db *gorm.DB, who models.Who, typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error) {
+// ReadOneCore get one model object based on its type and its id string
+func (service *LinkTableService) ReadOneCore(db *gorm.DB, who models.Who, typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error) {
 	modelObj := models.NewFromTypeString(typeString)
 
 	// Check if link table
@@ -117,7 +117,7 @@ func (service *LinkTableService) GetOneWithIDCore(db *gorm.DB, who models.Who, t
 	return modelObj, res.Role, err
 }
 
-func (serv *LinkTableService) GetManyWithIDsCore(db *gorm.DB, who models.Who, typeString string, ids []*datatypes.UUID) ([]models.IModel, []models.UserRole, error) {
+func (serv *LinkTableService) GetManyCore(db *gorm.DB, who models.Who, typeString string, ids []*datatypes.UUID) ([]models.IModel, []models.UserRole, error) {
 	rtable := models.GetTableNameFromTypeString(typeString)
 	subquery := fmt.Sprintf("model_id IN (select model_id from %s where user_id = ?)", rtable)
 	db2 := db.Table(rtable).Where(subquery, who.Oid).Where("id IN (?)", ids)
@@ -191,7 +191,7 @@ func (serv *LinkTableService) userHasPermissionToEdit(db *gorm.DB, who models.Wh
 	}
 
 	// Pull out entire modelObj
-	modelObj, _, err := serv.GetOneWithIDCore(db, who, typeString, id)
+	modelObj, _, err := serv.ReadOneCore(db, who, typeString, id)
 	if err != nil { // Error is "record not found" when not found
 		return nil, models.UserRoleInvalid, err
 	}
@@ -291,7 +291,7 @@ func (serv *LinkTableService) UpdateOneCore(db *gorm.DB, who models.Who, typeStr
 
 	// This loads the IDs
 	// This so we have the preloading.
-	modelObj2, _, err = serv.GetOneWithIDCore(db, who, typeString, id)
+	modelObj2, _, err = serv.ReadOneCore(db, who, typeString, id)
 	if err != nil { // Error is "record not found" when not found
 		log.Println("Error:", err)
 		return nil, err

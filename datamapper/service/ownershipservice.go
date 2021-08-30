@@ -144,8 +144,8 @@ func (serv *OwnershipService) CreateOneCore(db *gorm.DB, who models.Who, typeStr
 	return modelObj, nil
 }
 
-// GetOneWithIDCore get one model object based on its type and its id string
-func (serv *OwnershipService) GetOneWithIDCore(db *gorm.DB, who models.Who, typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error) {
+// ReadOneCore get one model object based on its type and its id string
+func (serv *OwnershipService) ReadOneCore(db *gorm.DB, who models.Who, typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error) {
 	modelObj := models.NewFromTypeString(typeString)
 
 	db = db.Set("gorm:auto_preload", true)
@@ -184,8 +184,8 @@ func (serv *OwnershipService) GetOneWithIDCore(db *gorm.DB, who models.Who, type
 	return modelObj, res.Role, nil
 }
 
-// GetManyWithIDsCore -
-func (serv *OwnershipService) GetManyWithIDsCore(db *gorm.DB, who models.Who, typeString string, ids []*datatypes.UUID) ([]models.IModel, []models.UserRole, error) {
+// GetManyCore -
+func (serv *OwnershipService) GetManyCore(db *gorm.DB, who models.Who, typeString string, ids []*datatypes.UUID) ([]models.IModel, []models.UserRole, error) {
 	// If I can load it, I have permission to edit it. So no need to call loadAndCheckErrorBeforeModify
 	// like when I do for update. Just get the role and check if it's admin
 	rtable, joinTableName, err := getModelTableNameAndJoinTableNameFromTypeString(typeString)
@@ -299,7 +299,7 @@ func (serv *OwnershipService) UpdateOneCore(db *gorm.DB, who models.Who, typeStr
 
 	// This loads the IDs
 	// This so we have the preloading.
-	modelObj2, _, err = serv.GetOneWithIDCore(db, who, typeString, id)
+	modelObj2, _, err = serv.ReadOneCore(db, who, typeString, id)
 	if err != nil { // Error is "record not found" when not found
 		log.Println("Error:", err)
 		return nil, err

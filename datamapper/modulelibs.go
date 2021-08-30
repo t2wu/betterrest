@@ -75,7 +75,7 @@ func loadAndCheckErrorBeforeModify(serv service.IService, db *gorm.DB, who model
 	// TODO: Is there a more efficient way?
 	// For ownership: role is the role of the model to the user
 	// for models under organization, the role is the role of the organization to the user
-	modelObj2, role, err := serv.GetOneWithIDCore(db, who, typeString, id)
+	modelObj2, role, err := serv.ReadOneCore(db, who, typeString, id)
 	if err != nil { // Error is "record not found" when not found
 		return nil, models.UserRoleInvalid, err
 	}
@@ -100,7 +100,7 @@ func loadAndCheckErrorBeforeModify(serv service.IService, db *gorm.DB, who model
 // db should already be set up for all the joins needed, if any
 func loadManyAndCheckBeforeModify(serv service.IService, db *gorm.DB, who models.Who, typeString string,
 	ids []*datatypes.UUID, permittedRoles []models.UserRole) ([]models.IModel, []models.UserRole, error) {
-	modelObjs, roles, err := serv.GetManyWithIDsCore(db, who, typeString, ids)
+	modelObjs, roles, err := serv.GetManyCore(db, who, typeString, ids)
 	if err != nil {
 		log.Println("calling getManyWithIDsCore err:", err)
 		return nil, nil, err

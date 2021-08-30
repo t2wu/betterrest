@@ -15,7 +15,6 @@ import (
 // https://github.com/gogap/aop
 
 type batchOpJob struct {
-	// mapper       IGetOneWithIDMapper
 	serv         service.IService
 	db           *gorm.DB
 	who          models.Who
@@ -99,7 +98,6 @@ func batchOpCore(job batchOpJob,
 }
 
 type opJob struct {
-	// mapper      IGetOneWithIDMapper
 	serv        service.IService
 	db          *gorm.DB
 	who         models.Who

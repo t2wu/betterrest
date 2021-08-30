@@ -61,9 +61,9 @@ func (serv *UserService) HookBeforeDeleteMany(db *gorm.DB, who models.Who, typeS
 	return nil, errors.New("not implemented")
 }
 
-// GetOneWithIDCore get one model object based on its type and its id string
-// getOneWithID get one model object based on its type and its id string without invoking read hookpoing
-func (serv *UserService) GetOneWithIDCore(db *gorm.DB, who models.Who, typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error) {
+// ReadOneCore get one model object based on its type and its id string
+// ReadOne get one model object based on its type and its id string without invoking read hookpoing
+func (serv *UserService) ReadOneCore(db *gorm.DB, who models.Who, typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error) {
 	// TODO: Currently can only read ID from your own (not others in the admin group either)
 	db = db.Set("gorm:auto_preload", true)
 
@@ -82,7 +82,7 @@ func (serv *UserService) GetOneWithIDCore(db *gorm.DB, who models.Who, typeStrin
 	return modelObj, models.UserRoleAdmin, nil
 }
 
-func (serv *UserService) GetManyWithIDsCore(db *gorm.DB, who models.Who, typeString string, ids []*datatypes.UUID) ([]models.IModel, []models.UserRole, error) {
+func (serv *UserService) GetManyCore(db *gorm.DB, who models.Who, typeString string, ids []*datatypes.UUID) ([]models.IModel, []models.UserRole, error) {
 	return nil, nil, fmt.Errorf("Not implemented")
 }
 
@@ -128,7 +128,7 @@ func (serv *UserService) UpdateOneCore(db *gorm.DB, who models.Who, typeString s
 
 	// This loads the IDs
 	// This so we have the preloading.
-	modelObj2, _, err = serv.GetOneWithIDCore(db, who, typeString, id)
+	modelObj2, _, err = serv.ReadOneCore(db, who, typeString, id)
 	if err != nil { // Error is "record not found" when not found
 		log.Println("Error:", err)
 		return nil, err

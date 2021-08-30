@@ -101,8 +101,8 @@ func (mapper *BaseMapper) CreateMany(db *gorm.DB, who models.Who, typeString str
 	return batchOpCore(j, before, after, mapper.Service.CreateOneCore)
 }
 
-// GetOneWithID get one model object based on its type and its id string
-func (mapper *BaseMapper) GetOneWithID(db *gorm.DB, who models.Who, typeString string, id *datatypes.UUID,
+// ReadOne get one model object based on its type and its id string
+func (mapper *BaseMapper) ReadOne(db *gorm.DB, who models.Who, typeString string, id *datatypes.UUID,
 	options *map[urlparam.Param]interface{}, cargo *models.ModelCargo) (models.IModel, models.UserRole, error) {
 	// anyone permission can read as long as you are linked on db
 	modelObj, role, err := loadAndCheckErrorBeforeModify(mapper.Service, db, who, typeString, nil, id, []models.UserRole{models.UserRoleAny})
@@ -127,14 +127,14 @@ func (mapper *BaseMapper) GetOneWithID(db *gorm.DB, who models.Who, typeString s
 	return modelObj, role, err
 }
 
-// GetAll obtains a slice of models.DomainModel
+// ReadMany obtains a slice of models.DomainModel
 // options can be string "offset" and "limit", both of type int
 // This is very Javascript-esque. I would have liked Python's optional parameter more.
 // Alas, no such feature in Go. https://stackoverflow.com/questions/2032149/optional-parameters-in-go
 // How does Gorm do the following? Might want to check out its source code.
 // Cancel offset condition with -1
 //  db.Offset(10).Find(&users1).Offset(-1).Find(&users2)
-func (mapper *BaseMapper) GetAll(db *gorm.DB, who models.Who, typeString string,
+func (mapper *BaseMapper) ReadMany(db *gorm.DB, who models.Who, typeString string,
 	options *map[urlparam.Param]interface{}, cargo *models.BatchHookCargo) ([]models.IModel, []models.UserRole, *int, error) {
 	dbClean := db
 	db = db.Set("gorm:auto_preload", true)
@@ -222,8 +222,8 @@ func (mapper *BaseMapper) GetAll(db *gorm.DB, who models.Who, typeString string,
 	return outmodels, roles, no, err
 }
 
-// UpdateOneWithID updates model based on this json
-func (mapper *BaseMapper) UpdateOneWithID(db *gorm.DB, who models.Who, typeString string,
+// UpdateOne updates model based on this json
+func (mapper *BaseMapper) UpdateOne(db *gorm.DB, who models.Who, typeString string,
 	modelObj models.IModel, id *datatypes.UUID, options *map[urlparam.Param]interface{}, cargo *models.ModelCargo) (models.IModel, error) {
 	oldModelObj, _, err := loadAndCheckErrorBeforeModify(mapper.Service, db, who, typeString, modelObj, id, []models.UserRole{models.UserRoleAdmin})
 	if err != nil {
@@ -291,8 +291,8 @@ func (mapper *BaseMapper) UpdateMany(db *gorm.DB, who models.Who, typeString str
 	return batchOpCore(j, before, after, mapper.Service.UpdateOneCore)
 }
 
-// PatchOneWithID updates model based on this json
-func (mapper *BaseMapper) PatchOneWithID(db *gorm.DB, who models.Who, typeString string, jsonPatch []byte,
+// PatchOne updates model based on this json
+func (mapper *BaseMapper) PatchOne(db *gorm.DB, who models.Who, typeString string, jsonPatch []byte,
 	id *datatypes.UUID, options *map[urlparam.Param]interface{}, cargo *models.ModelCargo) (models.IModel, error) {
 	oldModelObj, _, err := loadAndCheckErrorBeforeModify(mapper.Service, db, who, typeString, nil, id, []models.UserRole{models.UserRoleAdmin})
 	if err != nil {
@@ -397,9 +397,9 @@ func (mapper *BaseMapper) PatchMany(db *gorm.DB, who models.Who, typeString stri
 	return batchOpCore(j, before, after, mapper.Service.UpdateOneCore)
 }
 
-// DeleteOneWithID delete the model
+// DeleteOne delete the model
 // TODO: delete the groups associated with this record?
-func (mapper *BaseMapper) DeleteOneWithID(db *gorm.DB, who models.Who, typeString string,
+func (mapper *BaseMapper) DeleteOne(db *gorm.DB, who models.Who, typeString string,
 	id *datatypes.UUID, options *map[urlparam.Param]interface{}, cargo *models.ModelCargo) (models.IModel, error) {
 	modelObj, _, err := loadAndCheckErrorBeforeModify(mapper.Service, db, who, typeString, nil, id, []models.UserRole{models.UserRoleAdmin})
 	if err != nil {

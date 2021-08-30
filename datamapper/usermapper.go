@@ -129,10 +129,10 @@ func (mapper *UserMapper) CreateOne(db *gorm.DB, who models.Who, typeString stri
 // 	return nil, errors.New("not implemented")
 // }
 
-// GetOneWithID get one model object based on its type and its id string
-func (mapper *UserMapper) GetOneWithID(db *gorm.DB, who models.Who, typeString string,
+// ReadOne get one model object based on its type and its id string
+func (mapper *UserMapper) ReadOne(db *gorm.DB, who models.Who, typeString string,
 	id *datatypes.UUID, options *map[urlparam.Param]interface{}, cargo *models.ModelCargo) (models.IModel, models.UserRole, error) {
-	modelObj, role, err := mapper.Service.GetOneWithIDCore(db, who, typeString, id)
+	modelObj, role, err := mapper.Service.ReadOneCore(db, who, typeString, id)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -148,10 +148,10 @@ func (mapper *UserMapper) GetOneWithID(db *gorm.DB, who models.Who, typeString s
 	return modelObj, role, nil
 }
 
-// UpdateOneWithID updates model based on this json
+// UpdateOne updates model based on this json
 // Update DOESN'T change password. It'll load up the password hash and save the same.
 // Update password require special endpoint
-func (mapper *UserMapper) UpdateOneWithID(db *gorm.DB, who models.Who, typeString string,
+func (mapper *UserMapper) UpdateOne(db *gorm.DB, who models.Who, typeString string,
 	modelObj models.IModel, id *datatypes.UUID, options *map[urlparam.Param]interface{},
 	cargo *models.ModelCargo) (models.IModel, error) {
 
@@ -191,8 +191,8 @@ func (mapper *UserMapper) UpdateOneWithID(db *gorm.DB, who models.Who, typeStrin
 	return modelObj2, nil
 }
 
-// DeleteOneWithID deletes the user with the ID
-func (mapper *UserMapper) DeleteOneWithID(db *gorm.DB, who models.Who, typeString string, id *datatypes.UUID,
+// DeleteOne deletes the user with the ID
+func (mapper *UserMapper) DeleteOne(db *gorm.DB, who models.Who, typeString string, id *datatypes.UUID,
 	options *map[urlparam.Param]interface{}, cargo *models.ModelCargo) (models.IModel, error) {
 	modelObj, _, err := loadAndCheckErrorBeforeModify(mapper.Service, db, who, typeString, nil, id, []models.UserRole{models.UserRoleAdmin})
 	if err != nil {
@@ -450,8 +450,8 @@ func (mapper *UserMapper) CreateMany(db *gorm.DB, who models.Who, typeString str
 	return nil, fmt.Errorf("Not implemented")
 }
 
-// GetAll :-
-func (mapper *UserMapper) GetAll(db *gorm.DB, who models.Who, typeString string,
+// ReadMany :-
+func (mapper *UserMapper) ReadMany(db *gorm.DB, who models.Who, typeString string,
 	options *map[urlparam.Param]interface{}, cargo *models.BatchHookCargo) ([]models.IModel, []models.UserRole, *int, error) {
 	return nil, nil, nil, fmt.Errorf("Not implemented")
 }
@@ -476,8 +476,8 @@ func (mapper *UserMapper) DeleteMany(db *gorm.DB, who models.Who,
 	return nil, fmt.Errorf("Not implemented")
 }
 
-// PatchOneWithID :-
-func (mapper *UserMapper) PatchOneWithID(db *gorm.DB, who models.Who,
+// PatchOne :-
+func (mapper *UserMapper) PatchOne(db *gorm.DB, who models.Who,
 	typeString string, jsonPatch []byte, id *datatypes.UUID, options *map[urlparam.Param]interface{},
 	cargo *models.ModelCargo) (models.IModel, error) {
 	return nil, fmt.Errorf("Not implemented, todo")

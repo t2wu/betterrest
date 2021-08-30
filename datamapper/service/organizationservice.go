@@ -58,8 +58,8 @@ func (serv *OrganizationService) HookBeforeDeleteMany(db *gorm.DB, who models.Wh
 
 // getOneWithIDCore get one model object based on its type and its id string
 // since this is organizationMapper, need to make sure it's the same organization
-func (serv *OrganizationService) GetOneWithIDCore(db *gorm.DB, who models.Who, typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error) {
-	log.Println("organization GetOneWithIDCore called")
+func (serv *OrganizationService) ReadOneCore(db *gorm.DB, who models.Who, typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error) {
+	log.Println("organization ReadOneCore called")
 	modelObj := models.NewFromTypeString(typeString)
 
 	db = db.Set("gorm:auto_preload", true)
@@ -124,7 +124,7 @@ func (serv *OrganizationService) GetOneWithIDCore(db *gorm.DB, who models.Who, t
 	return modelObj, role, err
 }
 
-func (serv *OrganizationService) GetManyWithIDsCore(db *gorm.DB, who models.Who, typeString string, ids []*datatypes.UUID) ([]models.IModel, []models.UserRole, error) {
+func (serv *OrganizationService) GetManyCore(db *gorm.DB, who models.Who, typeString string, ids []*datatypes.UUID) ([]models.IModel, []models.UserRole, error) {
 	// var ok bool
 	// var modelObjHavingOrganization models.IHasOrganizationLink
 	// if modelObjHavingOrganization, ok = models.NewFromTypeString(typeString).(models.IHasOrganizationLink); !ok {
@@ -337,7 +337,7 @@ func (serv *OrganizationService) UpdateOneCore(db *gorm.DB, who models.Who, type
 
 	// This loads the IDs
 	// This so we have the preloading.
-	modelObj2, _, err = serv.GetOneWithIDCore(db, who, typeString, id)
+	modelObj2, _, err = serv.ReadOneCore(db, who, typeString, id)
 	if err != nil { // Error is "record not found" when not found
 		log.Println("Error:", err)
 		return nil, err
