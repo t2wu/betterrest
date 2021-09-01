@@ -311,10 +311,21 @@ func TestFirst_NestedQueryWithInnerJoinWithCriteriaOnMainTable_Works(t *testing.
 	}
 }
 
-func TestCreateAndDelete_Works(t *testing.T) {
+func TestCreate_Works_ForPeg(t *testing.T) {
 	uuid := "046bcadb-7127-47b1-9c1e-ff92ccea44b8"
-	tm := TestModel{BaseModel: models.BaseModel{ID: datatypes.NewUUIDFromStringNoErr(uuid)}, Name: "MyTestModel", Age: 1}
+	tm := TestModel{BaseModel: models.BaseModel{
+		ID: datatypes.NewUUIDFromStringNoErr(uuid)},
+		Name: "MyTestModel",
+		Age:  1,
+		Dogs: []Dog{
+			{
+				Name:  "Buddy",
+				Color: "black",
+			},
+		},
+	}
 	tx := db.Begin()
+	defer tx.Rollback()
 
 	err := Q(tx).Create(&tm).Error()
 	if !assert.Nil(t, err) {
@@ -328,27 +339,139 @@ func TestCreateAndDelete_Works(t *testing.T) {
 	}
 
 	assert.Equal(t, uuid, searched.ID.String())
-
-	tx.Rollback()
+	if assert.Equal(t, 1, len(searched.Dogs)) {
+		assert.Equal(t, "Buddy", searched.Dogs[0].Name)
+		assert.Equal(t, "black", searched.Dogs[0].Color)
+	}
 }
-func TestDelete_Works(t *testing.T) {
-	uuid := "046bcadb-7127-47b1-9c1e-ff92ccea44b8"
-	tm := TestModel{BaseModel: models.BaseModel{ID: datatypes.NewUUIDFromStringNoErr(uuid)}, Name: "MyTestModel", Age: 1}
+
+func TestCreate_PegAssoc_ShouldAssociateCorrectly(t *testing.T) {
+	// First create a cat, and while creating TestModel, associate it with the cat
+	// Then, when you load it, you should see the cat
+	catuuid := "6a53ab29-72c9-4746-8e12-cb670d289231"
+	cat := Cat{
+		BaseModel: models.BaseModel{ID: datatypes.NewUUIDFromStringNoErr(catuuid)},
+		Name:      "Buddy",
+		Color:     "black",
+	}
 
 	tx := db.Begin()
+	defer tx.Rollback()
+
+	err := Q(tx).Create(&cat).Error()
+	if !assert.Nil(t, err) {
+		return
+	}
+
+	uuid := "046bcadb-7127-47b1-9c1e-ff92ccea44b8"
+	tm := TestModel{BaseModel: models.BaseModel{
+		ID: datatypes.NewUUIDFromStringNoErr(uuid)},
+		Name: "MyTestModel",
+		Age:  1,
+		Cats: []Cat{cat},
+	}
+
+	err = Q(tx).Create(&tm).Error()
+	if !assert.Nil(t, err) {
+		return
+	}
+
+	searched := TestModel{}
+	if err := Q(tx, C("ID =", uuid)).First(&searched).Error(); err != nil {
+		assert.Nil(t, err)
+		return
+	}
+
+	assert.Equal(t, uuid, searched.ID.String())
+	if assert.Equal(t, 1, len(searched.Cats)) { // should be associated
+		assert.Equal(t, catuuid, searched.Cats[0].ID.String())
+		assert.Equal(t, "Buddy", searched.Cats[0].Name)
+		assert.Equal(t, "black", searched.Cats[0].Color)
+	}
+}
+
+func TestDelete_Pegged_ShouldRemoveAllNestedFields(t *testing.T) {
+	uuid := "046bcadb-7127-47b1-9c1e-ff92ccea44b8"
+	doguuid := "faea91d5-f376-400e-ac93-0109886db336"
+	tm := TestModel{BaseModel: models.BaseModel{
+		ID: datatypes.NewUUIDFromStringNoErr(uuid)},
+		Name: "MyTestModel",
+		Age:  1,
+		Dogs: []Dog{
+			{
+				BaseModel: models.BaseModel{
+					ID: datatypes.NewUUIDFromStringNoErr(doguuid),
+				},
+				Name:  "Buddy",
+				Color: "black",
+			},
+		},
+	}
+
+	tx := db.Begin()
+	defer tx.Rollback()
 
 	err := Q(tx).Create(&tm).Delete(&tm).Error()
 	if !assert.Nil(t, err) {
 		return
 	}
 
-	err = Q(tx, C("ID =", uuid)).First(&TestModel{}).Error()
-	if assert.Error(nil, err) {
+	loadedTestModel := TestModel{}
+	err = Q(tx, C("ID =", uuid)).First(&loadedTestModel).Error()
+	if assert.Error(t, err) {
 		assert.True(t, errors.Is(err, gorm.ErrRecordNotFound))
 	}
 
-	tx.Rollback()
-	// assert.Fail(t, "on purpose")
+	loadedDogModel := Dog{}
+	err = Q(tx, C("ID =", doguuid)).First(&loadedDogModel).Error()
+	if assert.Error(t, err) {
+		assert.True(t, errors.Is(err, gorm.ErrRecordNotFound))
+	}
+}
+
+func TestDelete_PeggedAssoc_Should_Leave_it_intact(t *testing.T) {
+	// First create a cat, and while creating TestModel, associate it with the cat
+	// Then, when you load it, you should see the cat
+	catuuid := "6a53ab29-72c9-4746-8e12-cb670d289231"
+	cat := Cat{
+		BaseModel: models.BaseModel{ID: datatypes.NewUUIDFromStringNoErr(catuuid)},
+		Name:      "Buddy",
+		Color:     "black",
+	}
+
+	tx := db.Begin()
+	defer tx.Rollback()
+
+	err := Q(tx).Create(&cat).Error()
+	if !assert.Nil(t, err) {
+		return
+	}
+
+	uuid := "046bcadb-7127-47b1-9c1e-ff92ccea44b8"
+	tm := TestModel{BaseModel: models.BaseModel{
+		ID: datatypes.NewUUIDFromStringNoErr(uuid)},
+		Name: "MyTestModel",
+		Age:  1,
+		Cats: []Cat{cat},
+	}
+
+	err = Q(tx).Create(&tm).Delete(&tm).Error()
+	if !assert.Nil(t, err) {
+		return
+	}
+
+	loadedTestModel := TestModel{}
+	err = Q(tx, C("ID =", uuid)).First(&loadedTestModel).Error()
+	if assert.Error(t, err) {
+		assert.True(t, errors.Is(err, gorm.ErrRecordNotFound))
+	}
+
+	loadedCatModel := Cat{}
+	err = Q(tx, C("ID =", catuuid)).First(&loadedCatModel).Error()
+	if assert.Nil(t, err) {
+		assert.Equal(t, catuuid, loadedCatModel.GetID().String())
+		assert.Nil(t, loadedCatModel.TestModelID)
+	}
 }
 
 func TestDelete_criteria_works(t *testing.T) {
@@ -438,6 +561,7 @@ func TestSave_Works(t *testing.T) {
 
 func TestUpdate_Field_Works(t *testing.T) {
 	tx := db.Begin()
+	defer tx.Rollback()
 	if err := Q(tx, C("Name =", "second")).Update(&TestModel{}, C("Age =", 120)).Error(); err != nil {
 		assert.Nil(t, err)
 		return
@@ -450,8 +574,6 @@ func TestUpdate_Field_Works(t *testing.T) {
 	}
 
 	assert.Equal(t, 120, check.Age)
-
-	tx.Rollback()
 }
 
 func TestUpdate_NestedField_ShouldGiveWarning(t *testing.T) {
@@ -462,4 +584,239 @@ func TestUpdate_NestedField_ShouldGiveWarning(t *testing.T) {
 	}
 
 	assert.Fail(t, "should not be here")
+}
+
+// Batch create and delete operations
+
+func TestBatchCreate_Pegged(t *testing.T) {
+	tx := db.Begin()
+	defer tx.Rollback()
+
+	uuid1 := "57403d17-01c7-40d2-ade3-6f8e8a27d786"
+	uuid2 := "95a71d20-e508-41b0-a6ea-901f96c2e721"
+	doguuid1 := "919b7d4b-35fd-43a9-b707-78a874870f16"
+	doguuid2 := "673bd527-1af8-4f3b-b0d1-8158ee6f5e51"
+
+	testModel1 := TestModel{
+		BaseModel: models.BaseModel{ID: datatypes.NewUUIDFromStringNoErr(uuid1)},
+		Name:      "TestModel1",
+		Dogs: []Dog{
+			{
+				BaseModel: models.BaseModel{ID: datatypes.NewUUIDFromStringNoErr(doguuid1)},
+				Name:      "Buddy",
+				Color:     "black",
+			},
+		},
+	}
+	testModel2 := TestModel{
+		BaseModel: models.BaseModel{ID: datatypes.NewUUIDFromStringNoErr(uuid2)},
+		Name:      "TestModel2",
+		Dogs: []Dog{
+			{
+				BaseModel: models.BaseModel{ID: datatypes.NewUUIDFromStringNoErr(doguuid2)},
+				Name:      "Happy",
+				Color:     "red",
+			},
+		},
+	}
+
+	models := []models.IModel{&testModel1, &testModel2}
+
+	searched := make([]TestModel, 0)
+
+	err := DB(tx).CreateMany(models).Error()
+	if assert.Nil(t, err) {
+		err := Q(tx, C("ID IN", []*datatypes.UUID{
+			datatypes.NewUUIDFromStringNoErr(uuid1),
+			datatypes.NewUUIDFromStringNoErr(uuid2),
+		})).Find(&searched).Error()
+		if assert.Nil(t, err) {
+			assert.Len(t, searched, 2)
+			if assert.Len(t, searched[0].Dogs, 1) {
+				assert.Equal(t, "Happy", searched[0].Dogs[0].Name)
+			}
+			if assert.Len(t, searched[1].Dogs, 1) {
+				assert.Equal(t, "Buddy", searched[1].Dogs[0].Name)
+			}
+		}
+	}
+}
+
+func TestBatchCreate_PeggAssociate_shouldAssociateCorrectly(t *testing.T) {
+	tx := db.Begin()
+	defer tx.Rollback()
+
+	uuid1 := "57403d17-01c7-40d2-ade3-6f8e8a27d786"
+	uuid2 := "95a71d20-e508-41b0-a6ea-901f96c2e721"
+	catuuid1 := "919b7d4b-35fd-43a9-b707-78a874870f16"
+	catuuid2 := "673bd527-1af8-4f3b-b0d1-8158ee6f5e51"
+
+	cat1 := Cat{
+		BaseModel: models.BaseModel{ID: datatypes.NewUUIDFromStringNoErr(catuuid1)},
+		Name:      "Kiddy1",
+		Color:     "black",
+	}
+
+	cat2 := Cat{
+		BaseModel: models.BaseModel{ID: datatypes.NewUUIDFromStringNoErr(catuuid2)},
+		Name:      "Kiddy2",
+		Color:     "black",
+	}
+
+	err := DB(tx).CreateMany([]models.IModel{&cat1, &cat2}).Error()
+	if !assert.Nil(t, err) {
+		return
+	}
+
+	testModel1 := TestModel{
+		BaseModel: models.BaseModel{ID: datatypes.NewUUIDFromStringNoErr(uuid1)},
+		Name:      "TestModel1",
+		Cats:      []Cat{cat1},
+	}
+	testModel2 := TestModel{
+		BaseModel: models.BaseModel{ID: datatypes.NewUUIDFromStringNoErr(uuid2)},
+		Name:      "TestModel2",
+		Cats:      []Cat{cat2},
+	}
+
+	models := []models.IModel{&testModel1, &testModel2}
+
+	searched := make([]TestModel, 0)
+
+	err = DB(tx).CreateMany(models).Error()
+	if assert.Nil(t, err) {
+		err := Q(tx, C("ID IN", []*datatypes.UUID{
+			datatypes.NewUUIDFromStringNoErr(uuid1),
+			datatypes.NewUUIDFromStringNoErr(uuid2),
+		})).Find(&searched).Error()
+		if assert.Nil(t, err) {
+			assert.Len(t, searched, 2)
+			if assert.Len(t, searched[0].Cats, 1) {
+				assert.Equal(t, "Kiddy2", searched[0].Cats[0].Name)
+			}
+			if assert.Len(t, searched[1].Cats, 1) {
+				assert.Equal(t, "Kiddy1", searched[1].Cats[0].Name)
+			}
+		}
+	}
+}
+
+func TestBatchDelete_Pegged(t *testing.T) {
+	tx := db.Begin()
+	defer tx.Rollback()
+
+	uuid1 := "57403d17-01c7-40d2-ade3-6f8e8a27d786"
+	uuid2 := "95a71d20-e508-41b0-a6ea-901f96c2e721"
+	doguuid1 := "919b7d4b-35fd-43a9-b707-78a874870f16"
+	doguuid2 := "673bd527-1af8-4f3b-b0d1-8158ee6f5e51"
+
+	testModel1 := TestModel{
+		BaseModel: models.BaseModel{ID: datatypes.NewUUIDFromStringNoErr(uuid1)},
+		Name:      "TestModel1",
+		Dogs: []Dog{
+			{
+				BaseModel: models.BaseModel{ID: datatypes.NewUUIDFromStringNoErr(doguuid1)},
+				Name:      "Buddy",
+				Color:     "black",
+			},
+		},
+	}
+	testModel2 := TestModel{
+		BaseModel: models.BaseModel{ID: datatypes.NewUUIDFromStringNoErr(uuid2)},
+		Name:      "TestModel2",
+		Dogs: []Dog{
+			{
+				BaseModel: models.BaseModel{ID: datatypes.NewUUIDFromStringNoErr(doguuid2)},
+				Name:      "Happy",
+				Color:     "red",
+			},
+		},
+	}
+
+	models := []models.IModel{&testModel1, &testModel2}
+
+	err := DB(tx).CreateMany(models).DeleteMany(models).Error()
+	if assert.Nil(t, err) {
+		searched := make([]TestModel, 0)
+		err := Q(tx, C("ID IN", []*datatypes.UUID{
+			datatypes.NewUUIDFromStringNoErr(uuid1),
+			datatypes.NewUUIDFromStringNoErr(uuid2),
+		})).Find(&searched).Error()
+		assert.Nil(t, err)
+		assert.Equal(t, 0, len(searched))
+		assert.Len(t, searched, 0)
+
+		dogSearched := make([]Dog, 0)
+		err = Q(tx, C("ID IN", []*datatypes.UUID{
+			datatypes.NewUUIDFromStringNoErr(doguuid1),
+			datatypes.NewUUIDFromStringNoErr(doguuid2),
+		})).Find(&dogSearched).Error()
+
+		assert.Nil(t, err)
+		assert.Equal(t, 0, len(dogSearched))
+	}
+}
+
+func TestBatchDelete_PegAssoc_ShouldLeaveItIntact(t *testing.T) {
+	tx := db.Begin()
+	defer tx.Rollback()
+
+	uuid1 := "57403d17-01c7-40d2-ade3-6f8e8a27d786"
+	uuid2 := "95a71d20-e508-41b0-a6ea-901f96c2e721"
+	catuuid1 := "919b7d4b-35fd-43a9-b707-78a874870f16"
+	catuuid2 := "673bd527-1af8-4f3b-b0d1-8158ee6f5e51"
+
+	cat1 := Cat{
+		BaseModel: models.BaseModel{ID: datatypes.NewUUIDFromStringNoErr(catuuid1)},
+		Name:      "Kiddy1",
+		Color:     "black",
+	}
+
+	cat2 := Cat{
+		BaseModel: models.BaseModel{ID: datatypes.NewUUIDFromStringNoErr(catuuid2)},
+		Name:      "Kiddy2",
+		Color:     "black",
+	}
+
+	err := DB(tx).CreateMany([]models.IModel{&cat1, &cat2}).Error()
+	if !assert.Nil(t, err) {
+		return
+	}
+
+	testModel1 := TestModel{
+		BaseModel: models.BaseModel{ID: datatypes.NewUUIDFromStringNoErr(uuid1)},
+		Name:      "TestModel1",
+		Cats:      []Cat{cat1},
+	}
+	testModel2 := TestModel{
+		BaseModel: models.BaseModel{ID: datatypes.NewUUIDFromStringNoErr(uuid2)},
+		Name:      "TestModel2",
+		Cats:      []Cat{cat2},
+	}
+
+	models := []models.IModel{&testModel1, &testModel2}
+
+	err = DB(tx).CreateMany(models).DeleteMany(models).Error()
+	if assert.Nil(t, err) {
+		searched := make([]TestModel, 0)
+		err := Q(tx, C("ID IN", []*datatypes.UUID{
+			datatypes.NewUUIDFromStringNoErr(uuid1),
+			datatypes.NewUUIDFromStringNoErr(uuid2),
+		})).Find(&searched).Error()
+		assert.Nil(t, err)
+		assert.Equal(t, 0, len(searched))
+		assert.Len(t, searched, 0)
+
+		catSearched := make([]Cat, 0)
+		err = Q(tx, C("ID IN", []*datatypes.UUID{
+			datatypes.NewUUIDFromStringNoErr(catuuid1),
+			datatypes.NewUUIDFromStringNoErr(catuuid2),
+		})).Find(&catSearched).Error()
+
+		assert.Nil(t, err)
+		if assert.Equal(t, 2, len(catSearched)) {
+			assert.Nil(t, catSearched[0].TestModelID)
+			assert.Nil(t, catSearched[1].TestModelID)
+		}
+	}
 }

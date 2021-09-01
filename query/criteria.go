@@ -2,7 +2,6 @@ package query
 
 import (
 	"fmt"
-	"reflect"
 	"strings"
 
 	"github.com/t2wu/betterrest/models"
@@ -126,14 +125,8 @@ func (p *Predicate) BuildQueryStringAndValues(modelObj models.IModel) (string, [
 		}
 	}
 
-	// The "IN" case, where p.Value is a slice
-	values := reflect.ValueOf(p.Value)
-	var sb strings.Builder
-	sb.WriteString("?")
-	for i := 1; i < values.Len(); i++ {
-		sb.WriteString(", ?")
-	}
-	return fmt.Sprintf("\"%s\".%s %s (%s)", tblName, col, p.Cond, sb.String()), []interface{}{p.Value}, nil
+	// The "IN" case, where p.Value is a slice, only one question mark is needed
+	return fmt.Sprintf("\"%s\".%s %s (?)", tblName, col, p.Cond), []interface{}{p.Value}, nil
 }
 
 func (p *Predicate) GetDesignatedModel(modelObj models.IModel) (models.IModel, error) {

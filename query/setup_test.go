@@ -41,6 +41,22 @@ type TestModel struct {
 	Age  int    `json:"age"`
 
 	Dogs []Dog `betterrest:"peg" json:"dogs"`
+
+	// Any field with pegassoc should have association_autoupdate:false AND
+	// foreign key constraint for cat should have SET NULL on delete and update
+	Cats []Cat `gorm:"association_autoupdate:false;" betterrest:"pegassoc" json:"cats"`
+}
+
+type Cat struct {
+	models.BaseModel
+
+	Name  string `json:"name"`
+	Color string `json:"color"`
+
+	// Cat should set TestModelID it as a foriegn key (gorm 1 foreign key was weird, at least
+	// on MySQL. We should do Automigrate by really automigrating and taking into the tag
+	// as well, esp if Gorm 2 isn't doing it yet)
+	TestModelID *datatypes.UUID `gorm:"type:uuid;index;" json:"_"`
 }
 
 type Dog struct {
@@ -94,7 +110,8 @@ func TestMain(m *testing.M) {
 	db.SingularTable(true)
 
 	if err := db.AutoMigrate(&TestModel{}).AutoMigrate(&Dog{}).
-		AutoMigrate(&DogToy{}).AutoMigrate(&UnNested{}).AutoMigrate(&UnNestedInner{}).Error; err != nil {
+		AutoMigrate(&DogToy{}).AutoMigrate(&UnNested{}).AutoMigrate(&UnNestedInner{}).
+		AutoMigrate(&Cat{}).AddForeignKey("test_model_id", "test_model(id)", "SET NULL", "SET NULL").Error; err != nil {
 		panic("failed to automigrate TestModel:" + err.Error())
 	}
 

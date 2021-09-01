@@ -305,7 +305,7 @@ func userHasRolesAccessToModelOrg(db *gorm.DB, who models.Who, typeString string
 	return false, nil
 }
 
-// UpdateOneCore one, permissin should already be checked
+// UpdateOneCore one, permission should already be checked
 // called for patch operation as well (after patch has already applied)
 // Fuck, repeat the following code for now (you can't call the overriding method from the non-overriding one)
 func (serv *OrganizationService) UpdateOneCore(db *gorm.DB, who models.Who, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObj models.IModel) (modelObj2 models.IModel, err error) {

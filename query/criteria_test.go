@@ -253,7 +253,7 @@ func TestBuildQueryStringAndValueForInClause_Works(t *testing.T) {
 			want: struct {
 				s string
 				v []string
-			}{s: "\"test_model\".id IN (?, ?, ?)", v: []string{uuid1, uuid2, uuid4}},
+			}{s: "\"test_model\".id IN (?)", v: []string{uuid1, uuid2, uuid4}},
 		},
 	}
 	for _, test := range tests {

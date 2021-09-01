@@ -18,10 +18,10 @@ type IService interface {
 	HookBeforeDeleteMany(db *gorm.DB, who models.Who, typeString string, modelObjs []models.IModel) ([]models.IModel, error)
 
 	CreateOneCore(db *gorm.DB, who models.Who, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObj models.IModel) (models.IModel, error)
+	ReadOneCore(db *gorm.DB, who models.Who, typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error)
 	UpdateOneCore(db *gorm.DB, who models.Who, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObj models.IModel) (modelObj2 models.IModel, err error)
 	DeleteOneCore(db *gorm.DB, who models.Who, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObjs models.IModel) (models.IModel, error)
 
-	ReadOneCore(db *gorm.DB, who models.Who, typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error)
 	GetManyCore(db *gorm.DB, who models.Who, typeString string, ids []*datatypes.UUID) ([]models.IModel, []models.UserRole, error)
 
 	GetAllQueryContructCore(db *gorm.DB, who models.Who, typeString string) (*gorm.DB, error)
@@ -32,16 +32,16 @@ type IService interface {
 type BaseService struct {
 }
 
-// CreateOneCoreBasic create something
+// CreateOneCore create the model
 func (serv *BaseService) CreateOneCore(db *gorm.DB, who models.Who, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObj models.IModel) (models.IModel, error) {
 	// No need to check if primary key is blank.
 	// If it is it'll be created by Gorm's BeforeCreate hook
 	// (defined in base model)
 	// if dbc := db.Create(modelObj); dbc.Error != nil {
-	if dbc := db.Create(modelObj); dbc.Error != nil {
+	if err := db.Create(modelObj).Error; err != nil {
 		// create failed: UNIQUE constraint failed: user.email
 		// It looks like this error may be dependent on the type of database we use
-		return nil, dbc.Error
+		return nil, err
 	}
 
 	// For pegassociated, the since we expect association_autoupdate:false
@@ -111,7 +111,6 @@ func (serv *BaseService) DeleteOneCore(db *gorm.DB, who models.Who, typeString s
 	}
 
 	if err := gormfixes.DeleteModelFixManyToManyAndPeg(db, modelObj); err != nil {
-		// if err := gormfixes.RemovePeggedField(db, modelObj); err != nil {
 		return nil, err
 	}
 

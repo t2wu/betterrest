@@ -177,7 +177,7 @@ func (serv *LinkTableService) GetAllQueryContructCore(db *gorm.DB, who models.Wh
 // GetAllRolesCore gets all roles according to the criteria
 func (serv *LinkTableService) GetAllRolesCore(dbChained *gorm.DB, dbClean *gorm.DB, who models.Who, typeString string, modelObjs []models.IModel) ([]models.UserRole, error) {
 	// No roles for this table, because this IS the linking table
-	roles := make([]models.UserRole, len(modelObjs), len(modelObjs))
+	roles := make([]models.UserRole, len(modelObjs))
 	for i := range roles {
 		roles[i] = models.UserRoleInvalid // FIXME It shouldn't be Invaild, it should be the user's access to this
 	}

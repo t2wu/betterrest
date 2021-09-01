@@ -1,12 +1,14 @@
 package query
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"reflect"
 	"strings"
 
 	"github.com/jinzhu/gorm"
+	"github.com/t2wu/betterrest/libs/datatypes"
 	"github.com/t2wu/betterrest/models"
 )
 
@@ -258,21 +260,23 @@ func (q *Query) buildQueryCore(db *gorm.DB, modelObj models.IModel) (*gorm.DB, e
 	// handles main modelObj
 	q.mainMB.SortBuilderInfosByLevel() // now sorted, so our join statement can join in correct order
 
-	// First-level queries that have no explicit join table
-	for _, buildInfo := range q.mainMB.builderInfos {
-		rel, err := buildInfo.builder.GetPredicateRelation()
-		if err != nil {
-			return db, err
-		}
+	// // First-level queries that have no explicit join table
+	// for _, buildInfo := range q.mainMB.builderInfos {
+	// 	rel, err := buildInfo.builder.GetPredicateRelation()
+	// 	if err != nil {
+	// 		return db, err
+	// 	}
 
-		if !DesignatorContainsDot(rel) { // where clause
-			s, vals, err := rel.BuildQueryStringAndValues(q.mainMB.modelObj)
-			if err != nil {
-				return db, err
-			}
-			db = db.Where(s, vals...)
-		}
-	}
+	// 	if !DesignatorContainsDot(rel) { // where clause
+	// 		s, vals, err := rel.BuildQueryStringAndValues(q.mainMB.modelObj)
+	// 		if err != nil {
+	// 			return db, err
+	// 		}
+	// 		log.Println("s:", s)
+	// 		log.Printf("vals: %+v\n", vals)
+	// 		db = db.Where(s, vals...)
+	// 	}
+	// }
 
 	db, err = q.buildQueryCoreInnerJoin(db, q.mainMB)
 	if err != nil {
@@ -393,6 +397,7 @@ func (q *Query) buildQueryCoreInnerJoin(db *gorm.DB, mb *ModelAndBuilder) (*gorm
 			if err != nil {
 				return db, err
 			}
+
 			db = db.Model(mb.modelObj).Where(s, vals...)
 		}
 	}
@@ -432,12 +437,51 @@ func (q *Query) buildQueryOrderOffSetAndLimit(db *gorm.DB, modelObj models.IMode
 func (q *Query) Create(modelObj models.IModel) IQuery {
 	q.Reset()
 
-	q.Err = q.db.Create(modelObj).Error
+	if err := q.db.Create(modelObj).Error; err != nil {
+		q.Err = err
+		return q
+	}
+
+	// For pegassociated, the since we expect association_autoupdate:false
+	// need to manually create it
+	if err := CreatePeggedAssocFields(q.db, modelObj); err != nil {
+		q.Err = err
+		return q
+	}
+
 	return q
 }
 
+func (q *Query) CreateMany(modelObjs []models.IModel) IQuery {
+	q.Reset()
+
+	// TODO: do a batch create instead
+	for _, modelObj := range modelObjs {
+		q.Err = q.db.Create(modelObj).Error
+		if q.Err != nil {
+			return q
+		}
+
+		// For pegassociated, the since we expect association_autoupdate:false
+		// need to manually create it
+		if err := CreatePeggedAssocFields(q.db, modelObj); err != nil {
+			q.Err = err
+			return q
+		}
+	}
+
+	return q
+}
+
+// Delete can be with criteria, or can just delete the model directly
 func (q *Query) Delete(modelObj models.IModel) IQuery {
 	if q.Err != nil {
+		return q
+	}
+
+	if modelObj.GetID() == nil && q.mainMB == nil && len(q.mbs) == 0 {
+		// You could delete every record in the database with Gormv1
+		q.Err = errors.New("delete must have a modelID or include at least one PredicateRelationBuilder")
 		return q
 	}
 
@@ -454,7 +498,44 @@ func (q *Query) Delete(modelObj models.IModel) IQuery {
 		return q
 	}
 
-	q.Err = q.db.Delete(modelObj).Error
+	if err := q.db.Delete(modelObj).Error; err != nil {
+		q.Err = err
+		return q
+	}
+
+	if err := DeleteModelFixManyToManyAndPegAndPegAssoc(q.db, modelObj); err != nil {
+		q.Err = err
+		return q
+	}
+
+	return q
+}
+
+func (q *Query) DeleteMany(modelObjs []models.IModel) IQuery {
+	q.Reset()
+
+	// Collect all the ids, non can be nil
+	ids := make([]*datatypes.UUID, len(modelObjs))
+	for i, modelObj := range modelObjs {
+		ids[i] = modelObj.GetID()
+		if modelObj.GetID() == nil {
+			q.Err = errors.New("modelObj to delete cannot have an ID of nil")
+			return q
+		}
+	}
+
+	m := reflect.New(reflect.TypeOf(modelObjs[0]).Elem()).Interface().(models.IModel)
+	// Batch delete, not documented for Gorm v1 but actually works
+	if q.Err = q.db.Unscoped().Delete(m, ids).Error; q.Err != nil {
+		return q
+	}
+
+	for _, modelObj := range modelObjs {
+		if err := DeleteModelFixManyToManyAndPegAndPegAssoc(q.db, modelObj); err != nil {
+			q.Err = err
+			return q
+		}
+	}
 
 	return q
 }
