@@ -45,6 +45,12 @@ type TestModel struct {
 	// Any field with pegassoc should have association_autoupdate:false AND
 	// foreign key constraint for cat should have SET NULL on delete and update
 	Cats []Cat `gorm:"association_autoupdate:false;" betterrest:"pegassoc" json:"cats"`
+
+	FavoriteDog Dog `betterrest:"peg" json:"favoriteDog"`
+	FavoriteCat Cat `gorm:"association_autoupdate:false;" betterrest:"pegassoc" json:"favoriteCat"`
+
+	EvilDog *Dog `betterrest:"peg" json:"evilDog"`
+	EvilCat *Cat `gorm:"association_autoupdate:false;" betterrest:"pegassoc" json:"evilCat"`
 }
 
 type Cat struct {
@@ -111,7 +117,8 @@ func TestMain(m *testing.M) {
 
 	if err := db.AutoMigrate(&TestModel{}).AutoMigrate(&Dog{}).
 		AutoMigrate(&DogToy{}).AutoMigrate(&UnNested{}).AutoMigrate(&UnNestedInner{}).
-		AutoMigrate(&Cat{}).AddForeignKey("test_model_id", "test_model(id)", "SET NULL", "SET NULL").Error; err != nil {
+		AutoMigrate(&Cat{}).
+		AddForeignKey("test_model_id", "test_model(id)", "SET NULL", "SET NULL").Error; err != nil {
 		panic("failed to automigrate TestModel:" + err.Error())
 	}
 

@@ -30,7 +30,7 @@ func Q(db *gorm.DB, args ...interface{}) IQuery {
 // Instead of Q() directly, we can use DB().Q()
 // This is so it's easier to stubb out when testing
 func DB(db *gorm.DB) IQuery {
-	return &Query{db: db, dbori: db}
+	return Q(db) // no argument. That way mainMB would never be null
 }
 
 // Q is the query struct
@@ -183,6 +183,8 @@ func (q *Query) First(modelObj models.IModel) IQuery {
 
 	if q.mainMB != nil {
 		q.mainMB.modelObj = modelObj
+	} else {
+		q.db = q.db.Model(modelObj)
 	}
 
 	var err error
@@ -229,6 +231,8 @@ loop:
 
 	if q.mainMB != nil {
 		q.mainMB.modelObj = modelObj
+	} else {
+		q.db = q.db.Model(modelObj)
 	}
 
 	var err error
@@ -257,30 +261,33 @@ func (q *Query) buildQueryCore(db *gorm.DB, modelObj models.IModel) (*gorm.DB, e
 	var err error
 	db = buildPreload(db).Model(modelObj)
 
-	// handles main modelObj
-	q.mainMB.SortBuilderInfosByLevel() // now sorted, so our join statement can join in correct order
+	if q.mainMB != nil {
 
-	// // First-level queries that have no explicit join table
-	// for _, buildInfo := range q.mainMB.builderInfos {
-	// 	rel, err := buildInfo.builder.GetPredicateRelation()
-	// 	if err != nil {
-	// 		return db, err
-	// 	}
+		// handles main modelObj
+		q.mainMB.SortBuilderInfosByLevel() // now sorted, so our join statement can join in correct order
 
-	// 	if !DesignatorContainsDot(rel) { // where clause
-	// 		s, vals, err := rel.BuildQueryStringAndValues(q.mainMB.modelObj)
-	// 		if err != nil {
-	// 			return db, err
-	// 		}
-	// 		log.Println("s:", s)
-	// 		log.Printf("vals: %+v\n", vals)
-	// 		db = db.Where(s, vals...)
-	// 	}
-	// }
+		// // First-level queries that have no explicit join table
+		// for _, buildInfo := range q.mainMB.builderInfos {
+		// 	rel, err := buildInfo.builder.GetPredicateRelation()
+		// 	if err != nil {
+		// 		return db, err
+		// 	}
 
-	db, err = q.buildQueryCoreInnerJoin(db, q.mainMB)
-	if err != nil {
-		return db, err
+		// 	if !DesignatorContainsDot(rel) { // where clause
+		// 		s, vals, err := rel.BuildQueryStringAndValues(q.mainMB.modelObj)
+		// 		if err != nil {
+		// 			return db, err
+		// 		}
+		// 		log.Println("s:", s)
+		// 		log.Printf("vals: %+v\n", vals)
+		// 		db = db.Where(s, vals...)
+		// 	}
+		// }
+
+		db, err = q.buildQueryCoreInnerJoin(db, q.mainMB)
+		if err != nil {
+			return db, err
+		}
 	}
 
 	// Other non-nested tables
@@ -487,6 +494,8 @@ func (q *Query) Delete(modelObj models.IModel) IQuery {
 
 	if q.mainMB != nil {
 		q.mainMB.modelObj = modelObj
+	} else {
+		q.db = q.db.Model(modelObj)
 	}
 
 	// Won't work, builtqueryCore has "ORDER BY Clause"

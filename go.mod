@@ -21,4 +21,5 @@ require (
 	github.com/stretchr/testify v1.6.1
 	github.com/twpayne/go-geom v1.3.4
 	golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9
+	gorm.io/gorm v1.21.14
 )

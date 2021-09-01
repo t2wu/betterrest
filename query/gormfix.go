@@ -106,19 +106,22 @@ func markForDelete(db *gorm.DB, v reflect.Value, car cargo) error {
 			switch v.Field(i).Kind() {
 			case reflect.Struct:
 				m := v.Field(i).Addr().Interface().(models.IModel)
-				fieldTableName := models.GetTableNameFromIModel(m)
-				if _, ok := car.toProcess[fieldTableName]; ok {
-					mids := car.toProcess[fieldTableName]
-					mids.ids = append(mids.ids, m.GetID())
-					car.toProcess[fieldTableName] = mids
-				} else {
-					arr := make([]interface{}, 1)
-					arr[0] = m.GetID()
-					car.toProcess[fieldTableName] = modelAndIds{modelObj: m, ids: arr}
-				}
-				// Traverse into it
-				if err := markForDelete(db, v.Field(i), car); err != nil {
-					return err
+				if m.GetID() != nil { // could be embedded struct that never get initialiezd
+					fieldTableName := models.GetTableNameFromIModel(m)
+					if _, ok := car.toProcess[fieldTableName]; ok {
+						mids := car.toProcess[fieldTableName]
+						mids.ids = append(mids.ids, m.GetID())
+						car.toProcess[fieldTableName] = mids
+					} else {
+						arr := make([]interface{}, 1)
+						arr[0] = m.GetID()
+						car.toProcess[fieldTableName] = modelAndIds{modelObj: m, ids: arr}
+					}
+
+					// Traverse into it
+					if err := markForDelete(db, v.Field(i), car); err != nil {
+						return err
+					}
 				}
 			case reflect.Slice:
 				typ := v.Type().Field(i).Type.Elem()
@@ -141,9 +144,25 @@ func markForDelete(db *gorm.DB, v reflect.Value, car cargo) error {
 					}
 				}
 			case reflect.Ptr:
-				// Unbox the pointer
-				if err := markForDelete(db, v.Elem(), car); err != nil {
-					return err
+				if !isNil(v.Field(i)) && !isNil(v.Field(i).Elem()) &&
+					v.Field(i).IsValid() && v.Field(i).Elem().IsValid() {
+					imodel := v.Field(i).Interface().(models.IModel)
+					fieldTableName := models.GetTableNameFromIModel(imodel)
+					id := v.Field(i).Interface().(models.IModel).GetID()
+
+					if _, ok := car.toProcess[fieldTableName]; ok {
+						mids := car.toProcess[fieldTableName]
+						mids.ids = append(mids.ids, id)
+						car.toProcess[fieldTableName] = mids
+					} else {
+						arr := make([]interface{}, 1)
+						arr[0] = id
+						car.toProcess[fieldTableName] = modelAndIds{modelObj: imodel, ids: arr}
+					}
+
+					if err := markForDelete(db, v.Field(i).Elem(), car); err != nil {
+						return err
+					}
 				}
 			}
 		} else if strings.HasPrefix(t, "pegassoc-manytomany") {
@@ -245,18 +264,46 @@ func CreatePeggedAssocFields(db *gorm.DB, modelObj models.IModel) (err error) {
 					tableName := models.GetTableNameFromIModel(modelObj)
 					correspondingColumnName := tableName + "_id"
 
-					db.Model(nestedModel).Update(correspondingColumnName, modelObj.GetID())
+					if err := db.Model(nestedModel).Update(correspondingColumnName, modelObj.GetID()).Error; err != nil {
+						return err
+					}
 
 					// // this loops forever unlike update, why?
 					// if err = db.Set("gorm:association_autoupdate", true).Model(modelObj).Association(columnName).Append(nestedModel).Error; err != nil {
 					// 	return err
 					// }
 				}
-
+			case reflect.Ptr:
+				nestedModel := v.Field(i).Interface()
+				nestedIModel, ok := nestedModel.(models.IModel)
+				if ok && !isNil(nestedIModel) && nestedIModel.GetID() != nil {
+					tableName := models.GetTableNameFromIModel(modelObj)
+					correspondingColumnName := tableName + "_id"
+					// Where clause is not needed when the embedded is a struct, but if it's a pointer to struct then it's needed
+					if err := db.Model(nestedModel).Where("id = ?", nestedModel.(models.IModel).GetID()).Update(correspondingColumnName, modelObj.GetID()).Error; err != nil {
+						return err
+					}
+				}
+			case reflect.Struct:
+				nestedModel := v.Field(i).Addr().Interface()
+				nestedIModel, ok := nestedModel.(models.IModel)
+				if ok && nestedIModel.GetID() != nil {
+					tableName := models.GetTableNameFromIModel(modelObj)
+					correspondingColumnName := tableName + "_id"
+					// Where clause is not needed when the embedded is a struct, but if it's a pointer to struct then it's needed
+					if err := db.Model(nestedModel).Where("id = ?", nestedModel.(models.IModel).GetID()).Update(correspondingColumnName, modelObj.GetID()).Error; err != nil {
+						return err
+					}
+				}
 			default:
 				// embedded object is considered part of the structure, so no removal
 			}
 		}
 	}
 	return nil
+}
+
+func isNil(a interface{}) bool {
+	defer func() { recover() }()
+	return a == nil || reflect.ValueOf(a).IsNil()
 }
