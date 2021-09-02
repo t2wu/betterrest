@@ -198,6 +198,13 @@ func TestQueryFind_WhenNotFound_ShouldNotGiveAnError(t *testing.T) {
 	assert.Equal(t, 0, len(tms))
 }
 
+func TestQueryFind_WhenActuallyGivenAModel_AndNotFound_ShouldGiveAnError(t *testing.T) {
+	tm := TestModel{}
+
+	err := Q(db, C("Name =", "Greg")).Find(&tm).Error()
+	assert.Error(t, err)
+}
+
 func TestQueryFind_WithoutCriteria_ShouldGetAll(t *testing.T) {
 	tms := make([]TestModel, 0)
 

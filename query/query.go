@@ -462,12 +462,20 @@ func (q *Query) Create(modelObj models.IModel) IQuery {
 func (q *Query) CreateMany(modelObjs []models.IModel) IQuery {
 	q.Reset()
 
+	car := BatchCreateData{}
+	car.toProcess = make(map[string][]models.IModel)
+
 	// TODO: do a batch create instead
 	for _, modelObj := range modelObjs {
 		q.Err = q.db.Create(modelObj).Error
 		if q.Err != nil {
 			return q
 		}
+
+		// if err := gatherModelToCreate(reflect.ValueOf(modelObj).Elem(), &car); err != nil {
+		// 	q.Err = err
+		// 	return q
+		// }
 
 		// For pegassociated, the since we expect association_autoupdate:false
 		// need to manually create it
@@ -476,6 +484,16 @@ func (q *Query) CreateMany(modelObjs []models.IModel) IQuery {
 			return q
 		}
 	}
+
+	// for tableName, ms := range car.toProcess {
+	// 	q.db = q.GetDBOri().Table(tableName)
+	// 	for _, m := range ms {
+	// 		if err := q.db.Create(m).Error; err != nil {
+	// 			q.Err = err
+	// 			return q
+	// 		}
+	// 	}
+	// }
 
 	return q
 }
