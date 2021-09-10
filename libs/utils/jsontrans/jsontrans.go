@@ -144,9 +144,17 @@ func cherryPickCore(data map[string]interface{}, f *JSONFields, dataPicked map[s
 				dataPicked[k] = make([]interface{}, 0)
 			} else if v == FieldOmitEmpty {
 				// ignore
-			} else {
-				// if nil, default to empty list
-				dataPicked[k] = make([]interface{}, 0)
+			} else if transformStruct, ok := v.(IFieldTransformModelToJSON); ok {
+				transV, err := transformStruct.TransformModelToJSON(data[k])
+				if err != nil {
+					return err
+				}
+				dataPicked[k] = transV
+			} else { // v can be nil, or other default value
+				dataPicked[k] = data[k]
+
+				// // if nil, default to empty list
+				// dataPicked[k] = make([]interface{}, 0)
 			}
 			// log.Println("reflect.TypeOf(data[k]):", reflect.TypeOf(data[k]))
 		} else if datastring, ok := data[k].(string); ok && datastring == "" {
