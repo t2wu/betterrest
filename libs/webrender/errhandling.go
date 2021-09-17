@@ -434,22 +434,10 @@ func (e *ErrResponse) Render(w http.ResponseWriter, r *http.Request) error {
 	// Status sets a HTTP response status code hint into request context at any point
 	// during the request life-cycle. Before the Responder sends its response header
 	// it will check the StatusCtxKey
+	w.Header().Set("Cache-Control", "no-store")
 	render.Status(r, e.HTTPStatusCode)
 	// render.JSON
 	return nil
-}
-
-// WriteOK writes a code 0 response
-func WriteOK(w http.ResponseWriter) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.Write([]byte("{ \"code\": 0 }"))
-}
-
-// WriteBytes writes code 0 and a content
-func WriteBytes(w http.ResponseWriter, jsonBytes []byte) {
-	content := fmt.Sprintf("{ \"code\": 0, \"content\": %s }", string(jsonBytes))
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.Write([]byte(content))
 }
 
 // errorToSensibleString handles SQL error more sensible

@@ -182,6 +182,7 @@ func RenderModel(w http.ResponseWriter, r *http.Request, typeString string, mode
 	content := fmt.Sprintf("{ \"code\": 0, \"content\": %s }", string(jsonBytes))
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
 	w.Write([]byte(content))
 }
 
@@ -208,6 +209,7 @@ func RenderModelSlice(w http.ResponseWriter, r *http.Request, typeString string,
 
 	data := []byte(content)
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Content-Length", strconv.Itoa(len(data)))
 	w.Write(data)
 }
@@ -220,6 +222,7 @@ func UserLoginHandler(typeString string) func(c *gin.Context) {
 		w, r := c.Writer, c.Request
 
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-store")
 
 		tx := db.Shared().Begin()
 		defer func(tx *gorm.DB) {
@@ -1043,10 +1046,9 @@ func SendVerificationEmailHandler(typeString string, mapper datamapper.IEmailVer
 			render.Render(w, r, webrender.NewErrBadRequest(err)) // maybe another type of error?
 		} else {
 			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			w.Header().Set("Cache-Control", "no-store")
 			w.Write([]byte("{\"code\": 0}"))
 		}
-
-		return
 	}
 }
 
@@ -1086,10 +1088,9 @@ func EmailVerificationHandler(typeString string, mapper datamapper.IEmailVerific
 			render.Render(w, r, webrender.NewErrBadRequest(err)) // maybe another type of error?
 		} else {
 			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			w.Header().Set("Cache-Control", "no-store")
 			w.Write([]byte("{\"code\": 0}"))
 		}
-
-		return
 	}
 }
 
@@ -1127,10 +1128,9 @@ func SendResetPasswordHandler(typeString string, mapper datamapper.IResetPasswor
 			render.Render(w, r, webrender.NewErrBadRequest(err)) // maybe another type of error?
 		} else {
 			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			w.Header().Set("Cache-Control", "no-store")
 			w.Write([]byte("{\"code\": 0}"))
 		}
-
-		return
 	}
 }
 
@@ -1179,6 +1179,7 @@ func PasswordResetHandler(typeString string, mapper datamapper.IResetPasswordMap
 			render.Render(w, r, webrender.NewErrBadRequest(err)) // maybe another type of error?
 		} else {
 			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			w.Header().Set("Cache-Control", "no-store")
 			w.Write([]byte("{\"code\": 0}"))
 		}
 
@@ -1188,7 +1189,5 @@ func PasswordResetHandler(typeString string, mapper datamapper.IResetPasswordMap
 		// 	c.Redirect(http.StatusFound, redirectURL)
 		// 	return
 		// }
-
-		return
 	}
 }
