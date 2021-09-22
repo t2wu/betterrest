@@ -150,7 +150,12 @@ func cherryPickCore(data map[string]interface{}, f *JSONFields, dataPicked map[s
 					return err
 				}
 				dataPicked[k] = transV
-			} else { // v can be nil, or other default value
+			} else if _, ok := v.(JSONFields); ok {
+				// if nil array or nil struct, so far struct
+				// right now I could not tell array and struct apart, (a design flaw),
+				// but I don't have struct pointer fields.
+				dataPicked[k] = make([]interface{}, 0)
+			} else { // v can be nil, or other default value. when array is
 				dataPicked[k] = data[k]
 
 				// // if nil, default to empty list
