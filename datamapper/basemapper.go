@@ -275,6 +275,9 @@ func (mapper *BaseMapper) UpdateMany(db *gorm.DB, who models.Who, typeString str
 		return nil, err
 	}
 
+	// load and check is not in the same order as modelobj
+	oldModelObjs = mapper.sortOldModelByIds(oldModelObjs, ids)
+
 	before := models.ModelRegistry[typeString].BeforeUpdate
 	after := models.ModelRegistry[typeString].AfterUpdate
 	j := batchOpJob{
@@ -357,6 +360,9 @@ func (mapper *BaseMapper) PatchMany(db *gorm.DB, who models.Who, typeString stri
 	if err != nil {
 		return nil, err
 	}
+
+	// load and check is not in the same order as modelobj
+	oldModelObjs = mapper.sortOldModelByIds(oldModelObjs, ids)
 
 	// Hookpoint BEFORE BeforeCRUD and BeforePatch
 	// This is called BEFORE the actual patch
@@ -490,3 +496,17 @@ func (mapper *BaseMapper) DeleteMany(db *gorm.DB, who models.Who, typeString str
 }
 
 // ----------------------------------------------------------------------------------------
+
+func (mapper *BaseMapper) sortOldModelByIds(oldModelObjs []models.IModel, ids []*datatypes.UUID) []models.IModel {
+	// build dictionary of old model objs
+	mapping := make(map[string]models.IModel)
+	for _, oldModelObj := range oldModelObjs {
+		mapping[oldModelObj.GetID().String()] = oldModelObj
+	}
+
+	oldModelObjSorted := make([]models.IModel, 0)
+	for _, id := range ids {
+		oldModelObjSorted = append(oldModelObjSorted, mapping[id.String()])
+	}
+	return oldModelObjSorted
+}
