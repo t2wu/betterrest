@@ -164,10 +164,11 @@ func modelObjsToJSON(typeString string, modelObjs []models.IModel, roles []model
 	return content, nil
 }
 
-func RenderModel(c *gin.Context, modelObj models.IModel, hpdata *models.HookPointData) {
+func RenderModel(c *gin.Context, modelObj models.IModel, hpdata *models.HookPointData, op models.CRUPDOp) {
 	if mrender, ok := modelObj.(models.IHasRenderer); ok {
-		c.Writer.Write(mrender.Render(hpdata))
-		return
+		if mrender.Render(c, hpdata, op) {
+			return
+		}
 	}
 
 	RenderJSONForModel(c, modelObj, hpdata)
@@ -189,10 +190,12 @@ func RenderJSONForModel(c *gin.Context, modelObj models.IModel, hpdata *models.H
 	c.Writer.Write([]byte(content))
 }
 
-func RenderModelSlice(c *gin.Context, modelObjs []models.IModel, total *int, bhpdata *models.BatchHookPointData) {
-	if models.ModelRegistry[bhpdata.TypeString].BatchRenderer != nil {
-		c.Writer.Write(models.ModelRegistry[bhpdata.TypeString].BatchRenderer(bhpdata.Roles, bhpdata.Who, modelObjs))
-		return
+func RenderModelSlice(c *gin.Context, modelObjs []models.IModel, total *int, bhpdata *models.BatchHookPointData, op models.CRUPDOp) {
+	// BatchRenderer
+	if renderer := models.ModelRegistry[bhpdata.TypeString].BatchRenderer; renderer != nil {
+		if renderer(c, modelObjs, bhpdata, op) {
+			return
+		}
 	}
 
 	jsonString, err := modelObjsToJSON(bhpdata.TypeString, modelObjs, bhpdata.Roles, bhpdata.Who)
@@ -455,7 +458,7 @@ func GetAllHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin
 				afterTransact(bhpData, models.CRUPDOpRead)
 			}
 
-			RenderModelSlice(c, modelObjs, no, &bhpData)
+			RenderModelSlice(c, modelObjs, no, &bhpData, models.CRUPDOpRead)
 		}
 	}
 }
@@ -506,7 +509,7 @@ func CreateHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin
 			if err != nil {
 				render.Render(w, c.Request, webrender.NewErrCreate(err))
 			} else {
-				roles := make([]models.UserRole, len(modelObjs), len(modelObjs))
+				roles := make([]models.UserRole, len(modelObjs))
 				// admin is 0 so it's ok
 				for i := 0; i < len(modelObjs); i++ {
 					roles[i] = models.UserRoleAdmin
@@ -518,7 +521,7 @@ func CreateHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin
 				if afterTransact := models.ModelRegistry[typeString].AfterTransact; afterTransact != nil {
 					afterTransact(bhpData, models.CRUPDOpCreate)
 				}
-				RenderModelSlice(c, modelObjs, nil, &bhpData)
+				RenderModelSlice(c, modelObjs, nil, &bhpData, models.CRUPDOpCreate)
 			}
 		} else {
 			cargo := models.ModelCargo{}
@@ -542,7 +545,7 @@ func CreateHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin
 				if v, ok := modelObj.(models.IAfterTransact); ok {
 					v.AfterTransact(hpdata, models.CRUPDOpCreate)
 				}
-				RenderModel(c, modelObj, &hpdata)
+				RenderModel(c, modelObj, &hpdata, models.CRUPDOpCreate)
 			}
 		}
 	}
@@ -596,10 +599,8 @@ func ReadOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *gi
 			if v, ok := modelObj.(models.IAfterTransact); ok {
 				v.AfterTransact(hpdata, models.CRUPDOpRead)
 			}
-			RenderModel(c, modelObj, &hpdata)
+			RenderModel(c, modelObj, &hpdata, models.CRUPDOpRead)
 		}
-
-		return
 	}
 }
 
@@ -664,10 +665,8 @@ func UpdateOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 			if v, ok := modelObj2.(models.IAfterTransact); ok {
 				v.AfterTransact(hpdata, models.CRUPDOpUpdate)
 			}
-			RenderModel(c, modelObj2, &hpdata)
+			RenderModel(c, modelObj2, &hpdata, models.CRUPDOpUpdate)
 		}
-
-		return
 	}
 }
 
@@ -715,7 +714,7 @@ func UpdateManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 		if err != nil {
 			render.Render(w, r, webrender.NewErrUpdate(err))
 		} else {
-			roles := make([]models.UserRole, len(modelObjs2), len(modelObjs2))
+			roles := make([]models.UserRole, len(modelObjs2))
 			for i := 0; i < len(roles); i++ {
 				roles[i] = models.UserRoleAdmin
 			}
@@ -728,10 +727,8 @@ func UpdateManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 				afterTransact(bhpData, models.CRUPDOpUpdate)
 			}
 
-			RenderModelSlice(c, modelObjs2, nil, &bhpData)
+			RenderModelSlice(c, modelObjs2, nil, &bhpData, models.CRUPDOpUpdate)
 		}
-
-		return
 	}
 }
 
@@ -791,15 +788,8 @@ func PatchOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *g
 			if v, ok := modelObj.(models.IAfterTransact); ok {
 				v.AfterTransact(hpdata, models.CRUPDOpPatch)
 			}
-			RenderModel(c, modelObj, &hpdata)
+			RenderModel(c, modelObj, &hpdata, models.CRUPDOpPatch)
 		}
-
-		// type JSONPatch struct {
-		// 	Op    string
-		// 	Path  string
-		// 	Value interface{}
-		// }
-		return
 	}
 }
 
@@ -846,7 +836,7 @@ func PatchManyHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 		if err != nil {
 			render.Render(w, r, webrender.NewErrUpdate(err))
 		} else {
-			roles := make([]models.UserRole, len(modelObjs), len(modelObjs))
+			roles := make([]models.UserRole, len(modelObjs))
 			for i := 0; i < len(roles); i++ {
 				roles[i] = models.UserRoleAdmin
 			}
@@ -859,10 +849,8 @@ func PatchManyHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 				afterTransact(bhpData, models.CRUPDOpPatch)
 			}
 
-			RenderModelSlice(c, modelObjs, nil, &bhpData)
+			RenderModelSlice(c, modelObjs, nil, &bhpData, models.CRUPDOpPatch)
 		}
-
-		return
 	}
 }
 
@@ -914,10 +902,8 @@ func DeleteOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 			if v, ok := modelObj.(models.IAfterTransact); ok {
 				v.AfterTransact(hpdata, models.CRUPDOpDelete)
 			}
-			RenderModel(c, modelObj, &hpdata)
+			RenderModel(c, modelObj, &hpdata, models.CRUPDOpDelete)
 		}
-
-		return
 	}
 }
 
@@ -957,7 +943,7 @@ func DeleteManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 		if err != nil {
 			render.Render(w, r, webrender.NewErrDelete(err))
 		} else {
-			roles := make([]models.UserRole, len(modelObjs), len(modelObjs))
+			roles := make([]models.UserRole, len(modelObjs))
 			for i := 0; i < len(roles); i++ {
 				roles[i] = models.UserRoleAdmin
 			}
@@ -970,10 +956,8 @@ func DeleteManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 				afterTransact(bhpData, models.CRUPDOpDelete)
 			}
 
-			RenderModelSlice(c, modelObjs, nil, &bhpData)
+			RenderModelSlice(c, modelObjs, nil, &bhpData, models.CRUPDOpDelete)
 		}
-
-		return
 	}
 }
 
@@ -1022,10 +1006,9 @@ func EmailChangePasswordHandler(typeString string, mapper datamapper.IChangeEmai
 			role := models.UserRoleAdmin
 			hpdata := models.HookPointData{DB: nil, Who: who, TypeString: typeString,
 				URLParams: nil, Role: &role, Cargo: nil}
-			RenderModel(c, modelObj, &hpdata)
-		}
 
-		return
+			RenderJSONForModel(c, modelObj2, &hpdata)
+		}
 	}
 }
 

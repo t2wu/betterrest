@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/gin-gonic/gin"
 	"github.com/t2wu/betterrest/libs/settings"
 
 	"github.com/jinzhu/gorm"
@@ -336,7 +337,7 @@ func (r *Registrar) BatchDeleteHooks(
 }
 
 // BatchRenderer register custom batch renderer (do your own output, not necessarily JSON)
-func (r *Registrar) BatchRenderer(renderer func(roles []models.UserRole, who models.Who, modelObj []models.IModel) []byte) *Registrar {
+func (r *Registrar) BatchRenderer(renderer func(c *gin.Context, ms []models.IModel, bhpdata *models.BatchHookPointData, op models.CRUPDOp) bool) *Registrar {
 	typeString := r.currentTypeString
 
 	if _, ok := models.ModelRegistry[typeString]; !ok {

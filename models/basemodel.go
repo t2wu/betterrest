@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/stoewer/go-strcase"
 	"github.com/t2wu/betterrest/libs/datatypes"
 	"github.com/t2wu/betterrest/libs/urlparam"
@@ -115,39 +116,6 @@ type IModel interface {
 	SetID(id *datatypes.UUID)
 }
 
-// IHasPermissions is for IModel with a custom permission field to cherry pick json fields
-// default is to return all but the dates
-type IHasPermissions interface {
-	Permissions(role UserRole, who Who) (jsontrans.Permission, jsontrans.JSONFields)
-}
-
-// IHasRenderer is for formatting IModel with a custom function
-// basically do your own custom output
-// For batch renderer, register a Render(r UserRole, who Who, modelObjs []IModel) []byte
-type IHasRenderer interface {
-	Render(hpdata *HookPointData) []byte
-}
-
-// This is registered
-// // IHasBatchRender is for formatting []IModel with a custom function
-// // basically do your own custom output
-// type IHasBatchRender interface {
-// 	Render(r UserRole, who Who, modelObjs []IModel) []byte
-// }
-
-// Inside content is an array of JSONIDPatch
-// {
-// content:[
-// {
-//   "id": "2f9795fd-fb39-4ea5-af69-14bfa69840aa",
-//   "patches": [
-// 	  { "op": "test", "path": "/a/b/c", "value": "foo" },
-// 	  { "op": "remove", "path": "/a/b/c" },
-//   ]
-// }
-// ]
-// }
-
 // JSONIDPatch is the stuff inside "content" for PatchMany operation
 type JSONIDPatch struct {
 	ID    *datatypes.UUID `json:"id"`
@@ -159,13 +127,6 @@ type JSONIDPatch struct {
 // OrgModelTypeFromOrgResourceTypeString given org resource typeString
 // returns the reflect type of the organization
 func OrgModelTypeFromOrgResourceTypeString(typeString string) reflect.Type {
-	// if ModelRegistry[typeString].Mapper != MapperTypeViaOrganization {
-	// 	// Programming error
-	// 	panic(fmt.Sprintf("TypeString %s does not represents a resource under organization", typeString))
-	// }
-
-	// return reflect.TypeOf(NewOrgModelFromOrgResourceTypeString(typeString))
-
 	if ModelRegistry[typeString].Mapper != MapperTypeViaOrganization {
 		// Programming error
 		panic(fmt.Sprintf("TypeString %s does not represents a resource under organization", typeString))
@@ -399,6 +360,20 @@ type IAfterTransact interface {
 // IValidate supports validation with govalidator
 type IValidate interface {
 	Validate(who Who, http HTTP) error
+}
+
+// IHasPermissions is for IModel with a custom permission field to cherry pick json fields
+// default is to return all but the dates
+type IHasPermissions interface {
+	Permissions(role UserRole, who Who) (jsontrans.Permission, jsontrans.JSONFields)
+}
+
+// IHasRenderer is for formatting IModel with a custom function
+// basically do your own custom output
+// If return false, use the default JSON output
+// For batch renderer, register a Render(r UserRole, who Who, modelObjs []IModel) bool
+type IHasRenderer interface {
+	Render(c *gin.Context, hpdata *HookPointData, op CRUPDOp) bool
 }
 
 // ------------------------------------

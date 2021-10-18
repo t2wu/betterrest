@@ -3,6 +3,7 @@ package models
 import (
 	"reflect"
 
+	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
 	"github.com/t2wu/betterrest/libs/urlparam"
 )
@@ -115,7 +116,7 @@ type Reg struct {
 	BeforeDelete func(bhpData BatchHookPointData) error
 	AfterDelete  func(bhpData BatchHookPointData) error
 
-	BatchRenderer func(roles []UserRole, who Who, modelObj []IModel) []byte
+	BatchRenderer func(c *gin.Context, ms []IModel, bhpdata *BatchHookPointData, op CRUPDOp) bool
 }
 
 // func (g *Gateway) AfterCreateDB(db *gorm.DB, typeString string) error {
