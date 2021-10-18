@@ -164,39 +164,41 @@ func modelObjsToJSON(typeString string, modelObjs []models.IModel, roles []model
 	return content, nil
 }
 
-// RenderModel :-
-func RenderModel(w http.ResponseWriter, r *http.Request, typeString string, modelObj models.IModel, role models.UserRole, who models.Who) {
+func RenderModel(c *gin.Context, modelObj models.IModel, hpdata *models.HookPointData) {
 	if mrender, ok := modelObj.(models.IHasRenderer); ok {
-		w.Write(mrender.Render(role, who))
+		c.Writer.Write(mrender.Render(hpdata))
 		return
 	}
 
+	RenderJSONForModel(c, modelObj, hpdata)
+}
+
+func RenderJSONForModel(c *gin.Context, modelObj models.IModel, hpdata *models.HookPointData) {
 	// render.JSON(w, r, modelObj) // cannot use this since no picking the field we need
-	jsonBytes, err := tools.ToJSON(typeString, modelObj, role, who)
+	jsonBytes, err := tools.ToJSON(hpdata.TypeString, modelObj, *hpdata.Role, hpdata.Who)
 	if err != nil {
 		log.Println("Error in RenderModel:", err)
-		render.Render(w, r, webrender.NewErrGenJSON(err))
+		render.Render(c.Writer, c.Request, webrender.NewErrGenJSON(err))
 		return
 	}
 
 	content := fmt.Sprintf("{ \"code\": 0, \"content\": %s }", string(jsonBytes))
 
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.Header().Set("Cache-Control", "no-store")
-	w.Write([]byte(content))
+	c.Writer.Header().Set("Content-Type", "application/json; charset=utf-8")
+	c.Writer.Header().Set("Cache-Control", "no-store")
+	c.Writer.Write([]byte(content))
 }
 
-// RenderModelSlice :-
-func RenderModelSlice(w http.ResponseWriter, r *http.Request, typeString string, modelObjs []models.IModel, roles []models.UserRole, total *int, who models.Who) {
-	if models.ModelRegistry[typeString].BatchRenderer != nil {
-		w.Write(models.ModelRegistry[typeString].BatchRenderer(roles, who, modelObjs))
+func RenderModelSlice(c *gin.Context, modelObjs []models.IModel, total *int, bhpdata *models.BatchHookPointData) {
+	if models.ModelRegistry[bhpdata.TypeString].BatchRenderer != nil {
+		c.Writer.Write(models.ModelRegistry[bhpdata.TypeString].BatchRenderer(bhpdata.Roles, bhpdata.Who, modelObjs))
 		return
 	}
 
-	jsonString, err := modelObjsToJSON(typeString, modelObjs, roles, who)
+	jsonString, err := modelObjsToJSON(bhpdata.TypeString, modelObjs, bhpdata.Roles, bhpdata.Who)
 	if err != nil {
 		log.Println("Error in RenderModelSlice:", err)
-		render.Render(w, r, webrender.NewErrGenJSON(err))
+		render.Render(c.Writer, c.Request, webrender.NewErrGenJSON(err))
 		return
 	}
 
@@ -208,10 +210,10 @@ func RenderModelSlice(w http.ResponseWriter, r *http.Request, typeString string,
 	}
 
 	data := []byte(content)
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.Header().Set("Cache-Control", "no-store")
-	w.Header().Set("Content-Length", strconv.Itoa(len(data)))
-	w.Write(data)
+	c.Writer.Header().Set("Content-Type", "application/json; charset=utf-8")
+	c.Writer.Header().Set("Cache-Control", "no-store")
+	c.Writer.Header().Set("Content-Length", strconv.Itoa(len(data)))
+	c.Writer.Write(data)
 }
 
 // ---------------------------------------------
@@ -445,16 +447,16 @@ func GetAllHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin
 		if err != nil {
 			render.Render(w, r, webrender.NewErrInternalServerError(err))
 		} else {
+			bhpData := models.BatchHookPointData{Ms: modelObjs, DB: nil, Who: who,
+				TypeString: typeString, Roles: roles, URLParams: &options, Cargo: &cargo}
+
 			// the batch afterTransact hookpoint
 			if afterTransact := models.ModelRegistry[typeString].AfterTransact; afterTransact != nil {
-				bhpData := models.BatchHookPointData{Ms: modelObjs, DB: nil, Who: who,
-					TypeString: typeString, Roles: roles, URLParams: &options, Cargo: &cargo}
 				afterTransact(bhpData, models.CRUPDOpRead)
 			}
-			RenderModelSlice(w, r, typeString, modelObjs, roles, no, who)
-		}
 
-		return
+			RenderModelSlice(c, modelObjs, no, &bhpData)
+		}
 	}
 }
 
@@ -498,10 +500,9 @@ func CreateHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin
 					log.Println("Error in CreateMany:", typeString, err2)
 					return err2
 				}
-
-				// RenderModelSlice(w, r, typeString, modelObjs, roles, nil, who)
 				return nil
 			})
+
 			if err != nil {
 				render.Render(w, c.Request, webrender.NewErrCreate(err))
 			} else {
@@ -510,13 +511,14 @@ func CreateHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin
 				for i := 0; i < len(modelObjs); i++ {
 					roles[i] = models.UserRoleAdmin
 				}
+
+				bhpData := models.BatchHookPointData{Ms: modelObjs, DB: nil, Who: who,
+					TypeString: typeString, Roles: roles, URLParams: &options, Cargo: &cargo}
 				// the batch afterTransact hookpoint
 				if afterTransact := models.ModelRegistry[typeString].AfterTransact; afterTransact != nil {
-					bhpData := models.BatchHookPointData{Ms: modelObjs, DB: nil, Who: who,
-						TypeString: typeString, Roles: roles, URLParams: &options, Cargo: &cargo}
 					afterTransact(bhpData, models.CRUPDOpCreate)
 				}
-				RenderModelSlice(w, r, typeString, modelObjs, roles, nil, who)
+				RenderModelSlice(c, modelObjs, nil, &bhpData)
 			}
 		} else {
 			cargo := models.ModelCargo{}
@@ -534,12 +536,13 @@ func CreateHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin
 			if err != nil {
 				render.Render(w, c.Request, webrender.NewErrCreate(err))
 			} else {
+				role := models.UserRoleAdmin
+				hpdata := models.HookPointData{DB: nil, Who: who, TypeString: typeString,
+					URLParams: &options, Role: &role, Cargo: &cargo}
 				if v, ok := modelObj.(models.IAfterTransact); ok {
-					hpdata := models.HookPointData{DB: nil, Who: who, TypeString: typeString,
-						URLParams: &options, Cargo: &cargo}
 					v.AfterTransact(hpdata, models.CRUPDOpCreate)
 				}
-				RenderModel(w, r, typeString, modelObj, models.UserRoleAdmin, who)
+				RenderModel(c, modelObj, &hpdata)
 			}
 		}
 	}
@@ -588,12 +591,12 @@ func ReadOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *gi
 		} else if err != nil {
 			render.Render(w, r, webrender.NewErrInternalServerError(err))
 		} else {
+			hpdata := models.HookPointData{DB: nil, Who: who, TypeString: typeString, Cargo: &cargo,
+				URLParams: &options, Role: &role}
 			if v, ok := modelObj.(models.IAfterTransact); ok {
-				hpdata := models.HookPointData{DB: nil, Who: who, TypeString: typeString, Cargo: &cargo,
-					URLParams: &options}
 				v.AfterTransact(hpdata, models.CRUPDOpRead)
 			}
-			RenderModel(w, r, typeString, modelObj, role, who)
+			RenderModel(c, modelObj, &hpdata)
 		}
 
 		return
@@ -655,12 +658,13 @@ func UpdateOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 		if err != nil {
 			render.Render(w, r, webrender.NewErrUpdate(err))
 		} else {
-			if v, ok := modelObj.(models.IAfterTransact); ok {
-				hpdata := models.HookPointData{DB: nil, Who: who, TypeString: typeString,
-					URLParams: &options, Cargo: &cargo}
+			role := models.UserRoleAdmin
+			hpdata := models.HookPointData{DB: nil, Who: who, TypeString: typeString,
+				URLParams: &options, Role: &role, Cargo: &cargo}
+			if v, ok := modelObj2.(models.IAfterTransact); ok {
 				v.AfterTransact(hpdata, models.CRUPDOpUpdate)
 			}
-			RenderModel(w, r, typeString, modelObj2, models.UserRoleAdmin, who)
+			RenderModel(c, modelObj2, &hpdata)
 		}
 
 		return
@@ -715,14 +719,16 @@ func UpdateManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 			for i := 0; i < len(roles); i++ {
 				roles[i] = models.UserRoleAdmin
 			}
+
+			bhpData := models.BatchHookPointData{Ms: modelObjs, DB: nil, Who: who,
+				TypeString: typeString, Roles: roles, URLParams: &options, Cargo: &cargo}
+
 			// the batch afterTransact hookpoint
 			if afterTransact := models.ModelRegistry[typeString].AfterTransact; afterTransact != nil {
-				bhpData := models.BatchHookPointData{Ms: modelObjs, DB: nil, Who: who,
-					TypeString: typeString, Roles: roles, URLParams: &options, Cargo: &cargo}
 				afterTransact(bhpData, models.CRUPDOpUpdate)
 			}
 
-			RenderModelSlice(w, r, typeString, modelObjs2, roles, nil, who)
+			RenderModelSlice(c, modelObjs2, nil, &bhpData)
 		}
 
 		return
@@ -779,12 +785,13 @@ func PatchOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *g
 		if err != nil {
 			render.Render(w, r, webrender.NewErrPatch(err))
 		} else {
+			role := models.UserRoleAdmin
+			hpdata := models.HookPointData{DB: nil, Who: who, TypeString: typeString,
+				URLParams: &options, Role: &role, Cargo: &cargo}
 			if v, ok := modelObj.(models.IAfterTransact); ok {
-				hpdata := models.HookPointData{DB: nil, Who: who, TypeString: typeString,
-					URLParams: &options, Cargo: &cargo}
 				v.AfterTransact(hpdata, models.CRUPDOpPatch)
 			}
-			RenderModel(w, r, typeString, modelObj, models.UserRoleAdmin, who)
+			RenderModel(c, modelObj, &hpdata)
 		}
 
 		// type JSONPatch struct {
@@ -843,13 +850,16 @@ func PatchManyHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 			for i := 0; i < len(roles); i++ {
 				roles[i] = models.UserRoleAdmin
 			}
+
+			bhpData := models.BatchHookPointData{Ms: modelObjs, DB: nil, Who: who,
+				TypeString: typeString, Roles: roles, URLParams: &options, Cargo: &cargo}
+
 			// the batch afterTransact hookpoint
 			if afterTransact := models.ModelRegistry[typeString].AfterTransact; afterTransact != nil {
-				bhpData := models.BatchHookPointData{Ms: modelObjs, DB: nil, Who: who,
-					TypeString: typeString, Roles: roles, URLParams: &options, Cargo: &cargo}
 				afterTransact(bhpData, models.CRUPDOpPatch)
 			}
-			RenderModelSlice(w, r, typeString, modelObjs, roles, nil, who)
+
+			RenderModelSlice(c, modelObjs, nil, &bhpData)
 		}
 
 		return
@@ -898,12 +908,13 @@ func DeleteOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 		if err != nil {
 			render.Render(w, r, webrender.NewErrDelete(err))
 		} else {
+			role := models.UserRoleAdmin
+			hpdata := models.HookPointData{DB: nil, Who: who, TypeString: typeString,
+				URLParams: &options, Role: &role, Cargo: &cargo}
 			if v, ok := modelObj.(models.IAfterTransact); ok {
-				hpdata := models.HookPointData{DB: nil, Who: who, TypeString: typeString,
-					URLParams: &options, Cargo: &cargo}
 				v.AfterTransact(hpdata, models.CRUPDOpDelete)
 			}
-			RenderModel(w, r, typeString, modelObj, models.UserRoleAdmin, who)
+			RenderModel(c, modelObj, &hpdata)
 		}
 
 		return
@@ -950,13 +961,16 @@ func DeleteManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 			for i := 0; i < len(roles); i++ {
 				roles[i] = models.UserRoleAdmin
 			}
+
+			bhpData := models.BatchHookPointData{Ms: modelObjs, DB: nil, Who: who,
+				TypeString: typeString, Roles: roles, URLParams: nil, Cargo: &cargo}
+
 			// the batch afterTransact hookpoint
 			if afterTransact := models.ModelRegistry[typeString].AfterTransact; afterTransact != nil {
-				bhpData := models.BatchHookPointData{Ms: modelObjs, DB: nil, Who: who,
-					TypeString: typeString, Roles: roles, URLParams: nil, Cargo: &cargo}
 				afterTransact(bhpData, models.CRUPDOpDelete)
 			}
-			RenderModelSlice(w, r, typeString, modelObjs, roles, nil, who)
+
+			RenderModelSlice(c, modelObjs, nil, &bhpData)
 		}
 
 		return
@@ -1005,7 +1019,10 @@ func EmailChangePasswordHandler(typeString string, mapper datamapper.IChangeEmai
 		if err != nil {
 			render.Render(w, r, webrender.NewErrUpdate(err))
 		} else {
-			RenderModel(w, r, typeString, modelObj2, models.UserRoleAdmin, who)
+			role := models.UserRoleAdmin
+			hpdata := models.HookPointData{DB: nil, Who: who, TypeString: typeString,
+				URLParams: nil, Role: &role, Cargo: nil}
+			RenderModel(c, modelObj, &hpdata)
 		}
 
 		return

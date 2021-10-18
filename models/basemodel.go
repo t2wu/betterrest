@@ -125,7 +125,7 @@ type IHasPermissions interface {
 // basically do your own custom output
 // For batch renderer, register a Render(r UserRole, who Who, modelObjs []IModel) []byte
 type IHasRenderer interface {
-	Render(role UserRole, who Who) []byte
+	Render(hpdata *HookPointData) []byte
 }
 
 // This is registered
