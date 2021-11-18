@@ -298,6 +298,24 @@ type ErrVerify struct {
 	ErrResponse
 }
 
+// NewErrCustomRender creates a new ErrCustomRender
+// This can be use by custom renderer for the user of this library.
+func NewErrCustomRender(err error) render.Renderer {
+	return &ErrCustomRender{
+		ErrResponse{
+			HTTPStatusCode: http.StatusBadRequest,
+			Code:           17,
+			StatusText:     "error rendering output",
+			ErrorText:      errorToSensibleString(err),
+		},
+	}
+}
+
+// ErrCustomRender some problem with output custom rendering
+type ErrCustomRender struct {
+	ErrResponse
+}
+
 // General CRUD errors
 
 // NewErrCreate creates a new ErrCreate
