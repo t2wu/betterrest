@@ -1,34 +1,25 @@
 package query
 
 import (
+	"errors"
 	"fmt"
 )
 
 // args is either two arguments: "Name =" "Christy", or another predicate builder C()
 func C(args ...interface{}) *PredicateRelationBuilder {
-	builder := &PredicateRelationBuilder{
+	builder := NewPredicateRelationBuilder()
+	builder.addPredicateOrBuilder(args...)
+
+	return builder
+}
+
+func NewPredicateRelationBuilder() *PredicateRelationBuilder {
+	return &PredicateRelationBuilder{
 		Rel: &PredicateRelation{
 			PredOrRels: make([]Criteria, 0),
 			Logics:     make([]PredicateLogic, 0),
 		},
 	}
-
-	if s, ok := args[0].(string); ok && len(args) == 2 {
-		return builder.C(s, args[1])
-	} else if b, ok := args[0].(*PredicateRelationBuilder); ok && len(args) == 1 {
-		rel, err := b.GetPredicateRelation()
-		if err != nil {
-			builder.Error = err
-		} else {
-			// NewPredicateRelationBuilder()
-			builder.Rel = NewPredicateRelation()
-			builder.Rel.PredOrRels = append(builder.Rel.PredOrRels, rel)
-		}
-	} else {
-		builder.Error = fmt.Errorf("argument to file-level C function incorrect type")
-	}
-
-	return builder
 }
 
 type PredicateRelationBuilder struct {
@@ -40,41 +31,50 @@ func (p *PredicateRelationBuilder) GetPredicateRelation() (*PredicateRelation, e
 	return p.Rel, p.Error
 }
 
-// s is Name =?, v is value
-func (p *PredicateRelationBuilder) C(s string, v interface{}) *PredicateRelationBuilder {
+func (p *PredicateRelationBuilder) C(args ...interface{}) *PredicateRelationBuilder {
 	if p.Error != nil {
 		return p
 	}
 
-	// If calling C() and not And() or Or(), it means that predicate should be empty
-	// (first time, has not called And() or Or())
 	if len(p.Rel.PredOrRels) != 0 || len(p.Rel.Logics) != 0 {
 		p.Error = fmt.Errorf("calling C() when predicate or relation not empty")
 		return p
 	}
 
-	p.addPredicate(s, v)
+	p.addPredicateOrBuilder(args...)
+
 	return p
 }
 
 // s is Name =?, v is value
-func (p *PredicateRelationBuilder) And(s string, v interface{}) *PredicateRelationBuilder {
-	p.addRelation(s, v, PredicateLogicAND)
+func (p *PredicateRelationBuilder) And(args ...interface{}) *PredicateRelationBuilder {
+	args = append(args, PredicateLogicAND)
+	p.addRelation(args...)
 	return p
 }
 
 // s is Name =?, v is value
-func (p *PredicateRelationBuilder) Or(s string, v interface{}) *PredicateRelationBuilder {
-	p.addRelation(s, v, PredicateLogicOR)
+func (p *PredicateRelationBuilder) Or(args ...interface{}) *PredicateRelationBuilder {
+	args = append(args, PredicateLogicOR)
+	p.addRelation(args...)
 	return p
 }
 
-func (p *PredicateRelationBuilder) addRelation(s string, v interface{}, logic PredicateLogic) *PredicateRelationBuilder {
+// s string, v interface{}, logic PredicateLogic
+func (p *PredicateRelationBuilder) addRelation(args ...interface{}) *PredicateRelationBuilder {
 	if p.Error != nil {
 		return p
 	}
-	p.addPredicate(s, v)
+
+	if len(args) >= 2 {
+		p.addPredicateOrBuilder(args[:len(args)-1]...)
+	} else {
+		p.Error = errors.New("And or Or should have at least two arguments")
+	}
+
+	logic := args[len(args)-1].(PredicateLogic)
 	p.Rel.Logics = append(p.Rel.Logics, logic)
+
 	return p
 }
 
@@ -85,5 +85,22 @@ func (p *PredicateRelationBuilder) addPredicate(s string, v interface{}) {
 		p.Error = err
 	} else {
 		p.Rel.PredOrRels = append(p.Rel.PredOrRels, pred)
+	}
+}
+
+func (p *PredicateRelationBuilder) addPredicateOrBuilder(args ...interface{}) {
+	if s, ok := args[0].(string); ok && len(args) == 2 {
+		p.addPredicate(s, args[1])
+	} else if b, ok := args[0].(*PredicateRelationBuilder); ok && len(args) == 1 {
+		rel, err := b.GetPredicateRelation()
+		if err != nil {
+			p.Error = err
+		} else {
+			// NewPredicateRelationBuilder()
+			// p.Rel = NewPredicateRelation()
+			p.Rel.PredOrRels = append(p.Rel.PredOrRels, rel)
+		}
+	} else {
+		p.Error = fmt.Errorf("argument to file-level C function incorrect type")
 	}
 }
