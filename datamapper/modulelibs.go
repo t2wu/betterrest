@@ -3,7 +3,6 @@ package datamapper
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log"
 	"net/url"
 
@@ -46,15 +45,6 @@ func constructInnerFieldParamQueries(db *gorm.DB, typeString string, options *ma
 	}
 
 	return db, nil
-}
-
-func constructOrderFieldQueries(db *gorm.DB, tableName string, order *string) *gorm.DB {
-	if order != nil && *order == "asc" {
-		db = db.Order(fmt.Sprintf("\"%s\".created_at ASC", tableName))
-	} else {
-		db = db.Order(fmt.Sprintf("\"%s\".created_at DESC", tableName)) // descending by default
-	}
-	return db
 }
 
 func loadAndCheckErrorBeforeModify(serv service.IService, db *gorm.DB, who models.Who, typeString string, modelObj models.IModel, id *datatypes.UUID, permittedRoles []models.UserRole) (models.IModel, models.UserRole, error) {

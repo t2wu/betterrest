@@ -2,7 +2,10 @@ package datamapper
 
 import (
 	"errors"
+	"fmt"
 	"log"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/t2wu/betterrest/datamapper/gormfixes"
@@ -10,6 +13,7 @@ import (
 	"github.com/t2wu/betterrest/libs/datatypes"
 	"github.com/t2wu/betterrest/libs/urlparam"
 	"github.com/t2wu/betterrest/models"
+	qry "github.com/t2wu/betterrest/query"
 
 	"github.com/jinzhu/gorm"
 )
@@ -127,6 +131,46 @@ func (mapper *BaseMapper) ReadOne(db *gorm.DB, who models.Who, typeString string
 	return modelObj, role, err
 }
 
+func createBuilderFromQueryParameters(urlParams url.Values, typeString string) *qry.PredicateRelationBuilder {
+	var builder *qry.PredicateRelationBuilder
+	for urlQueryKey, urlQueryVals := range urlParams {
+		model := models.NewFromTypeString(typeString)
+		fieldName, _ := qry.JSONKeysToFieldName(model, urlQueryKey)
+
+		// urlQueryKeys can be the same, or can be different field
+		// But between urlQueryKeys it is always an AND relationship
+		// AND relationship is outer, OR relationship is inner
+
+		var innerBuilder *qry.PredicateRelationBuilder
+		for _, urlQueryVal := range urlQueryVals {
+			// query value can have ">30;<20" and it's an OR relationship
+			// since query key can be different fields, or multiple same fields
+			// it's AND relationship on the outer keys
+			urlQueryVal = strings.TrimSpace(urlQueryVal)
+			conditions := strings.Split(urlQueryVal, ";")
+			predicate, value := getPredicateAndValueFromFieldValue2(conditions[0])
+			predicate = strings.TrimSpace(predicate)
+			value = strings.TrimSpace(value)
+			innerBuilder = qry.C(fieldName+" "+predicate, value)
+
+			for _, condition := range conditions[1:] {
+				predicate, value := getPredicateAndValueFromFieldValue2(condition)
+				predicate = strings.TrimSpace(predicate)
+				value = strings.TrimSpace(value)
+				innerBuilder = innerBuilder.Or(fieldName+" "+predicate, value)
+				// qry.Q(db, qry.C(fieldName+" "+predicate, value))
+			}
+		}
+
+		if builder == nil {
+			builder = qry.C(innerBuilder)
+		} else {
+			builder = builder.And(innerBuilder) // outer is AND
+		}
+	}
+	return builder
+}
+
 // ReadMany obtains a slice of models.DomainModel
 // options can be string "offset" and "limit", both of type int
 // This is very Javascript-esque. I would have liked Python's optional parameter more.
@@ -134,6 +178,102 @@ func (mapper *BaseMapper) ReadOne(db *gorm.DB, who models.Who, typeString string
 // How does Gorm do the following? Might want to check out its source code.
 // Cancel offset condition with -1
 //  db.Offset(10).Find(&users1).Offset(-1).Find(&users2)
+// func (mapper *BaseMapper) ReadMany(db *gorm.DB, who models.Who, typeString string,
+// 	options *map[urlparam.Param]interface{}, cargo *models.BatchHookCargo) ([]models.IModel, []models.UserRole, *int, error) {
+// 	dbClean := db
+// 	db = db.Set("gorm:auto_preload", true)
+
+// 	offset, limit, cstart, cstop, order, latestn, latestnons, totalcount := urlparam.GetOptions(*options)
+// 	rtable := models.GetTableNameFromTypeString(typeString)
+
+// 	var builder *qry.PredicateRelationBuilder
+// 	if urlParams, ok := (*options)[urlparam.ParamOtherQueries].(url.Values); ok && len(urlParams) != 0 {
+// 		builder = createBuilderFromQueryParameters(urlParams, typeString)
+// 	}
+
+// 	builder = builder.C("CreatedAt BETWEEN", time.Unix(int64(*cstart), 0), time.Unix(int64(*cstop), 0))
+
+// 	var err error
+// 	// db, err = constructInnerFieldParamQueries(db, typeString, options, latestn, latestnons)
+// 	// if err != nil {
+// 	// 	return nil, nil, nil, err
+// 	// }
+
+// 	db, err = mapper.Service.GetAllQueryContructCore(db, who, typeString)
+// 	if err != nil {
+// 		return nil, nil, nil, err
+// 	}
+
+// 	if order != nil && *order == "asc" {
+// 		qry.Q(db, builder).Order("CreatedAt ASC")
+// 	} else {
+// 		qry.Q(db, builder).Order("CreatedAt DESC")
+// 	}
+
+// 	var no *int
+// 	if totalcount {
+// 		no = new(int)
+// 		// Query for total count, without offset and limit (all)
+// 		if err := db.Count(no).Error; err != nil {
+// 			log.Println("count error:", err)
+// 			return nil, nil, nil, err
+// 		}
+// 	}
+
+// 	// chain offset and limit
+// 	if offset != nil && limit != nil {
+// 		db = db.Offset(*offset).Limit(*limit)
+// 	} else if cstart == nil && cstop == nil { // default to 100 maximum unless time is specified
+// 		db = db.Offset(0).Limit(100)
+// 	}
+
+// 	// Actual quer in the following line
+// 	outmodels, err := models.NewSliceFromDBByTypeString(typeString, db.Find)
+// 	if err != nil {
+// 		return nil, nil, nil, err
+// 	}
+
+// 	roles, err := mapper.Service.GetAllRolesCore(db, dbClean, who, typeString, outmodels)
+// 	if err != nil {
+// 		return nil, nil, nil, err
+// 	}
+
+// 	// safeguard, Must be coded wrongly
+// 	if len(outmodels) != len(roles) {
+// 		return nil, nil, nil, errors.New("unknown query error")
+// 	}
+
+// 	// make many to many tag works
+// 	for _, m := range outmodels {
+// 		err = gormfixes.LoadManyToManyBecauseGormFailsWithID(dbClean, m)
+// 		if err != nil {
+// 			return nil, nil, nil, err
+// 		}
+// 	}
+
+// 	// the AfterCRUPD hookpoint
+// 	// use dbClean cuz it's not chained
+// 	if after := models.ModelRegistry[typeString].AfterCRUPD; after != nil {
+// 		bhpData := models.BatchHookPointData{Ms: outmodels, DB: dbClean, Who: who,
+// 			TypeString: typeString, Roles: roles, Cargo: cargo, URLParams: options}
+// 		if err = after(bhpData, models.CRUPDOpRead); err != nil {
+// 			return nil, nil, nil, err
+// 		}
+// 	}
+
+// 	// AfterRead hookpoint
+// 	// use dbClean cuz it's not chained
+// 	if after := models.ModelRegistry[typeString].AfterRead; after != nil {
+// 		bhpData := models.BatchHookPointData{Ms: outmodels, DB: dbClean, Who: who,
+// 			TypeString: typeString, Roles: roles, Cargo: cargo, URLParams: options}
+// 		if err = after(bhpData); err != nil {
+// 			return nil, nil, nil, err
+// 		}
+// 	}
+
+// 	return outmodels, roles, no, err
+// }
+
 func (mapper *BaseMapper) ReadMany(db *gorm.DB, who models.Who, typeString string,
 	options *map[urlparam.Param]interface{}, cargo *models.BatchHookCargo) ([]models.IModel, []models.UserRole, *int, error) {
 	dbClean := db
@@ -147,9 +287,17 @@ func (mapper *BaseMapper) ReadMany(db *gorm.DB, who models.Who, typeString strin
 	}
 
 	var err error
-	db, err = constructInnerFieldParamQueries(db, typeString, options, latestn, latestnons)
-	if err != nil {
-		return nil, nil, nil, err
+	var builder *qry.PredicateRelationBuilder
+	if latestn != nil { // query module currently don't handle latestn, use old if so
+		db, err = constructInnerFieldParamQueries(db, typeString, options, latestn, latestnons)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+
+	} else {
+		if urlParams, ok := (*options)[urlparam.ParamOtherQueries].(url.Values); ok && len(urlParams) != 0 {
+			builder = createBuilderFromQueryParameters(urlParams, typeString)
+		}
 	}
 
 	db = constructOrderFieldQueries(db, rtable, order)
@@ -161,10 +309,22 @@ func (mapper *BaseMapper) ReadMany(db *gorm.DB, who models.Who, typeString strin
 	var no *int
 	if totalcount {
 		no = new(int)
-		// Query for total count, without offset and limit (all)
-		if err := db.Count(no).Error; err != nil {
-			log.Println("count error:", err)
-			return nil, nil, nil, err
+		if builder == nil {
+			// Query for total count, without offset and limit (all)
+			if err := db.Count(no).Error; err != nil {
+				log.Println("count error:", err)
+				return nil, nil, nil, err
+			}
+		} else {
+			q := qry.Q(db, builder)
+			if err := q.Count(models.NewFromTypeString(typeString), no).Error(); err != nil {
+				log.Println("count error:", err)
+				return nil, nil, nil, err
+			}
+
+			// Fetch it back, so the builder stuff is in there
+			// And resort back to Gorm.
+			// db = q.GetDB()
 		}
 	}
 
@@ -173,6 +333,13 @@ func (mapper *BaseMapper) ReadMany(db *gorm.DB, who models.Who, typeString strin
 		db = db.Offset(*offset).Limit(*limit)
 	} else if cstart == nil && cstop == nil { // default to 100 maximum unless time is specified
 		db = db.Offset(0).Limit(100)
+	}
+
+	if builder != nil {
+		db, err = qry.Q(db, builder).BuildQuery(models.NewFromTypeString(typeString))
+		if err != nil {
+			return nil, nil, nil, err
+		}
 	}
 
 	// Actual quer in the following line
@@ -509,4 +676,13 @@ func (mapper *BaseMapper) sortOldModelByIds(oldModelObjs []models.IModel, ids []
 		oldModelObjSorted = append(oldModelObjSorted, mapping[id.String()])
 	}
 	return oldModelObjSorted
+}
+
+func constructOrderFieldQueries(db *gorm.DB, tableName string, order *string) *gorm.DB {
+	if order != nil && *order == "asc" {
+		db = db.Order(fmt.Sprintf("\"%s\".created_at ASC", tableName))
+	} else {
+		db = db.Order(fmt.Sprintf("\"%s\".created_at DESC", tableName)) // descending by default
+	}
+	return db
 }

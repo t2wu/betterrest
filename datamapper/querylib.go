@@ -11,7 +11,36 @@ import (
 	"github.com/t2wu/betterrest/libs/utils/letters"
 	"github.com/t2wu/betterrest/libs/utils/sqlbuilder"
 	"github.com/t2wu/betterrest/models"
+	qry "github.com/t2wu/betterrest/query"
 )
+
+func getPredicateAndValueFromFieldValue2(fieldVal string) (string, string) {
+	if strings.HasPrefix(fieldVal, "<") {
+		return fieldVal[0:1], fieldVal[1:]
+	} else if strings.HasPrefix(fieldVal, "<=") {
+		return fieldVal[0:2], fieldVal[2:]
+	} else if strings.HasPrefix(fieldVal, ">") {
+		return fieldVal[0:1], fieldVal[1:]
+	} else if strings.HasPrefix(fieldVal, ">=") {
+		return fieldVal[0:2], fieldVal[2:]
+	} else { // no sign
+		return "=", fieldVal
+	}
+}
+
+func getPredicateAndValueFromFieldValue(fieldVal string) (qry.PredicateCond, string) {
+	if strings.HasPrefix(fieldVal, "<") {
+		return qry.PredicateCondLT, fieldVal[1:]
+	} else if strings.HasPrefix(fieldVal, "<=") {
+		return qry.PredicateCondLTEQ, fieldVal[2:]
+	} else if strings.HasPrefix(fieldVal, ">") {
+		return qry.PredicateCondGT, fieldVal[1:]
+	} else if strings.HasPrefix(fieldVal, ">=") {
+		return qry.PredicateCondGTEQ, fieldVal[2:]
+	} else { // no sign
+		return qry.PredicateCondEQ, fieldVal
+	}
+}
 
 func constructFilterCriteriaFromFieldNameAndFieldValue(fieldName string, fieldValues []string) (*sqlbuilder.FilterCriteria, error) {
 	predicatesArr := make([][]sqlbuilder.Predicate, len(fieldValues))
@@ -20,6 +49,8 @@ func constructFilterCriteriaFromFieldNameAndFieldValue(fieldName string, fieldVa
 	hasFilterPredicateEQ := false
 	hasFilterPredicateNotEQ := false
 
+	// query parameter is fieldName, but it can have multiple fieldValues
+	// And within a single fieldValue I could have ">30;<20"
 	for i, fieldValue := range fieldValues {
 		// fieldValue could be ">30;<20" for greater than 30 OR smaller than 20
 		fieldValue = strings.TrimSpace(fieldValue)
@@ -34,25 +65,10 @@ func constructFilterCriteriaFromFieldNameAndFieldValue(fieldName string, fieldVa
 		for j, fieldVal := range fieldVals {
 			predicate := sqlbuilder.Predicate{}
 
-			if strings.HasPrefix(fieldVal, "<") {
-				predicate.PredicateLogic = sqlbuilder.FilterPredicateLogicLT
-				predicate.FieldValue = fieldVal[1:]
+			predicate.PredicateLogic, predicate.FieldValue = getPredicateAndValueFromFieldValue(fieldVal)
+			if predicate.PredicateLogic != qry.PredicateCondEQ {
 				hasFilterPredicateNotEQ = true
-			} else if strings.HasPrefix(fieldVal, "<=") {
-				predicate.PredicateLogic = sqlbuilder.FilterPredicateLogicLTEQ
-				predicate.FieldValue = fieldVal[2:]
-				hasFilterPredicateNotEQ = true
-			} else if strings.HasPrefix(fieldVal, ">") {
-				predicate.PredicateLogic = sqlbuilder.FilterPredicateLogicGT
-				predicate.FieldValue = fieldVal[1:]
-				hasFilterPredicateNotEQ = true
-			} else if strings.HasPrefix(fieldVal, ">=") {
-				predicate.PredicateLogic = sqlbuilder.FilterPredicateLogicGTEQ
-				predicate.FieldValue = fieldVal[2:]
-				hasFilterPredicateNotEQ = true
-			} else { // no sign
-				predicate.PredicateLogic = sqlbuilder.FilterPredicateLogicEQ
-				predicate.FieldValue = fieldVal
+			} else {
 				hasFilterPredicateEQ = true
 			}
 			predicatesArr[i][j] = predicate

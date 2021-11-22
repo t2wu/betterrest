@@ -11,30 +11,15 @@ import (
 	"github.com/t2wu/betterrest/libs/datatypes"
 	"github.com/t2wu/betterrest/libs/utils/letters"
 	"github.com/t2wu/betterrest/models"
+	qry "github.com/t2wu/betterrest/query"
 )
 
 // Something like this.
 // Search by dense_rank
 
-// FilterPredicateLogic is the type about greater than, less than, etc
-type FilterPredicateLogic string
-
-const (
-	// FilterPredicateLogicEQ is equals
-	FilterPredicateLogicEQ FilterPredicateLogic = "="
-	// FilterPredicateLogicLT is less than
-	FilterPredicateLogicLT FilterPredicateLogic = "<"
-	// FilterPredicateLogicLTEQ is less than or equal to
-	FilterPredicateLogicLTEQ FilterPredicateLogic = "<="
-	// FilterPredicateLogicGT is equal to
-	FilterPredicateLogicGT FilterPredicateLogic = ">"
-	// FilterPredicateLogicGTEQ is greater than or equal to
-	FilterPredicateLogicGTEQ FilterPredicateLogic = ">="
-)
-
 // Predicate :-
 type Predicate struct {
-	PredicateLogic FilterPredicateLogic
+	PredicateLogic qry.PredicateCond
 	FieldValue     string
 }
 
@@ -43,7 +28,7 @@ type FilterCriteria struct {
 	FieldName     string        // Field name to match
 	PredicatesArr [][]Predicate // greater than less than, etc., multiple for AND relationship
 	// Is it? age > 30 OR age < 20 AND ?
-	// actually if there is predicate that's not FilterPredicateLogicEQ, you can't do FilterPredicateLogicEQ
+	// actually if there is predicate that's not qry.PredicateCondEQ, you can't do qry.PredicateCondEQ
 }
 
 // TwoLevelFilterCriteria is the criteria to query for inner level field
@@ -80,7 +65,7 @@ func AddWhereStmt(db *gorm.DB, typeString string, tableName string, filter Filte
 	hasEquality := false
 	for _, predicates := range filter.PredicatesArr {
 		for _, predicate := range predicates {
-			if predicate.PredicateLogic == FilterPredicateLogicEQ {
+			if predicate.PredicateLogic == qry.PredicateCondEQ {
 				hasEquality = true
 			}
 		}
@@ -147,7 +132,7 @@ func AddNestedQueryJoinStmt(db *gorm.DB, typeString string, criteria TwoLevelFil
 		hasEquality := false
 		for _, predicates := range filter.PredicatesArr {
 			for _, predicate := range predicates {
-				if predicate.PredicateLogic == FilterPredicateLogicEQ {
+				if predicate.PredicateLogic == qry.PredicateCondEQ {
 					hasEquality = true
 				}
 			}
@@ -192,7 +177,7 @@ func AddLatestNCTEJoin(db *gorm.DB, typeString string, tableName string, latestn
 		hasEquality := false
 		for _, predicates := range filter.PredicatesArr {
 			for _, predicate := range predicates {
-				if predicate.PredicateLogic == FilterPredicateLogicEQ {
+				if predicate.PredicateLogic == qry.PredicateCondEQ {
 					hasEquality = true
 				}
 			}
@@ -309,7 +294,7 @@ func latestnGetPartitionWhereAndTransformedValues(typeString, tableName string, 
 		hasEquality := false
 		for _, predicates := range filter.PredicatesArr {
 			for _, predicate := range predicates {
-				if predicate.PredicateLogic == FilterPredicateLogicEQ {
+				if predicate.PredicateLogic == qry.PredicateCondEQ {
 					hasEquality = true
 				}
 			}
@@ -398,7 +383,7 @@ func latestnGetPartitionWhereAndTransformedValues2(typeString, tableName string,
 		hasEquality := false
 		for _, predicates := range filter.PredicatesArr {
 			for _, predicate := range predicates {
-				if predicate.PredicateLogic == FilterPredicateLogicEQ {
+				if predicate.PredicateLogic == qry.PredicateCondEQ {
 					hasEquality = true
 				}
 			}
@@ -461,7 +446,7 @@ func latestnGetPartitionWhereAndTransformedValues2(typeString, tableName string,
 		hasEquality := false
 		for _, predicates := range filter.PredicatesArr {
 			for _, predicate := range predicates {
-				if predicate.PredicateLogic == FilterPredicateLogicEQ {
+				if predicate.PredicateLogic == qry.PredicateCondEQ {
 					hasEquality = true
 				}
 			}
@@ -597,7 +582,7 @@ func getTransformedValueFromValidField(modelObj interface{}, structFieldName str
 
 	fieldType, err := datatypes.GetModelFieldTypeElmIfValid(modelObj, letters.CamelCaseToPascalCase(structFieldName))
 	if err != nil {
-		log.Println("err:", err)
+		log.Println("getTransformedValueFromValidField err:", err)
 		return nil, err
 	}
 
