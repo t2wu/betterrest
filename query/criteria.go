@@ -25,6 +25,8 @@ const (
 	PredicateCondGTEQ PredicateCond = ">="
 	// PredicateCondGTEQ is greater than or equal to
 	PredicateCondIN PredicateCond = "IN"
+	// PredicateCondBETWEEN is between two values
+	PredicateCondBETWEEN PredicateCond = "BETWEEN"
 )
 
 func StringToPredicateCond(s string) (PredicateCond, error) {
@@ -42,6 +44,8 @@ func StringToPredicateCond(s string) (PredicateCond, error) {
 		return PredicateCondGTEQ, nil
 	case string(PredicateCondIN):
 		return PredicateCondIN, nil
+	case string(PredicateCondBETWEEN):
+		return PredicateCondBETWEEN, nil
 	}
 
 	return PredicateCondEQ, fmt.Errorf("not a PredicateCond string")
@@ -117,16 +121,20 @@ func (p *Predicate) BuildQueryStringAndValues(modelObj models.IModel) (string, [
 		return "", nil, err
 	}
 
-	if p.Cond != PredicateCondIN {
-		if escape, ok := p.Value.(*Escape); ok {
-			return fmt.Sprintf("\"%s\".%s %s %s", tblName, col, p.Cond, escape.Value), []interface{}{}, nil
-		} else {
-			return fmt.Sprintf("\"%s\".%s %s ?", tblName, col, p.Cond), []interface{}{p.Value}, nil
-		}
+	// The "IN" case, where p.Value is a slice, only one question mark is needed
+	if p.Cond == PredicateCondIN {
+		return fmt.Sprintf("\"%s\".%s %s (?)", tblName, col, p.Cond), []interface{}{p.Value}, nil
 	}
 
-	// The "IN" case, where p.Value is a slice, only one question mark is needed
-	return fmt.Sprintf("\"%s\".%s %s (?)", tblName, col, p.Cond), []interface{}{p.Value}, nil
+	if p.Cond == PredicateCondBETWEEN {
+		return fmt.Sprintf("\"%s\".%s BETWEEN ? AND ?", tblName, col), []interface{}{p.Value}, nil
+	}
+
+	if escape, ok := p.Value.(*Escape); ok {
+		return fmt.Sprintf("\"%s\".%s %s %s", tblName, col, p.Cond, escape.Value), []interface{}{}, nil
+	} else {
+		return fmt.Sprintf("\"%s\".%s %s ?", tblName, col, p.Cond), []interface{}{p.Value}, nil
+	}
 }
 
 func (p *Predicate) GetDesignatedModel(modelObj models.IModel) (models.IModel, error) {

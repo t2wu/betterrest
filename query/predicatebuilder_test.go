@@ -2,6 +2,7 @@ package query
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -52,6 +53,28 @@ func TestPredicateBuilder_In_Works(t *testing.T) {
 		if assert.Equal(t, 2, len(p2)) {
 			assert.Equal(t, "Christy", p2[0])
 			assert.Equal(t, "Tina", p2[1])
+		}
+	}
+}
+
+func TestPredicateBuilder_Betwen_Works(t *testing.T) {
+	now := time.Now()
+	before := now.Add(-60 * time.Second)
+	b := C("CreatedAt BETWEEN", []time.Time{before, now})
+	rel, err := b.GetPredicateRelation()
+
+	assert.Nil(t, err)
+	if !assert.Equal(t, 1, len(rel.PredOrRels), "there should be 1 predicate") {
+		return
+	}
+
+	p := rel.PredOrRels[0].(*Predicate)
+	assert.Equal(t, "CreatedAt", p.Field)
+	assert.Equal(t, PredicateCondBETWEEN, p.Cond)
+	if p2, ok := p.Value.([]time.Time); ok {
+		if assert.Equal(t, 2, len(p2)) {
+			assert.Equal(t, before.UnixNano(), p2[0].UnixNano())
+			assert.Equal(t, now.UnixNano(), p2[1].UnixNano())
 		}
 	}
 }

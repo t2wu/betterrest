@@ -3,6 +3,7 @@ package query
 import (
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/t2wu/betterrest/libs/datatypes"
@@ -267,6 +268,50 @@ func TestBuildQueryStringAndValueForInClause_Works(t *testing.T) {
 				assert.Equal(t, test.want.v[0], v2[0].String())
 				assert.Equal(t, test.want.v[1], v2[1].String())
 				assert.Equal(t, test.want.v[2], v2[2].String())
+			} else {
+				assert.Fail(t, "wrong type")
+			}
+		}
+	}
+}
+
+func TestBuildQueryStringAndValueForBetweenClause_Works(t *testing.T) {
+	now := time.Now()
+	before := now.Add(-60 * time.Second)
+
+	tests := []struct {
+		predicate *Predicate
+		want      struct {
+			s string
+			v []time.Time
+		}
+	}{
+		{
+			predicate: &Predicate{
+				Field: "CreatedAt",
+				Cond:  PredicateCondBETWEEN,
+				Value: []time.Time{
+					before,
+					now,
+				},
+			},
+			want: struct {
+				s string
+				v []time.Time
+			}{s: "\"test_model\".created_at BETWEEN ? AND ?", v: []time.Time{before, now}},
+		},
+	}
+
+	for _, test := range tests {
+		s, vals, err := test.predicate.BuildQueryStringAndValues(&TestModel{})
+		assert.Nil(t, err)
+		assert.Equal(t, test.want.s, s)
+
+		if assert.Equal(t, 1, len(vals)) {
+			v2, ok := vals[0].([]time.Time)
+			if ok {
+				assert.Equal(t, test.want.v[0].UnixNano(), v2[0].UnixNano())
+				assert.Equal(t, test.want.v[1].UnixNano(), v2[1].UnixNano())
 			} else {
 				assert.Fail(t, "wrong type")
 			}
