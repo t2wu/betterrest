@@ -286,6 +286,17 @@ func TestFind_NestedQueryWithInnerJoin_Works(t *testing.T) {
 	}
 }
 
+func TestQueryCount_ShouldBeCorrect(t *testing.T) {
+	var count int
+
+	if err := Q(db, C("Name =", "same")).Count(&TestModel{}, &count).Error(); err != nil {
+		assert.Nil(t, err)
+		return
+	}
+
+	assert.Equal(t, 3, count)
+}
+
 // -------------------
 
 func TestQueryFirst_Nested_Query(t *testing.T) {

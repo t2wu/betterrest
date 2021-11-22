@@ -17,7 +17,7 @@ type QueryType int
 
 const (
 	QueryTypeFirst QueryType = iota
-	QueryTypeFind  QueryType = iota
+	QueryTypeFind
 )
 
 // It would be Q(db, C(...), C(...)...).First() or Q(db).First() with empty PredicateRelationBuilder
@@ -195,16 +195,31 @@ func (q *Query) First(modelObj models.IModel) IQuery {
 	}
 
 	q.db = q.buildQueryOrderOffSetAndLimit(q.db, modelObj)
+	q.Err = q.db.First(modelObj).Error
 
-	f := getQueryFunc(q.db, QueryTypeFirst)
-	if f == nil {
-		q.Err = fmt.Errorf("wrong QueryType")
+	return q
+}
+
+func (q *Query) Count(modelObj models.IModel, no *int) IQuery {
+	if q.Err != nil {
 		return q
 	}
 
-	if f != nil {
-		q.Err = f(modelObj).Error
+	if q.mainMB != nil {
+		q.mainMB.modelObj = modelObj
+	} else {
+		q.db = q.db.Model(modelObj)
 	}
+
+	var err error
+	q.db, err = q.buildQueryCore(q.db, modelObj)
+	if err != nil {
+		q.Err = err
+		return q
+	}
+
+	q.db = q.buildQueryOrderOffSetAndLimit(q.db, modelObj)
+	q.Err = q.db.Count(no).Error
 
 	return q
 }
@@ -243,18 +258,24 @@ loop:
 	}
 
 	q.db = q.buildQueryOrderOffSetAndLimit(q.db, modelObj)
-
-	f := getQueryFunc(q.db, QueryTypeFind)
-	if f == nil {
-		q.Err = fmt.Errorf("wrong QueryType")
-		return q
-	}
-
-	if f != nil {
-		q.Err = f(modelObjs).Error
-	}
+	q.Err = q.db.Find(modelObjs).Error
 
 	return q
+}
+
+// This is a passover for building query, we're just building the where clause
+func (q *Query) BuildQuery(modelObj models.IModel) (*gorm.DB, error) {
+	if q.Err != nil {
+		return q.db, q.Err
+	}
+
+	if q.mainMB != nil {
+		q.mainMB.modelObj = modelObj
+	} else {
+		q.db = q.db.Model(modelObj)
+	}
+
+	return q.buildQueryCore(q.db, modelObj)
 }
 
 func (q *Query) buildQueryCore(db *gorm.DB, modelObj models.IModel) (*gorm.DB, error) {
@@ -655,18 +676,6 @@ type TableAndArgs struct {
 
 func buildPreload(tx *gorm.DB) *gorm.DB {
 	return tx.Set("gorm:auto_preload", true)
-}
-
-// func (s *DB) Find(out interface{}, where ...interface{}) *DB {
-func getQueryFunc(tx *gorm.DB, f QueryType) func(interface{}, ...interface{}) *gorm.DB {
-	switch f {
-	case QueryTypeFind:
-		return tx.Find
-	case QueryTypeFirst:
-		return tx.First
-	}
-
-	return nil
 }
 
 // hacky...

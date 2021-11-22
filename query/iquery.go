@@ -12,8 +12,10 @@ type IQuery interface {
 	Limit(limit int) IQuery
 	Offset(offset int) IQuery
 	InnerJoin(modelObj models.IModel, foreignObj models.IModel, args ...interface{}) IQuery
+	BuildQuery(modelObj models.IModel) (*gorm.DB, error)
 	First(modelObj models.IModel) IQuery
 	Find(modelObjs interface{}) IQuery
+	Count(modelObj models.IModel, no *int) IQuery
 	Create(modelObj models.IModel) IQuery
 	CreateMany(modelObjs []models.IModel) IQuery
 	Delete(modelObj models.IModel) IQuery
