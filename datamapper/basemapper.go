@@ -131,11 +131,14 @@ func (mapper *BaseMapper) ReadOne(db *gorm.DB, who models.Who, typeString string
 	return modelObj, role, err
 }
 
-func createBuilderFromQueryParameters(urlParams url.Values, typeString string) *qry.PredicateRelationBuilder {
+func createBuilderFromQueryParameters(urlParams url.Values, typeString string) (*qry.PredicateRelationBuilder, error) {
 	var builder *qry.PredicateRelationBuilder
 	for urlQueryKey, urlQueryVals := range urlParams {
 		model := models.NewFromTypeString(typeString)
-		fieldName, _ := qry.JSONKeysToFieldName(model, urlQueryKey)
+		fieldName, err := qry.JSONKeysToFieldName(model, urlQueryKey)
+		if err != nil {
+			return nil, err
+		}
 
 		// urlQueryKeys can be the same, or can be different field
 		// But between urlQueryKeys it is always an AND relationship
@@ -168,7 +171,7 @@ func createBuilderFromQueryParameters(urlParams url.Values, typeString string) *
 			builder = builder.And(innerBuilder) // outer is AND
 		}
 	}
-	return builder
+	return builder, nil
 }
 
 // ReadMany obtains a slice of models.DomainModel
@@ -293,10 +296,12 @@ func (mapper *BaseMapper) ReadMany(db *gorm.DB, who models.Who, typeString strin
 		if err != nil {
 			return nil, nil, nil, err
 		}
-
 	} else {
 		if urlParams, ok := (*options)[urlparam.ParamOtherQueries].(url.Values); ok && len(urlParams) != 0 {
-			builder = createBuilderFromQueryParameters(urlParams, typeString)
+			builder, err = createBuilderFromQueryParameters(urlParams, typeString)
+			if err != nil {
+				return nil, nil, nil, err
+			}
 		}
 	}
 
