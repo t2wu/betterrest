@@ -137,7 +137,7 @@ func createBuilderFromQueryParameters(urlParams url.Values, typeString string) (
 		model := models.NewFromTypeString(typeString)
 		fieldName, err := qry.JSONKeysToFieldName(model, urlQueryKey)
 		if err != nil {
-			return nil, err
+			continue // field name doesn't exists
 		}
 
 		// urlQueryKeys can be the same, or can be different field
