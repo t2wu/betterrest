@@ -9,7 +9,11 @@ import (
 
 func TestJSONKeysToFieldName_OneLevelTag_found(t *testing.T) {
 	var v models.IModel = &Person{}
-	fieldName, err := JSONKeysToFieldName(v, "surname")
+	fieldName, err := JSONKeysToFieldName(v, "id")
+	assert.Nil(t, err)
+	assert.Equal(t, "ID", fieldName)
+
+	fieldName, err = JSONKeysToFieldName(v, "surname")
 	assert.Nil(t, err)
 	assert.Equal(t, "LastName", fieldName)
 

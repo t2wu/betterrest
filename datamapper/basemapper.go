@@ -154,7 +154,12 @@ func createBuilderFromQueryParameters(urlParams url.Values, typeString string) (
 			predicate, value := getPredicateAndValueFromFieldValue2(conditions[0])
 			predicate = strings.TrimSpace(predicate)
 			value = strings.TrimSpace(value)
-			innerBuilder = qry.C(fieldName+" "+predicate, value)
+
+			if innerBuilder == nil {
+				innerBuilder = qry.C(fieldName+" "+predicate, value)
+			} else {
+				innerBuilder.Or(fieldName+" "+predicate, value)
+			}
 
 			for _, condition := range conditions[1:] {
 				predicate, value := getPredicateAndValueFromFieldValue2(condition)

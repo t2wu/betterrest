@@ -12,6 +12,10 @@ import (
 // if not found, return err
 // By doing this we don't need model check?
 func JSONKeysToFieldName(modelObj models.IModel, key string) (string, error) {
+	if key == "id" { // special case, no need to loop
+		return "ID", nil
+	}
+
 	toks := strings.SplitN(key, ".", 2)
 	first := toks[0]
 
