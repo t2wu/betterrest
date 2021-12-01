@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-playground/validator/v10"
 	"github.com/t2wu/betterrest/datamapper/gormfixes"
 	"github.com/t2wu/betterrest/datamapper/service"
 	"github.com/t2wu/betterrest/libs/datatypes"
@@ -135,7 +136,7 @@ func createBuilderFromQueryParameters(urlParams url.Values, typeString string) (
 	var builder *qry.PredicateRelationBuilder
 	for urlQueryKey, urlQueryVals := range urlParams {
 		model := models.NewFromTypeString(typeString)
-		fieldName, err := qry.JSONKeysToFieldName(model, urlQueryKey)
+		fieldName, err := models.JSONKeysToFieldName(model, urlQueryKey)
 		if err != nil {
 			continue // field name doesn't exists
 		}
@@ -490,6 +491,15 @@ func (mapper *BaseMapper) PatchOne(db *gorm.DB, who models.Who, typeString strin
 	modelObj, err := applyPatchCore(typeString, oldModelObj, jsonPatch)
 	if err != nil {
 		return nil, err
+	}
+
+	err = models.Validate.Struct(modelObj)
+	if errs, ok := err.(validator.ValidationErrors); ok {
+		s, err2 := models.TranslateValidationErrorMessage(errs, modelObj)
+		if err2 != nil {
+			log.Println("error translating validaiton message:", err)
+		}
+		err = errors.New(s)
 	}
 
 	// TODO: Huh? How do we do validation here?!

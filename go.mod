@@ -6,7 +6,6 @@ require (
 	github.com/asaskevich/govalidator v0.0.0-20200108200545-475eaeb16496
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/evanphx/json-patch v4.5.0+incompatible
-	github.com/getlantern/deepcopy v0.0.0-20160317154340-7f45deb8130a
 	github.com/gin-gonic/gin v1.7.3
 	github.com/go-chi/render v1.0.1
 	github.com/go-playground/locales v0.13.0
@@ -21,5 +20,4 @@ require (
 	github.com/stretchr/testify v1.6.1
 	github.com/twpayne/go-geom v1.3.4
 	golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9
-	gorm.io/gorm v1.21.14
 )

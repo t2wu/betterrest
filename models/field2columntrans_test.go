@@ -1,15 +1,14 @@
-package query
+package models
 
 import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/t2wu/betterrest/models"
 )
 
 func TestFieldNameToColumn_works(t *testing.T) {
 	p := Person{}
-	var v models.IModel = &p
+	var v IModel = &p
 	columnName, err := FieldNameToColumn(v, "FirstName")
 	assert.Nil(t, err)
 	assert.Equal(t, "first_name", columnName)
@@ -17,7 +16,7 @@ func TestFieldNameToColumn_works(t *testing.T) {
 
 func TestFieldNameToCustomColumn_works(t *testing.T) {
 	p := Person{}
-	var v models.IModel = &p
+	var v IModel = &p
 	columnName, err := FieldNameToColumn(v, "CustomColumn")
 	assert.Nil(t, err)
 	assert.Equal(t, "My_columnname", columnName)
@@ -25,7 +24,7 @@ func TestFieldNameToCustomColumn_works(t *testing.T) {
 
 func TestFieldNameToColumn_NestedThreeLevel_Works(t *testing.T) {
 	p := Person{}
-	var v models.IModel = &p
+	var v IModel = &p
 	columnName, err := FieldNameToColumn(v, "Contacts.Name")
 	assert.Nil(t, err)
 	assert.Equal(t, "contacts.name", columnName)
@@ -60,7 +59,7 @@ func TestFieldNameToColumn_NestedThreeLevel_Works(t *testing.T) {
 }
 
 func TestFieldNameToColumn_NestedThreeLevelAndCustom_Works(t *testing.T) {
-	var v models.IModel = &Person{}
+	var v IModel = &Person{}
 	columnName, err := FieldNameToColumn(v, "Pet.PetToy.Name")
 	assert.Nil(t, err)
 	assert.Equal(t, "pet.pet_toy.pet_toy_name", columnName)
@@ -72,7 +71,7 @@ func TestFieldNameToColumn_NestedThreeLevelAndCustom_Works(t *testing.T) {
 
 func TestFieldNameToColumnWrongName_Error(t *testing.T) {
 	p := Person{}
-	var v models.IModel = &p
+	var v IModel = &p
 	_, err := FieldNameToColumn(v, "NotHere")
 	assert.Error(t, err)
 }

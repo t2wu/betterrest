@@ -396,13 +396,13 @@ func (q *Query) buildQueryCoreInnerJoin(db *gorm.DB, mb *ModelAndBuilder) (*gorm
 				upperTableName = models.GetTableNameFromIModel(mb.modelObj)
 			} else {
 				designatorForUpperModel := strings.Join(toks[:len(toks)-1], ".")
-				upperTableName, err = GetModelTableNameInModelIfValid(mb.modelObj, designatorForUpperModel)
+				upperTableName, err = models.GetModelTableNameInModelIfValid(mb.modelObj, designatorForUpperModel)
 				if err != nil {
 					return db, err
 				}
 			}
 
-			currTableName, err := GetModelTableNameInModelIfValid(mb.modelObj, designator)
+			currTableName, err := models.GetModelTableNameInModelIfValid(mb.modelObj, designator)
 			if err != nil {
 				return db, err
 			}
@@ -439,7 +439,7 @@ func (q *Query) buildQueryOrderOffSetAndLimit(db *gorm.DB, modelObj models.IMode
 		toks := strings.Split(*q.order, " ")
 		fieldName := toks[0]
 		rest := toks[1] // DESC or ASC
-		col, err := FieldNameToColumn(modelObj, fieldName)
+		col, err := models.FieldNameToColumn(modelObj, fieldName)
 		if err != nil {
 			q.Err = err
 		}
@@ -705,7 +705,7 @@ func GetOuterTableName(modelObj models.IModel, fieldNameDesignator string) (stri
 	if strings.Contains(fieldNameDesignator, ".") {
 		toks := strings.Split(fieldNameDesignator, ".")
 		outerFieldNameToStruct := strings.Join(toks[:len(toks)-1], ".")
-		typ2, err := GetModelFieldTypeInModelIfValid(modelObj, outerFieldNameToStruct)
+		typ2, err := models.GetModelFieldTypeInModelIfValid(modelObj, outerFieldNameToStruct)
 		if err != nil {
 			return "", err
 		}

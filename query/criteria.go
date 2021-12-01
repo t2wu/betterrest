@@ -109,7 +109,7 @@ func (p *Predicate) BuildQueryStringAndValues(modelObj models.IModel) (string, [
 		toks := strings.Split(p.Field, ".")
 		field = toks[len(toks)-1]
 		fieldToModel := strings.Join(toks[:len(toks)-1], ".")
-		currModelObj, err = GetInnerModelIfValid(modelObj, fieldToModel)
+		currModelObj, err = models.GetInnerModelIfValid(modelObj, fieldToModel)
 		if err != nil {
 			return "", nil, err
 		}
@@ -142,7 +142,7 @@ func (p *Predicate) GetDesignatedModel(modelObj models.IModel) (models.IModel, e
 		// nested model
 		toks := strings.Split(p.Field, ".")
 		modelField := strings.Join(toks[:len(toks)-1], ".")
-		return GetInnerModelIfValid(modelObj, modelField)
+		return models.GetInnerModelIfValid(modelObj, modelField)
 	} else {
 		return modelObj, nil
 	}
@@ -289,7 +289,7 @@ func (pr *PredicateRelation) GetAllUnqueStructFieldDesignator() map[string]inter
 
 // normalize query to column name query
 func fieldToColumn(obj models.IModel, field string) (string, error) {
-	col, err := FieldNameToColumn(obj, field) // this traverses the inner struct as well
+	col, err := models.FieldNameToColumn(obj, field) // this traverses the inner struct as well
 	if err != nil {
 		return "", err
 	}

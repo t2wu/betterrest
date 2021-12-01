@@ -1,15 +1,13 @@
-package query
+package models
 
 import (
 	"fmt"
 	"reflect"
 	"runtime/debug"
 	"strings"
-
-	"github.com/t2wu/betterrest/models"
 )
 
-func IsFieldInModel(modelObj models.IModel, field string) bool {
+func IsFieldInModel(modelObj IModel, field string) bool {
 	toks := strings.SplitN(field, ".", 2)
 	first := toks[0]
 
@@ -26,7 +24,7 @@ func IsFieldInModel(modelObj models.IModel, field string) bool {
 	ok2 := true
 	if ok && len(toks) > 1 && toks[1] != "" { // has nested field
 		innerType := getInnerType(structField)
-		innerModel := reflect.New(innerType).Interface().(models.IModel)
+		innerModel := reflect.New(innerType).Interface().(IModel)
 
 		ok2 = IsFieldInModel(innerModel, toks[1])
 	}
@@ -36,7 +34,7 @@ func IsFieldInModel(modelObj models.IModel, field string) bool {
 
 // Never returns the pointer value
 // Since what we want is reflec.New() and it would be a pointer
-func GetModelFieldTypeInModelIfValid(modelObj models.IModel, field string) (reflect.Type, error) {
+func GetModelFieldTypeInModelIfValid(modelObj IModel, field string) (reflect.Type, error) {
 	toks := strings.SplitN(field, ".", 2)
 	first := toks[0]
 
@@ -59,7 +57,7 @@ func GetModelFieldTypeInModelIfValid(modelObj models.IModel, field string) (refl
 
 	var err error
 	if ok && len(toks) > 1 && toks[1] != "" { // has nested field
-		innerModel := reflect.New(typ).Interface().(models.IModel)
+		innerModel := reflect.New(typ).Interface().(IModel)
 
 		typ, err = GetModelFieldTypeInModelIfValid(innerModel, toks[1])
 	}
@@ -67,21 +65,21 @@ func GetModelFieldTypeInModelIfValid(modelObj models.IModel, field string) (refl
 	return typ, err
 }
 
-func GetModelTableNameInModelIfValid(modelObj models.IModel, field string) (string, error) {
+func GetModelTableNameInModelIfValid(modelObj IModel, field string) (string, error) {
 	typ, err := GetModelFieldTypeInModelIfValid(modelObj, field)
 	if err != nil {
 		return "", err
 	}
-	return models.GetTableNameFromType(typ), nil
+	return GetTableNameFromType(typ), nil
 }
 
-func GetInnerModelIfValid(modelObj models.IModel, field string) (models.IModel, error) {
+func GetInnerModelIfValid(modelObj IModel, field string) (IModel, error) {
 	typ, err := GetModelFieldTypeInModelIfValid(modelObj, field)
 	if err != nil {
 		return nil, err
 	}
 
-	m, ok := reflect.New(typ).Interface().(models.IModel)
+	m, ok := reflect.New(typ).Interface().(IModel)
 	if !ok {
 		return nil, fmt.Errorf("not an IModel")
 	}

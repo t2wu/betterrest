@@ -13,7 +13,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-chi/render"
-	"github.com/go-playground/validator/v10"
 	uuid "github.com/satori/go.uuid"
 )
 
@@ -143,10 +142,8 @@ func ModelOrModelsFromJSONBody(r *http.Request, typeString string, who models.Wh
 			return nil, nil, webrender.NewErrParsingJSON(err)
 		}
 
-		err := models.Validate.Struct(modelObj)
-		if err != nil {
-			errs := err.(validator.ValidationErrors)
-			return nil, nil, webrender.NewErrValidation(errs)
+		if err := models.ValidateModel(modelObj); err != nil {
+			return nil, nil, webrender.NewErrValidation(err)
 		}
 
 		if v, ok := modelObj.(models.IValidate); ok {
@@ -185,11 +182,9 @@ func ModelOrModelsFromJSONBody(r *http.Request, typeString string, who models.Wh
 			return nil, nil, webrender.NewErrParsingJSON(err)
 		}
 
-		// err := models.Validate.Struct(modelObj)
-		// if err != nil {
-		// 	errs := err.(validator.ValidationErrors)
-		// 	return nil, nil, NewErrValidation(errs)
-		// }
+		if err := models.ValidateModel(modelObj); err != nil {
+			return nil, nil, webrender.NewErrValidation(err)
+		}
 
 		if v, ok := modelObj.(models.IValidate); ok {
 			who := WhoFromContext(r)
@@ -198,7 +193,6 @@ func ModelOrModelsFromJSONBody(r *http.Request, typeString string, who models.Wh
 				return nil, nil, webrender.NewErrValidation(err)
 			}
 		}
-		// return nil, nil, NewErrValidation(errors.New("test"))
 
 		modelObjs = append(modelObjs, modelObj)
 	}
@@ -258,11 +252,9 @@ func ModelsFromJSONBody(r *http.Request, typeString string, who models.Who) ([]m
 			return nil, webrender.NewErrParsingJSON(err)
 		}
 
-		// err := models.Validate.Struct(modelObj)
-		// if err != nil {
-		// 	errs := err.(validator.ValidationErrors)
-		// 	return nil, NewErrValidation(errs)
-		// }
+		if err := models.ValidateModel(modelObj); err != nil {
+			return nil, webrender.NewErrValidation(err)
+		}
 
 		if v, ok := modelObj.(models.IValidate); ok {
 			who := WhoFromContext(r)
@@ -317,6 +309,10 @@ func ModelFromJSONBody(r *http.Request, typeString string, who models.Who) (mode
 
 	if err = json.Unmarshal(jsn, modelObj); err != nil {
 		return nil, webrender.NewErrParsingJSON(err)
+	}
+
+	if err := models.ValidateModel(modelObj); err != nil {
+		return nil, webrender.NewErrValidation(err)
 	}
 
 	if v, ok := modelObj.(models.IValidate); ok {

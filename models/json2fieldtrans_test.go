@@ -1,14 +1,13 @@
-package query
+package models
 
 import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/t2wu/betterrest/models"
 )
 
 func TestJSONKeysToFieldName_OneLevelTag_found(t *testing.T) {
-	var v models.IModel = &Person{}
+	var v IModel = &Person{}
 	fieldName, err := JSONKeysToFieldName(v, "id")
 	assert.Nil(t, err)
 	assert.Equal(t, "ID", fieldName)
@@ -31,19 +30,19 @@ func TestJSONKeysToFieldName_OneLevelTag_found(t *testing.T) {
 }
 
 func TestJSONKeysToFieldName_FieldWithoutJSONTag_HasError(t *testing.T) {
-	var v models.IModel = &Person{}
+	var v IModel = &Person{}
 	_, err := JSONKeysToFieldName(v, "missingJson")
 	assert.Error(t, err)
 }
 
 func TestJSONKeysToFieldName_WrongJSONTag_HasError(t *testing.T) {
-	var v models.IModel = &Person{}
+	var v IModel = &Person{}
 	_, err := JSONKeysToFieldName(v, "lastName")
 	assert.Error(t, err)
 }
 
 func TestJSONKeysToFieldName_TwoLevelTag_found(t *testing.T) {
-	var v models.IModel = &Person{}
+	var v IModel = &Person{}
 	fieldName, err := JSONKeysToFieldName(v, "pet.name")
 	assert.Nil(t, err)
 	assert.Equal(t, "Pet.Name", fieldName)

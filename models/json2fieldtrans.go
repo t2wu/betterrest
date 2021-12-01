@@ -1,17 +1,15 @@
-package query
+package models
 
 import (
 	"fmt"
 	"reflect"
 	"strings"
-
-	"github.com/t2wu/betterrest/models"
 )
 
 // JSONKeyToColumnName transforms json name to column name
 // if not found, return err
 // By doing this we don't need model check?
-func JSONKeysToFieldName(modelObj models.IModel, key string) (string, error) {
+func JSONKeysToFieldName(modelObj IModel, key string) (string, error) {
 	if key == "id" { // special case, no need to loop
 		return "ID", nil
 	}
@@ -54,7 +52,7 @@ loop:
 			}
 		}
 
-		innerModel := reflect.New(typ).Interface().(models.IModel)
+		innerModel := reflect.New(typ).Interface().(IModel)
 		innerFieldName, err := JSONKeysToFieldName(innerModel, toks[1])
 		if err != nil {
 			return "", err

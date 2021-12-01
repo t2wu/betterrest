@@ -1,14 +1,13 @@
-package query
+package models
 
 import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/t2wu/betterrest/models"
 )
 
 type Person struct {
-	models.BaseModel
+	BaseModel
 
 	FirstName  string  `json:"firstName"`
 	LastName   *string `json:"surname"` // note, json is different from field name
@@ -26,7 +25,7 @@ type Person struct {
 }
 
 type Contact struct {
-	models.BaseModel
+	BaseModel
 
 	Name      string  `json:"name"`
 	Name2     *string `json:"name2"`
@@ -39,7 +38,7 @@ type Contact struct {
 }
 
 type Pet struct {
-	models.BaseModel
+	BaseModel
 	Name  string  `json:"name"`
 	Name2 *string `json:"name2"`
 	Age   int
@@ -50,7 +49,7 @@ type Pet struct {
 }
 
 type PetToy struct {
-	models.BaseModel
+	BaseModel
 	Name string `json:"name" gorm:"index;column:pet_toy_name;"`
 }
 
