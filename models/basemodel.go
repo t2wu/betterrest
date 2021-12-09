@@ -219,24 +219,39 @@ type IDoRealDelete interface {
 	DoRealDelete() bool
 }
 
-type HTTPMethod string
+// CRUPDOp designates the type of operations for BeforeCRUPD and AfterCRUPD hookpoints
+type CRUPDOp int
 
 const (
-	HTTPMethodGET     HTTPMethod = "GET"
-	HTTPMethodHEAD    HTTPMethod = "HEAD"
-	HTTPMethodPOST    HTTPMethod = "POST"
-	HTTPMethodPUT     HTTPMethod = "PUT"
-	HTTPMethodDELETE  HTTPMethod = "DELETE"
-	HTTPMethodCONNECT HTTPMethod = "CONNECT"
-	HTTPMethodOPTION  HTTPMethod = "OPTION"
-	HTTPMethodTRACE   HTTPMethod = "TRACE"
-	HTTPMethodPATCH   HTTPMethod = "PATCH"
+	CRUPDOpOther CRUPDOp = iota // should not be used
+	CRUPDOpRead
+	CRUPDOpCreate
+	CRUPDOpUpdate
+	CRUPDOpPatch
+	CRUPDOpDelete
 )
 
 // HTTP stores HTTP request information
 type HTTP struct {
 	Endpoint string
-	Method   HTTPMethod
+	Op       CRUPDOp
+}
+
+func HTTPMethodToCRUDOp(method string) CRUPDOp {
+	switch method {
+	case "GET":
+		return CRUPDOpRead
+	case "POST":
+		return CRUPDOpCreate
+	case "UPDATE":
+		return CRUPDOpUpdate
+	case "PATCH":
+		return CRUPDOpPatch
+	case "DELETE":
+		return CRUPDOpDelete
+	default:
+		return CRUPDOpOther // shouldn't be here
+	}
 }
 
 // IGuardAPIEntry supports method which guard access to API based on scope
@@ -248,17 +263,6 @@ type IGuardAPIEntry interface {
 type ModelCargo struct {
 	Payload interface{}
 }
-
-// CRUPDOp designates the type of operations for BeforeCRUPD and AfterCRUPD hookpoints
-type CRUPDOp int
-
-const (
-	CRUPDOpRead CRUPDOp = iota
-	CRUPDOpCreate
-	CRUPDOpUpdate
-	CRUPDOpPatch
-	CRUPDOpDelete
-)
 
 // HookPointData is the data send to single model hookpoints
 type HookPointData struct {
