@@ -219,10 +219,24 @@ type IDoRealDelete interface {
 	DoRealDelete() bool
 }
 
+type HTTPMethod string
+
+const (
+	HTTPMethodGET     HTTPMethod = "GET"
+	HTTPMethodHEAD    HTTPMethod = "HEAD"
+	HTTPMethodPOST    HTTPMethod = "POST"
+	HTTPMethodPUT     HTTPMethod = "PUT"
+	HTTPMethodDELETE  HTTPMethod = "DELETE"
+	HTTPMethodCONNECT HTTPMethod = "CONNECT"
+	HTTPMethodOPTION  HTTPMethod = "OPTION"
+	HTTPMethodTRACE   HTTPMethod = "TRACE"
+	HTTPMethodPATCH   HTTPMethod = "PATCH"
+)
+
 // HTTP stores HTTP request information
 type HTTP struct {
 	Endpoint string
-	Method   string
+	Method   HTTPMethod
 }
 
 // IGuardAPIEntry supports method which guard access to API based on scope

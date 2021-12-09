@@ -148,7 +148,7 @@ func ModelOrModelsFromJSONBody(r *http.Request, typeString string, who models.Wh
 
 		if v, ok := modelObj.(models.IValidate); ok {
 			who := WhoFromContext(r)
-			http := models.HTTP{Endpoint: r.URL.Path, Method: r.Method}
+			http := models.HTTP{Endpoint: r.URL.Path, Method: models.HTTPMethod(r.Method)}
 			if err := v.Validate(who, http); err != nil {
 				return nil, nil, webrender.NewErrValidation(err)
 			}
@@ -188,7 +188,7 @@ func ModelOrModelsFromJSONBody(r *http.Request, typeString string, who models.Wh
 
 		if v, ok := modelObj.(models.IValidate); ok {
 			who := WhoFromContext(r)
-			http := models.HTTP{Endpoint: r.URL.Path, Method: r.Method}
+			http := models.HTTP{Endpoint: r.URL.Path, Method: models.HTTPMethod(r.Method)}
 			if err := v.Validate(who, http); err != nil {
 				return nil, nil, webrender.NewErrValidation(err)
 			}
@@ -258,7 +258,7 @@ func ModelsFromJSONBody(r *http.Request, typeString string, who models.Who) ([]m
 
 		if v, ok := modelObj.(models.IValidate); ok {
 			who := WhoFromContext(r)
-			http := models.HTTP{Endpoint: r.URL.Path, Method: r.Method}
+			http := models.HTTP{Endpoint: r.URL.Path, Method: models.HTTPMethod(r.Method)}
 			if err := v.Validate(who, http); err != nil {
 				return nil, webrender.NewErrValidation(err)
 			}
@@ -317,7 +317,7 @@ func ModelFromJSONBody(r *http.Request, typeString string, who models.Who) (mode
 
 	if v, ok := modelObj.(models.IValidate); ok {
 		who := WhoFromContext(r)
-		http := models.HTTP{Endpoint: r.URL.Path, Method: r.Method}
+		http := models.HTTP{Endpoint: r.URL.Path, Method: models.HTTPMethod(r.Method)}
 		if err := v.Validate(who, http); err != nil {
 			return nil, webrender.NewErrValidation(err)
 		}
@@ -343,7 +343,7 @@ func ModelFromJSONBodyNoWhoNoCheckPermissionNoTransform(r *http.Request, typeStr
 
 	if v, ok := modelObj.(models.IValidate); ok {
 		who := WhoFromContext(r)
-		http := models.HTTP{Endpoint: r.URL.Path, Method: r.Method}
+		http := models.HTTP{Endpoint: r.URL.Path, Method: models.HTTPMethod(r.Method)}
 		if err := v.Validate(who, http); err != nil {
 			return nil, webrender.NewErrValidation(err)
 		}
