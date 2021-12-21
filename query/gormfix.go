@@ -241,6 +241,102 @@ func pegPegassocOrPegManyToMany(tag reflect.StructTag) string {
 	return ""
 }
 
+func checkIDsNotFound(db *gorm.DB, nestedIModels []models.IModel) error {
+	if len(nestedIModels) > 0 {
+		ids := make([]*datatypes.UUID, 0)
+		for _, nestedIModel := range nestedIModels {
+			id := nestedIModel.GetID()
+			if id != nil {
+				ids = append(ids, id)
+			}
+		}
+
+		tableName := models.GetTableNameFromIModel(nestedIModels[0])
+		var count int64
+		err := db.Table(tableName).Where("id IN (?)", ids).Count(&count).Error
+		if err != nil && !gorm.IsRecordNotFoundError(err) {
+			return err // some real error
+		}
+		if count != 0 {
+			return fmt.Errorf("id should not be pre-exists on create")
+		}
+	}
+
+	return nil
+}
+
+func RemoveIDForNonPegOrPeggedFieldsBeforeCreate(db *gorm.DB, modelObj models.IModel) error {
+	v := reflect.Indirect(reflect.ValueOf(modelObj))
+
+	for i := 0; i < v.NumField(); i++ {
+		tag := v.Type().Field(i).Tag.Get("betterrest")
+		if tag == "peg" {
+			// if it's pegged and it's creating, it should be new ID, so we set it nil..
+			// or at least it shouldn't exists! (TODO)
+			// what if it's the third level?
+			fieldVal := v.Field(i)
+			switch fieldVal.Kind() {
+			case reflect.Slice:
+				// Loop through the slice
+				ms := make([]models.IModel, 0)
+				for j := 0; j < fieldVal.Len(); j++ {
+					nestedModel := fieldVal.Index(j).Addr().Interface()
+					nestedIModel, ok := nestedModel.(models.IModel)
+					if ok {
+						ms = append(ms, nestedIModel)
+					}
+				}
+
+				if err := checkIDsNotFound(db, ms); err != nil {
+					return err
+				}
+
+				for j := 0; j < len(ms); j++ {
+					nestedIModel := ms[j]
+					// Traverse into it
+					if err := RemoveIDForNonPegOrPeggedFieldsBeforeCreate(db, nestedIModel); err != nil {
+						return err
+					}
+				}
+			case reflect.Ptr:
+				nestedModel := v.Field(i).Interface()
+				nestedIModel, ok := nestedModel.(models.IModel)
+				if ok && !isNil(nestedIModel) {
+					if nestedIModel.GetID() != nil {
+						if nestedIModel.GetID() != nil {
+							if err := checkIDsNotFound(db, []models.IModel{nestedIModel}); err != nil {
+								return err
+							}
+						}
+					}
+					// Traverse into it
+					if err := RemoveIDForNonPegOrPeggedFieldsBeforeCreate(db, nestedIModel); err != nil {
+						return err
+					}
+				}
+
+			case reflect.Struct:
+				nestedModel := v.Field(i).Addr().Interface()
+				nestedIModel, ok := nestedModel.(models.IModel)
+				if ok {
+					if nestedIModel.GetID() != nil {
+						if err := checkIDsNotFound(db, []models.IModel{nestedIModel}); err != nil {
+							return err
+						}
+					}
+
+					// Traverse into it
+					if err := RemoveIDForNonPegOrPeggedFieldsBeforeCreate(db, nestedIModel); err != nil {
+						return err
+					}
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
 // CreatePeggedAssocFields :-
 func CreatePeggedAssocFields(db *gorm.DB, modelObj models.IModel) (err error) {
 	v := reflect.Indirect(reflect.ValueOf(modelObj))
@@ -255,17 +351,15 @@ func CreatePeggedAssocFields(db *gorm.DB, modelObj models.IModel) (err error) {
 				for j := 0; j < fieldVal.Len(); j++ {
 					// nestedModelID := fieldVal.Index(j).FieldByName("ID").Interface().(*datatypes.UUID)
 					nestedModel := fieldVal.Index(j).Addr().Interface()
-
-					// Load the full model
-					if err = db.First(nestedModel).Error; err != nil {
-						return err
-					}
-
-					tableName := models.GetTableNameFromIModel(modelObj)
-					correspondingColumnName := tableName + "_id"
-
-					if err := db.Model(nestedModel).Update(correspondingColumnName, modelObj.GetID()).Error; err != nil {
-						return err
+					nestedIModel, ok := nestedModel.(models.IModel)
+					if ok && nestedIModel.GetID() != nil {
+						tableName := models.GetTableNameFromIModel(modelObj)
+						correspondingColumnName := tableName + "_id"
+						// Where clause is not needed when the embedded is a struct, but if it's a pointer to struct then it's needed
+						if err := db.Model(nestedModel).Where("id = ?", nestedModel.(models.IModel).GetID()).
+							Update(correspondingColumnName, modelObj.GetID()).Error; err != nil {
+							return err
+						}
 					}
 
 					// // this loops forever unlike update, why?
@@ -291,7 +385,8 @@ func CreatePeggedAssocFields(db *gorm.DB, modelObj models.IModel) (err error) {
 					tableName := models.GetTableNameFromIModel(modelObj)
 					correspondingColumnName := tableName + "_id"
 					// Where clause is not needed when the embedded is a struct, but if it's a pointer to struct then it's needed
-					if err := db.Model(nestedModel).Where("id = ?", nestedModel.(models.IModel).GetID()).Update(correspondingColumnName, modelObj.GetID()).Error; err != nil {
+					if err := db.Model(nestedModel).Where("id = ?", nestedModel.(models.IModel).GetID()).
+						Update(correspondingColumnName, modelObj.GetID()).Error; err != nil {
 						return err
 					}
 				}

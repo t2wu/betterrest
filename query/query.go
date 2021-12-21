@@ -51,6 +51,7 @@ type Query struct {
 	mbs    []ModelAndBuilder // the builder for non-nested models, each one is a separate non-nested model
 }
 
+// Q takes in PredicateRelationBuilder here.
 func (q *Query) Q(args ...interface{}) IQuery {
 	q.Reset() // always reset with Q()
 
@@ -465,6 +466,11 @@ func (q *Query) buildQueryOrderOffSetAndLimit(db *gorm.DB, modelObj models.IMode
 func (q *Query) Create(modelObj models.IModel) IQuery {
 	q.Reset()
 
+	if err := RemoveIDForNonPegOrPeggedFieldsBeforeCreate(q.db, modelObj); err != nil {
+		q.Err = err
+		return q
+	}
+
 	if err := q.db.Create(modelObj).Error; err != nil {
 		q.Err = err
 		return q
@@ -488,6 +494,11 @@ func (q *Query) CreateMany(modelObjs []models.IModel) IQuery {
 
 	// TODO: do a batch create instead
 	for _, modelObj := range modelObjs {
+		if err := RemoveIDForNonPegOrPeggedFieldsBeforeCreate(q.db, modelObj); err != nil {
+			q.Err = err
+			return q
+		}
+
 		q.Err = q.db.Create(modelObj).Error
 		if q.Err != nil {
 			return q
