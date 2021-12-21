@@ -9,6 +9,7 @@ import (
 	"github.com/t2wu/betterrest/datamapper/gormfixes"
 	"github.com/t2wu/betterrest/libs/datatypes"
 	"github.com/t2wu/betterrest/models"
+	qry "github.com/t2wu/betterrest/query"
 )
 
 // check out
@@ -118,8 +119,7 @@ func (serv *OwnershipService) CreateOneCore(db *gorm.DB, who models.Who, typeStr
 	// No need to check if primary key is blank.
 	// If it is it'll be created by Gorm's BeforeCreate hook
 	// (defined in base model)
-	// if dbc := db.Create(modelObj); dbc.Error != nil {
-	if err := db.Create(modelObj).Error; err != nil {
+	if err := qry.DB(db).Create(modelObj).Error(); err != nil {
 		return nil, err
 	}
 
@@ -129,11 +129,11 @@ func (serv *OwnershipService) CreateOneCore(db *gorm.DB, who models.Who, typeStr
 		return nil, err
 	}
 
-	// For pegassociated, the since we expect association_autoupdate:false
-	// need to manually create it
-	if err := gormfixes.CreatePeggedAssocFields(db, modelObj); err != nil {
-		return nil, err
-	}
+	// // For pegassociated, the since we expect association_autoupdate:false
+	// // need to manually create it
+	// if err := gormfixes.CreatePeggedAssocFields(db, modelObj); err != nil {
+	// 	return nil, err
+	// }
 
 	// For table with trigger which update before insert, we need to load it again
 	if err := db.First(modelObj).Error; err != nil {
