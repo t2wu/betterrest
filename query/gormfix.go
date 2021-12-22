@@ -258,7 +258,7 @@ func checkIDsNotFound(db *gorm.DB, nestedIModels []models.IModel) error {
 			return err // some real error
 		}
 		if count != 0 {
-			return fmt.Errorf("id should not be pre-exists on create")
+			return fmt.Errorf("id of embedded pegged object already exists")
 		}
 	}
 

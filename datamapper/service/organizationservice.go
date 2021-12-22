@@ -287,7 +287,7 @@ func userHasRolesAccessToModelOrg(db *gorm.DB, who models.Who, typeString string
 	}
 
 	if len(organizations) != 1 {
-		return false, fmt.Errorf("search should have exactly one organization")
+		return false, fmt.Errorf("wrong organization link ID")
 	}
 
 	// Check that organizations is not an empty array, and one of the organization has an ID that
