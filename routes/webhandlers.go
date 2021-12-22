@@ -330,6 +330,8 @@ func UserLoginHandler(typeString string) func(c *gin.Context) {
 			default:
 				render.Render(w, r, webrender.NewErrInternalServerError(err))
 			}
+
+			return
 		}
 
 		var jsn []byte
