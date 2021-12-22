@@ -229,15 +229,13 @@ func UserLoginHandler(typeString string) func(c *gin.Context) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.Header().Set("Cache-Control", "no-store")
 
-		tx := db.Shared().Begin()
-		defer func(tx *gorm.DB) {
+		defer func() {
 			if r := recover(); r != nil {
-				tx.Rollback()
 				debug.PrintStack()
 				render.Render(w, c.Request, webrender.NewErrInternalServerError(nil))
-				fmt.Println("Panic in UserLoginHandler", r)
+				fmt.Println("Panic in GetAllHandler", r)
 			}
-		}(tx)
+		}()
 
 		tokenHours := TokenHoursFromContext(r)
 
@@ -256,73 +254,82 @@ func UserLoginHandler(typeString string) func(c *gin.Context) {
 			return
 		}
 
-		cargo := models.ModelCargo{}
-		// Before hook
-		if v, ok := m.(models.IBeforeLogin); ok {
-			hpdata := models.HookPointData{DB: tx, Who: who, TypeString: typeString, Cargo: &cargo}
-			if err := v.BeforeLogin(hpdata); err != nil {
-				render.Render(w, r, webrender.NewErrInternalServerError(err))
-				return
-			}
-		}
+		// How to make transact better?!
+		// normal, internal-server, login-failed, generate-token-error, not-found
+		reason := "normal"
+		var realerr error
+		var payload map[string]interface{}
 
-		authUserModel, err := security.GetVerifiedAuthUser(tx, m)
-		if err == security.ErrPasswordIncorrect {
-			// User hookpoing after login
-			if v, ok := authUserModel.(models.IAfterLoginFailed); ok {
-				who.Oid = authUserModel.GetID()
+		err := transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
+			cargo := models.ModelCargo{}
+			// Before hook
+			if v, ok := m.(models.IBeforeLogin); ok {
 				hpdata := models.HookPointData{DB: tx, Who: who, TypeString: typeString, Cargo: &cargo}
-				if err := v.AfterLoginFailed(hpdata); err != nil {
-					// tx.Rollback() // no rollback!!, actually. commit!
-					tx.Commit()
-
-					log.Println("Error in UserLogin callign AfterLogin:", typeString, err)
-					render.Render(w, r, webrender.NewErrLoginUser(err))
-					return
+				if err := v.BeforeLogin(hpdata); err != nil {
+					reason = "internal-server"
+					return err
 				}
 			}
 
-			// tx.Rollback() //no rollback, actually. commit
-			tx.Commit()
-
-			render.Render(w, r, webrender.NewErrLoginUser(nil))
-			return
-		} else if err != nil {
-			// unable to login user. maybe doesn't exist?
-			// or username, password wrong
-			// tx.Rollback() no rollback, actually commit
-			tx.Commit()
-
-			render.Render(w, r, webrender.NewErrLoginUser(err))
-			return
-		}
-
-		// login success, return access token
-		payload, err := createTokenPayloadForScope(authUserModel.GetID(), &scope, tokenHours)
-		if err != nil {
-			tx.Rollback()
-			render.Render(w, r, webrender.NewErrGeneratingToken(err))
-			return
-		}
-
-		// User hookpoing after login
-		if v, ok := authUserModel.(models.IAfterLogin); ok {
-			who.Oid = authUserModel.GetID()
-			hpdata := models.HookPointData{DB: tx, Who: who, TypeString: typeString, Cargo: &cargo}
-			payload, err = v.AfterLogin(hpdata, payload)
+			authUserModel, err := security.GetVerifiedAuthUser(tx, m)
 			if err != nil {
-				// tx.Rollback() no rollback, actually, commit!
-				tx.Commit() // technically this can return err, too
+				realerr = err
+				reason = "login-failed"
 
-				log.Println("Error in UserLogin calling AfterLogin:", typeString, err)
-				render.Render(w, r, webrender.NewErrNotFound(err))
-				return
+				if v, ok := authUserModel.(models.IAfterLoginFailed); ok {
+					who.Oid = authUserModel.GetID()
+					hpdata := models.HookPointData{DB: tx, Who: who, TypeString: typeString, Cargo: &cargo}
+					if err := v.AfterLoginFailed(hpdata); err != nil {
+						realerr = err
+						log.Println("Error in UserLogin callign AfterLogin:", typeString, err)
+						return nil // since we don't want to cancel the transaction
+					}
+				}
+
+				return nil // since we don't want to cancel the transaction
 			}
+
+			// login success, return access token
+			payload, err = createTokenPayloadForScope(authUserModel.GetID(), &scope, tokenHours)
+			if err != nil {
+				reason = "generate-token-error"
+				return err
+			}
+
+			// User hookpoint after login
+			if v, ok := authUserModel.(models.IAfterLogin); ok {
+				who.Oid = authUserModel.GetID()
+				hpdata := models.HookPointData{DB: tx, Who: who, TypeString: typeString, Cargo: &cargo}
+				payload, err = v.AfterLogin(hpdata, payload)
+				if err != nil {
+					realerr = err
+					reason = "not-found"
+
+					log.Println("Error in UserLogin calling AfterLogin:", typeString, err)
+					return // commit
+				}
+			}
+
+			return nil
+		})
+
+		if err == nil {
+			err = realerr
 		}
 
-		if err := tx.Commit().Error; err != nil {
-			render.Render(w, c.Request, webrender.NewErrInternalServerError(nil))
-			return
+		if err != nil {
+			switch reason {
+			case "login-failed":
+				render.Render(w, r, webrender.NewErrLoginUser(err))
+			case "generate-token-error":
+				render.Render(w, r, webrender.NewErrGeneratingToken(err))
+			case "not-found":
+				render.Render(w, r, webrender.NewErrNotFound(err))
+			case "internal-server":
+				fallthrough
+			default:
+				render.Render(w, r, webrender.NewErrInternalServerError(err))
+			}
 		}
 
 		var jsn []byte
