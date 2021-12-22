@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/go-playground/validator/v10"
 	"github.com/t2wu/betterrest/datamapper/service"
 	"github.com/t2wu/betterrest/libs/datatypes"
 	"github.com/t2wu/betterrest/libs/security"
@@ -137,6 +138,12 @@ func (mapper *UserMapper) ReadOne(db *gorm.DB, who models.Who, typeString string
 		return nil, 0, err
 	}
 
+	// After CRUPD hook
+	if m, ok := modelObj.(models.IAfterCRUPD); ok {
+		hpdata := models.HookPointData{DB: db, Who: who, TypeString: typeString, Cargo: cargo, Role: &role, URLParams: options}
+		m.AfterCRUPDDB(hpdata, models.CRUPDOpRead)
+	}
+
 	if m, ok := modelObj.(models.IAfterRead); ok {
 		hpdata := models.HookPointData{DB: db, Who: who, TypeString: typeString, Role: &role,
 			Cargo: cargo}
@@ -167,28 +174,92 @@ func (mapper *UserMapper) UpdateOne(db *gorm.DB, who models.Who, typeString stri
 
 	reflect.ValueOf(modelObj).Elem().FieldByName("Status").Set(reflect.ValueOf(models.UserStatusActive))
 
-	// Before hook
-	if v, ok := modelObj.(models.IBeforeUpdate); ok {
-		hpdata := models.HookPointData{DB: db, Who: who, TypeString: typeString, Cargo: cargo}
-		if err := v.BeforeUpdateDB(hpdata); err != nil {
-			return nil, err
-		}
+	// TODO: Huh? How do we do validation here?!
+	var before, after *string
+	if _, ok := modelObj.(models.IBeforeUpdate); ok {
+		b := "BeforeUpdateDB"
+		before = &b
+	}
+	if _, ok := modelObj.(models.IAfterUpdate); ok {
+		a := "AfterUpdateDB"
+		after = &a
 	}
 
-	modelObj2, err := mapper.Service.UpdateOneCore(db, who, typeString, modelObj, id, oldModelObj)
+	j := opJob{
+		serv:        mapper.Service,
+		db:          db,
+		who:         who,
+		typeString:  typeString,
+		oldModelObj: oldModelObj,
+		modelObj:    modelObj,
+		crupdOp:     models.CRUPDOpUpdate,
+		cargo:       cargo,
+		options:     options,
+	}
+	return opCore(before, after, j, mapper.Service.UpdateOneCore)
+}
+
+// PatchOne updates model based on this json
+func (mapper *UserMapper) PatchOne(db *gorm.DB, who models.Who, typeString string, jsonPatch []byte,
+	id *datatypes.UUID, options *map[urlparam.Param]interface{}, cargo *models.ModelCargo) (models.IModel, error) {
+	oldModelObj, _, err := loadAndCheckErrorBeforeModify(mapper.Service, db, who, typeString, nil, id, []models.UserRole{models.UserRoleAdmin})
 	if err != nil {
 		return nil, err
 	}
 
-	// After hook
-	if v, ok := modelObj2.(models.IAfterUpdate); ok {
+	if m, ok := oldModelObj.(models.IBeforePatchApply); ok {
 		hpdata := models.HookPointData{DB: db, Who: who, TypeString: typeString, Cargo: cargo}
-		if err = v.AfterUpdateDB(hpdata); err != nil {
+		if err := m.BeforePatchApplyDB(hpdata); err != nil {
 			return nil, err
 		}
 	}
 
-	return modelObj2, nil
+	// Apply patch operations
+	modelObj, err := applyPatchCore(typeString, oldModelObj, jsonPatch)
+	if err != nil {
+		return nil, err
+	}
+
+	err = models.Validate.Struct(modelObj)
+	if errs, ok := err.(validator.ValidationErrors); ok {
+		s, err2 := models.TranslateValidationErrorMessage(errs, modelObj)
+		if err2 != nil {
+			log.Println("error translating validaiton message:", err)
+		}
+		err = errors.New(s)
+	}
+
+	modelObj, err = preserveEmailPassword(db, who.Oid, modelObj)
+	if err != nil {
+		return nil, err
+	}
+
+	reflect.ValueOf(modelObj).Elem().FieldByName("Status").Set(reflect.ValueOf(models.UserStatusActive))
+
+	// TODO: Huh? How do we do validation here?!
+	var before, after *string
+	if _, ok := modelObj.(models.IBeforePatch); ok {
+		b := "BeforePatchDB"
+		before = &b
+	}
+
+	if _, ok := modelObj.(models.IAfterPatch); ok {
+		a := "AfterPatchDB"
+		after = &a
+	}
+
+	j := opJob{
+		serv:        mapper.Service,
+		db:          db,
+		who:         who,
+		typeString:  typeString,
+		oldModelObj: oldModelObj,
+		modelObj:    modelObj,
+		crupdOp:     models.CRUPDOpPatch,
+		cargo:       cargo,
+		options:     options,
+	}
+	return opCore(before, after, j, mapper.Service.UpdateOneCore)
 }
 
 // DeleteOne deletes the user with the ID
@@ -474,13 +545,6 @@ func (mapper *UserMapper) DeleteMany(db *gorm.DB, who models.Who,
 	typeString string, modelObjs []models.IModel, options *map[urlparam.Param]interface{},
 	cargo *models.BatchHookCargo) ([]models.IModel, error) {
 	return nil, fmt.Errorf("Not implemented")
-}
-
-// PatchOne :-
-func (mapper *UserMapper) PatchOne(db *gorm.DB, who models.Who,
-	typeString string, jsonPatch []byte, id *datatypes.UUID, options *map[urlparam.Param]interface{},
-	cargo *models.ModelCargo) (models.IModel, error) {
-	return nil, fmt.Errorf("Not implemented, todo")
 }
 
 // Private -------------------------------------------------------------------------

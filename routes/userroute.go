@@ -34,6 +34,7 @@ func UserRoutes(endpoint string, r *gin.Engine) {
 	{
 		n.GET("", guardMiddleWare(typeString), ReadOneHandler(typeString, dm))
 		n.PUT("", guardMiddleWare(typeString), UpdateOneHandler(typeString, dm))
+		n.PATCH("", guardMiddleWare(typeString), PatchOneHandler(typeString, dm)) // e.g. PATCH /model/123
 		n.PUT("/changeemailpassword", guardMiddleWare(typeString), EmailChangePasswordHandler(typeString, dm))
 		n.DELETE("", guardMiddleWare(typeString), DeleteOneHandler(typeString, dm))
 	}
