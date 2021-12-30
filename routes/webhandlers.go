@@ -311,7 +311,7 @@ func UserLoginHandler(typeString string) func(c *gin.Context) {
 			}
 
 			return nil
-		})
+		}, "UserLoginHandler")
 
 		if err == nil {
 			err = realerr
@@ -513,7 +513,7 @@ func CreateHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin
 					return err2
 				}
 				return nil
-			})
+			}, "CreateHandler batch")
 
 			if err != nil {
 				render.Render(w, c.Request, webrender.NewErrCreate(err))
@@ -543,7 +543,7 @@ func CreateHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin
 					return err2
 				}
 				return nil
-			})
+			}, "CreateHandler single")
 
 			if err != nil {
 				render.Render(w, c.Request, webrender.NewErrCreate(err))
@@ -663,7 +663,7 @@ func UpdateOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 				return err
 			}
 			return nil
-		})
+		}, "UpdateOneHandler")
 
 		if err != nil {
 			render.Render(w, r, webrender.NewErrUpdate(err))
@@ -718,7 +718,7 @@ func UpdateManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 			}
 
 			return nil
-		})
+		}, "UpdateManyHandler")
 
 		if err != nil {
 			render.Render(w, r, webrender.NewErrUpdate(err))
@@ -786,7 +786,7 @@ func PatchOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *g
 			}
 
 			return nil
-		})
+		}, "PatchOneHandler")
 
 		if err != nil {
 			render.Render(w, r, webrender.NewErrPatch(err))
@@ -840,7 +840,7 @@ func PatchManyHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 				return err
 			}
 			return nil
-		})
+		}, "PatchManyHandler")
 
 		if err != nil {
 			render.Render(w, r, webrender.NewErrUpdate(err))
@@ -900,7 +900,7 @@ func DeleteOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 				return err
 			}
 			return
-		})
+		}, "DeleteOneHandler")
 
 		if err != nil {
 			render.Render(w, r, webrender.NewErrDelete(err))
@@ -947,7 +947,7 @@ func DeleteManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 				return err
 			}
 			return nil
-		})
+		}, "DeleteManyHandler")
 
 		if err != nil {
 			render.Render(w, r, webrender.NewErrDelete(err))
@@ -1007,7 +1007,7 @@ func EmailChangePasswordHandler(typeString string, mapper datamapper.IChangeEmai
 			}
 
 			return nil
-		})
+		}, "EmailChangePasswordHandler")
 
 		if err != nil {
 			render.Render(w, r, webrender.NewErrUpdate(err))
@@ -1049,7 +1049,7 @@ func SendVerificationEmailHandler(typeString string, mapper datamapper.IEmailVer
 			logTransID(tx, c.Request.Method, c.Request.URL.String(), "1")
 
 			return mapper.SendEmailVerification(tx, who, typeString, modelObj)
-		})
+		}, "SendVerificationEmailHandler")
 
 		if err != nil {
 			render.Render(w, r, webrender.NewErrBadRequest(err)) // maybe another type of error?
@@ -1091,7 +1091,7 @@ func EmailVerificationHandler(typeString string, mapper datamapper.IEmailVerific
 			logTransID(tx, c.Request.Method, c.Request.URL.String(), "1")
 
 			return mapper.VerifyEmail(tx, typeString, id, code)
-		})
+		}, "EmailVerificationHandler")
 
 		if err != nil {
 			render.Render(w, r, webrender.NewErrBadRequest(err)) // maybe another type of error?
@@ -1131,7 +1131,7 @@ func SendResetPasswordHandler(typeString string, mapper datamapper.IResetPasswor
 		err := transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
 			logTransID(tx, c.Request.Method, c.Request.URL.String(), "1")
 			return mapper.SendEmailResetPassword(tx, who, typeString, modelObj)
-		})
+		}, "SendResetPasswordHandler")
 
 		if err != nil {
 			render.Render(w, r, webrender.NewErrBadRequest(err)) // maybe another type of error?
@@ -1182,7 +1182,7 @@ func PasswordResetHandler(typeString string, mapper datamapper.IResetPasswordMap
 			logTransID(tx, c.Request.Method, c.Request.URL.String(), "1")
 
 			return mapper.ResetPassword(tx, typeString, modelObj, id, code)
-		})
+		}, "PasswordResetHandler")
 
 		if err != nil {
 			render.Render(w, r, webrender.NewErrBadRequest(err)) // maybe another type of error?

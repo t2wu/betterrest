@@ -1,5 +1,6 @@
 package settings
 
 var (
-	Log = false
+	Log           = false
+	TransactDebug = false
 )

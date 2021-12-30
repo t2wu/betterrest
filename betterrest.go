@@ -16,11 +16,13 @@ import (
 )
 
 type Config struct {
-	Log bool
+	Log           bool
+	TransactDebug bool
 }
 
 func SetConfig(cfg Config) {
 	settings.Log = cfg.Log
+	settings.TransactDebug = cfg.TransactDebug
 }
 
 /*

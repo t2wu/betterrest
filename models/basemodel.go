@@ -37,6 +37,10 @@ const (
 
 	// UserRolePublic to all (global object)
 	UserRolePublic UserRole = 2
+
+	// UserRoleTableBased is like admin but permission is subject to table control
+	// Cannot delete site or alter permissions
+	UserRoleTableBased UserRole = 3
 )
 
 type UserStatus int
