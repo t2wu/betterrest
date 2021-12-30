@@ -54,13 +54,20 @@ func Transact(db *gorm.DB, txFunc func(*gorm.DB) error, labels ...string) (err e
 			if debug {
 				transactDebugCountLock.Lock()
 				transactDebugCount -= 1
-				log.Printf("Transact ID %s %s end (rollback), existing transactions: %d, takes %f second\n", transactID, label, transactDebugCount, float64(time.Now().Sub(now))/float64(time.Second))
+				log.Printf("Transact ID %s %s end (rollback panic), existing transactions: %d, takes %f second\n", transactID, label, transactDebugCount, float64(time.Now().Sub(now))/float64(time.Second))
 				transactDebugCountLock.Unlock()
 			}
 
 			tx.Rollback()
 			panic(p) // re-throw panic after Rollback
 		} else if err != nil {
+			if debug {
+				transactDebugCountLock.Lock()
+				transactDebugCount -= 1
+				log.Printf("Transact ID %s %s end (rollback), existing transactions: %d, takes %f second\n", transactID, label, transactDebugCount, float64(time.Now().Sub(now))/float64(time.Second))
+				transactDebugCountLock.Unlock()
+			}
+
 			tx.Rollback() // err is non-nil; don't change it
 		} else {
 			err = tx.Commit().Error // err is nil; if Commit returns error update err
