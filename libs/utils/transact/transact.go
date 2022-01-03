@@ -31,7 +31,7 @@ func Transact(db *gorm.DB, txFunc func(*gorm.DB) error, labels ...string) (err e
 			label = labels[0]
 		}
 
-		transactID := datatypes.NewUUID().String()
+		transactID = datatypes.NewUUID().String()
 		if len(labels) > 1 {
 			transactID = labels[1]
 		}
