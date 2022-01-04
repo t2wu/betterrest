@@ -13,6 +13,7 @@ type IQuery interface {
 	Offset(offset int) IQuery
 	InnerJoin(modelObj models.IModel, foreignObj models.IModel, args ...interface{}) IQuery
 	BuildQuery(modelObj models.IModel) (*gorm.DB, error)
+	Take(modelObj models.IModel) IQuery
 	First(modelObj models.IModel) IQuery
 	Find(modelObjs interface{}) IQuery
 	Count(modelObj models.IModel, no *int) IQuery

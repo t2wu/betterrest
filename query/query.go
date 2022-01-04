@@ -177,6 +177,30 @@ func (q *Query) InnerJoin(modelObj models.IModel, foreignObj models.IModel, args
 	return q
 }
 
+func (q *Query) Take(modelObj models.IModel) IQuery {
+	if q.Err != nil {
+		return q
+	}
+
+	if q.mainMB != nil {
+		q.mainMB.modelObj = modelObj
+	} else {
+		q.db = q.db.Model(modelObj)
+	}
+
+	var err error
+	q.db, err = q.buildQueryCore(q.db, modelObj)
+	if err != nil {
+		q.Err = err
+		return q
+	}
+
+	q.db = q.buildQueryOrderOffSetAndLimit(q.db, modelObj)
+	q.Err = q.db.Take(modelObj).Error
+
+	return q
+}
+
 func (q *Query) First(modelObj models.IModel) IQuery {
 	if q.Err != nil {
 		return q
