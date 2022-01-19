@@ -25,7 +25,6 @@ type IQuery interface {
 	// Update(modelObjs interface{}, attrs ...interface{}) IQuery
 	Update(modelObj models.IModel, p *PredicateRelationBuilder) IQuery
 	GetDB() *gorm.DB
-	GetDBOri() *gorm.DB
 	Reset() IQuery
 	Error() error
 }

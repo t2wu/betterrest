@@ -558,16 +558,6 @@ func (q *Query) CreateMany(modelObjs []models.IModel) IQuery {
 		}
 	}
 
-	// for tableName, ms := range car.toProcess {
-	// 	q.db = q.GetDBOri().Table(tableName)
-	// 	for _, m := range ms {
-	// 		if err := q.db.Create(m).Error; err != nil {
-	// 			q.Err = err
-	// 			return q
-	// 		}
-	// 	}
-	// }
-
 	return q
 }
 
@@ -713,12 +703,7 @@ func (q *Query) GetDB() *gorm.DB {
 	return q.db
 }
 
-func (q *Query) GetDBOri() *gorm.DB {
-	return q.dbori
-}
-
 func (q *Query) Reset() IQuery {
-	q.db = q.dbori
 	// q.Err = nil // do not reset this other wise Error() will always be nil afte say Find()
 	q.order = nil
 	q.limit = nil
