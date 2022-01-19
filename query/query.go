@@ -178,6 +178,9 @@ func (q *Query) InnerJoin(modelObj models.IModel, foreignObj models.IModel, args
 }
 
 func (q *Query) Take(modelObj models.IModel) IQuery {
+	defer q.Reset()
+	db := q.db
+
 	if q.Err != nil {
 		return q
 	}
@@ -185,23 +188,25 @@ func (q *Query) Take(modelObj models.IModel) IQuery {
 	if q.mainMB != nil {
 		q.mainMB.modelObj = modelObj
 	} else {
-		q.db = q.db.Model(modelObj)
+		db = db.Model(modelObj)
 	}
 
 	var err error
-	q.db, err = q.buildQueryCore(q.db, modelObj)
+	db, err = q.buildQueryCore(db, modelObj)
 	if err != nil {
 		q.Err = err
 		return q
 	}
 
-	q.db = q.buildQueryOrderOffSetAndLimit(q.db, modelObj)
-	q.Err = q.db.Take(modelObj).Error
+	db = q.buildQueryOrderOffSetAndLimit(db, modelObj)
+	q.Err = db.Take(modelObj).Error
 
 	return q
 }
 
 func (q *Query) First(modelObj models.IModel) IQuery {
+	defer q.Reset()
+	db := q.db
 	if q.Err != nil {
 		return q
 	}
@@ -209,23 +214,25 @@ func (q *Query) First(modelObj models.IModel) IQuery {
 	if q.mainMB != nil {
 		q.mainMB.modelObj = modelObj
 	} else {
-		q.db = q.db.Model(modelObj)
+		db = q.db.Model(modelObj)
 	}
 
 	var err error
-	q.db, err = q.buildQueryCore(q.db, modelObj)
+	db, err = q.buildQueryCore(db, modelObj)
 	if err != nil {
 		q.Err = err
 		return q
 	}
 
-	q.db = q.buildQueryOrderOffSetAndLimit(q.db, modelObj)
-	q.Err = q.db.First(modelObj).Error
+	db = q.buildQueryOrderOffSetAndLimit(db, modelObj)
+	q.Err = db.First(modelObj).Error
 
 	return q
 }
 
 func (q *Query) Count(modelObj models.IModel, no *int) IQuery {
+	defer q.Reset()
+	db := q.db
 	if q.Err != nil {
 		return q
 	}
@@ -233,23 +240,26 @@ func (q *Query) Count(modelObj models.IModel, no *int) IQuery {
 	if q.mainMB != nil {
 		q.mainMB.modelObj = modelObj
 	} else {
-		q.db = q.db.Model(modelObj)
+		db = db.Model(modelObj)
 	}
 
 	var err error
-	q.db, err = q.buildQueryCore(q.db, modelObj)
+	db, err = q.buildQueryCore(db, modelObj)
 	if err != nil {
 		q.Err = err
 		return q
 	}
 
-	q.db = q.buildQueryOrderOffSetAndLimit(q.db, modelObj)
-	q.Err = q.db.Count(no).Error
+	db = q.buildQueryOrderOffSetAndLimit(db, modelObj)
+	q.Err = db.Count(no).Error
 
 	return q
 }
 
 func (q *Query) Find(modelObjs interface{}) IQuery {
+	defer q.Reset()
+	db := q.db
+
 	if q.Err != nil {
 		return q
 	}
@@ -272,35 +282,38 @@ loop:
 	if q.mainMB != nil {
 		q.mainMB.modelObj = modelObj
 	} else {
-		q.db = q.db.Model(modelObj)
+		db = db.Model(modelObj)
 	}
 
 	var err error
-	q.db, err = q.buildQueryCore(q.db, modelObj)
+	db, err = q.buildQueryCore(db, modelObj)
 	if err != nil {
 		q.Err = err
 		return q
 	}
 
-	q.db = q.buildQueryOrderOffSetAndLimit(q.db, modelObj)
-	q.Err = q.db.Find(modelObjs).Error
+	db = q.buildQueryOrderOffSetAndLimit(db, modelObj)
+	q.Err = db.Find(modelObjs).Error
 
 	return q
 }
 
 // This is a passover for building query, we're just building the where clause
 func (q *Query) BuildQuery(modelObj models.IModel) (*gorm.DB, error) {
+	defer q.Reset()
+	db := q.db
+
 	if q.Err != nil {
-		return q.db, q.Err
+		return db, q.Err
 	}
 
 	if q.mainMB != nil {
 		q.mainMB.modelObj = modelObj
 	} else {
-		q.db = q.db.Model(modelObj)
+		db = db.Model(modelObj)
 	}
 
-	return q.buildQueryCore(q.db, modelObj)
+	return q.buildQueryCore(db, modelObj)
 }
 
 func (q *Query) buildQueryCore(db *gorm.DB, modelObj models.IModel) (*gorm.DB, error) {
@@ -488,21 +501,23 @@ func (q *Query) buildQueryOrderOffSetAndLimit(db *gorm.DB, modelObj models.IMode
 }
 
 func (q *Query) Create(modelObj models.IModel) IQuery {
-	q.Reset()
+	q.Reset() // This shouldn't matter, unless it's a left-over bug
+	defer q.Reset()
+	db := q.db
 
-	if err := RemoveIDForNonPegOrPeggedFieldsBeforeCreate(q.db, modelObj); err != nil {
+	if err := RemoveIDForNonPegOrPeggedFieldsBeforeCreate(db, modelObj); err != nil {
 		q.Err = err
 		return q
 	}
 
-	if err := q.db.Create(modelObj).Error; err != nil {
+	if err := db.Create(modelObj).Error; err != nil {
 		q.Err = err
 		return q
 	}
 
 	// For pegassociated, the since we expect association_autoupdate:false
 	// need to manually create it
-	if err := CreatePeggedAssocFields(q.db, modelObj); err != nil {
+	if err := CreatePeggedAssocFields(db, modelObj); err != nil {
 		q.Err = err
 		return q
 	}
@@ -511,19 +526,21 @@ func (q *Query) Create(modelObj models.IModel) IQuery {
 }
 
 func (q *Query) CreateMany(modelObjs []models.IModel) IQuery {
-	q.Reset()
+	q.Reset() // This shouldn't matter, unless it's a left-over bug
+	defer q.Reset()
+	db := q.db
 
 	car := BatchCreateData{}
 	car.toProcess = make(map[string][]models.IModel)
 
 	// TODO: do a batch create instead
 	for _, modelObj := range modelObjs {
-		if err := RemoveIDForNonPegOrPeggedFieldsBeforeCreate(q.db, modelObj); err != nil {
+		if err := RemoveIDForNonPegOrPeggedFieldsBeforeCreate(db, modelObj); err != nil {
 			q.Err = err
 			return q
 		}
 
-		q.Err = q.db.Create(modelObj).Error
+		q.Err = db.Create(modelObj).Error
 		if q.Err != nil {
 			return q
 		}
@@ -535,7 +552,7 @@ func (q *Query) CreateMany(modelObjs []models.IModel) IQuery {
 
 		// For pegassociated, the since we expect association_autoupdate:false
 		// need to manually create it
-		if err := CreatePeggedAssocFields(q.db, modelObj); err != nil {
+		if err := CreatePeggedAssocFields(db, modelObj); err != nil {
 			q.Err = err
 			return q
 		}
@@ -556,6 +573,9 @@ func (q *Query) CreateMany(modelObjs []models.IModel) IQuery {
 
 // Delete can be with criteria, or can just delete the model directly
 func (q *Query) Delete(modelObj models.IModel) IQuery {
+	defer q.Reset()
+	db := q.db
+
 	if q.Err != nil {
 		return q
 	}
@@ -569,24 +589,24 @@ func (q *Query) Delete(modelObj models.IModel) IQuery {
 	if q.mainMB != nil {
 		q.mainMB.modelObj = modelObj
 	} else {
-		q.db = q.db.Model(modelObj)
+		db = db.Model(modelObj)
 	}
 
 	// Won't work, builtqueryCore has "ORDER BY Clause"
 	var err error
-	q.db = q.db.Unscoped()
-	q.db, err = q.buildQueryCore(q.db, modelObj)
+	db = db.Unscoped()
+	db, err = q.buildQueryCore(db, modelObj)
 	if err != nil {
 		q.Err = err
 		return q
 	}
 
-	if err := q.db.Delete(modelObj).Error; err != nil {
+	if err := db.Delete(modelObj).Error; err != nil {
 		q.Err = err
 		return q
 	}
 
-	if err := DeleteModelFixManyToManyAndPegAndPegAssoc(q.db, modelObj); err != nil {
+	if err := DeleteModelFixManyToManyAndPegAndPegAssoc(db, modelObj); err != nil {
 		q.Err = err
 		return q
 	}
@@ -595,7 +615,9 @@ func (q *Query) Delete(modelObj models.IModel) IQuery {
 }
 
 func (q *Query) DeleteMany(modelObjs []models.IModel) IQuery {
-	q.Reset()
+	q.Reset() // needed only if left-over bug
+	defer q.Reset()
+	db := q.db
 
 	// Collect all the ids, non can be nil
 	ids := make([]*datatypes.UUID, len(modelObjs))
@@ -609,12 +631,12 @@ func (q *Query) DeleteMany(modelObjs []models.IModel) IQuery {
 
 	m := reflect.New(reflect.TypeOf(modelObjs[0]).Elem()).Interface().(models.IModel)
 	// Batch delete, not documented for Gorm v1 but actually works
-	if q.Err = q.db.Unscoped().Delete(m, ids).Error; q.Err != nil {
+	if q.Err = db.Unscoped().Delete(m, ids).Error; q.Err != nil {
 		return q
 	}
 
 	for _, modelObj := range modelObjs {
-		if err := DeleteModelFixManyToManyAndPegAndPegAssoc(q.db, modelObj); err != nil {
+		if err := DeleteModelFixManyToManyAndPegAndPegAssoc(db, modelObj); err != nil {
 			q.Err = err
 			return q
 		}
@@ -624,16 +646,22 @@ func (q *Query) DeleteMany(modelObjs []models.IModel) IQuery {
 }
 
 func (q *Query) Save(modelObj models.IModel) IQuery {
+	defer q.Reset()
+	db := q.db
+
 	if q.Err != nil {
 		return q
 	}
 
-	q.Err = q.db.Save(modelObj).Error
+	q.Err = db.Save(modelObj).Error
 	return q
 }
 
 // Update only allow one level of builder
 func (q *Query) Update(modelObj models.IModel, p *PredicateRelationBuilder) IQuery {
+	defer q.Reset()
+	db := q.db
+
 	if q.Err != nil {
 		return q
 	}
@@ -644,7 +672,7 @@ func (q *Query) Update(modelObj models.IModel, p *PredicateRelationBuilder) IQue
 
 	// Won't work, builtqueryCore has "ORDER BY Clause"
 	var err error
-	q.db, err = q.buildQueryCore(q.db, modelObj)
+	db, err = q.buildQueryCore(db, modelObj)
 	if err != nil {
 		q.Err = err
 		return q
@@ -676,7 +704,7 @@ func (q *Query) Update(modelObj models.IModel, p *PredicateRelationBuilder) IQue
 		updateMap[s] = values[i]
 	}
 
-	q.Err = q.db.Update(updateMap).Error
+	q.Err = db.Update(updateMap).Error
 
 	return q
 }
@@ -691,12 +719,13 @@ func (q *Query) GetDBOri() *gorm.DB {
 
 func (q *Query) Reset() IQuery {
 	q.db = q.dbori
-	q.Err = nil
+	// q.Err = nil // do not reset this other wise Error() will always be nil afte say Find()
 	q.order = nil
 	q.limit = nil
 	q.offset = nil
 
 	q.mbs = make([]ModelAndBuilder, 0)
+	q.mainMB = nil
 	return q
 }
 
