@@ -23,7 +23,7 @@ const (
 // It would be Q(db, C(...), C(...)...).First() or Q(db).First() with empty PredicateRelationBuilder
 // Use multiple C() when working on inner fields (one C() per struct field)
 func Q(db *gorm.DB, args ...interface{}) IQuery {
-	q := &Query{db: db, dbori: db}
+	q := &Query{db: db}
 	return q.Q(args...)
 }
 
@@ -39,8 +39,7 @@ func DB(db *gorm.DB) IQuery {
 // Query by field name, and prevent SQL injection by making sure that fields are part of the
 // model
 type Query struct {
-	db    *gorm.DB // Gorm db object can be a transaction
-	dbori *gorm.DB // So we can reset it for another query if needed.
+	db *gorm.DB // Gorm db object can be a transaction
 	// args  []interface{}
 	Err    error
 	order  *string // custom order to Gorm instead of "created_at DESC"
@@ -53,7 +52,7 @@ type Query struct {
 
 // Q takes in PredicateRelationBuilder here.
 func (q *Query) Q(args ...interface{}) IQuery {
-	q.Reset() // always reset with Q()
+	// q.Reset() // always reset with Q() // do i need to? what if order first?
 
 	mb := ModelAndBuilder{}
 	for _, arg := range args {
@@ -178,7 +177,8 @@ func (q *Query) InnerJoin(modelObj models.IModel, foreignObj models.IModel, args
 }
 
 func (q *Query) Take(modelObj models.IModel) IQuery {
-	defer q.Reset()
+	defer resetWithoutResetError(q)
+
 	db := q.db
 
 	if q.Err != nil {
@@ -205,7 +205,8 @@ func (q *Query) Take(modelObj models.IModel) IQuery {
 }
 
 func (q *Query) First(modelObj models.IModel) IQuery {
-	defer q.Reset()
+	defer resetWithoutResetError(q)
+
 	db := q.db
 	if q.Err != nil {
 		return q
@@ -231,7 +232,8 @@ func (q *Query) First(modelObj models.IModel) IQuery {
 }
 
 func (q *Query) Count(modelObj models.IModel, no *int) IQuery {
-	defer q.Reset()
+	defer resetWithoutResetError(q)
+
 	db := q.db
 	if q.Err != nil {
 		return q
@@ -257,7 +259,8 @@ func (q *Query) Count(modelObj models.IModel, no *int) IQuery {
 }
 
 func (q *Query) Find(modelObjs interface{}) IQuery {
-	defer q.Reset()
+	defer resetWithoutResetError(q)
+
 	db := q.db
 
 	if q.Err != nil {
@@ -300,7 +303,8 @@ loop:
 
 // This is a passover for building query, we're just building the where clause
 func (q *Query) BuildQuery(modelObj models.IModel) (*gorm.DB, error) {
-	defer q.Reset()
+	defer resetWithoutResetError(q)
+
 	db := q.db
 
 	if q.Err != nil {
@@ -502,7 +506,7 @@ func (q *Query) buildQueryOrderOffSetAndLimit(db *gorm.DB, modelObj models.IMode
 
 func (q *Query) Create(modelObj models.IModel) IQuery {
 	q.Reset() // This shouldn't matter, unless it's a left-over bug
-	defer q.Reset()
+	defer resetWithoutResetError(q)
 	db := q.db
 
 	if err := RemoveIDForNonPegOrPeggedFieldsBeforeCreate(db, modelObj); err != nil {
@@ -527,7 +531,7 @@ func (q *Query) Create(modelObj models.IModel) IQuery {
 
 func (q *Query) CreateMany(modelObjs []models.IModel) IQuery {
 	q.Reset() // This shouldn't matter, unless it's a left-over bug
-	defer q.Reset()
+	defer resetWithoutResetError(q)
 	db := q.db
 
 	car := BatchCreateData{}
@@ -563,7 +567,6 @@ func (q *Query) CreateMany(modelObjs []models.IModel) IQuery {
 
 // Delete can be with criteria, or can just delete the model directly
 func (q *Query) Delete(modelObj models.IModel) IQuery {
-	defer q.Reset()
 	db := q.db
 
 	if q.Err != nil {
@@ -606,7 +609,7 @@ func (q *Query) Delete(modelObj models.IModel) IQuery {
 
 func (q *Query) DeleteMany(modelObjs []models.IModel) IQuery {
 	q.Reset() // needed only if left-over bug
-	defer q.Reset()
+	defer resetWithoutResetError(q)
 	db := q.db
 
 	// Collect all the ids, non can be nil
@@ -636,7 +639,7 @@ func (q *Query) DeleteMany(modelObjs []models.IModel) IQuery {
 }
 
 func (q *Query) Save(modelObj models.IModel) IQuery {
-	defer q.Reset()
+	defer resetWithoutResetError(q)
 	db := q.db
 
 	if q.Err != nil {
@@ -649,7 +652,7 @@ func (q *Query) Save(modelObj models.IModel) IQuery {
 
 // Update only allow one level of builder
 func (q *Query) Update(modelObj models.IModel, p *PredicateRelationBuilder) IQuery {
-	defer q.Reset()
+	defer resetWithoutResetError(q)
 	db := q.db
 
 	if q.Err != nil {
@@ -704,18 +707,16 @@ func (q *Query) GetDB() *gorm.DB {
 }
 
 func (q *Query) Reset() IQuery {
-	// q.Err = nil // do not reset this other wise Error() will always be nil afte say Find()
-	q.order = nil
-	q.limit = nil
-	q.offset = nil
-
-	q.mbs = make([]ModelAndBuilder, 0)
-	q.mainMB = nil
+	q.Err = nil
+	resetWithoutResetError(q)
 	return q
 }
 
 func (q *Query) Error() error {
-	return q.Err
+	resetWithoutResetError(q)
+	err := q.Err
+	q.Err = nil
+	return err
 }
 
 type TableAndArgs struct {
@@ -763,4 +764,14 @@ func GetOuterTableName(modelObj models.IModel, fieldNameDesignator string) (stri
 		outerTableName = models.GetTableNameFromIModel(modelObj)
 	}
 	return outerTableName, nil
+}
+
+// --------------
+func resetWithoutResetError(q *Query) {
+	q.order = nil
+	q.limit = nil
+	q.offset = nil
+
+	q.mbs = make([]ModelAndBuilder, 0)
+	q.mainMB = nil
 }
