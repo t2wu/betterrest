@@ -165,7 +165,7 @@ func TestQueryFindLimit_ShouldBeCorrect(t *testing.T) {
 func TestQueryFindOrderBy_ShouldBeCorrect(t *testing.T) {
 	tms := make([]TestModel, 0)
 
-	if err := Q(db, C("Name =", "same")).Order("CreatedAt ASC").Find(&tms).Error(); err != nil {
+	if err := Q(db, C("Name =", "same")).Order("CreatedAt", OrderAsc).Find(&tms).Error(); err != nil {
 		assert.Nil(t, err)
 		return
 	}
@@ -181,7 +181,7 @@ func TestQueryFindOrderBy_BogusFieldShouldHaveError(t *testing.T) {
 	tms := make([]TestModel, 0)
 
 	// Currently order works not by field.
-	if err := Q(db, C("Name =", "same")).Order("Bogus ASC").Find(&tms).Error(); err != nil {
+	if err := Q(db, C("Name =", "same")).Order("Bogus", OrderAsc).Find(&tms).Error(); err != nil {
 		assert.Error(t, err)
 		return
 	}

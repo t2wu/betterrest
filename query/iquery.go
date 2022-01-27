@@ -5,10 +5,17 @@ import (
 	"github.com/t2wu/betterrest/models"
 )
 
+type Order string
+
+const (
+	OrderAsc  Order = "ASC"
+	OrderDesc Order = "DESC"
+)
+
 // IQuery so we can stubb out the DB
 type IQuery interface {
 	Q(args ...interface{}) IQuery
-	Order(order string) IQuery
+	Order(field string, order Order) IQuery
 	Limit(limit int) IQuery
 	Offset(offset int) IQuery
 	InnerJoin(modelObj models.IModel, foreignObj models.IModel, args ...interface{}) IQuery

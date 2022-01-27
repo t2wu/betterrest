@@ -528,18 +528,6 @@ func latestnGetPartitionWhereAndTransformedValues2(typeString, tableName string,
 	// return partitionBy, latestnWhereStmt, globalWhereStmt, transformedValues
 }
 
-// AddLatestJoinWithTwoLevelFilter generates latest join with two-level filter
-// TODO? Can tablename be part of the "?"
-// func AddLatestJoinWithTwoLevelFilter(db *gorm.DB, typeString string, tableName string, latestn int, filter FilterCriteria) {
-// 	var sb strings.Builder
-// 	sb.WriteString(fmt.Sprintf("INNER JOIN (SELECT %s, DENSE_RANK() OVER (PARTITION by %s ORDER BY created_at DESC) FROM %s) AS latestn ",
-// 		tableName, filter.FieldName, tableName))
-// 	sb.WriteString(fmt.Sprintf("ON %s.%s = latestn.%s AND %s.created_at = latestn.created_at AND ",
-// 		tableName, filter.FieldName, filter.FieldName, tableName))
-// 	sb.WriteString(fmt.Sprintf("latestn.dense_rank <= ?"))
-// 	stmt := sb.String()
-// }
-
 // ===========================================
 // Private
 // ===========================================

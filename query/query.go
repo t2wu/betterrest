@@ -40,11 +40,16 @@ func DB(db *gorm.DB) IQuery {
 // model
 type Query struct {
 	db *gorm.DB // Gorm db object can be a transaction
+
 	// args  []interface{}
-	Err    error
-	order  *string // custom order to Gorm instead of "created_at DESC"
-	limit  *int    // custom limit
-	offset *int    // custom offset
+	Err error
+
+	// custom order to Gorm instead of "created_at DESC"
+	orderField *string
+	order      *Order
+
+	limit  *int // custom limit
+	offset *int // custom offset
 
 	mainMB *ModelAndBuilder  // the builder on the main model (including the nested one)
 	mbs    []ModelAndBuilder // the builder for non-nested models, each one is a separate non-nested model
@@ -76,16 +81,18 @@ func (q *Query) Q(args ...interface{}) IQuery {
 	return q
 }
 
-func (q *Query) Order(order string) IQuery {
+func (q *Query) Order(field string, order Order) IQuery {
+	// func (q *Query) Order(order string) IQuery {
 	if q.order != nil {
 		log.Println("warning: query order already set")
 	}
 
-	if strings.Contains(order, ".") {
-		q.Err = fmt.Errorf("dot notation in order")
+	if strings.Contains(field, ".") {
+		q.Err = fmt.Errorf("dot notation in field not supported")
 		return q
 	}
 
+	q.orderField = &field
 	q.order = &order
 	return q
 }
@@ -477,19 +484,16 @@ func (q *Query) buildQueryCoreInnerJoin(db *gorm.DB, mb *ModelAndBuilder) (*gorm
 
 func (q *Query) buildQueryOrderOffSetAndLimit(db *gorm.DB, modelObj models.IModel) *gorm.DB {
 	order := ""
-	if q.order != nil {
-		toks := strings.Split(*q.order, " ")
-		fieldName := toks[0]
-		rest := toks[1] // DESC or ASC
-		col, err := models.FieldNameToColumn(modelObj, fieldName)
+	tableName := models.GetTableNameFromIModel(modelObj)
+	if q.orderField != nil && q.order != nil {
+		col, err := models.FieldNameToColumn(modelObj, *q.orderField)
 		if err != nil {
 			q.Err = err
 		}
 
-		tableName := models.GetTableNameFromIModel(modelObj)
-		order = fmt.Sprintf("\"%s\".%s %s", tableName, col, rest)
+		order = fmt.Sprintf("\"%s\".%s %s", tableName, col, *q.order)
 	} else {
-		order = fmt.Sprintf("\"%s\".created_at DESC", models.GetTableNameFromIModel(modelObj))
+		order = fmt.Sprintf("\"%s\".created_at DESC", tableName) // descending by default
 	}
 
 	db = db.Order(order)
@@ -769,6 +773,7 @@ func GetOuterTableName(modelObj models.IModel, fieldNameDesignator string) (stri
 // --------------
 func resetWithoutResetError(q *Query) {
 	q.order = nil
+	q.orderField = nil
 	q.limit = nil
 	q.offset = nil
 
