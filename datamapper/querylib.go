@@ -145,9 +145,10 @@ func constructDbFromURLFieldQuery(db *gorm.DB, typeString string, urlParams map[
 	// ) AS latestn
 	// ON dock.id = latestn.id AND latestn.dense_rank <= 1
 
-	if latestn != nil && len(filterslatestnons) > 0 {
+	// if latestn != nil && len(filterslatestnons) > 0 {
+	if latestn != nil && len(latestnons) > 0 {
 		// log.Println("filterslatestnons:", filterslatestnons)
-		db, err = sqlbuilder.AddLatestNCTEJoin(db, typeString, models.GetTableNameFromTypeString(typeString), *latestn, filterslatestnons)
+		db, err = sqlbuilder.AddLatestNCTEJoin(db, typeString, models.GetTableNameFromTypeString(typeString), *latestn, latestnons, filterslatestnons)
 		if err != nil {
 			return db, err
 		}

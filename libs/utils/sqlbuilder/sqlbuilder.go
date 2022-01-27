@@ -166,12 +166,14 @@ func filterHasLateston(filters []FilterCriteria) bool {
 	return false
 }
 
-func AddLatestNCTEJoin(db *gorm.DB, typeString string, tableName string, latestn int, filters []FilterCriteria) (*gorm.DB, error) {
+// filters is for latestnons
+func AddLatestNCTEJoin(db *gorm.DB, typeString string, tableName string, latestn int, latestnons []string, filterslatestnons []FilterCriteria) (*gorm.DB, error) {
 	partitionByArr := make([]string, 0)
 	latestnonWhereArr := make([]string, 0)
 	transformedValues := make([]interface{}, 0)
+	m := models.NewFromTypeString(typeString)
 
-	for _, filter := range filters {
+	for _, filter := range filterslatestnons {
 		// If there is any equality comparison other than equal
 		// there shouldn't be any IN then
 		hasEquality := false
@@ -182,8 +184,6 @@ func AddLatestNCTEJoin(db *gorm.DB, typeString string, tableName string, latestn
 				}
 			}
 		}
-
-		m := models.NewFromTypeString(typeString)
 
 		urlFieldValues := make([]string, 0)
 		for _, predicates := range filter.PredicatesArr {
@@ -202,36 +202,66 @@ func AddLatestNCTEJoin(db *gorm.DB, typeString string, tableName string, latestn
 			return db, err
 		}
 
-		fiterdFieldValues, anyNull := filterNullValue(transformedFieldValues)
+		filterdFieldValues, anyNull := filterNullValue(transformedFieldValues)
 		// If passed, the field is part of the data structure
 
-		fieldName := strcase.SnakeCase(filter.FieldName)
-		partitionByArr = append(partitionByArr, fieldName)
+		// fieldName := strcase.SnakeCase(filter.FieldName)
+
+		actualFieldName, err := models.JSONKeysToFieldName(m, filter.FieldName)
+		if err != nil {
+			return db, err
+		}
+		fieldName, err := models.FieldNameToColumn(m, actualFieldName)
+		if err != nil {
+			return db, err
+		}
 
 		// One field is either >= or =, so we split by equality here
 		if hasEquality {
-			latestnonWhereArr = append(latestnonWhereArr, inOpStmt(tableName, fieldName, len(fiterdFieldValues), anyNull)) // "%s.%s IN (%s)
+			latestnonWhereArr = append(latestnonWhereArr, inOpStmt(tableName, fieldName, len(filterdFieldValues), anyNull)) // "%s.%s IN (?) OR %s.%s IS NULL)
 		} else {
 			latestnonWhereArr = append(latestnonWhereArr, comparisonOpStmt(tableName, strcase.SnakeCase(filter.FieldName), filter.PredicatesArr))
 		}
 
-		transformedValues = append(transformedValues, fiterdFieldValues...)
+		transformedValues = append(transformedValues, filterdFieldValues...)
 
 	}
 
-	if len(transformedValues) == 0 {
-		return db, fmt.Errorf("latestn cannot be used without querying field value")
+	// if len(transformedValues) == 0 {
+	// 	return db, fmt.Errorf("latestn cannot be used without querying field value")
+	// }
+
+	// it's possible that there isn't any WHERE clause inside the CTE but we still have to paritition by
+
+	for _, latestnon := range latestnons {
+		actualFieldName, err := models.JSONKeysToFieldName(m, latestnon)
+		if err != nil {
+			return db, err
+		}
+		fieldName, err := models.FieldNameToColumn(m, actualFieldName)
+		if err != nil {
+			return db, err
+		}
+
+		partitionByArr = append(partitionByArr, fieldName)
 	}
 
 	partitionBy := strings.Join(partitionByArr, ", ")
-	latestnonWhereStmt := strings.Join(latestnonWhereArr, " AND ")
 
 	var sb strings.Builder
-	// The latestnon can be here in the WHERE clause
-	sb.WriteString(fmt.Sprintf("INNER JOIN (SELECT id, DENSE_RANK() OVER (PARTITION by %s ORDER BY created_at DESC) FROM %s WHERE %s) AS latestn ",
-		partitionBy, tableName, latestnonWhereStmt)) // WHERE fieldName = fieldValue
 
-	sb.WriteString(fmt.Sprintf("ON %s AND %s.id = latestn.id AND latestn.dense_rank <= ?", latestnonWhereStmt, tableName))
+	if len(latestnonWhereArr) > 0 {
+		latestnonWhereStmt := strings.Join(latestnonWhereArr, " AND ")
+		// The latestnon can be here in the WHERE clause
+		sb.WriteString(fmt.Sprintf("INNER JOIN (SELECT id, DENSE_RANK() OVER (PARTITION by %s ORDER BY created_at DESC) FROM %s WHERE %s) AS latestn ",
+			partitionBy, tableName, latestnonWhereStmt)) // WHERE fieldName = fieldValue
+		sb.WriteString(fmt.Sprintf("ON %s AND %s.id = latestn.id AND latestn.dense_rank <= ?", latestnonWhereStmt, tableName))
+	} else { // having partition by (latestnon), but no where clause on latestnon
+		// The latestnon can be here in the WHERE clause
+		sb.WriteString(fmt.Sprintf("INNER JOIN (SELECT id, DENSE_RANK() OVER (PARTITION by %s ORDER BY created_at DESC) FROM %s) AS latestn ",
+			partitionBy, tableName)) // WHERE fieldName = fieldValue
+		sb.WriteString(fmt.Sprintf("ON %s.id = latestn.id AND latestn.dense_rank <= ?", tableName))
+	}
 
 	stmt := sb.String()
 
@@ -277,7 +307,7 @@ func AddLatestJoinWithOneLevelFilter(db *gorm.DB, typeString string, tableName s
 
 	stmt := sb.String()
 
-	transformedValues = append(transformedValues, latestn)
+	transformedValues = append(transformedValues, latestn) // tofix
 
 	db = db.Joins(stmt, transformedValues...)
 	return db, nil
@@ -521,9 +551,7 @@ func latestnGetPartitionWhereAndTransformedValues2(typeString, tableName string,
 // from better_other_queries
 // This doesn't fill in the values
 func inOpStmt(tableName string, fieldName string, numfieldValues int, checkNull bool) string {
-	tableName = "\"" + tableName + "\""
-	fieldName = "\"" + fieldName + "\""
-	tableAndField := fmt.Sprintf("%s.%s", tableName, fieldName)
+	tableAndField := fmt.Sprintf(`"%s"."%s"`, tableName, fieldName)
 
 	// A simple IN clause is OK except when I need to check if the field is an null value
 	// then the IN clause won't work, need to do
@@ -533,6 +561,9 @@ func inOpStmt(tableName string, fieldName string, numfieldValues int, checkNull 
 	if numfieldValues >= 1 {
 		questionMarks := strings.Repeat("?,", numfieldValues)
 		questionMarks = questionMarks[:len(questionMarks)-1]
+
+		// Need to build individual ? because the IN clause and other ? are filled together at once
+		// If we don't spell them all out it's going to get misplaced
 		stmt.WriteString(fmt.Sprintf("%s IN (%s)", tableAndField, questionMarks))
 	}
 
@@ -548,12 +579,9 @@ func inOpStmt(tableName string, fieldName string, numfieldValues int, checkNull 
 }
 
 func comparisonOpStmt(tableName string, fieldName string, predicatesArr [][]Predicate) string {
-	tableName = "\"" + tableName + "\""
-	fieldName = "\"" + fieldName + "\""
-	tableAndField := fmt.Sprintf("%s.%s", tableName, fieldName)
+	tableAndField := fmt.Sprintf(`"%s"."%s"`, tableName, fieldName)
 
 	// predicatesArr[] is OR relationships, inside is AND relationships
-
 	var stmt strings.Builder
 	predicates := predicatesArr[0]
 	stmt.WriteString(fmt.Sprintf(" (%s %s ?", tableAndField, string(predicates[0].PredicateLogic)))

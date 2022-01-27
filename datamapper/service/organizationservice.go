@@ -59,7 +59,6 @@ func (serv *OrganizationService) HookBeforeDeleteMany(db *gorm.DB, who models.Wh
 // getOneWithIDCore get one model object based on its type and its id string
 // since this is organizationMapper, need to make sure it's the same organization
 func (serv *OrganizationService) ReadOneCore(db *gorm.DB, who models.Who, typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error) {
-	log.Println("organization ReadOneCore called")
 	modelObj := models.NewFromTypeString(typeString)
 
 	db = db.Set("gorm:auto_preload", true)

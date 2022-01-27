@@ -40,8 +40,8 @@ func constructInnerFieldParamQueries(db *gorm.DB, typeString string, options *ma
 		if err != nil {
 			return nil, err
 		}
-	} else if latestn != nil {
-		return nil, errors.New("latestn cannot be used without querying field value")
+	} else if latestn != nil && len(latestnons) == 0 {
+		return nil, errors.New("use latestnon with latestn")
 	}
 
 	return db, nil
