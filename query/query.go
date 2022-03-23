@@ -64,6 +64,7 @@ func (q *Query) Q(args ...interface{}) IQuery {
 		b, ok := arg.(*PredicateRelationBuilder)
 		if !ok {
 			q.Err = fmt.Errorf("incorrect arguments for Q()")
+			PrintFileAndLine(q.Err)
 			return q
 		}
 
@@ -89,6 +90,7 @@ func (q *Query) Order(field string, order Order) IQuery {
 
 	if strings.Contains(field, ".") {
 		q.Err = fmt.Errorf("dot notation in field not supported")
+		PrintFileAndLine(q.Err)
 		return q
 	}
 
@@ -138,6 +140,7 @@ func (q *Query) InnerJoin(modelObj models.IModel, foreignObj models.IModel, args
 		b, ok = args[0].(*PredicateRelationBuilder)
 		if !ok {
 			q.Err = fmt.Errorf("incorrect arguments for Q()")
+			PrintFileAndLine(q.Err)
 			return q
 		}
 
@@ -169,6 +172,7 @@ func (q *Query) InnerJoin(modelObj models.IModel, foreignObj models.IModel, args
 		b, ok := args[i].(*PredicateRelationBuilder)
 		if !ok {
 			q.Err = fmt.Errorf("incorrect arguments for Q()")
+			PrintFileAndLine(q.Err)
 			return q
 		}
 		binfo := BuilderInfo{
@@ -207,6 +211,9 @@ func (q *Query) Take(modelObj models.IModel) IQuery {
 
 	db = q.buildQueryOrderOffSetAndLimit(db, modelObj)
 	q.Err = db.Take(modelObj).Error
+	if q.Err != nil {
+		PrintFileAndLine(q.Err)
+	}
 
 	return q
 }
@@ -234,6 +241,9 @@ func (q *Query) First(modelObj models.IModel) IQuery {
 
 	db = q.buildQueryOrderOffSetAndLimit(db, modelObj)
 	q.Err = db.First(modelObj).Error
+	if q.Err != nil {
+		PrintFileAndLine(q.Err)
+	}
 
 	return q
 }
@@ -261,6 +271,9 @@ func (q *Query) Count(modelObj models.IModel, no *int) IQuery {
 
 	db = q.buildQueryOrderOffSetAndLimit(db, modelObj)
 	q.Err = db.Count(no).Error
+	if q.Err != nil {
+		PrintFileAndLine(q.Err)
+	}
 
 	return q
 }
@@ -304,6 +317,9 @@ loop:
 
 	db = q.buildQueryOrderOffSetAndLimit(db, modelObj)
 	q.Err = db.Find(modelObjs).Error
+	if q.Err != nil {
+		PrintFileAndLine(q.Err)
+	}
 
 	return q
 }
@@ -519,6 +535,7 @@ func (q *Query) Create(modelObj models.IModel) IQuery {
 	}
 
 	if err := db.Create(modelObj).Error; err != nil {
+		PrintFileAndLine(err)
 		q.Err = err
 		return q
 	}
@@ -550,6 +567,7 @@ func (q *Query) CreateMany(modelObjs []models.IModel) IQuery {
 
 		q.Err = db.Create(modelObj).Error
 		if q.Err != nil {
+			PrintFileAndLine(q.Err)
 			return q
 		}
 
@@ -599,6 +617,7 @@ func (q *Query) Delete(modelObj models.IModel) IQuery {
 	}
 
 	if err := db.Delete(modelObj).Error; err != nil {
+		PrintFileAndLine(err)
 		q.Err = err
 		return q
 	}
@@ -629,6 +648,7 @@ func (q *Query) DeleteMany(modelObjs []models.IModel) IQuery {
 	m := reflect.New(reflect.TypeOf(modelObjs[0]).Elem()).Interface().(models.IModel)
 	// Batch delete, not documented for Gorm v1 but actually works
 	if q.Err = db.Unscoped().Delete(m, ids).Error; q.Err != nil {
+		PrintFileAndLine(q.Err)
 		return q
 	}
 
@@ -651,6 +671,9 @@ func (q *Query) Save(modelObj models.IModel) IQuery {
 	}
 
 	q.Err = db.Save(modelObj).Error
+	if q.Err != nil {
+		PrintFileAndLine(q.Err)
+	}
 	return q
 }
 
@@ -685,6 +708,7 @@ func (q *Query) Update(modelObj models.IModel, p *PredicateRelationBuilder) IQue
 	field2Struct, _ := FindFieldNameToStructAndStructFieldNameIfAny(rel) // hacky
 	if field2Struct != nil {
 		q.Err = fmt.Errorf("dot notation in update")
+		PrintFileAndLine(q.Err)
 		return q
 	}
 
@@ -702,6 +726,9 @@ func (q *Query) Update(modelObj models.IModel, p *PredicateRelationBuilder) IQue
 	}
 
 	q.Err = db.Update(updateMap).Error
+	if q.Err != nil {
+		PrintFileAndLine(q.Err)
+	}
 
 	return q
 }
