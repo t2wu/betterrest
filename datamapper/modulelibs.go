@@ -47,7 +47,7 @@ func constructInnerFieldParamQueries(db *gorm.DB, typeString string, options *ma
 	return db, nil
 }
 
-func loadAndCheckErrorBeforeModify(serv service.IService, db *gorm.DB, who models.Who, typeString string, modelObj models.IModel, id *datatypes.UUID, permittedRoles []models.UserRole) (models.IModel, models.UserRole, error) {
+func loadAndCheckErrorBeforeModify(serv service.IService, db *gorm.DB, who models.UserIDFetchable, typeString string, modelObj models.IModel, id *datatypes.UUID, permittedRoles []models.UserRole) (models.IModel, models.UserRole, error) {
 	if id == nil || id.UUID.String() == "" {
 		// in case it's an empty string
 		return nil, models.UserRoleInvalid, service.ErrIDEmpty
@@ -88,7 +88,7 @@ func loadAndCheckErrorBeforeModify(serv service.IService, db *gorm.DB, who model
 }
 
 // db should already be set up for all the joins needed, if any
-func loadManyAndCheckBeforeModify(serv service.IService, db *gorm.DB, who models.Who, typeString string,
+func loadManyAndCheckBeforeModify(serv service.IService, db *gorm.DB, who models.UserIDFetchable, typeString string,
 	ids []*datatypes.UUID, permittedRoles []models.UserRole) ([]models.IModel, []models.UserRole, error) {
 	modelObjs, roles, err := serv.GetManyCore(db, who, typeString, ids)
 	if err != nil {

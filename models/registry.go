@@ -20,7 +20,7 @@ var ModelRegistry = make(map[string]*Reg)
 // var OwnershipTyp reflect.Type
 
 // OwnerTyp is the model of the Owner table
-var OwnerTyp reflect.Type
+// var OwnerTyp reflect.Type
 
 // UserTyp is the model of the User table
 var UserTyp reflect.Type
@@ -59,8 +59,8 @@ type BatchHookPointData struct {
 	// DB is the DB handle
 	DB *gorm.DB
 	// Who is operating this CRUPD right now
-	Who Who
-	// Scope included in the token who is accessing right now
+	Who UserIDFetchable
+	// TypeString
 	TypeString string
 	// Cargo between Before and After hookpoints (not used in AfterRead since there is before read hookpoint.)
 	Cargo *BatchHookCargo

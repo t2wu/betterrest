@@ -3,11 +3,13 @@ package betterrest
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"reflect"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/t2wu/betterrest/libs/settings"
+	"github.com/t2wu/betterrest/routes"
 
 	"github.com/jinzhu/gorm"
 	"github.com/t2wu/betterrest/db"
@@ -35,6 +37,14 @@ func RegDB(dbi *gorm.DB) {
 }
 
 /*
+ * RegisterContextFunction
+ */
+
+func RegisterContextFunction(f func(r *http.Request) models.UserIDFetchable) {
+	routes.WhoFromContext = f
+}
+
+/*
  * Registration
  */
 
@@ -51,15 +61,6 @@ func For(typeString string) *Registrar {
 		models.ModelRegistry[typeString] = &models.Reg{}
 	}
 	return r
-}
-
-// UserModel set the IModel type
-func (r *Registrar) UserModel(modelObj models.IModel) *Registrar {
-	options := models.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: models.MapperTypeUser}
-	// Always override as there is only ONE user type
-	models.UserTyp = reflect.TypeOf(modelObj).Elem()
-
-	return r.ModelWithOption(modelObj, options)
 }
 
 // Model adds a New function for an models.IModel (convenient function of RegModelWithOption)

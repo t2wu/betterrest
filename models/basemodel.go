@@ -43,14 +43,6 @@ const (
 	UserRoleTableBased UserRole = 3
 )
 
-type UserStatus int
-
-const (
-	UserStatusUnverified UserStatus = iota // email unverified (can happen with a change of email)
-	UserStatusActive                       // email active
-	UserStatusInactive                     // email inactive (for whatever reason the account is inactivated)
-)
-
 // BaseModel is the base class domain model which has standard ID
 type BaseModel struct {
 	// For MySQL
@@ -260,7 +252,7 @@ func HTTPMethodToCRUDOp(method string) CRUPDOp {
 
 // IGuardAPIEntry supports method which guard access to API based on scope
 type IGuardAPIEntry interface {
-	GuardAPIEntry(models Who, http HTTP) bool
+	GuardAPIEntry(models interface{}, http HTTP) bool
 }
 
 // ModelCargo is payload between hookpoints
@@ -268,12 +260,16 @@ type ModelCargo struct {
 	Payload interface{}
 }
 
+type UserIDFetchable interface {
+	GetUserID() *datatypes.UUID
+}
+
 // HookPointData is the data send to single model hookpoints
 type HookPointData struct {
 	// DB handle (not available for AfterTransact)
 	DB *gorm.DB
 	// Who is the user information, who is operating this CRUPD right now
-	Who Who
+	Who UserIDFetchable
 	// TypeString is the typeString (model string) of this model
 	TypeString string
 	// Cargo between Before and After hookpoints (not used in IAfterRead since there is no IBeforeRead.)
@@ -283,31 +279,6 @@ type HookPointData struct {
 	Role *UserRole
 	// URL parameters
 	URLParams *map[urlparam.Param]interface{}
-}
-
-// IBeforeLogin has a function that is a hookpoint for actions before login but after marshalling
-type IBeforeLogin interface {
-	BeforeLogin(hpdata HookPointData) error
-}
-
-// IAfterLogin has a function that is a hookpoint for actions after login
-type IAfterLogin interface {
-	AfterLogin(hpdata HookPointData, payload map[string]interface{}) (map[string]interface{}, error)
-}
-
-// IAfterLoginFailed has a function that is a hookpoint for actions after login but before marshalling
-type IAfterLoginFailed interface {
-	AfterLoginFailed(hpdata HookPointData) error
-}
-
-// IBeforePasswordChange has a function that is a hookpoint for actions before password change but before marshalling
-type IBeforePasswordChange interface {
-	BeforePasswordChange(hpdata HookPointData) error
-}
-
-// IAfterPasswordChange has a function that is a hookpoint for actions after password change
-type IAfterPasswordChange interface {
-	AfterPasswordChange(hpdata HookPointData) error
 }
 
 // IBeforeCreate supports method to be called before data is inserted (created) into the database
@@ -381,19 +352,19 @@ type IAfterTransact interface {
 
 // IValidate supports validation with govalidator
 type IValidate interface {
-	Validate(who Who, http HTTP) error
+	Validate(who UserIDFetchable, http HTTP) error
 }
 
 // IHasPermissions is for IModel with a custom permission field to cherry pick json fields
 // default is to return all but the dates
 type IHasPermissions interface {
-	Permissions(role UserRole, who Who) (jsontrans.Permission, jsontrans.JSONFields)
+	Permissions(role UserRole, who UserIDFetchable) (jsontrans.Permission, jsontrans.JSONFields)
 }
 
 // IHasRenderer is for formatting IModel with a custom function
 // basically do your own custom output
 // If return false, use the default JSON output
-// For batch renderer, register a Render(r UserRole, who Who, modelObjs []IModel) bool
+// For batch renderer, register a Render(r UserRole, who models.UserIDFetchable, modelObjs []IModel) bool
 type IHasRenderer interface {
 	Render(c *gin.Context, hpdata *HookPointData, op CRUPDOp) bool
 }

@@ -27,39 +27,41 @@ import (
 // For a table of HTTP status codes (400, 401, etc) see here
 // https://golang.org/pkg/net/http/
 
+// Moved to application
+
 // NewErrClientNotAuthorized creates a new ErrClientNotAuthorized
-func NewErrClientNotAuthorized(err error) render.Renderer {
-	return &ErrClientNotAuthorized{
-		ErrResponse{
-			HTTPStatusCode: http.StatusUnauthorized,
-			Code:           1,
-			StatusText:     "client not authorized",
-			ErrorText:      errorToSensibleString(err),
-		},
-	}
-}
+// func NewErrClientNotAuthorized(err error) render.Renderer {
+// 	return &ErrClientNotAuthorized{
+// 		ErrResponse{
+// 			HTTPStatusCode: http.StatusUnauthorized,
+// 			Code:           1,
+// 			StatusText:     "client not authorized",
+// 			ErrorText:      ErrorToSensibleString(err),
+// 		},
+// 	}
+// }
 
-// ErrClientNotAuthorized is when client id or secret is not registered or wrong
-type ErrClientNotAuthorized struct {
-	ErrResponse
-}
+// // ErrClientNotAuthorized is when client id or secret is not registered or wrong
+// type ErrClientNotAuthorized struct {
+// 	ErrResponse
+// }
 
-// NewErrTokenInvalid creates a new ErrTokenInvalid
-func NewErrTokenInvalid(err error) render.Renderer {
-	return &ErrTokenInvalid{
-		ErrResponse{
-			HTTPStatusCode: http.StatusUnauthorized,
-			Code:           2,
-			StatusText:     "token not given, invalid or expired",
-			ErrorText:      errorToSensibleString(err),
-		},
-	}
-}
+// // NewErrTokenInvalid creates a new ErrTokenInvalid
+// func NewErrTokenInvalid(err error) render.Renderer {
+// 	return &ErrTokenInvalid{
+// 		ErrResponse{
+// 			HTTPStatusCode: http.StatusUnauthorized,
+// 			Code:           2,
+// 			StatusText:     "token not given, invalid or expired",
+// 			ErrorText:      ErrorToSensibleString(err),
+// 		},
+// 	}
+// }
 
-// ErrTokenInvalid token is not valid or expired
-type ErrTokenInvalid struct {
-	ErrResponse
-}
+// // ErrTokenInvalid token is not valid or expired
+// type ErrTokenInvalid struct {
+// 	ErrResponse
+// }
 
 // NewErrBadRequest creates a new ErrBadRequest
 func NewErrBadRequest(err error) render.Renderer {
@@ -68,7 +70,7 @@ func NewErrBadRequest(err error) render.Renderer {
 			HTTPStatusCode: http.StatusBadRequest,
 			Code:           3,
 			StatusText:     "general bad request",
-			ErrorText:      errorToSensibleString(err),
+			ErrorText:      ErrorToSensibleString(err),
 		},
 	}
 }
@@ -85,7 +87,7 @@ func NewErrReadingBody(err error) render.Renderer {
 			HTTPStatusCode: http.StatusBadRequest,
 			Code:           4,
 			StatusText:     "error in reading HTTP body",
-			ErrorText:      errorToSensibleString(err),
+			ErrorText:      ErrorToSensibleString(err),
 		},
 	}
 }
@@ -102,7 +104,7 @@ func NewErrParsingJSON(err error) render.Renderer {
 			HTTPStatusCode: http.StatusBadRequest,
 			Code:           5,
 			StatusText:     "error in parsing JSON",
-			ErrorText:      errorToSensibleString(err),
+			ErrorText:      ErrorToSensibleString(err),
 		},
 	}
 }
@@ -119,7 +121,7 @@ func NewErrGenJSON(err error) render.Renderer {
 			HTTPStatusCode: http.StatusBadRequest,
 			Code:           6,
 			StatusText:     "error generating JSON",
-			ErrorText:      errorToSensibleString(err),
+			ErrorText:      ErrorToSensibleString(err),
 		},
 	}
 }
@@ -129,39 +131,41 @@ type ErrGenJSON struct {
 	ErrResponse
 }
 
-// NewErrLoginUser creates a new ErrLoginUser
-func NewErrLoginUser(err error) render.Renderer {
-	return &ErrLoginUser{
-		ErrResponse{
-			HTTPStatusCode: http.StatusBadRequest,
-			Code:           7,
-			StatusText:     "error login user (wrong email/password)",
-			ErrorText:      errorToSensibleString(err),
-		},
-	}
-}
+// The following two has been moved to the application
 
-// ErrLoginUser problem login user. Maybe the user doesn't exists.
-type ErrLoginUser struct {
-	ErrResponse
-}
+// // NewErrLoginUser creates a new ErrLoginUser
+// func NewErrLoginUser(err error) render.Renderer {
+// 	return &ErrLoginUser{
+// 		ErrResponse{
+// 			HTTPStatusCode: http.StatusBadRequest,
+// 			Code:           7,
+// 			StatusText:     "error login user (wrong email/password)",
+// 			ErrorText:      ErrorToSensibleString(err),
+// 		},
+// 	}
+// }
 
-// NewErrGeneratingToken creates a new ErrGeneratingToken
-func NewErrGeneratingToken(err error) render.Renderer {
-	return &ErrGeneratingToken{
-		ErrResponse{
-			HTTPStatusCode: http.StatusBadRequest,
-			Code:           8,
-			StatusText:     "error in generating token", // probably problem with the private key
-			ErrorText:      errorToSensibleString(err),
-		},
-	}
-}
+// // ErrLoginUser problem login user. Maybe the user doesn't exists.
+// type ErrLoginUser struct {
+// 	ErrResponse
+// }
 
-// ErrGeneratingToken shows problem with generating key
-type ErrGeneratingToken struct {
-	ErrResponse
-}
+// // NewErrGeneratingToken creates a new ErrGeneratingToken
+// func NewErrGeneratingToken(err error) render.Renderer {
+// 	return &ErrGeneratingToken{
+// 		ErrResponse{
+// 			HTTPStatusCode: http.StatusBadRequest,
+// 			Code:           8,
+// 			StatusText:     "error in generating token", // probably problem with the private key
+// 			ErrorText:      ErrorToSensibleString(err),
+// 		},
+// 	}
+// }
+
+// // ErrGeneratingToken shows problem with generating key
+// type ErrGeneratingToken struct {
+// 	ErrResponse
+// }
 
 // NewErrURLParameter creates a new ErrURLParameter
 func NewErrURLParameter(err error) render.Renderer {
@@ -170,7 +174,7 @@ func NewErrURLParameter(err error) render.Renderer {
 			HTTPStatusCode: http.StatusBadRequest,
 			Code:           9,
 			StatusText:     "error on the URL parameter",
-			ErrorText:      errorToSensibleString(err),
+			ErrorText:      ErrorToSensibleString(err),
 		},
 	}
 }
@@ -187,7 +191,7 @@ func NewErrQueryParameter(err error) render.Renderer {
 			HTTPStatusCode: http.StatusBadRequest,
 			Code:           10,
 			StatusText:     "error on the query parameter",
-			ErrorText:      errorToSensibleString(err),
+			ErrorText:      ErrorToSensibleString(err),
 		},
 	}
 }
@@ -204,7 +208,7 @@ func NewErrNotFound(err error) render.Renderer {
 			HTTPStatusCode: http.StatusNotFound,
 			Code:           11,
 			StatusText:     "resource not found",
-			ErrorText:      errorToSensibleString(err),
+			ErrorText:      ErrorToSensibleString(err),
 		},
 	}
 }
@@ -221,7 +225,7 @@ func NewErrDBError(err error) render.Renderer {
 			HTTPStatusCode: http.StatusBadRequest,
 			Code:           12,
 			StatusText:     "problem with the database",
-			ErrorText:      errorToSensibleString(err),
+			ErrorText:      ErrorToSensibleString(err),
 		},
 	}
 }
@@ -240,24 +244,24 @@ func NewErrValidation(err error) render.Renderer {
 			Code:           13,
 
 			// This one is special.. we use error at the end
-			StatusText: errorToSensibleString(err),
+			StatusText: ErrorToSensibleString(err),
 		},
 	}
 }
 
-// NewErrInvalidRefreshToken presents error when refreshing
-// a token
-func NewErrInvalidRefreshToken(err error) render.Renderer {
-	return &ErrInvalidRefreshToken{
-		ErrResponse{
-			HTTPStatusCode: http.StatusBadRequest,
-			Code:           14,
+// // NewErrInvalidRefreshToken presents error when refreshing
+// // a token
+// func NewErrInvalidRefreshToken(err error) render.Renderer {
+// 	return &ErrInvalidRefreshToken{
+// 		ErrResponse{
+// 			HTTPStatusCode: http.StatusBadRequest,
+// 			Code:           14,
 
-			// This one is special.. we use error at the end
-			StatusText: errorToSensibleString(err),
-		},
-	}
-}
+// 			// This one is special.. we use error at the end
+// 			StatusText: ErrorToSensibleString(err),
+// 		},
+// 	}
+// }
 
 // ErrPermissionDeniedForAPIEndpoint is permission denied for this endpoint
 type ErrPermissionDeniedForAPIEndpoint struct {
@@ -271,32 +275,15 @@ func NewErrPermissionDeniedForAPIEndpoint(err error) render.Renderer {
 			HTTPStatusCode: http.StatusUnauthorized,
 			Code:           15,
 			StatusText:     "permission denied for this endpoint",
-			ErrorText:      errorToSensibleString(err),
+			ErrorText:      ErrorToSensibleString(err),
 		},
 	}
 }
 
-// ErrInvalidRefreshToken some problem refreshing the token (maybe missing)
-type ErrInvalidRefreshToken struct {
-	ErrResponse
-}
-
-// NewErrVerify creates a new ErrVerify
-func NewErrVerify(err error) render.Renderer {
-	return &ErrVerify{
-		ErrResponse{
-			HTTPStatusCode: http.StatusBadRequest,
-			Code:           16,
-			StatusText:     "error verifying email",
-			ErrorText:      errorToSensibleString(err),
-		},
-	}
-}
-
-// ErrVerify some problem verifying email (not specific yet)
-type ErrVerify struct {
-	ErrResponse
-}
+// // ErrInvalidRefreshToken some problem refreshing the token (maybe missing)
+// type ErrInvalidRefreshToken struct {
+// 	ErrResponse
+// }
 
 // NewErrCustomRender creates a new ErrCustomRender
 // This can be use by custom renderer for the user of this library.
@@ -306,7 +293,7 @@ func NewErrCustomRender(err error) render.Renderer {
 			HTTPStatusCode: http.StatusBadRequest,
 			Code:           17,
 			StatusText:     "error rendering output",
-			ErrorText:      errorToSensibleString(err),
+			ErrorText:      ErrorToSensibleString(err),
 		},
 	}
 }
@@ -325,7 +312,7 @@ func NewErrCreate(err error) render.Renderer {
 			HTTPStatusCode: http.StatusBadRequest,
 			Code:           100,
 			StatusText:     "error in creating resource",
-			ErrorText:      errorToSensibleString(err),
+			ErrorText:      ErrorToSensibleString(err),
 		},
 	}
 }
@@ -344,7 +331,7 @@ func NewErrUpdate(err error) render.Renderer {
 			HTTPStatusCode: http.StatusBadRequest,
 			Code:           101,
 			StatusText:     "error in updating resource",
-			ErrorText:      errorToSensibleString(err),
+			ErrorText:      ErrorToSensibleString(err),
 		},
 	}
 }
@@ -361,7 +348,7 @@ func NewErrPatch(err error) render.Renderer {
 			HTTPStatusCode: http.StatusBadRequest,
 			Code:           102,
 			StatusText:     "error in patching resource",
-			ErrorText:      errorToSensibleString(err),
+			ErrorText:      ErrorToSensibleString(err),
 		},
 	}
 }
@@ -379,24 +366,7 @@ func NewErrDelete(err error) render.Renderer {
 			HTTPStatusCode: http.StatusBadRequest,
 			Code:           103,
 			StatusText:     "error in deleting resource",
-			ErrorText:      errorToSensibleString(err),
-		},
-	}
-}
-
-// ErrVerification some problem regarding email verification
-type ErrVerification struct {
-	ErrResponse
-}
-
-// NewErrVerification creates a new ErrDelete
-func NewErrVerification(err error) render.Renderer {
-	return &ErrDelete{
-		ErrResponse{
-			HTTPStatusCode: http.StatusBadRequest,
-			Code:           104,
-			StatusText:     "error in verifying user",
-			ErrorText:      errorToSensibleString(err),
+			ErrorText:      ErrorToSensibleString(err),
 		},
 	}
 }
@@ -410,20 +380,19 @@ type ErrDelete struct {
  * Internal server error
  */
 
-// NewErrInternalServerError presents error when refreshing
-// a token
+// NewErrInternalServerError
 func NewErrInternalServerError(err error) render.Renderer {
 	return &ErrInternalServerError{
 		ErrResponse{
 			HTTPStatusCode: http.StatusInternalServerError,
 			Code:           500,
 			StatusText:     "internal server error",
-			ErrorText:      errorToSensibleString(err),
+			ErrorText:      ErrorToSensibleString(err),
 		},
 	}
 }
 
-// ErrInternalServerError some problem refreshing the token (maybe missing)
+// ErrInternalServerError
 type ErrInternalServerError struct {
 	ErrResponse
 }
@@ -458,11 +427,11 @@ func (e *ErrResponse) Render(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
-// errorToSensibleString handles SQL error more sensible
+// ErrorToSensibleString handles SQL error more sensible
 // (When I get around to it)
 // I don't want it to say
 // "error": "Error 1062: Duplicate entry '\\x12\\xF6\\x8B\\xF6b\\xBCF\\x90\\xBC\\xED\\xA0\\xACa\\x066\\x92' for key 'PRIMARY'"
-func errorToSensibleString(err error) string {
+func ErrorToSensibleString(err error) string {
 	me, ok := err.(*mysql.MySQLError)
 	if ok {
 		if me.Number == 1062 {

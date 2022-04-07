@@ -16,77 +16,6 @@ import (
 	uuid "github.com/satori/go.uuid"
 )
 
-// WhoFromContext fetches struct Who from request context
-func WhoFromContext(r *http.Request) models.Who {
-	ownerID, scope, client := OwnerIDFromContext(r), ScopeFromContext(r), ClientFromContext(r)
-	return models.Who{
-		Client: client,
-		Oid:    ownerID,
-		Scope:  scope,
-	}
-}
-
-// ClientFromContext gets Client from context
-func ClientFromContext(r *http.Request) *models.Client {
-	var client *models.Client
-	item := r.Context().Value(ContextKeyClient)
-	if item != nil {
-		client = item.(*models.Client)
-	}
-	return client
-}
-
-// OwnerIDFromContext gets id from context
-func OwnerIDFromContext(r *http.Request) *datatypes.UUID {
-	var ownerID *datatypes.UUID
-	item := r.Context().Value(ContextKeyOwnerID)
-	if item != nil {
-		ownerID = item.(*datatypes.UUID)
-	}
-	return ownerID
-}
-
-// ScopeFromContext gets scope from context
-func ScopeFromContext(r *http.Request) *string {
-	var scope *string
-	item := r.Context().Value(ContextKeyScope)
-	if item != nil {
-		s := item.(string)
-		scope = &s
-	}
-	return scope
-}
-
-// IatFromContext gets iat from context
-func IatFromContext(r *http.Request) float64 {
-	var iat float64
-	item := r.Context().Value(ContextKeyIat)
-	if item != nil {
-		iat = item.(float64)
-	}
-	return iat
-}
-
-// ExpFromContext gets iat from context
-func ExpFromContext(r *http.Request) float64 {
-	var exp float64
-	item := r.Context().Value(ContextKeyExp)
-	if item != nil {
-		exp = item.(float64)
-	}
-	return exp
-}
-
-// TokenHoursFromContext gets hours from context
-func TokenHoursFromContext(r *http.Request) *float64 {
-	item := r.Context().Value(ContextKeyTokenHours)
-	if item != nil {
-		tokenHours := item.(float64)
-		return &tokenHours
-	}
-	return nil
-}
-
 // JSONBodyWithContent for partial unmarshalling
 type JSONBodyWithContent struct {
 	Content []json.RawMessage
@@ -94,7 +23,7 @@ type JSONBodyWithContent struct {
 
 // ModelOrModelsFromJSONBody parses JSON body into array of models
 // It take care where the case when it is not even an array and there is a "content" in there
-func ModelOrModelsFromJSONBody(r *http.Request, typeString string, who models.Who) ([]models.IModel, *bool, render.Renderer) {
+func ModelOrModelsFromJSONBody(r *http.Request, typeString string, who models.UserIDFetchable) ([]models.IModel, *bool, render.Renderer) {
 	defer r.Body.Close()
 	var jsn []byte
 	var modelObjs []models.IModel
@@ -202,7 +131,7 @@ func ModelOrModelsFromJSONBody(r *http.Request, typeString string, who models.Wh
 }
 
 // ModelsFromJSONBody parses JSON body into array of models
-func ModelsFromJSONBody(r *http.Request, typeString string, who models.Who) ([]models.IModel, render.Renderer) {
+func ModelsFromJSONBody(r *http.Request, typeString string, who models.UserIDFetchable) ([]models.IModel, render.Renderer) {
 	defer r.Body.Close()
 	var jsn []byte
 	var modelObjs []models.IModel
@@ -274,7 +203,7 @@ func ModelsFromJSONBody(r *http.Request, typeString string, who models.Who) ([]m
 // FIXME:
 // Validation should not be done here because empty field does not pass validation,
 // but sometimes we need empty fields such as patch
-func ModelFromJSONBody(r *http.Request, typeString string, who models.Who) (models.IModel, render.Renderer) {
+func ModelFromJSONBody(r *http.Request, typeString string, who models.UserIDFetchable) (models.IModel, render.Renderer) {
 	defer r.Body.Close()
 	var jsn []byte
 	var err error
@@ -313,32 +242,6 @@ func ModelFromJSONBody(r *http.Request, typeString string, who models.Who) (mode
 
 	if err := models.ValidateModel(modelObj); err != nil {
 		return nil, webrender.NewErrValidation(err)
-	}
-
-	if v, ok := modelObj.(models.IValidate); ok {
-		who := WhoFromContext(r)
-		http := models.HTTP{Endpoint: r.URL.Path, Op: models.HTTPMethodToCRUDOp(r.Method)}
-		if err := v.Validate(who, http); err != nil {
-			return nil, webrender.NewErrValidation(err)
-		}
-	}
-
-	return modelObj, nil
-}
-
-func ModelFromJSONBodyNoWhoNoCheckPermissionNoTransform(r *http.Request, typeString string) (models.IModel, render.Renderer) {
-	defer r.Body.Close()
-	var jsn []byte
-	var err error
-
-	if jsn, err = ioutil.ReadAll(r.Body); err != nil {
-		return nil, webrender.NewErrReadingBody(err)
-	}
-
-	modelObj := models.NewFromTypeString(typeString)
-
-	if err = json.Unmarshal(jsn, modelObj); err != nil {
-		return nil, webrender.NewErrParsingJSON(err)
 	}
 
 	if v, ok := modelObj.(models.IValidate); ok {

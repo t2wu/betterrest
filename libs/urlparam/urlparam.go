@@ -15,9 +15,6 @@ const (
 	ParamCstop         Param = "cstop"
 	ParamHasTotalCount Param = "totalcount"
 	ParamOtherQueries  Param = "better_otherqueries"
-
-	// For email verification
-	// ParamRedirect Param = "redirect"
 )
 
 func GetOptions(options map[Param]interface{}) (offset *int, limit *int, cstart *int, cstop *int, order *string, latestn *int, latestnons []string, count bool) {

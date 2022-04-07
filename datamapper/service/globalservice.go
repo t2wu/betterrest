@@ -14,7 +14,7 @@ type GlobalService struct {
 	BaseService
 }
 
-func (serv *GlobalService) HookBeforeCreateOne(db *gorm.DB, who models.Who, typeString string, modelObj models.IModel) (models.IModel, error) {
+func (serv *GlobalService) HookBeforeCreateOne(db *gorm.DB, who models.UserIDFetchable, typeString string, modelObj models.IModel) (models.IModel, error) {
 	modelID := modelObj.GetID()
 	if modelID == nil {
 		modelID = datatypes.NewUUID()
@@ -23,20 +23,20 @@ func (serv *GlobalService) HookBeforeCreateOne(db *gorm.DB, who models.Who, type
 	return modelObj, nil
 }
 
-func (serv *GlobalService) HookBeforeCreateMany(db *gorm.DB, who models.Who, typeString string, modelObjs []models.IModel) ([]models.IModel, error) {
+func (serv *GlobalService) HookBeforeCreateMany(db *gorm.DB, who models.UserIDFetchable, typeString string, modelObjs []models.IModel) ([]models.IModel, error) {
 	return modelObjs, nil
 }
 
-func (serv *GlobalService) HookBeforeDeleteOne(db *gorm.DB, who models.Who, typeString string, modelObj models.IModel) (models.IModel, error) {
+func (serv *GlobalService) HookBeforeDeleteOne(db *gorm.DB, who models.UserIDFetchable, typeString string, modelObj models.IModel) (models.IModel, error) {
 	return modelObj, nil
 }
 
-func (serv *GlobalService) HookBeforeDeleteMany(db *gorm.DB, who models.Who, typeString string, modelObjs []models.IModel) ([]models.IModel, error) {
+func (serv *GlobalService) HookBeforeDeleteMany(db *gorm.DB, who models.UserIDFetchable, typeString string, modelObjs []models.IModel) ([]models.IModel, error) {
 	return modelObjs, nil
 }
 
 // ReadOneCore get one model object based on its type and its id string
-func (service *GlobalService) ReadOneCore(db *gorm.DB, who models.Who, typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error) {
+func (service *GlobalService) ReadOneCore(db *gorm.DB, who models.UserIDFetchable, typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error) {
 	modelObj := models.NewFromTypeString(typeString)
 	modelObj.SetID(id)
 
@@ -60,7 +60,7 @@ func (service *GlobalService) ReadOneCore(db *gorm.DB, who models.Who, typeStrin
 	return modelObj, role, err
 }
 
-func (service *GlobalService) GetManyCore(db *gorm.DB, who models.Who, typeString string, ids []*datatypes.UUID) ([]models.IModel, []models.UserRole, error) {
+func (service *GlobalService) GetManyCore(db *gorm.DB, who models.UserIDFetchable, typeString string, ids []*datatypes.UUID) ([]models.IModel, []models.UserRole, error) {
 	rtable := models.GetTableNameFromTypeString(typeString)
 	db = db.Table(rtable).Where(fmt.Sprintf("\"%s\".\"id\" IN (?)", rtable), ids).Set("gorm:auto_preload", true)
 
@@ -90,13 +90,13 @@ func (service *GlobalService) GetManyCore(db *gorm.DB, who models.Who, typeStrin
 }
 
 // GetAllQueryContructCore construct the meat of the query
-func (serv *GlobalService) GetAllQueryContructCore(db *gorm.DB, who models.Who, typeString string) (*gorm.DB, error) {
+func (serv *GlobalService) GetAllQueryContructCore(db *gorm.DB, who models.UserIDFetchable, typeString string) (*gorm.DB, error) {
 	rtable := models.GetTableNameFromTypeString(typeString)
 	return db.Table(rtable), nil // that's it
 }
 
 // GetAllRolesCore gets all roles according to the criteria
-func (serv *GlobalService) GetAllRolesCore(dbChained *gorm.DB, dbClean *gorm.DB, who models.Who, typeString string, modelObjs []models.IModel) ([]models.UserRole, error) {
+func (serv *GlobalService) GetAllRolesCore(dbChained *gorm.DB, dbClean *gorm.DB, who models.UserIDFetchable, typeString string, modelObjs []models.IModel) ([]models.UserRole, error) {
 	// Don't know why this doesn't work
 	roles := make([]models.UserRole, len(modelObjs))
 	for i := range roles {
@@ -109,7 +109,7 @@ func (serv *GlobalService) GetAllRolesCore(dbChained *gorm.DB, dbClean *gorm.DB,
 // UpdateOneCore one, permissin should already be checked
 // called for patch operation as well (after patch has already applied)
 // Fuck, repeat the following code for now (you can't call the overriding method from the non-overriding one)
-func (serv *GlobalService) UpdateOneCore(db *gorm.DB, who models.Who, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObj models.IModel) (modelObj2 models.IModel, err error) {
+func (serv *GlobalService) UpdateOneCore(db *gorm.DB, who models.UserIDFetchable, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObj models.IModel) (modelObj2 models.IModel, err error) {
 	if modelNeedsRealDelete(oldModelObj) { // parent model
 		db = db.Unscoped()
 	}

@@ -1,7 +1,6 @@
 package routes
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -16,7 +15,6 @@ import (
 	"github.com/jinzhu/gorm"
 	"github.com/t2wu/betterrest/datamapper"
 	"github.com/t2wu/betterrest/db"
-	"github.com/t2wu/betterrest/libs/security"
 	"github.com/t2wu/betterrest/libs/settings"
 	"github.com/t2wu/betterrest/libs/urlparam"
 	"github.com/t2wu/betterrest/libs/utils/transact"
@@ -29,7 +27,7 @@ import (
 )
 
 // ------------------------------------------------------
-func logTransID(tx *gorm.DB, method, url, cardinality string) {
+func LogTransID(tx *gorm.DB, method, url, cardinality string) {
 	if settings.Log {
 		res := struct {
 			TxidCurrent int
@@ -150,7 +148,7 @@ func hasTotalCountFromQueryString(values *url.Values) bool {
 	return false
 }
 
-func modelObjsToJSON(typeString string, modelObjs []models.IModel, roles []models.UserRole, who models.Who) (string, error) {
+func modelObjsToJSON(typeString string, modelObjs []models.IModel, roles []models.UserRole, who models.UserIDFetchable) (string, error) {
 	arr := make([]string, len(modelObjs))
 	for i, v := range modelObjs {
 		if j, err := tools.ToJSON(typeString, v, roles[i], who); err != nil {
@@ -220,164 +218,6 @@ func RenderModelSlice(c *gin.Context, modelObjs []models.IModel, total *int, bhp
 }
 
 // ---------------------------------------------
-
-// UserLoginHandler logs in the user. Effectively creates a JWT token for the user
-func UserLoginHandler(typeString string) func(c *gin.Context) {
-	return func(c *gin.Context) {
-		w, r := c.Writer, c.Request
-
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		w.Header().Set("Cache-Control", "no-store")
-
-		defer func() {
-			if r := recover(); r != nil {
-				debug.PrintStack()
-				render.Render(w, c.Request, webrender.NewErrInternalServerError(nil))
-				fmt.Println("Panic in GetAllHandler", r)
-			}
-		}()
-
-		tokenHours := TokenHoursFromContext(r)
-
-		client := ClientFromContext(r)
-		scope := "owner"
-
-		who := models.Who{
-			// Oid: logged in yet
-			Client: client,
-			Scope:  &scope,
-		}
-
-		m, httperr := ModelFromJSONBody(r, "users", who) // m is models.IModel
-		if httperr != nil {
-			render.Render(w, r, httperr)
-			return
-		}
-
-		// How to make transact better?!
-		// normal, internal-server, login-failed, generate-token-error, not-found
-		reason := "normal"
-		var realerr error
-		var payload map[string]interface{}
-
-		err := transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
-			cargo := models.ModelCargo{}
-			// Before hook
-			if v, ok := m.(models.IBeforeLogin); ok {
-				hpdata := models.HookPointData{DB: tx, Who: who, TypeString: typeString, Cargo: &cargo}
-				if err := v.BeforeLogin(hpdata); err != nil {
-					reason = "internal-server"
-					return err
-				}
-			}
-
-			authUserModel, err := security.GetVerifiedAuthUser(tx, m)
-			if err != nil {
-				realerr = err
-				reason = "login-failed"
-
-				if v, ok := authUserModel.(models.IAfterLoginFailed); ok {
-					who.Oid = authUserModel.GetID()
-					hpdata := models.HookPointData{DB: tx, Who: who, TypeString: typeString, Cargo: &cargo}
-					if err := v.AfterLoginFailed(hpdata); err != nil {
-						realerr = err
-						log.Println("Error in UserLogin callign AfterLogin:", typeString, err)
-						return nil // since we don't want to cancel the transaction
-					}
-				}
-
-				return nil // since we don't want to cancel the transaction
-			}
-
-			// login success, return access token
-			payload, err = createTokenPayloadForScope(authUserModel.GetID(), &scope, tokenHours)
-			if err != nil {
-				reason = "generate-token-error"
-				return err
-			}
-
-			// User hookpoint after login
-			if v, ok := authUserModel.(models.IAfterLogin); ok {
-				who.Oid = authUserModel.GetID()
-				hpdata := models.HookPointData{DB: tx, Who: who, TypeString: typeString, Cargo: &cargo}
-				payload, err = v.AfterLogin(hpdata, payload)
-				if err != nil {
-					realerr = err
-					reason = "not-found"
-
-					log.Println("Error in UserLogin calling AfterLogin:", typeString, err)
-					return // commit
-				}
-			}
-
-			return nil
-		}, "UserLoginHandler")
-
-		if err == nil {
-			err = realerr
-		}
-
-		if err != nil {
-			switch reason {
-			case "login-failed":
-				render.Render(w, r, webrender.NewErrLoginUser(err))
-			case "generate-token-error":
-				render.Render(w, r, webrender.NewErrGeneratingToken(err))
-			case "not-found":
-				render.Render(w, r, webrender.NewErrNotFound(err))
-			case "internal-server":
-				fallthrough
-			default:
-				render.Render(w, r, webrender.NewErrInternalServerError(err))
-			}
-
-			return
-		}
-
-		var jsn []byte
-		if jsn, err = json.Marshal(payload); err != nil {
-			render.Render(w, r, webrender.NewErrGenJSON(err))
-			return
-		}
-
-		w.Write(jsn)
-	}
-}
-
-// UserVerifyEmailHandler verifies the user's email
-// func UserVerifyEmailHandler(typeString string) func(c *gin.Context) {
-// 	return func(c *gin.Context) {
-// 		w, r := c.Writer, c.Request
-// 		values := r.URL.Query()
-// 		email := values.Get("email") // verification email
-// 		code := values.Get("code")   // verification code
-
-// 		// Query the library for verification of this email
-// 		err := libs.Transact(db.Shared(), func(tx *gorm.DB) error {
-// 			model := models.NewFromTypeString(typeString)
-// 			if err := tx.Model(&model).Where("email = ? AND code = ? AND status = ?",
-// 				email, code, models.UserStatusUnverified).Error; err != nil {
-// 				return fmt.Errorf("account verification failed")
-// 			}
-
-// 			if err := tx.Model(&model).Update("status", models.UserStatusActive).Error; err != nil {
-// 				err := fmt.Errorf("account failed to activate")
-// 				return err
-// 			}
-// 			return nil
-// 		})
-
-// 		if err != nil {
-// 			render.Render(w, r, NewErrVerify(err))
-// 		}
-
-// 		content := fmt.Sprintf("{ \"code\": 0 }")
-// 		data := []byte(content)
-
-// 		w.Header().Set("Content-Length", strconv.Itoa(len(data)))
-// 		w.Write(data)
-// 	}
-// }
 
 func GetOptionByParsingURL(r *http.Request) (map[urlparam.Param]interface{}, error) {
 	options := make(map[urlparam.Param]interface{})
@@ -505,7 +345,7 @@ func CreateHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin
 			cargo := models.BatchHookCargo{}
 
 			err := transact.Transact(db.Shared(), func(tx *gorm.DB) error {
-				logTransID(tx, c.Request.Method, c.Request.URL.String(), "n")
+				LogTransID(tx, c.Request.Method, c.Request.URL.String(), "n")
 
 				var err2 error
 				if modelObjs, err2 = mapper.CreateMany(tx, who, typeString, modelObjs, &options, &cargo); err2 != nil {
@@ -536,7 +376,7 @@ func CreateHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin
 			cargo := models.ModelCargo{}
 			var err2 error
 			err := transact.Transact(db.Shared(), func(tx *gorm.DB) error {
-				logTransID(tx, c.Request.Method, c.Request.URL.String(), "1")
+				LogTransID(tx, c.Request.Method, c.Request.URL.String(), "1")
 
 				if modelObj, err2 = mapper.CreateOne(tx, who, typeString, modelObjs[0], &options, &cargo); err2 != nil {
 					log.Println("Error in CreateOne:", typeString, err2)
@@ -656,7 +496,7 @@ func UpdateOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 		cargo := models.ModelCargo{}
 		var modelObj2 models.IModel
 		err = transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
-			logTransID(tx, c.Request.Method, c.Request.URL.String(), "1")
+			LogTransID(tx, c.Request.Method, c.Request.URL.String(), "1")
 
 			if modelObj2, err = mapper.UpdateOne(tx, who, typeString, modelObj, id, &options, &cargo); err != nil {
 				log.Println("Error in UpdateOneHandler ErrUpdate:", typeString, err)
@@ -710,7 +550,7 @@ func UpdateManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 		cargo := models.BatchHookCargo{}
 		var modelObjs2 []models.IModel
 		err = transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
-			logTransID(tx, c.Request.Method, c.Request.URL.String(), "n")
+			LogTransID(tx, c.Request.Method, c.Request.URL.String(), "n")
 
 			if modelObjs2, err = mapper.UpdateMany(tx, who, typeString, modelObjs, &options, &cargo); err != nil {
 				log.Println("Error in UpdateManyHandler:", typeString, err)
@@ -778,7 +618,7 @@ func PatchOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *g
 		cargo := models.ModelCargo{}
 		var modelObj models.IModel
 		err = transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
-			logTransID(tx, c.Request.Method, c.Request.URL.String(), "1")
+			LogTransID(tx, c.Request.Method, c.Request.URL.String(), "1")
 
 			if modelObj, err = mapper.PatchOne(tx, who, typeString, jsonPatch, id, &options, &cargo); err != nil {
 				log.Println("Error in PatchOneHandler:", typeString, err)
@@ -833,7 +673,7 @@ func PatchManyHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 		cargo := models.BatchHookCargo{}
 		var modelObjs []models.IModel
 		err = transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
-			logTransID(tx, c.Request.Method, c.Request.URL.String(), "n")
+			LogTransID(tx, c.Request.Method, c.Request.URL.String(), "n")
 
 			if modelObjs, err = mapper.PatchMany(tx, who, typeString, jsonIDPatches, &options, &cargo); err != nil {
 				log.Println("Error in PatchManyHandler:", typeString, err)
@@ -893,7 +733,7 @@ func DeleteOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 		cargo := models.ModelCargo{}
 		var modelObj models.IModel
 		err = transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
-			logTransID(tx, c.Request.Method, c.Request.URL.String(), "1")
+			LogTransID(tx, c.Request.Method, c.Request.URL.String(), "1")
 
 			if modelObj, err = mapper.DeleteOne(tx, who, typeString, id, &options, &cargo); err != nil {
 				log.Printf("Error in DeleteOneHandler: %s %+v\n", typeString, err)
@@ -940,7 +780,7 @@ func DeleteManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 
 		cargo := models.BatchHookCargo{}
 		err := transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
-			logTransID(tx, c.Request.Method, c.Request.URL.String(), "n")
+			LogTransID(tx, c.Request.Method, c.Request.URL.String(), "n")
 
 			if modelObjs, err = mapper.DeleteMany(tx, who, typeString, modelObjs, nil, &cargo); err != nil {
 				log.Println("Error in DeleteOneHandler ErrDelete:", typeString, err)
@@ -967,236 +807,5 @@ func DeleteManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 
 			RenderModelSlice(c, modelObjs, nil, &bhpData, models.CRUPDOpDelete)
 		}
-	}
-}
-
-// EmailChangePasswordHandler returns a gin handler which changes password
-func EmailChangePasswordHandler(typeString string, mapper datamapper.IChangeEmailPasswordMapper) func(c *gin.Context) {
-	return func(c *gin.Context) {
-		w, r := c.Writer, c.Request
-
-		defer func() {
-			if r := recover(); r != nil {
-				debug.PrintStack()
-				render.Render(w, c.Request, webrender.NewErrInternalServerError(nil))
-				fmt.Println("Panic in ChangePasswordHandler", r)
-			}
-		}()
-
-		id, httperr := IDFromURLQueryString(c)
-		if httperr != nil {
-			render.Render(w, r, httperr)
-			return
-		}
-
-		who := WhoFromContext(r)
-
-		modelObj, httperr := ModelFromJSONBody(r, typeString, who)
-		if httperr != nil {
-			render.Render(w, r, httperr)
-			return
-		}
-
-		var modelObj2 models.IModel
-		err := transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
-			logTransID(tx, c.Request.Method, c.Request.URL.String(), "1")
-
-			if modelObj2, err = mapper.ChangeEmailPasswordWithID(tx, who, typeString, modelObj, id); err != nil {
-				log.Println("Error in ChangeEmailPasswordHandler:", typeString, err)
-				return err
-			}
-
-			return nil
-		}, "EmailChangePasswordHandler")
-
-		if err != nil {
-			render.Render(w, r, webrender.NewErrUpdate(err))
-		} else {
-			role := models.UserRoleAdmin
-			hpdata := models.HookPointData{DB: nil, Who: who, TypeString: typeString,
-				URLParams: nil, Role: &role, Cargo: nil}
-
-			RenderJSONForModel(c, modelObj2, &hpdata)
-		}
-	}
-}
-
-func SendVerificationEmailHandler(typeString string, mapper datamapper.IEmailVerificationMapper) func(c *gin.Context) {
-	return func(c *gin.Context) {
-		w, r := c.Writer, c.Request
-
-		defer func() {
-			if r := recover(); r != nil {
-				debug.PrintStack()
-				render.Render(w, c.Request, webrender.NewErrInternalServerError(nil))
-				fmt.Println("Panic in CreateHandler", r)
-			}
-		}()
-
-		// var modelObj models.IModel
-
-		who := WhoFromContext(r)
-		// Is there a ownerID? Probably not...
-		modelObj, httperr := ModelFromJSONBody(r, typeString, who)
-		if httperr != nil {
-			render.Render(w, r, httperr)
-			return
-		}
-
-		// db *gorm.DB, who models.Who,
-		// typeString string, modelobj models.IModel, id *datatypes.UUID
-		err := transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
-			logTransID(tx, c.Request.Method, c.Request.URL.String(), "1")
-
-			return mapper.SendEmailVerification(tx, who, typeString, modelObj)
-		}, "SendVerificationEmailHandler")
-
-		if err != nil {
-			render.Render(w, r, webrender.NewErrBadRequest(err)) // maybe another type of error?
-		} else {
-			w.Header().Set("Content-Type", "application/json; charset=utf-8")
-			w.Header().Set("Cache-Control", "no-store")
-			w.Write([]byte("{\"code\": 0}"))
-		}
-	}
-}
-
-// EmailVerificationHandler returns a gin handler which make the account verified and active
-func EmailVerificationHandler(typeString string, mapper datamapper.IEmailVerificationMapper) func(c *gin.Context) {
-	return func(c *gin.Context) {
-		w, r := c.Writer, c.Request
-
-		defer func() {
-			if r := recover(); r != nil {
-				debug.PrintStack()
-				render.Render(w, c.Request, webrender.NewErrInternalServerError(nil))
-				fmt.Println("Panic in ChangePasswordHandler", r)
-			}
-		}()
-
-		id, httperr := IDFromURLQueryString(c)
-		if httperr != nil {
-			render.Render(w, r, httperr)
-			return
-		}
-
-		code := c.Param("code")
-		if code == "" {
-			render.Render(w, r, webrender.NewErrURLParameter(errors.New("missing verification code")))
-			return
-		}
-
-		// Remove this code from the db and make this user verified
-		err := transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
-			logTransID(tx, c.Request.Method, c.Request.URL.String(), "1")
-
-			return mapper.VerifyEmail(tx, typeString, id, code)
-		}, "EmailVerificationHandler")
-
-		if err != nil {
-			render.Render(w, r, webrender.NewErrBadRequest(err)) // maybe another type of error?
-		} else {
-			w.Header().Set("Content-Type", "application/json; charset=utf-8")
-			w.Header().Set("Cache-Control", "no-store")
-			w.Write([]byte("{\"code\": 0}"))
-		}
-	}
-}
-
-func SendResetPasswordHandler(typeString string, mapper datamapper.IResetPasswordMapper) func(c *gin.Context) {
-	return func(c *gin.Context) {
-		w, r := c.Writer, c.Request
-
-		defer func() {
-			if r := recover(); r != nil {
-				debug.PrintStack()
-				render.Render(w, c.Request, webrender.NewErrInternalServerError(nil))
-				fmt.Println("Panic in CreateHandler", r)
-			}
-		}()
-
-		// var modelObj models.IModel
-
-		who := WhoFromContext(r)
-
-		log.Println("model from json body")
-		modelObj, httperr := ModelFromJSONBody(r, typeString, who)
-		if httperr != nil {
-			render.Render(w, r, httperr)
-			return
-		}
-
-		// db *gorm.DB, who models.Who,
-		// typeString string, modelobj models.IModel, id *datatypes.UUID
-		err := transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
-			logTransID(tx, c.Request.Method, c.Request.URL.String(), "1")
-			return mapper.SendEmailResetPassword(tx, who, typeString, modelObj)
-		}, "SendResetPasswordHandler")
-
-		if err != nil {
-			render.Render(w, r, webrender.NewErrBadRequest(err)) // maybe another type of error?
-		} else {
-			w.Header().Set("Content-Type", "application/json; charset=utf-8")
-			w.Header().Set("Cache-Control", "no-store")
-			w.Write([]byte("{\"code\": 0}"))
-		}
-	}
-}
-
-// EmailVerificationHandler returns a gin handler which make the account verified and active
-func PasswordResetHandler(typeString string, mapper datamapper.IResetPasswordMapper) func(c *gin.Context) {
-	return func(c *gin.Context) {
-		w, r := c.Writer, c.Request
-
-		defer func() {
-			if r := recover(); r != nil {
-				debug.PrintStack()
-				render.Render(w, c.Request, webrender.NewErrInternalServerError(nil))
-				fmt.Println("Panic in ChangePasswordHandler", r)
-			}
-		}()
-
-		id, httperr := IDFromURLQueryString(c)
-		if httperr != nil {
-			render.Render(w, r, httperr)
-			return
-		}
-
-		code := c.Param("code")
-		if code == "" {
-			render.Render(w, r, webrender.NewErrURLParameter(errors.New("missing verification code")))
-			return
-		}
-
-		modelObj, httperr := ModelFromJSONBodyNoWhoNoCheckPermissionNoTransform(r, typeString)
-		if httperr != nil {
-			render.Render(w, r, httperr)
-			return
-		}
-
-		// values := r.URL.Query()
-		// redirectURL := values.Get(string(urlparam.ParamRedirect))
-
-		// Remove this code from the db and make this user verified
-		err := transact.Transact(db.Shared(), func(tx *gorm.DB) error {
-			logTransID(tx, c.Request.Method, c.Request.URL.String(), "1")
-
-			return mapper.ResetPassword(tx, typeString, modelObj, id, code)
-		}, "PasswordResetHandler")
-
-		if err != nil {
-			render.Render(w, r, webrender.NewErrBadRequest(err)) // maybe another type of error?
-		} else {
-			w.Header().Set("Content-Type", "application/json; charset=utf-8")
-			w.Header().Set("Cache-Control", "no-store")
-			w.Write([]byte("{\"code\": 0}"))
-		}
-
-		// if err != nil {
-		// 	c.Redirect(http.StatusFound, redirectURL+"?error="+err.Error())
-		// } else {
-		// 	c.Redirect(http.StatusFound, redirectURL)
-		// 	return
-		// }
 	}
 }

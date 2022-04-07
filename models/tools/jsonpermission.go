@@ -9,7 +9,7 @@ import (
 )
 
 // ToJSON pack json into this struct and the role
-func ToJSON(typeString string, v models.IModel, r models.UserRole, who models.Who) ([]byte, error) {
+func ToJSON(typeString string, v models.IModel, r models.UserRole, who models.UserIDFetchable) ([]byte, error) {
 	var j []byte
 	var err error
 

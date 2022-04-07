@@ -17,7 +17,7 @@ import (
 type batchOpJob struct {
 	serv         service.IService
 	db           *gorm.DB
-	who          models.Who
+	who          models.UserIDFetchable
 	typeString   string
 	oldmodelObjs []models.IModel // use for update (need to load and override for pegged fields)
 	modelObjs    []models.IModel // current field value from the user if update, or from the loaded field if delete
@@ -29,7 +29,7 @@ type batchOpJob struct {
 func batchOpCore(job batchOpJob,
 	before func(bhpData models.BatchHookPointData) error,
 	after func(bhpData models.BatchHookPointData) error,
-	taskFunc func(db *gorm.DB, who models.Who, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObj models.IModel) (models.IModel, error),
+	taskFunc func(db *gorm.DB, who models.UserIDFetchable, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObj models.IModel) (models.IModel, error),
 ) ([]models.IModel, error) {
 
 	db, who, typeString, modelObjs, oldmodelObjs, cargo, crupdOp, options := job.db, job.who, job.typeString,
@@ -100,7 +100,7 @@ func batchOpCore(job batchOpJob,
 type opJob struct {
 	serv        service.IService
 	db          *gorm.DB
-	who         models.Who
+	who         models.UserIDFetchable
 	typeString  string
 	crupdOp     models.CRUPDOp
 	oldModelObj models.IModel      // use for update (need to load and override for pegged fields)
@@ -117,7 +117,7 @@ func opCore(
 	// before func(hpdata models.HookPointData) error,
 	// after func(hpdata models.HookPointData) error,
 	job opJob,
-	taskFun func(db *gorm.DB, who models.Who, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObj models.IModel) (models.IModel, error),
+	taskFun func(db *gorm.DB, who models.UserIDFetchable, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObj models.IModel) (models.IModel, error),
 ) (models.IModel, error) {
 	db, who, typeString, oldModelObj, modelObj, crupdOp, cargo, options := job.db, job.who,
 		job.typeString, job.oldModelObj, job.modelObj, job.crupdOp, job.cargo, job.options
