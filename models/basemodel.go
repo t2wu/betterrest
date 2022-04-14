@@ -278,7 +278,25 @@ type HookPointData struct {
 	// Role of this user in relation to this data, only available during read
 	Role *UserRole
 	// URL parameters
-	URLParams *map[urlparam.Param]interface{}
+	URLParams map[urlparam.Param]interface{}
+}
+
+// BatchHookPointData is the data send to batch model hookpoints
+type BatchHookPointData struct {
+	// Ms is the slice of IModels
+	Ms []IModel
+	// DB is the DB handle
+	DB *gorm.DB
+	// Who is operating this CRUPD right now
+	Who UserIDFetchable
+	// TypeString
+	TypeString string
+	// Cargo between Before and After hookpoints (not used in AfterRead since there is before read hookpoint.)
+	Cargo *BatchHookCargo
+	// Role of this user in relation to this data, only available during read
+	Roles []UserRole
+	// URL parameters
+	URLParams map[urlparam.Param]interface{}
 }
 
 // IBeforeCreate supports method to be called before data is inserted (created) into the database

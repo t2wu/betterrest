@@ -33,10 +33,12 @@ func GetOptions(options map[Param]interface{}) (offset *int, limit *int, cstart 
 	}
 
 	if _, ok := options[ParamCstart]; ok {
-		cstart, _ = options[ParamCstart].(*int)
+		v := options[ParamCstart].(int)
+		cstart = &v
 	}
 	if _, ok := options[ParamCstop]; ok {
-		cstop, _ = options[ParamCstop].(*int)
+		v := options[ParamCstop].(int)
+		cstop = &v
 	}
 
 	latestn = nil

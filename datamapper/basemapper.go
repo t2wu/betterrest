@@ -95,13 +95,13 @@ func (mapper *BaseMapper) ReadOne(db *gorm.DB, who models.UserIDFetchable, typeS
 
 	// After CRUPD hook
 	if m, ok := modelObj.(models.IAfterCRUPD); ok {
-		hpdata := models.HookPointData{DB: db, Who: who, TypeString: typeString, Cargo: cargo, Role: &role, URLParams: options}
+		hpdata := models.HookPointData{DB: db, Who: who, TypeString: typeString, Cargo: cargo, Role: &role, URLParams: *options}
 		m.AfterCRUPDDB(hpdata, models.CRUPDOpRead)
 	}
 
 	// AfterRead hook
 	if m, ok := modelObj.(models.IAfterRead); ok {
-		hpdata := models.HookPointData{DB: db, Who: who, TypeString: typeString, Cargo: cargo, Role: &role, URLParams: options}
+		hpdata := models.HookPointData{DB: db, Who: who, TypeString: typeString, Cargo: cargo, Role: &role, URLParams: *options}
 		if err := m.AfterReadDB(hpdata); err != nil {
 			return nil, 0, err
 		}
@@ -256,7 +256,7 @@ func (mapper *BaseMapper) ReadMany(db *gorm.DB, who models.UserIDFetchable, type
 	// use dbClean cuz it's not chained
 	if after := models.ModelRegistry[typeString].AfterCRUPD; after != nil {
 		bhpData := models.BatchHookPointData{Ms: outmodels, DB: dbClean, Who: who,
-			TypeString: typeString, Roles: roles, Cargo: cargo, URLParams: options}
+			TypeString: typeString, Roles: roles, Cargo: cargo, URLParams: *options}
 		if err = after(bhpData, models.CRUPDOpRead); err != nil {
 			return nil, nil, nil, err
 		}
@@ -266,7 +266,7 @@ func (mapper *BaseMapper) ReadMany(db *gorm.DB, who models.UserIDFetchable, type
 	// use dbClean cuz it's not chained
 	if after := models.ModelRegistry[typeString].AfterRead; after != nil {
 		bhpData := models.BatchHookPointData{Ms: outmodels, DB: dbClean, Who: who,
-			TypeString: typeString, Roles: roles, Cargo: cargo, URLParams: options}
+			TypeString: typeString, Roles: roles, Cargo: cargo, URLParams: *options}
 		if err = after(bhpData); err != nil {
 			return nil, nil, nil, err
 		}

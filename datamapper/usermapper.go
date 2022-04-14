@@ -100,7 +100,7 @@ func (mapper *UserMapper) ReadOne(db *gorm.DB, who models.UserIDFetchable, typeS
 
 	// After CRUPD hook
 	if m, ok := modelObj.(models.IAfterCRUPD); ok {
-		hpdata := models.HookPointData{DB: db, Who: who, TypeString: typeString, Cargo: cargo, Role: &role, URLParams: options}
+		hpdata := models.HookPointData{DB: db, Who: who, TypeString: typeString, Cargo: cargo, Role: &role, URLParams: *options}
 		m.AfterCRUPDDB(hpdata, models.CRUPDOpRead)
 	}
 

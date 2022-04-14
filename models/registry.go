@@ -5,7 +5,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
-	"github.com/t2wu/betterrest/libs/urlparam"
 )
 
 // BatchHookCargo is payload between batch update and batch delete hookpoints
@@ -50,24 +49,6 @@ type RegOptions struct {
 	BatchMethods string // Batch endpoints, "CRUD" for create, batch read, batch update, batch delete
 	IdvMethods   string //  ID end points, "RUD" for read one, update one, and delete one
 	Mapper       MapperType
-}
-
-// BatchHookPointData is the data send to batch model hookpoints
-type BatchHookPointData struct {
-	// Ms is the slice of IModels
-	Ms []IModel
-	// DB is the DB handle
-	DB *gorm.DB
-	// Who is operating this CRUPD right now
-	Who UserIDFetchable
-	// TypeString
-	TypeString string
-	// Cargo between Before and After hookpoints (not used in AfterRead since there is before read hookpoint.)
-	Cargo *BatchHookCargo
-	// Role of this user in relation to this data, only available during read
-	Roles []UserRole
-	// URL parameters
-	URLParams *map[urlparam.Param]interface{}
 }
 
 // Reg is a registry item
