@@ -21,15 +21,18 @@ func GetOptions(options map[Param]interface{}) (offset *int, limit *int, cstart 
 	// If key is in it, even if value is nil, ok will be true
 
 	if _, ok := options[ParamOffset]; ok {
-		offset, _ = options[ParamOffset].(*int)
+		v := options[ParamOffset].(int)
+		offset = &v
 	}
 
 	if _, ok := options[ParamLimit]; ok {
-		limit, _ = options[ParamLimit].(*int)
+		v := options[ParamLimit].(int)
+		limit = &v
 	}
 
 	if _, ok := options[ParamOrder]; ok {
-		order, _ = options[ParamOrder].(*string)
+		v := options[ParamOrder].(string)
+		order = &v
 	}
 
 	if _, ok := options[ParamCstart]; ok {
@@ -44,7 +47,7 @@ func GetOptions(options map[Param]interface{}) (offset *int, limit *int, cstart 
 	latestn = nil
 	if n, ok := options[ParamLatestN]; ok {
 		if n != nil {
-			if n2, err := strconv.Atoi(*(n.(*string))); err == nil {
+			if n2, err := strconv.Atoi(n.(string)); err == nil {
 				latestn = &n2
 			}
 		}

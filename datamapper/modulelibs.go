@@ -25,8 +25,8 @@ func modelNeedsRealDelete(modelObj models.IModel) bool {
 	return realDelete
 }
 
-func constructInnerFieldParamQueries(db *gorm.DB, typeString string, options *map[urlparam.Param]interface{}, latestn *int, latestnons []string) (*gorm.DB, error) {
-	if urlParams, ok := (*options)[urlparam.ParamOtherQueries].(url.Values); ok && len(urlParams) != 0 {
+func constructInnerFieldParamQueries(db *gorm.DB, typeString string, options map[urlparam.Param]interface{}, latestn *int, latestnons []string) (*gorm.DB, error) {
+	if urlParams, ok := options[urlparam.ParamOtherQueries].(url.Values); ok && len(urlParams) != 0 {
 		var err error
 		// If I want quering into nested data
 		// I need INNER JOIN that table where the field is what we search for,

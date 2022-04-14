@@ -30,7 +30,7 @@ type BaseMapper struct {
 
 // CreateOne creates an instance of this model based on json and store it in db
 func (mapper *BaseMapper) CreateOne(db *gorm.DB, who models.UserIDFetchable, typeString string, modelObj models.IModel,
-	options *map[urlparam.Param]interface{}, cargo *models.ModelCargo) (models.IModel, error) {
+	options map[urlparam.Param]interface{}, cargo *models.ModelCargo) (models.IModel, error) {
 	modelObj, err := mapper.Service.HookBeforeCreateOne(db, who, typeString, modelObj)
 	if err != nil {
 		return nil, err
@@ -62,7 +62,7 @@ func (mapper *BaseMapper) CreateOne(db *gorm.DB, who models.UserIDFetchable, typ
 
 // CreateMany creates an instance of this model based on json and store it in db
 func (mapper *BaseMapper) CreateMany(db *gorm.DB, who models.UserIDFetchable, typeString string, modelObjs []models.IModel,
-	options *map[urlparam.Param]interface{}, cargo *models.BatchHookCargo) ([]models.IModel, error) {
+	options map[urlparam.Param]interface{}, cargo *models.BatchHookCargo) ([]models.IModel, error) {
 	modelObjs, err := mapper.Service.HookBeforeCreateMany(db, who, typeString, modelObjs)
 	if err != nil {
 		return nil, err
@@ -86,7 +86,7 @@ func (mapper *BaseMapper) CreateMany(db *gorm.DB, who models.UserIDFetchable, ty
 
 // ReadOne get one model object based on its type and its id string
 func (mapper *BaseMapper) ReadOne(db *gorm.DB, who models.UserIDFetchable, typeString string, id *datatypes.UUID,
-	options *map[urlparam.Param]interface{}, cargo *models.ModelCargo) (models.IModel, models.UserRole, error) {
+	options map[urlparam.Param]interface{}, cargo *models.ModelCargo) (models.IModel, models.UserRole, error) {
 	// anyone permission can read as long as you are linked on db
 	modelObj, role, err := loadAndCheckErrorBeforeModify(mapper.Service, db, who, typeString, nil, id, []models.UserRole{models.UserRoleAny})
 	if err != nil {
@@ -95,13 +95,13 @@ func (mapper *BaseMapper) ReadOne(db *gorm.DB, who models.UserIDFetchable, typeS
 
 	// After CRUPD hook
 	if m, ok := modelObj.(models.IAfterCRUPD); ok {
-		hpdata := models.HookPointData{DB: db, Who: who, TypeString: typeString, Cargo: cargo, Role: &role, URLParams: *options}
+		hpdata := models.HookPointData{DB: db, Who: who, TypeString: typeString, Cargo: cargo, Role: &role, URLParams: options}
 		m.AfterCRUPDDB(hpdata, models.CRUPDOpRead)
 	}
 
 	// AfterRead hook
 	if m, ok := modelObj.(models.IAfterRead); ok {
-		hpdata := models.HookPointData{DB: db, Who: who, TypeString: typeString, Cargo: cargo, Role: &role, URLParams: *options}
+		hpdata := models.HookPointData{DB: db, Who: who, TypeString: typeString, Cargo: cargo, Role: &role, URLParams: options}
 		if err := m.AfterReadDB(hpdata); err != nil {
 			return nil, 0, err
 		}
@@ -159,11 +159,11 @@ func createBuilderFromQueryParameters(urlParams url.Values, typeString string) (
 }
 
 func (mapper *BaseMapper) ReadMany(db *gorm.DB, who models.UserIDFetchable, typeString string,
-	options *map[urlparam.Param]interface{}, cargo *models.BatchHookCargo) ([]models.IModel, []models.UserRole, *int, error) {
+	options map[urlparam.Param]interface{}, cargo *models.BatchHookCargo) ([]models.IModel, []models.UserRole, *int, error) {
 	dbClean := db
 	db = db.Set("gorm:auto_preload", true)
 
-	offset, limit, cstart, cstop, order, latestn, latestnons, totalcount := urlparam.GetOptions(*options)
+	offset, limit, cstart, cstop, order, latestn, latestnons, totalcount := urlparam.GetOptions(options)
 	rtable := models.GetTableNameFromTypeString(typeString)
 
 	if cstart != nil && cstop != nil {
@@ -178,7 +178,7 @@ func (mapper *BaseMapper) ReadMany(db *gorm.DB, who models.UserIDFetchable, type
 			return nil, nil, nil, err
 		}
 	} else {
-		if urlParams, ok := (*options)[urlparam.ParamOtherQueries].(url.Values); ok && len(urlParams) != 0 {
+		if urlParams, ok := options[urlparam.ParamOtherQueries].(url.Values); ok && len(urlParams) != 0 {
 			builder, err = createBuilderFromQueryParameters(urlParams, typeString)
 			if err != nil {
 				return nil, nil, nil, err
@@ -256,7 +256,7 @@ func (mapper *BaseMapper) ReadMany(db *gorm.DB, who models.UserIDFetchable, type
 	// use dbClean cuz it's not chained
 	if after := models.ModelRegistry[typeString].AfterCRUPD; after != nil {
 		bhpData := models.BatchHookPointData{Ms: outmodels, DB: dbClean, Who: who,
-			TypeString: typeString, Roles: roles, Cargo: cargo, URLParams: *options}
+			TypeString: typeString, Roles: roles, Cargo: cargo, URLParams: options}
 		if err = after(bhpData, models.CRUPDOpRead); err != nil {
 			return nil, nil, nil, err
 		}
@@ -266,7 +266,7 @@ func (mapper *BaseMapper) ReadMany(db *gorm.DB, who models.UserIDFetchable, type
 	// use dbClean cuz it's not chained
 	if after := models.ModelRegistry[typeString].AfterRead; after != nil {
 		bhpData := models.BatchHookPointData{Ms: outmodels, DB: dbClean, Who: who,
-			TypeString: typeString, Roles: roles, Cargo: cargo, URLParams: *options}
+			TypeString: typeString, Roles: roles, Cargo: cargo, URLParams: options}
 		if err = after(bhpData); err != nil {
 			return nil, nil, nil, err
 		}
@@ -277,7 +277,7 @@ func (mapper *BaseMapper) ReadMany(db *gorm.DB, who models.UserIDFetchable, type
 
 // UpdateOne updates model based on this json
 func (mapper *BaseMapper) UpdateOne(db *gorm.DB, who models.UserIDFetchable, typeString string,
-	modelObj models.IModel, id *datatypes.UUID, options *map[urlparam.Param]interface{}, cargo *models.ModelCargo) (models.IModel, error) {
+	modelObj models.IModel, id *datatypes.UUID, options map[urlparam.Param]interface{}, cargo *models.ModelCargo) (models.IModel, error) {
 	oldModelObj, _, err := loadAndCheckErrorBeforeModify(mapper.Service, db, who, typeString, modelObj, id, []models.UserRole{models.UserRoleAdmin})
 	if err != nil {
 		return nil, err
@@ -310,7 +310,7 @@ func (mapper *BaseMapper) UpdateOne(db *gorm.DB, who models.UserIDFetchable, typ
 
 // UpdateMany updates multiple models
 func (mapper *BaseMapper) UpdateMany(db *gorm.DB, who models.UserIDFetchable, typeString string,
-	modelObjs []models.IModel, options *map[urlparam.Param]interface{},
+	modelObjs []models.IModel, options map[urlparam.Param]interface{},
 	cargo *models.BatchHookCargo) ([]models.IModel, error) {
 	// load old model data
 	ids := make([]*datatypes.UUID, len(modelObjs))
@@ -349,7 +349,7 @@ func (mapper *BaseMapper) UpdateMany(db *gorm.DB, who models.UserIDFetchable, ty
 
 // PatchOne updates model based on this json
 func (mapper *BaseMapper) PatchOne(db *gorm.DB, who models.UserIDFetchable, typeString string, jsonPatch []byte,
-	id *datatypes.UUID, options *map[urlparam.Param]interface{}, cargo *models.ModelCargo) (models.IModel, error) {
+	id *datatypes.UUID, options map[urlparam.Param]interface{}, cargo *models.ModelCargo) (models.IModel, error) {
 	oldModelObj, _, err := loadAndCheckErrorBeforeModify(mapper.Service, db, who, typeString, nil, id, []models.UserRole{models.UserRoleAdmin})
 	if err != nil {
 		return nil, err
@@ -405,7 +405,7 @@ func (mapper *BaseMapper) PatchOne(db *gorm.DB, who models.UserIDFetchable, type
 
 // PatchMany patches multiple models
 func (mapper *BaseMapper) PatchMany(db *gorm.DB, who models.UserIDFetchable, typeString string,
-	jsonIDPatches []models.JSONIDPatch, options *map[urlparam.Param]interface{},
+	jsonIDPatches []models.JSONIDPatch, options map[urlparam.Param]interface{},
 	cargo *models.BatchHookCargo) ([]models.IModel, error) {
 	// Load data, patch it, then send it to the hookpoint
 	// Load IDs
@@ -468,7 +468,7 @@ func (mapper *BaseMapper) PatchMany(db *gorm.DB, who models.UserIDFetchable, typ
 // DeleteOne delete the model
 // TODO: delete the groups associated with this record?
 func (mapper *BaseMapper) DeleteOne(db *gorm.DB, who models.UserIDFetchable, typeString string,
-	id *datatypes.UUID, options *map[urlparam.Param]interface{}, cargo *models.ModelCargo) (models.IModel, error) {
+	id *datatypes.UUID, options map[urlparam.Param]interface{}, cargo *models.ModelCargo) (models.IModel, error) {
 	modelObj, _, err := loadAndCheckErrorBeforeModify(mapper.Service, db, who, typeString, nil, id, []models.UserRole{models.UserRoleAdmin})
 	if err != nil {
 		return nil, err
@@ -512,7 +512,7 @@ func (mapper *BaseMapper) DeleteOne(db *gorm.DB, who models.UserIDFetchable, typ
 
 // DeleteMany deletes multiple models
 func (mapper *BaseMapper) DeleteMany(db *gorm.DB, who models.UserIDFetchable, typeString string, modelObjs []models.IModel,
-	options *map[urlparam.Param]interface{}, cargo *models.BatchHookCargo) ([]models.IModel, error) {
+	options map[urlparam.Param]interface{}, cargo *models.BatchHookCargo) ([]models.IModel, error) {
 	// load old model data
 	ids := make([]*datatypes.UUID, len(modelObjs))
 	for i, modelObj := range modelObjs {

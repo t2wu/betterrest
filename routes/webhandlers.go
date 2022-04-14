@@ -223,20 +223,18 @@ func GetOptionByParsingURL(r *http.Request) (map[urlparam.Param]interface{}, err
 	options := make(map[urlparam.Param]interface{})
 
 	values := r.URL.Query()
-	if o, l, err := LimitAndOffsetFromQueryString(&values); err == nil {
-		if o != nil && l != nil {
-			options[urlparam.ParamOffset], options[urlparam.ParamLimit] = o, l
-		}
+	if o, l, err := LimitAndOffsetFromQueryString(&values); err == nil && o != nil && l != nil {
+		options[urlparam.ParamOffset], options[urlparam.ParamLimit] = *o, *l
 	} else if err != nil {
 		return nil, err
 	}
 
 	if order := OrderFromQueryString(&values); order != nil {
-		options[urlparam.ParamOrder] = order
+		options[urlparam.ParamOrder] = *order
 	}
 
 	if latestn := LatestnFromQueryString(&values); latestn != nil {
-		options[urlparam.ParamLatestN] = latestn
+		options[urlparam.ParamLatestN] = *latestn
 	}
 
 	if latestnon := LatestnOnFromQueryString(&values); latestnon != nil {
@@ -245,10 +243,8 @@ func GetOptionByParsingURL(r *http.Request) (map[urlparam.Param]interface{}, err
 
 	options[urlparam.ParamOtherQueries] = values
 
-	if cstart, cstop, err := CreatedTimeRangeFromQueryString(&values); err == nil {
-		if cstart != nil && cstop != nil {
-			options[urlparam.ParamCstart], options[urlparam.ParamCstop] = *cstart, *cstop
-		}
+	if cstart, cstop, err := CreatedTimeRangeFromQueryString(&values); err == nil && cstart != nil && cstop != nil {
+		options[urlparam.ParamCstart], options[urlparam.ParamCstop] = *cstart, *cstop
 	} else if err != nil {
 		return nil, err
 	}
@@ -294,7 +290,7 @@ func GetAllHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin
 
 		who := WhoFromContext(r)
 		cargo := models.BatchHookCargo{}
-		modelObjs, roles, no, err = mapper.ReadMany(db.Shared(), who, typeString, &options, &cargo)
+		modelObjs, roles, no, err = mapper.ReadMany(db.Shared(), who, typeString, options, &cargo)
 
 		if err != nil {
 			render.Render(w, r, webrender.NewErrInternalServerError(err))
@@ -348,7 +344,7 @@ func CreateHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin
 				LogTransID(tx, c.Request.Method, c.Request.URL.String(), "n")
 
 				var err2 error
-				if modelObjs, err2 = mapper.CreateMany(tx, who, typeString, modelObjs, &options, &cargo); err2 != nil {
+				if modelObjs, err2 = mapper.CreateMany(tx, who, typeString, modelObjs, options, &cargo); err2 != nil {
 					log.Println("Error in CreateMany:", typeString, err2)
 					return err2
 				}
@@ -378,7 +374,7 @@ func CreateHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin
 			err := transact.Transact(db.Shared(), func(tx *gorm.DB) error {
 				LogTransID(tx, c.Request.Method, c.Request.URL.String(), "1")
 
-				if modelObj, err2 = mapper.CreateOne(tx, who, typeString, modelObjs[0], &options, &cargo); err2 != nil {
+				if modelObj, err2 = mapper.CreateOne(tx, who, typeString, modelObjs[0], options, &cargo); err2 != nil {
 					log.Println("Error in CreateOne:", typeString, err2)
 					return err2
 				}
@@ -436,7 +432,7 @@ func ReadOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *gi
 
 		who := WhoFromContext(r)
 		cargo := models.ModelCargo{}
-		modelObj, role, err = mapper.ReadOne(db.Shared(), who, typeString, id, &options, &cargo)
+		modelObj, role, err = mapper.ReadOne(db.Shared(), who, typeString, id, options, &cargo)
 
 		if err != nil && gorm.IsRecordNotFoundError(err) {
 			render.Render(w, r, webrender.NewErrNotFound(err))
@@ -498,7 +494,7 @@ func UpdateOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 		err = transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
 			LogTransID(tx, c.Request.Method, c.Request.URL.String(), "1")
 
-			if modelObj2, err = mapper.UpdateOne(tx, who, typeString, modelObj, id, &options, &cargo); err != nil {
+			if modelObj2, err = mapper.UpdateOne(tx, who, typeString, modelObj, id, options, &cargo); err != nil {
 				log.Println("Error in UpdateOneHandler ErrUpdate:", typeString, err)
 				return err
 			}
@@ -552,7 +548,7 @@ func UpdateManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 		err = transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
 			LogTransID(tx, c.Request.Method, c.Request.URL.String(), "n")
 
-			if modelObjs2, err = mapper.UpdateMany(tx, who, typeString, modelObjs, &options, &cargo); err != nil {
+			if modelObjs2, err = mapper.UpdateMany(tx, who, typeString, modelObjs, options, &cargo); err != nil {
 				log.Println("Error in UpdateManyHandler:", typeString, err)
 				return err
 			}
@@ -620,7 +616,7 @@ func PatchOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *g
 		err = transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
 			LogTransID(tx, c.Request.Method, c.Request.URL.String(), "1")
 
-			if modelObj, err = mapper.PatchOne(tx, who, typeString, jsonPatch, id, &options, &cargo); err != nil {
+			if modelObj, err = mapper.PatchOne(tx, who, typeString, jsonPatch, id, options, &cargo); err != nil {
 				log.Println("Error in PatchOneHandler:", typeString, err)
 				return err
 			}
@@ -675,7 +671,7 @@ func PatchManyHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 		err = transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
 			LogTransID(tx, c.Request.Method, c.Request.URL.String(), "n")
 
-			if modelObjs, err = mapper.PatchMany(tx, who, typeString, jsonIDPatches, &options, &cargo); err != nil {
+			if modelObjs, err = mapper.PatchMany(tx, who, typeString, jsonIDPatches, options, &cargo); err != nil {
 				log.Println("Error in PatchManyHandler:", typeString, err)
 				return err
 			}
@@ -735,7 +731,7 @@ func DeleteOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 		err = transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
 			LogTransID(tx, c.Request.Method, c.Request.URL.String(), "1")
 
-			if modelObj, err = mapper.DeleteOne(tx, who, typeString, id, &options, &cargo); err != nil {
+			if modelObj, err = mapper.DeleteOne(tx, who, typeString, id, options, &cargo); err != nil {
 				log.Printf("Error in DeleteOneHandler: %s %+v\n", typeString, err)
 				return err
 			}

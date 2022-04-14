@@ -51,7 +51,7 @@ func SharedUserMapper() *UserMapper {
 // CreateOne creates an user model based on json and store it in db
 // Also creates a ownership with admin access
 func (mapper *UserMapper) CreateOne(db *gorm.DB, who models.UserIDFetchable, typeString string, modelObj models.IModel,
-	options *map[urlparam.Param]interface{}, cargo *models.ModelCargo) (models.IModel, error) {
+	options map[urlparam.Param]interface{}, cargo *models.ModelCargo) (models.IModel, error) {
 	modelObj, err := mapper.Service.HookBeforeCreateOne(db, who, typeString, modelObj)
 	if err != nil {
 		return nil, err
@@ -92,7 +92,7 @@ func (mapper *UserMapper) CreateOne(db *gorm.DB, who models.UserIDFetchable, typ
 
 // ReadOne get one model object based on its type and its id string
 func (mapper *UserMapper) ReadOne(db *gorm.DB, who models.UserIDFetchable, typeString string,
-	id *datatypes.UUID, options *map[urlparam.Param]interface{}, cargo *models.ModelCargo) (models.IModel, models.UserRole, error) {
+	id *datatypes.UUID, options map[urlparam.Param]interface{}, cargo *models.ModelCargo) (models.IModel, models.UserRole, error) {
 	modelObj, role, err := mapper.Service.ReadOneCore(db, who, typeString, id)
 	if err != nil {
 		return nil, 0, err
@@ -100,7 +100,7 @@ func (mapper *UserMapper) ReadOne(db *gorm.DB, who models.UserIDFetchable, typeS
 
 	// After CRUPD hook
 	if m, ok := modelObj.(models.IAfterCRUPD); ok {
-		hpdata := models.HookPointData{DB: db, Who: who, TypeString: typeString, Cargo: cargo, Role: &role, URLParams: *options}
+		hpdata := models.HookPointData{DB: db, Who: who, TypeString: typeString, Cargo: cargo, Role: &role, URLParams: options}
 		m.AfterCRUPDDB(hpdata, models.CRUPDOpRead)
 	}
 
@@ -117,7 +117,7 @@ func (mapper *UserMapper) ReadOne(db *gorm.DB, who models.UserIDFetchable, typeS
 
 // UpdateOne updates model based on this json
 func (mapper *UserMapper) UpdateOne(db *gorm.DB, who models.UserIDFetchable, typeString string,
-	modelObj models.IModel, id *datatypes.UUID, options *map[urlparam.Param]interface{},
+	modelObj models.IModel, id *datatypes.UUID, options map[urlparam.Param]interface{},
 	cargo *models.ModelCargo) (models.IModel, error) {
 
 	oldModelObj, _, err := loadAndCheckErrorBeforeModify(mapper.Service, db, who, typeString, modelObj, id, []models.UserRole{models.UserRoleAdmin})
@@ -151,7 +151,7 @@ func (mapper *UserMapper) UpdateOne(db *gorm.DB, who models.UserIDFetchable, typ
 
 // PatchOne updates model based on this json
 func (mapper *UserMapper) PatchOne(db *gorm.DB, who models.UserIDFetchable, typeString string, jsonPatch []byte,
-	id *datatypes.UUID, options *map[urlparam.Param]interface{}, cargo *models.ModelCargo) (models.IModel, error) {
+	id *datatypes.UUID, options map[urlparam.Param]interface{}, cargo *models.ModelCargo) (models.IModel, error) {
 	oldModelObj, _, err := loadAndCheckErrorBeforeModify(mapper.Service, db, who, typeString, nil, id, []models.UserRole{models.UserRoleAdmin})
 	if err != nil {
 		return nil, err
@@ -206,7 +206,7 @@ func (mapper *UserMapper) PatchOne(db *gorm.DB, who models.UserIDFetchable, type
 
 // DeleteOne deletes the user with the ID
 func (mapper *UserMapper) DeleteOne(db *gorm.DB, who models.UserIDFetchable, typeString string, id *datatypes.UUID,
-	options *map[urlparam.Param]interface{}, cargo *models.ModelCargo) (models.IModel, error) {
+	options map[urlparam.Param]interface{}, cargo *models.ModelCargo) (models.IModel, error) {
 	modelObj, _, err := loadAndCheckErrorBeforeModify(mapper.Service, db, who, typeString, nil, id, []models.UserRole{models.UserRoleAdmin})
 	if err != nil {
 		return nil, err
@@ -251,32 +251,32 @@ func (mapper *UserMapper) DeleteOne(db *gorm.DB, who models.UserIDFetchable, typ
 
 // CreateMany :-
 func (mapper *UserMapper) CreateMany(db *gorm.DB, who models.UserIDFetchable, typeString string,
-	modelObj []models.IModel, options *map[urlparam.Param]interface{}, cargo *models.BatchHookCargo) ([]models.IModel, error) {
+	modelObj []models.IModel, options map[urlparam.Param]interface{}, cargo *models.BatchHookCargo) ([]models.IModel, error) {
 	return nil, fmt.Errorf("Not implemented")
 }
 
 // ReadMany :-
 func (mapper *UserMapper) ReadMany(db *gorm.DB, who models.UserIDFetchable, typeString string,
-	options *map[urlparam.Param]interface{}, cargo *models.BatchHookCargo) ([]models.IModel, []models.UserRole, *int, error) {
+	options map[urlparam.Param]interface{}, cargo *models.BatchHookCargo) ([]models.IModel, []models.UserRole, *int, error) {
 	return nil, nil, nil, fmt.Errorf("Not implemented")
 }
 
 // UpdateMany :-
 func (mapper *UserMapper) UpdateMany(db *gorm.DB, who models.UserIDFetchable, typeString string,
-	modelObjs []models.IModel, options *map[urlparam.Param]interface{}, cargo *models.BatchHookCargo) ([]models.IModel, error) {
+	modelObjs []models.IModel, options map[urlparam.Param]interface{}, cargo *models.BatchHookCargo) ([]models.IModel, error) {
 	return nil, fmt.Errorf("Not implemented")
 }
 
 // PatchMany :-
 func (mapper *UserMapper) PatchMany(db *gorm.DB, who models.UserIDFetchable,
-	typeString string, jsonIDPatches []models.JSONIDPatch, options *map[urlparam.Param]interface{},
+	typeString string, jsonIDPatches []models.JSONIDPatch, options map[urlparam.Param]interface{},
 	cargo *models.BatchHookCargo) ([]models.IModel, error) {
 	return nil, fmt.Errorf("Not implemented")
 }
 
 // DeleteMany :-
 func (mapper *UserMapper) DeleteMany(db *gorm.DB, who models.UserIDFetchable,
-	typeString string, modelObjs []models.IModel, options *map[urlparam.Param]interface{},
+	typeString string, modelObjs []models.IModel, options map[urlparam.Param]interface{},
 	cargo *models.BatchHookCargo) ([]models.IModel, error) {
 	return nil, fmt.Errorf("Not implemented")
 }
