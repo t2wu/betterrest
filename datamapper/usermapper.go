@@ -323,32 +323,32 @@ func (mapper *UserMapper) DeleteOne(db *gorm.DB, who models.UserIDFetchable, typ
 
 // CreateMany :-
 func (mapper *UserMapper) CreateMany(db *gorm.DB, who models.UserIDFetchable, typeString string,
-	modelObj []models.IModel, options map[urlparam.Param]interface{}, cargo *models.BatchHookCargo) ([]models.IModel, error) {
-	return nil, fmt.Errorf("Not implemented")
+	modelObj []models.IModel, options map[urlparam.Param]interface{}, cargo *controller.Cargo) ([]models.IModel, *webrender.RetVal) {
+	return nil, webrender.NewRetValWithError(fmt.Errorf("Not implemented"))
 }
 
 // ReadMany :-
 func (mapper *UserMapper) ReadMany(db *gorm.DB, who models.UserIDFetchable, typeString string,
-	options map[urlparam.Param]interface{}, cargo *models.BatchHookCargo) ([]models.IModel, []models.UserRole, *int, error) {
-	return nil, nil, nil, fmt.Errorf("Not implemented")
+	options map[urlparam.Param]interface{}, cargo *controller.Cargo) ([]models.IModel, []models.UserRole, *int, *webrender.RetVal) {
+	return nil, nil, nil, webrender.NewRetValWithError(fmt.Errorf("Not implemented"))
 }
 
 // UpdateMany :-
 func (mapper *UserMapper) UpdateMany(db *gorm.DB, who models.UserIDFetchable, typeString string,
-	modelObjs []models.IModel, options map[urlparam.Param]interface{}, cargo *models.BatchHookCargo) ([]models.IModel, error) {
-	return nil, fmt.Errorf("Not implemented")
+	modelObjs []models.IModel, options map[urlparam.Param]interface{}, cargo *controller.Cargo) ([]models.IModel, *webrender.RetVal) {
+	return nil, webrender.NewRetValWithError(fmt.Errorf("Not implemented"))
 }
 
 // PatchMany :-
 func (mapper *UserMapper) PatchMany(db *gorm.DB, who models.UserIDFetchable,
 	typeString string, jsonIDPatches []models.JSONIDPatch, options map[urlparam.Param]interface{},
-	cargo *models.BatchHookCargo) ([]models.IModel, error) {
-	return nil, fmt.Errorf("Not implemented")
+	cargo *controller.Cargo) ([]models.IModel, *webrender.RetVal) {
+	return nil, webrender.NewRetValWithError(fmt.Errorf("Not implemented"))
 }
 
 // DeleteMany :-
 func (mapper *UserMapper) DeleteMany(db *gorm.DB, who models.UserIDFetchable,
 	typeString string, modelObjs []models.IModel, options map[urlparam.Param]interface{},
-	cargo *models.BatchHookCargo) ([]models.IModel, error) {
-	return nil, fmt.Errorf("Not implemented")
+	cargo *controller.Cargo) ([]models.IModel, *webrender.RetVal) {
+	return nil, webrender.NewRetValWithError(fmt.Errorf("Not implemented"))
 }

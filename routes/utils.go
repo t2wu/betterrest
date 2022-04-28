@@ -103,16 +103,13 @@ func GuardMiddleWare(typeString string) func(c *gin.Context) {
 			if guardRetVal := ctrl.GuardAPIEntry(&data, &info); !guardRetVal.ToPass {
 				defer c.Abort() // abort
 
-				if guardRetVal.CustomRenderer == nil {
+				if guardRetVal.Renderer == nil {
 					render.Render(w, r, webrender.NewErrPermissionDeniedForAPIEndpoint(nil))
 					return
 				}
-				render.Render(w, r, *guardRetVal.CustomRenderer)
+				render.Render(w, r, guardRetVal.Renderer)
 				return
 			}
 		}
-
-		// continues
-		return
 	}
 }

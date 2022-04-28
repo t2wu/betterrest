@@ -107,11 +107,10 @@ func CreateMany(mapper datamapper.IDataMapper, who models.UserIDFetchable, typeS
 	}, "lifecycle.CreateMany")
 
 	if retval != nil {
-		if retval.Error != nil {
+		if retval.Renderer == nil {
 			return nil, nil, webrender.NewErrCreate(retval.Error)
-		} else {
-			return nil, nil, retval.CustomRenderer
 		}
+		return nil, nil, retval.Renderer
 	}
 
 	roles := make([]models.UserRole, len(modelObjs))
@@ -156,11 +155,10 @@ func CreateOne(mapper datamapper.IDataMapper, who models.UserIDFetchable, typeSt
 	}, "lifecycle.CreateOne")
 
 	if retval != nil {
-		if retval.Error != nil {
+		if retval.Renderer == nil {
 			return nil, nil, webrender.NewErrCreate(retval.Error)
-		} else {
-			return nil, nil, *retval.CustomRenderer
 		}
+		return nil, nil, retval.Renderer
 	}
 
 	roles := []models.UserRole{models.UserRoleAdmin} // just one item
@@ -196,11 +194,10 @@ func ReadMany(mapper datamapper.IDataMapper, who models.UserIDFetchable, typeStr
 	cargo := controller.Cargo{}
 	modelObjs, roles, no, retval := mapper.ReadMany(db.Shared(), who, typeString, options, &cargo)
 	if retval != nil {
-		if retval.Error != nil {
-			return nil, nil, no, webrender.NewErrInternalServerError(retval.Error) // TODO, probably should have a READ error
-		} else {
-			return nil, nil, no, *retval.CustomRenderer
+		if retval.Renderer == nil {
+			return nil, nil, no, webrender.NewErrInternalServerError(retval.Error)
 		}
+		return nil, nil, no, retval.Renderer
 	}
 
 	data := controller.Data{Ms: modelObjs, DB: nil, Who: who,
@@ -232,14 +229,13 @@ func ReadOne(mapper datamapper.IDataMapper, who models.UserIDFetchable, typeStri
 	cargo := controller.Cargo{}
 	modelObj, role, retval := mapper.ReadOne(db.Shared(), who, typeString, id, options, &cargo)
 	if retval != nil {
-		if retval.Error != nil {
-			if gorm.IsRecordNotFoundError(retval.Error) {
-				return nil, nil, webrender.NewErrNotFound(retval.Error)
-			}
-			return nil, nil, webrender.NewErrInternalServerError(retval.Error) // TODO, probably should have a READ error
-		} else {
-			return nil, nil, retval.CustomRenderer
+		if retval.Renderer == nil {
+			return nil, nil, retval.Renderer
 		}
+		if gorm.IsRecordNotFoundError(retval.Error) {
+			return nil, nil, webrender.NewErrNotFound(retval.Error)
+		}
+		return nil, nil, webrender.NewErrInternalServerError(retval.Error) // TODO, probably should have a READ error
 	}
 
 	data := controller.Data{Ms: []models.IModel{modelObj}, DB: nil, Who: who,
@@ -277,11 +273,10 @@ func UpdateMany(mapper datamapper.IDataMapper, who models.UserIDFetchable, typeS
 	}, "lifecycle.UpdateMany")
 
 	if retval != nil {
-		if retval.Error != nil {
-			return nil, nil, webrender.NewErrUpdate(retval.Error)
-		} else {
-			return nil, nil, retval.CustomRenderer
+		if retval.Renderer == nil {
+			return nil, nil, retval.Renderer
 		}
+		return nil, nil, webrender.NewErrUpdate(retval.Error) // TODO, probably should have a READ error
 	}
 
 	roles := make([]models.UserRole, len(modelObjs))
@@ -321,13 +316,11 @@ func UpdateOne(mapper datamapper.IDataMapper, who models.UserIDFetchable, typeSt
 		}
 		return nil
 	}, "lifecycle.UpdateOne")
-
 	if retval != nil {
-		if retval.Error != nil {
-			return nil, nil, webrender.NewErrUpdate(retval.Error)
-		} else {
-			return nil, nil, retval.CustomRenderer
+		if retval.Renderer == nil {
+			return nil, nil, retval.Renderer
 		}
+		return nil, nil, webrender.NewErrUpdate(retval.Error) // TODO, probably should have a READ error
 	}
 
 	role := models.UserRoleAdmin
@@ -366,11 +359,10 @@ func PatchMany(mapper datamapper.IDataMapper, who models.UserIDFetchable, typeSt
 	}, "lifecycle.PatchMany")
 
 	if retval != nil {
-		if retval.Error != nil {
-			return nil, nil, webrender.NewErrPatch(retval.Error)
-		} else {
-			return nil, nil, retval.CustomRenderer
+		if retval.Renderer == nil {
+			return nil, nil, retval.Renderer
 		}
+		return nil, nil, webrender.NewErrPatch(retval.Error) // TODO, probably should have a READ error
 	}
 
 	roles := make([]models.UserRole, len(modelObjs))
@@ -414,11 +406,10 @@ func PatchOne(mapper datamapper.IDataMapper, who models.UserIDFetchable, typeStr
 	}, "lifecycle.PatchOne")
 
 	if retval != nil {
-		if retval.Error != nil {
-			return nil, nil, webrender.NewErrPatch(retval.Error)
-		} else {
-			return nil, nil, retval.CustomRenderer
+		if retval.Renderer == nil {
+			return nil, nil, retval.Renderer
 		}
+		return nil, nil, webrender.NewErrPatch(retval.Error) // TODO, probably should have a READ error
 	}
 
 	role := models.UserRoleAdmin
@@ -456,11 +447,10 @@ func DeleteMany(mapper datamapper.IDataMapper, who models.UserIDFetchable, typeS
 	}, "lifecycle.DeleteMany")
 
 	if retval != nil {
-		if retval.Error != nil {
-			return nil, nil, webrender.NewErrDelete(retval.Error)
-		} else {
-			return nil, nil, retval.CustomRenderer
+		if retval.Renderer == nil {
+			return nil, nil, retval.Renderer
 		}
+		return nil, nil, webrender.NewErrDelete(retval.Error) // TODO, probably should have a READ error
 	}
 
 	roles := make([]models.UserRole, len(modelObjs))
@@ -500,13 +490,11 @@ func DeleteOne(mapper datamapper.IDataMapper, who models.UserIDFetchable, typeSt
 		}
 		return
 	}, "lifecycle.DeleteOne")
-
 	if retval != nil {
-		if retval.Error != nil {
-			return nil, nil, webrender.NewErrDelete(retval.Error)
-		} else {
-			return nil, nil, retval.CustomRenderer
+		if retval.Renderer == nil {
+			return nil, nil, retval.Renderer
 		}
+		return nil, nil, webrender.NewErrDelete(retval.Error) // TODO, probably should have a READ error
 	}
 
 	role := models.UserRoleAdmin

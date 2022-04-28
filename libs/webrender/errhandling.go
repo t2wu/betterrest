@@ -455,13 +455,23 @@ type GuardRetVal struct {
 
 	// CustomRenderer renderers controls HTTP status and return value instead of permission denied, if given.
 	// If not set, permission denied by default
-	CustomRenderer *render.Renderer
+	Renderer render.Renderer
+}
+
+func NewRetValWithError(err error) *RetVal {
+	return &RetVal{Error: err}
+}
+
+func NewRetValWithRendererError(err error, renderer render.Renderer) *RetVal {
+	return &RetVal{Error: err, Renderer: renderer}
 }
 
 // RetVal is the hookpoint return structure
 type RetVal struct {
-	// Error to return error
+	// Error to return error, should always be set, even when having custom renderer
+	// This is so that if we call datamapper or hookpoint, when we aren't using it in the
+	// HTTP context, we can still handle error properly
 	Error error
 	// CustomRenderer if customize HTTP status
-	CustomRenderer *render.Renderer
+	Renderer render.Renderer
 }

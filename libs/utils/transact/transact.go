@@ -119,7 +119,7 @@ func TransactCustomError(db *gorm.DB, txFunc func(*gorm.DB) *webrender.RetVal, l
 	tx := db.Begin()
 	if err := tx.Error; err != nil {
 		renderer := webrender.NewErrInternalServerError(err)
-		retval = &webrender.RetVal{CustomRenderer: &renderer}
+		retval = webrender.NewRetValWithRendererError(err, renderer)
 	}
 
 	defer func() {
@@ -145,7 +145,7 @@ func TransactCustomError(db *gorm.DB, txFunc func(*gorm.DB) *webrender.RetVal, l
 		} else {
 			if err := tx.Commit().Error; err != nil { // err is nil; if Commit returns error update err
 				renderer := webrender.NewErrInternalServerError(err)
-				retval = &webrender.RetVal{CustomRenderer: &renderer}
+				retval = webrender.NewRetValWithRendererError(err, renderer)
 			}
 
 			if debug {
