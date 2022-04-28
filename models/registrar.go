@@ -117,8 +117,9 @@ func (r *Registrar) ModelWithOption(modelObj IModel, options RegOptions) *Regist
 
 // Controller adds the subject for new hookpoints
 // If controller is added, other hookpoint is not called
-func (r *Registrar) Controller(controller interface{}) {
+func (r *Registrar) Controller(controller interface{}) *Registrar {
 	ModelRegistry[r.currentTypeString].Controller = controller
+	return r
 }
 
 // CustomCreate register custom create table funtion
