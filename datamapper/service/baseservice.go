@@ -52,7 +52,7 @@ func (serv *BaseService) CreateOneCore(db *gorm.DB, who models.UserIDFetchable, 
 	// }
 
 	// For table with trigger which update before insert, we need to load it again
-	if err := db.First(modelObj).Error; err != nil {
+	if err := db.Take(modelObj).Error; err != nil {
 		// That's weird. we just inserted it.
 		return nil, err
 	}

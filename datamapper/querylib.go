@@ -153,7 +153,7 @@ func constructDbFromURLFieldQuery(db *gorm.DB, typeString string, urlParams map[
 			return db, err
 		}
 	} else if latestn != nil {
-		log.Println("GOING INTO DEPRECATED")
+		log.Println("GOING TO BE DEPRECATED")
 		// DEPRECATED: old behavior where there may is latestn but not latestnons
 		db, err = sqlbuilder.AddLatestJoinWithOneLevelFilter(db, typeString, models.GetTableNameFromTypeString(typeString), *latestn, filters)
 		if err != nil {

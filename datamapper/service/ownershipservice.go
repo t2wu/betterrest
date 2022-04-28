@@ -136,7 +136,7 @@ func (serv *OwnershipService) CreateOneCore(db *gorm.DB, who models.UserIDFetcha
 	// }
 
 	// For table with trigger which update before insert, we need to load it again
-	if err := db.First(modelObj).Error; err != nil {
+	if err := db.Take(modelObj).Error; err != nil {
 		// That's weird. we just inserted it.
 		return nil, err
 	}
@@ -251,7 +251,9 @@ func (serv *OwnershipService) GetAllRolesCore(dbChained *gorm.DB, dbClean *gorm.
 		return nil, err
 	}
 
-	roles := make([]models.UserRole, 0)
+	res := []struct {
+		Role models.UserRole
+	}{}
 
 	// ---------------------------
 	// ownershipModelTyp := getOwnershipModelTypeFromTypeString(typeString)
@@ -260,8 +262,13 @@ func (serv *OwnershipService) GetAllRolesCore(dbChained *gorm.DB, dbClean *gorm.
 	// The difference between this method and the find is that it's missing the
 	// WHERE "model"."deleted_at" IS NULL, so we need to add it
 	if err = dbChained.Where(fmt.Sprintf("\"%s\".\"deleted_at\" IS NULL", rtable)).
-		Select(fmt.Sprintf("\"%s\".\"role\"", joinTableName)).Scan(&roles).Error; err != nil {
+		Select(fmt.Sprintf("\"%s\".\"role\"", joinTableName)).Scan(&res).Error; err != nil {
 		return nil, err
+	}
+
+	roles := make([]models.UserRole, len(res))
+	for i, r := range res {
+		roles[i] = r.Role
 	}
 
 	return roles, nil

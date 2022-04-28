@@ -13,12 +13,12 @@ import (
 	"time"
 
 	"github.com/jinzhu/gorm"
+	"github.com/t2wu/betterrest/controller"
 	"github.com/t2wu/betterrest/datamapper"
-	"github.com/t2wu/betterrest/db"
 	"github.com/t2wu/betterrest/libs/settings"
 	"github.com/t2wu/betterrest/libs/urlparam"
-	"github.com/t2wu/betterrest/libs/utils/transact"
 	"github.com/t2wu/betterrest/libs/webrender"
+	"github.com/t2wu/betterrest/lifecycle"
 	"github.com/t2wu/betterrest/models"
 	"github.com/t2wu/betterrest/models/tools"
 
@@ -27,8 +27,16 @@ import (
 )
 
 // ------------------------------------------------------
-func LogTransID(tx *gorm.DB, method, url, cardinality string) {
+type TransIDLogger struct {
+}
+
+func (t *TransIDLogger) Log(tx *gorm.DB, method, url, cardinality string) {
 	if settings.Log {
+		if tx == nil {
+			log.Println(fmt.Sprintf("[BetterREST]: %s %s (%s), transact: n/a", method, url, cardinality))
+			return
+		}
+
 		res := struct {
 			TxidCurrent int
 		}{}
@@ -162,33 +170,77 @@ func modelObjsToJSON(typeString string, modelObjs []models.IModel, roles []model
 	return content, nil
 }
 
-func RenderModel(c *gin.Context, modelObj models.IModel, hpdata *models.HookPointData, op models.CRUPDOp) {
-	if mrender, ok := modelObj.(models.IHasRenderer); ok {
-		if mrender.Render(c, hpdata, op) {
-			return
+func RenderModelSlice(c *gin.Context, total *int, data *controller.Data, info *controller.EndPointInfo) {
+	if models.ModelRegistry[data.TypeString].Controller != nil {
+		if ctrl := models.ModelRegistry[data.TypeString].Controller.(controller.IHasRenderer); ctrl != nil {
+			if ctrl.Render(c, data, info) { // custom render if true
+				return
+			}
 		}
 	}
 
-	RenderJSONForModel(c, modelObj, hpdata)
+	// no custom rendering
+	jsonString, err := modelObjsToJSON(data.TypeString, data.Ms, data.Roles, data.Who)
+	if err != nil {
+		log.Println("Error in RenderModelSlice:", err)
+		render.Render(c.Writer, c.Request, webrender.NewErrGenJSON(err))
+		return
+	}
+
+	var content string
+	if total != nil {
+		content = fmt.Sprintf(`{ "code": 0, "total": %d, "content": %s }`, *total, jsonString)
+	} else {
+		content = fmt.Sprintf(`{ "code": 0, "content": %s }`, jsonString)
+	}
+
+	bytes := []byte(content)
+	c.Writer.Header().Set("Content-Type", "application/json; charset=utf-8")
+	c.Writer.Header().Set("Cache-Control", "no-store")
+	c.Writer.Header().Set("Content-Length", strconv.Itoa(len(bytes)))
+	c.Writer.Write(bytes)
+
+	// If using the following method, is byte getting sent?
+	// content := gin.H{"code": 0, "total": *total, "content": jsonString}
+	// if total != nil {
+	// 	content["total"] = *total
+	// }
+
+	// c.Header("Cache-Control", "no-store")
+	// c.Header("Content-Length", strconv.Itoa(len(bytes)))
+	// c.JSON(http.StatusOK, content)
 }
 
-func RenderJSONForModel(c *gin.Context, modelObj models.IModel, hpdata *models.HookPointData) {
+func RenderModel(c *gin.Context, total *int, data *controller.Data, info *controller.EndPointInfo) {
+	// Any custom rendering?
+	if models.ModelRegistry[data.TypeString].Controller != nil {
+		if ctrl := models.ModelRegistry[data.TypeString].Controller.(controller.IHasRenderer); ctrl != nil {
+			if ctrl.Render(c, data, info) { // custom render if true
+				return
+			}
+		}
+	}
+
+	RenderJSONForModel(c, data.Ms[0], data)
+}
+
+func RenderJSONForModel(c *gin.Context, modelObj models.IModel, data *controller.Data) {
 	// render.JSON(w, r, modelObj) // cannot use this since no picking the field we need
-	jsonBytes, err := tools.ToJSON(hpdata.TypeString, modelObj, *hpdata.Role, hpdata.Who)
+	jsonBytes, err := tools.ToJSON(data.TypeString, modelObj, data.Roles[0], data.Who)
 	if err != nil {
 		log.Println("Error in RenderModel:", err)
 		render.Render(c.Writer, c.Request, webrender.NewErrGenJSON(err))
 		return
 	}
 
-	content := fmt.Sprintf("{ \"code\": 0, \"content\": %s }", string(jsonBytes))
+	content := fmt.Sprintf(`{"code": 0, "content": %s }`, string(jsonBytes))
 
 	c.Writer.Header().Set("Content-Type", "application/json; charset=utf-8")
 	c.Writer.Header().Set("Cache-Control", "no-store")
 	c.Writer.Write([]byte(content))
 }
 
-func RenderModelSlice(c *gin.Context, modelObjs []models.IModel, total *int, bhpdata *models.BatchHookPointData, op models.CRUPDOp) {
+func RenderModelSliceOri(c *gin.Context, modelObjs []models.IModel, total *int, bhpdata *models.BatchHookPointData, op models.CRUPDOp) {
 	// BatchRenderer
 	if renderer := models.ModelRegistry[bhpdata.TypeString].BatchRenderer; renderer != nil {
 		if renderer(c, modelObjs, bhpdata, op) {
@@ -205,9 +257,9 @@ func RenderModelSlice(c *gin.Context, modelObjs []models.IModel, total *int, bhp
 
 	var content string
 	if total != nil {
-		content = fmt.Sprintf("{ \"code\": 0, \"total\": %d, \"content\": %s }", *total, jsonString)
+		content = fmt.Sprintf("{\"code\": 0, \"total\": %d, \"content\": %s}", *total, jsonString)
 	} else {
-		content = fmt.Sprintf("{ \"code\": 0, \"content\": %s }", jsonString)
+		content = fmt.Sprintf("{\"code\": 0, \"content\": %s}", jsonString)
 	}
 
 	data := []byte(content)
@@ -215,6 +267,32 @@ func RenderModelSlice(c *gin.Context, modelObjs []models.IModel, total *int, bhp
 	c.Writer.Header().Set("Cache-Control", "no-store")
 	c.Writer.Header().Set("Content-Length", strconv.Itoa(len(data)))
 	c.Writer.Write(data)
+}
+
+func RenderModelOri(c *gin.Context, modelObj models.IModel, hpdata *models.HookPointData, op models.CRUPDOp) {
+	if mrender, ok := modelObj.(models.IHasRenderer); ok {
+		if mrender.Render(c, hpdata, op) {
+			return
+		}
+	}
+
+	RenderJSONForModelOri(c, modelObj, hpdata)
+}
+
+func RenderJSONForModelOri(c *gin.Context, modelObj models.IModel, hpdata *models.HookPointData) {
+	// render.JSON(w, r, modelObj) // cannot use this since no picking the field we need
+	jsonBytes, err := tools.ToJSON(hpdata.TypeString, modelObj, *hpdata.Role, hpdata.Who)
+	if err != nil {
+		log.Println("Error in RenderModel:", err)
+		render.Render(c.Writer, c.Request, webrender.NewErrGenJSON(err))
+		return
+	}
+
+	content := fmt.Sprintf("{ \"code\": 0, \"content\": %s }", string(jsonBytes))
+
+	c.Writer.Header().Set("Content-Type", "application/json; charset=utf-8")
+	c.Writer.Header().Set("Cache-Control", "no-store")
+	c.Writer.Write([]byte(content))
 }
 
 // ---------------------------------------------
@@ -254,80 +332,93 @@ func GetOptionByParsingURL(r *http.Request) (map[urlparam.Param]interface{}, err
 	return options, nil
 }
 
+func w(handler func(c *gin.Context)) func(c *gin.Context) {
+	return func(c *gin.Context) {
+		defer func() {
+			if r := recover(); r != nil {
+				debug.PrintStack()
+				render.Render(c.Writer, c.Request, webrender.NewErrInternalServerError(nil))
+				fmt.Println("Panic in webhandler", r)
+			}
+		}()
+
+		handler(c)
+	}
+}
+
+func batchRenderHelper(c *gin.Context, typeString string, data *controller.Data, info *controller.EndPointInfo, no *int) {
+	// Does old renderer exists?
+	if renderer := models.ModelRegistry[typeString].BatchRenderer; renderer != nil {
+		// Re-create it again to remain backward compatible
+		oldBatchCargo := models.BatchHookCargo{Payload: data.Cargo.Payload}
+		bhpData := models.BatchHookPointData{Ms: data.Ms, DB: nil, Who: data.Who,
+			TypeString: data.TypeString, Roles: data.Roles, URLParams: data.URLParams, Cargo: &oldBatchCargo}
+
+		var op models.CRUPDOp
+		switch info.Op {
+		case controller.RESTOpRead:
+			op = models.CRUPDOpRead
+		case controller.RESTOpCreate:
+			op = models.CRUPDOpCreate
+		case controller.RESTOpUpdate:
+			op = models.CRUPDOpUpdate
+		case controller.RESTOpPatch:
+			op = models.CRUPDOpPatch
+		case controller.RESTOpDelete:
+			op = models.CRUPDOpDelete
+		}
+
+		RenderModelSliceOri(c, data.Ms, no, &bhpData, op)
+		return
+	}
+
+	// Use the new renderer (renderer doesn't have to exist, but call using the new RenderModelSlice)
+	RenderModelSlice(c, no, data, info)
+}
+
+func singleRenderHelper(c *gin.Context, typeString string, data *controller.Data, info *controller.EndPointInfo) {
+	// Does old renderer exists?
+	if renderer := models.ModelRegistry[typeString].BatchRenderer; renderer != nil {
+		// Re-create it again to remain backward compatible
+		oldBatchCargo := models.ModelCargo{Payload: data.Cargo.Payload}
+		hpdata := models.HookPointData{DB: nil, Who: data.Who,
+			TypeString: data.TypeString, Role: &data.Roles[0], URLParams: data.URLParams, Cargo: &oldBatchCargo}
+
+		var op models.CRUPDOp
+		switch info.Op {
+		case controller.RESTOpRead:
+			op = models.CRUPDOpRead
+		case controller.RESTOpCreate:
+			op = models.CRUPDOpCreate
+		case controller.RESTOpUpdate:
+			op = models.CRUPDOpUpdate
+		case controller.RESTOpPatch:
+			op = models.CRUPDOpPatch
+		case controller.RESTOpDelete:
+			op = models.CRUPDOpDelete
+		}
+
+		RenderModelOri(c, data.Ms[0], &hpdata, op)
+		return
+	}
+
+	// Use the new renderer (renderer doesn't have to exist, but call using the new RenderModelSlice)
+	RenderModel(c, nil, data, info)
+}
+
 // ---------------------------------------------
 // reflection stuff
 // https://stackoverflow.com/questions/7850140/how-do-you-create-a-new-instance-of-a-struct-from-its-type-at-run-time-in-go
 // https://stackoverflow.com/questions/23030884/is-there-a-way-to-create-an-instance-of-a-struct-from-a-string
 
-// GetAllHandler returns a Gin handler which fetch multiple records of a resource
-func GetAllHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin.Context) {
-	return func(c *gin.Context) {
-		w, r := c.Writer, c.Request
-
-		defer func() {
-			if r := recover(); r != nil {
-				debug.PrintStack()
-				render.Render(w, c.Request, webrender.NewErrInternalServerError(nil))
-				fmt.Println("Panic in GetAllHandler", r)
-			}
-		}()
-
-		var err error
-
-		options := make(map[urlparam.Param]interface{})
-		if options, err = GetOptionByParsingURL(r); err != nil {
-			render.Render(w, r, webrender.NewErrQueryParameter(err))
-			return
-		}
-
-		var modelObjs []models.IModel
-		var roles []models.UserRole
-		var no *int
-
-		if settings.Log {
-			log.Println(fmt.Sprintf("[BetterREST]: %s %s (n), transact: n/a", c.Request.Method, c.Request.URL.String()))
-		}
-
-		who := WhoFromContext(r)
-		cargo := models.BatchHookCargo{}
-		modelObjs, roles, no, err = mapper.ReadMany(db.Shared(), who, typeString, options, &cargo)
-
-		if err != nil {
-			render.Render(w, r, webrender.NewErrInternalServerError(err))
-		} else {
-			bhpData := models.BatchHookPointData{Ms: modelObjs, DB: nil, Who: who,
-				TypeString: typeString, Roles: roles, URLParams: options, Cargo: &cargo}
-
-			// the batch afterTransact hookpoint
-			if afterTransact := models.ModelRegistry[typeString].AfterTransact; afterTransact != nil {
-				afterTransact(bhpData, models.CRUPDOpRead)
-			}
-
-			RenderModelSlice(c, modelObjs, no, &bhpData, models.CRUPDOpRead)
-		}
-	}
-}
-
 // CreateHandler creates a resource
+
 func CreateHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin.Context) {
 	return func(c *gin.Context) {
 		w, r := c.Writer, c.Request
 
-		defer func() {
-			if r := recover(); r != nil {
-				debug.PrintStack()
-				render.Render(w, c.Request, webrender.NewErrInternalServerError(nil))
-				fmt.Println("Panic in CreateHandler", r)
-			}
-		}()
-
-		options, err := GetOptionByParsingURL(r)
-		if err != nil {
-			render.Render(w, r, webrender.NewErrQueryParameter(err))
-			return
-		}
-
 		who := WhoFromContext(r)
+		options := OptionFromContext(r)
 
 		modelObjs, isBatch, httperr := ModelOrModelsFromJSONBody(r, typeString, who)
 		if httperr != nil {
@@ -335,64 +426,46 @@ func CreateHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin
 			return
 		}
 
-		var modelObj models.IModel
-
 		if *isBatch {
-			cargo := models.BatchHookCargo{}
-
-			err := transact.Transact(db.Shared(), func(tx *gorm.DB) error {
-				LogTransID(tx, c.Request.Method, c.Request.URL.String(), "n")
-
-				var err2 error
-				if modelObjs, err2 = mapper.CreateMany(tx, who, typeString, modelObjs, options, &cargo); err2 != nil {
-					log.Println("Error in CreateMany:", typeString, err2)
-					return err2
-				}
-				return nil
-			}, "CreateHandler batch")
-
-			if err != nil {
-				render.Render(w, c.Request, webrender.NewErrCreate(err))
-			} else {
-				roles := make([]models.UserRole, len(modelObjs))
-				// admin is 0 so it's ok
-				for i := 0; i < len(modelObjs); i++ {
-					roles[i] = models.UserRoleAdmin
-				}
-
-				bhpData := models.BatchHookPointData{Ms: modelObjs, DB: nil, Who: who,
-					TypeString: typeString, Roles: roles, URLParams: options, Cargo: &cargo}
-				// the batch afterTransact hookpoint
-				if afterTransact := models.ModelRegistry[typeString].AfterTransact; afterTransact != nil {
-					afterTransact(bhpData, models.CRUPDOpCreate)
-				}
-				RenderModelSlice(c, modelObjs, nil, &bhpData, models.CRUPDOpCreate)
+			data, info, renderer := lifecycle.CreateMany(mapper, who, typeString, modelObjs, options, &TransIDLogger{})
+			if renderer != nil {
+				render.Render(w, c.Request, renderer)
+				return
 			}
+
+			// Render
+			batchRenderHelper(c, typeString, data, info, nil)
 		} else {
-			cargo := models.ModelCargo{}
-			var err2 error
-			err := transact.Transact(db.Shared(), func(tx *gorm.DB) error {
-				LogTransID(tx, c.Request.Method, c.Request.URL.String(), "1")
-
-				if modelObj, err2 = mapper.CreateOne(tx, who, typeString, modelObjs[0], options, &cargo); err2 != nil {
-					log.Println("Error in CreateOne:", typeString, err2)
-					return err2
-				}
-				return nil
-			}, "CreateHandler single")
-
-			if err != nil {
-				render.Render(w, c.Request, webrender.NewErrCreate(err))
-			} else {
-				role := models.UserRoleAdmin
-				hpdata := models.HookPointData{DB: nil, Who: who, TypeString: typeString,
-					URLParams: options, Role: &role, Cargo: &cargo}
-				if v, ok := modelObj.(models.IAfterTransact); ok {
-					v.AfterTransact(hpdata, models.CRUPDOpCreate)
-				}
-				RenderModel(c, modelObj, &hpdata, models.CRUPDOpCreate)
+			data, info, renderer := lifecycle.CreateOne(mapper, who, typeString, modelObjs[0], options, &TransIDLogger{})
+			if renderer != nil {
+				render.Render(w, c.Request, renderer)
+				return
 			}
+
+			singleRenderHelper(c, typeString, data, info)
 		}
+	}
+}
+
+// ReadManyHandler returns a Gin handler which fetch multiple records of a resource
+func ReadManyHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin.Context) {
+	return func(c *gin.Context) {
+		w, r := c.Writer, c.Request
+
+		if settings.Log {
+			log.Println(fmt.Sprintf("[BetterREST]: %s %s (n), transact: n/a", c.Request.Method, c.Request.URL.String()))
+		}
+
+		who := WhoFromContext(r)
+		options := OptionFromContext(r)
+
+		data, info, no, renderer := lifecycle.ReadMany(mapper, who, typeString, options, &TransIDLogger{})
+		if renderer != nil {
+			render.Render(w, r, renderer)
+			return
+		}
+
+		batchRenderHelper(c, typeString, data, info, no)
 	}
 }
 
@@ -402,50 +475,48 @@ func ReadOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *gi
 	return func(c *gin.Context) {
 		w, r := c.Writer, c.Request
 
-		defer func() {
-			if r := recover(); r != nil {
-				debug.PrintStack()
-				render.Render(w, c.Request, webrender.NewErrInternalServerError(nil))
-				fmt.Println("Panic in ReadOneHandler", r)
-			}
-		}()
-
 		id, httperr := IDFromURLQueryString(c)
 		if httperr != nil {
 			render.Render(w, r, httperr)
 			return
 		}
 
-		var err error
-		options, err := GetOptionByParsingURL(r)
-		if err != nil {
-			render.Render(w, r, webrender.NewErrQueryParameter(err))
-			return
-		}
-
-		var modelObj models.IModel
-		var role models.UserRole
-
 		if settings.Log {
 			log.Println(fmt.Sprintf("[BetterREST]: %s %s (1), transact: n/a", c.Request.Method, c.Request.URL.String()))
 		}
 
-		who := WhoFromContext(r)
-		cargo := models.ModelCargo{}
-		modelObj, role, err = mapper.ReadOne(db.Shared(), who, typeString, id, options, &cargo)
-
-		if err != nil && gorm.IsRecordNotFoundError(err) {
-			render.Render(w, r, webrender.NewErrNotFound(err))
-		} else if err != nil {
-			render.Render(w, r, webrender.NewErrInternalServerError(err))
-		} else {
-			hpdata := models.HookPointData{DB: nil, Who: who, TypeString: typeString, Cargo: &cargo,
-				URLParams: options, Role: &role}
-			if v, ok := modelObj.(models.IAfterTransact); ok {
-				v.AfterTransact(hpdata, models.CRUPDOpRead)
-			}
-			RenderModel(c, modelObj, &hpdata, models.CRUPDOpRead)
+		data, info, renderer := lifecycle.ReadOne(mapper, WhoFromContext(r), typeString, id, OptionFromContext(r), &TransIDLogger{})
+		if renderer != nil {
+			render.Render(w, c.Request, renderer)
+			return
 		}
+
+		singleRenderHelper(c, typeString, data, info)
+	}
+}
+
+// UpdateManyHandler returns a Gin handler which updates many records
+func UpdateManyHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin.Context) {
+	return func(c *gin.Context) {
+		w, r := c.Writer, c.Request
+
+		who := WhoFromContext(r)
+		options := OptionFromContext(r)
+
+		modelObjs, httperr := ModelsFromJSONBody(r, typeString, who)
+		if httperr != nil {
+			log.Println("Error in ModelsFromJSONBody:", typeString, httperr)
+			render.Render(w, r, httperr)
+			return
+		}
+
+		data, info, renderer := lifecycle.UpdateMany(mapper, who, typeString, modelObjs, options, &TransIDLogger{})
+		if renderer != nil {
+			render.Render(w, r, renderer)
+			return
+		}
+
+		batchRenderHelper(c, typeString, data, info, nil)
 	}
 }
 
@@ -454,28 +525,13 @@ func UpdateOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 	return func(c *gin.Context) {
 		w, r := c.Writer, c.Request
 
-		defer func() {
-			if r := recover(); r != nil {
-				debug.PrintStack()
-				render.Render(w, c.Request, webrender.NewErrInternalServerError(nil))
-				fmt.Println("Panic in UpdateOneHandler", r)
-			}
-		}()
-
 		id, httperr := IDFromURLQueryString(c)
 		if httperr != nil {
 			render.Render(w, r, httperr)
 			return
 		}
 
-		options, err := GetOptionByParsingURL(r)
-		if err != nil {
-			render.Render(w, r, webrender.NewErrQueryParameter(err))
-			return
-		}
-
 		who := WhoFromContext(r)
-
 		modelObj, httperr := ModelFromJSONBody(r, typeString, who)
 		if httperr != nil {
 			render.Render(w, r, httperr)
@@ -489,91 +545,34 @@ func UpdateOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 			return
 		}
 
-		cargo := models.ModelCargo{}
-		var modelObj2 models.IModel
-		err = transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
-			LogTransID(tx, c.Request.Method, c.Request.URL.String(), "1")
-
-			if modelObj2, err = mapper.UpdateOne(tx, who, typeString, modelObj, id, options, &cargo); err != nil {
-				log.Println("Error in UpdateOneHandler ErrUpdate:", typeString, err)
-				return err
-			}
-			return nil
-		}, "UpdateOneHandler")
-
-		if err != nil {
-			render.Render(w, r, webrender.NewErrUpdate(err))
-		} else {
-			role := models.UserRoleAdmin
-			hpdata := models.HookPointData{DB: nil, Who: who, TypeString: typeString,
-				URLParams: options, Role: &role, Cargo: &cargo}
-			if v, ok := modelObj2.(models.IAfterTransact); ok {
-				v.AfterTransact(hpdata, models.CRUPDOpUpdate)
-			}
-			RenderModel(c, modelObj2, &hpdata, models.CRUPDOpUpdate)
-		}
-	}
-}
-
-// UpdateManyHandler returns a Gin handler which updates many records
-func UpdateManyHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin.Context) {
-	return func(c *gin.Context) {
-		w, r := c.Writer, c.Request
-
-		defer func() {
-			if r := recover(); r != nil {
-				debug.PrintStack()
-				render.Render(w, c.Request, webrender.NewErrInternalServerError(nil))
-				fmt.Println("Panic in UpdateManyHandler", r)
-			}
-		}()
-
-		options, err := GetOptionByParsingURL(r)
-		if err != nil {
-			render.Render(w, r, webrender.NewErrQueryParameter(err))
+		data, info, renderer := lifecycle.UpdateOne(mapper, who, typeString, modelObj, id, OptionFromContext(r), &TransIDLogger{})
+		if renderer != nil {
+			render.Render(w, r, renderer)
 			return
 		}
 
-		who := WhoFromContext(r)
+		singleRenderHelper(c, typeString, data, info)
+	}
+}
 
-		modelObjs, httperr := ModelsFromJSONBody(r, typeString, who)
+// PatchManyHandler returns a Gin handler which patch (partial update) many records
+func PatchManyHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin.Context) {
+	return func(c *gin.Context) {
+		w, r := c.Writer, c.Request
+
+		jsonIDPatches, httperr := JSONPatchesFromJSONBody(r)
 		if httperr != nil {
-			log.Println("Error in ModelsFromJSONBody:", typeString, httperr)
+			log.Println("Error in JSONPatchesFromJSONBody:", typeString, httperr)
 			render.Render(w, r, httperr)
 			return
 		}
 
-		cargo := models.BatchHookCargo{}
-		var modelObjs2 []models.IModel
-		err = transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
-			LogTransID(tx, c.Request.Method, c.Request.URL.String(), "n")
-
-			if modelObjs2, err = mapper.UpdateMany(tx, who, typeString, modelObjs, options, &cargo); err != nil {
-				log.Println("Error in UpdateManyHandler:", typeString, err)
-				return err
-			}
-
-			return nil
-		}, "UpdateManyHandler")
-
-		if err != nil {
-			render.Render(w, r, webrender.NewErrUpdate(err))
-		} else {
-			roles := make([]models.UserRole, len(modelObjs2))
-			for i := 0; i < len(roles); i++ {
-				roles[i] = models.UserRoleAdmin
-			}
-
-			bhpData := models.BatchHookPointData{Ms: modelObjs, DB: nil, Who: who,
-				TypeString: typeString, Roles: roles, URLParams: options, Cargo: &cargo}
-
-			// the batch afterTransact hookpoint
-			if afterTransact := models.ModelRegistry[typeString].AfterTransact; afterTransact != nil {
-				afterTransact(bhpData, models.CRUPDOpUpdate)
-			}
-
-			RenderModelSlice(c, modelObjs2, nil, &bhpData, models.CRUPDOpUpdate)
+		data, info, renderer := lifecycle.PatchMany(mapper, WhoFromContext(r), typeString, jsonIDPatches, OptionFromContext(r), &TransIDLogger{})
+		if renderer != nil {
+			render.Render(w, r, renderer)
+			return
 		}
+		batchRenderHelper(c, typeString, data, info, nil)
 	}
 }
 
@@ -581,14 +580,6 @@ func UpdateManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 func PatchOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin.Context) {
 	return func(c *gin.Context) {
 		w, r := c.Writer, c.Request
-
-		defer func() {
-			if r := recover(); r != nil {
-				debug.PrintStack()
-				render.Render(w, c.Request, webrender.NewErrInternalServerError(nil))
-				fmt.Println("Panic in PatchOneHandler", r)
-			}
-		}()
 
 		id, httperr := IDFromURLQueryString(c)
 		if httperr != nil {
@@ -603,152 +594,13 @@ func PatchOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *g
 			return
 		}
 
-		options, err := GetOptionByParsingURL(r)
-		if err != nil {
-			render.Render(w, r, webrender.NewErrQueryParameter(err))
+		data, info, renderer := lifecycle.PatchOne(mapper, WhoFromContext(r), typeString, jsonPatch, id, OptionFromContext(r), &TransIDLogger{})
+		if renderer != nil {
+			render.Render(w, r, renderer)
 			return
 		}
 
-		who := WhoFromContext(r)
-
-		cargo := models.ModelCargo{}
-		var modelObj models.IModel
-		err = transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
-			LogTransID(tx, c.Request.Method, c.Request.URL.String(), "1")
-
-			if modelObj, err = mapper.PatchOne(tx, who, typeString, jsonPatch, id, options, &cargo); err != nil {
-				log.Println("Error in PatchOneHandler:", typeString, err)
-				return err
-			}
-
-			return nil
-		}, "PatchOneHandler")
-
-		if err != nil {
-			render.Render(w, r, webrender.NewErrPatch(err))
-		} else {
-			role := models.UserRoleAdmin
-			hpdata := models.HookPointData{DB: nil, Who: who, TypeString: typeString,
-				URLParams: options, Role: &role, Cargo: &cargo}
-			if v, ok := modelObj.(models.IAfterTransact); ok {
-				v.AfterTransact(hpdata, models.CRUPDOpPatch)
-			}
-			RenderModel(c, modelObj, &hpdata, models.CRUPDOpPatch)
-		}
-	}
-}
-
-// PatchManyHandler returns a Gin handler which patch (partial update) many records
-func PatchManyHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin.Context) {
-	return func(c *gin.Context) {
-		w, r := c.Writer, c.Request
-
-		defer func() {
-			if r := recover(); r != nil {
-				debug.PrintStack()
-				render.Render(w, c.Request, webrender.NewErrInternalServerError(nil))
-				fmt.Println("Panic in PatchManyHandler", r)
-			}
-		}()
-
-		options, err := GetOptionByParsingURL(r)
-		if err != nil {
-			render.Render(w, r, webrender.NewErrQueryParameter(err))
-			return
-		}
-
-		who := WhoFromContext(r)
-
-		jsonIDPatches, httperr := JSONPatchesFromJSONBody(r)
-		if httperr != nil {
-			log.Println("Error in JSONPatchesFromJSONBody:", typeString, httperr)
-			render.Render(w, r, httperr)
-			return
-		}
-
-		cargo := models.BatchHookCargo{}
-		var modelObjs []models.IModel
-		err = transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
-			LogTransID(tx, c.Request.Method, c.Request.URL.String(), "n")
-
-			if modelObjs, err = mapper.PatchMany(tx, who, typeString, jsonIDPatches, options, &cargo); err != nil {
-				log.Println("Error in PatchManyHandler:", typeString, err)
-				return err
-			}
-			return nil
-		}, "PatchManyHandler")
-
-		if err != nil {
-			render.Render(w, r, webrender.NewErrUpdate(err))
-		} else {
-			roles := make([]models.UserRole, len(modelObjs))
-			for i := 0; i < len(roles); i++ {
-				roles[i] = models.UserRoleAdmin
-			}
-
-			bhpData := models.BatchHookPointData{Ms: modelObjs, DB: nil, Who: who,
-				TypeString: typeString, Roles: roles, URLParams: options, Cargo: &cargo}
-
-			// the batch afterTransact hookpoint
-			if afterTransact := models.ModelRegistry[typeString].AfterTransact; afterTransact != nil {
-				afterTransact(bhpData, models.CRUPDOpPatch)
-			}
-
-			RenderModelSlice(c, modelObjs, nil, &bhpData, models.CRUPDOpPatch)
-		}
-	}
-}
-
-// DeleteOneHandler returns a Gin handler which delete one record
-func DeleteOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin.Context) {
-	return func(c *gin.Context) {
-		w, r := c.Writer, c.Request
-
-		defer func() {
-			if r := recover(); r != nil {
-				debug.PrintStack()
-				render.Render(w, c.Request, webrender.NewErrInternalServerError(nil))
-				fmt.Println("Panic in DeleteOneHandler", r)
-			}
-		}()
-
-		options, err := GetOptionByParsingURL(r)
-		if err != nil {
-			render.Render(w, r, webrender.NewErrQueryParameter(err))
-			return
-		}
-
-		id, httperr := IDFromURLQueryString(c)
-		if httperr != nil {
-			render.Render(w, r, httperr)
-			return
-		}
-
-		who := WhoFromContext(r)
-
-		cargo := models.ModelCargo{}
-		var modelObj models.IModel
-		err = transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
-			LogTransID(tx, c.Request.Method, c.Request.URL.String(), "1")
-
-			if modelObj, err = mapper.DeleteOne(tx, who, typeString, id, options, &cargo); err != nil {
-				log.Printf("Error in DeleteOneHandler: %s %+v\n", typeString, err)
-				return err
-			}
-			return
-		}, "DeleteOneHandler")
-
-		if err != nil {
-			render.Render(w, r, webrender.NewErrDelete(err))
-		} else {
-			role := models.UserRoleAdmin
-			hpdata := models.HookPointData{DB: nil, Who: who, TypeString: typeString,
-				URLParams: options, Role: &role, Cargo: &cargo}
-			if v, ok := modelObj.(models.IAfterTransact); ok {
-				v.AfterTransact(hpdata, models.CRUPDOpDelete)
-			}
-			RenderModel(c, modelObj, &hpdata, models.CRUPDOpDelete)
-		}
+		singleRenderHelper(c, typeString, data, info)
 	}
 }
 
@@ -757,16 +609,7 @@ func DeleteManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 	return func(c *gin.Context) {
 		w, r := c.Writer, c.Request
 
-		defer func() {
-			if r := recover(); r != nil {
-				debug.PrintStack()
-				render.Render(w, c.Request, webrender.NewErrInternalServerError(nil))
-				fmt.Println("Panic in DeleteManyHandler", r)
-			}
-		}()
-
 		who := WhoFromContext(r)
-
 		modelObjs, httperr := ModelsFromJSONBody(r, typeString, who)
 		if httperr != nil {
 			log.Println("Error in ModelsFromJSONBody:", typeString, httperr)
@@ -774,34 +617,31 @@ func DeleteManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 			return
 		}
 
-		cargo := models.BatchHookCargo{}
-		err := transact.Transact(db.Shared(), func(tx *gorm.DB) (err error) {
-			LogTransID(tx, c.Request.Method, c.Request.URL.String(), "n")
-
-			if modelObjs, err = mapper.DeleteMany(tx, who, typeString, modelObjs, nil, &cargo); err != nil {
-				log.Println("Error in DeleteOneHandler ErrDelete:", typeString, err)
-				return err
-			}
-			return nil
-		}, "DeleteManyHandler")
-
-		if err != nil {
-			render.Render(w, r, webrender.NewErrDelete(err))
-		} else {
-			roles := make([]models.UserRole, len(modelObjs))
-			for i := 0; i < len(roles); i++ {
-				roles[i] = models.UserRoleAdmin
-			}
-
-			bhpData := models.BatchHookPointData{Ms: modelObjs, DB: nil, Who: who,
-				TypeString: typeString, Roles: roles, URLParams: nil, Cargo: &cargo}
-
-			// the batch afterTransact hookpoint
-			if afterTransact := models.ModelRegistry[typeString].AfterTransact; afterTransact != nil {
-				afterTransact(bhpData, models.CRUPDOpDelete)
-			}
-
-			RenderModelSlice(c, modelObjs, nil, &bhpData, models.CRUPDOpDelete)
+		data, info, renderer := lifecycle.DeleteMany(mapper, who, typeString, modelObjs, OptionFromContext(r), &TransIDLogger{})
+		if renderer != nil {
+			render.Render(w, r, renderer)
+			return
 		}
+		batchRenderHelper(c, typeString, data, info, nil)
+	}
+}
+
+// DeleteOneHandler returns a Gin handler which delete one record
+func DeleteOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin.Context) {
+	return func(c *gin.Context) {
+		w, r := c.Writer, c.Request
+
+		id, httperr := IDFromURLQueryString(c)
+		if httperr != nil {
+			render.Render(w, r, httperr)
+			return
+		}
+
+		data, info, renderer := lifecycle.DeleteOne(mapper, WhoFromContext(r), typeString, id, OptionFromContext(r), &TransIDLogger{})
+		if renderer != nil {
+			render.Render(w, r, renderer)
+			return
+		}
+		singleRenderHelper(c, typeString, data, info)
 	}
 }

@@ -9,10 +9,12 @@ import (
 	"time"
 
 	"github.com/go-playground/validator/v10"
+	"github.com/t2wu/betterrest/controller"
 	"github.com/t2wu/betterrest/datamapper/gormfixes"
 	"github.com/t2wu/betterrest/datamapper/service"
 	"github.com/t2wu/betterrest/libs/datatypes"
 	"github.com/t2wu/betterrest/libs/urlparam"
+	"github.com/t2wu/betterrest/libs/webrender"
 	"github.com/t2wu/betterrest/models"
 	qry "github.com/t2wu/betterrest/query"
 
@@ -28,86 +30,256 @@ type BaseMapper struct {
 	Service service.IService
 }
 
-// CreateOne creates an instance of this model based on json and store it in db
-func (mapper *BaseMapper) CreateOne(db *gorm.DB, who models.UserIDFetchable, typeString string, modelObj models.IModel,
-	options map[urlparam.Param]interface{}, cargo *models.ModelCargo) (models.IModel, error) {
-	modelObj, err := mapper.Service.HookBeforeCreateOne(db, who, typeString, modelObj)
+// CreateMany creates an instance of this model based on json and store it in db
+func (mapper *BaseMapper) CreateMany(db *gorm.DB, who models.UserIDFetchable, typeString string, modelObjs []models.IModel,
+	options map[urlparam.Param]interface{}, cargo *controller.Cargo) ([]models.IModel, *webrender.RetVal) {
+	modelObjs, err := mapper.Service.HookBeforeCreateMany(db, who, typeString, modelObjs)
 	if err != nil {
-		return nil, err
+		return nil, &webrender.RetVal{Error: err}
 	}
 
-	var before, after *string
+	roles := make([]models.UserRole, len(modelObjs))
+	for i := range roles {
+		roles[i] = models.UserRoleAdmin // has to be admin to create
+	}
+
+	oldBefore := models.ModelRegistry[typeString].BeforeCreate
+	oldAfter := models.ModelRegistry[typeString].AfterCreate
+
+	data := controller.Data{Ms: modelObjs, DB: db, Who: who,
+		TypeString: typeString, Roles: roles, URLParams: options, Cargo: cargo}
+	info := controller.EndPointInfo{
+		Op:          controller.RESTOpCreate,
+		Cardinality: controller.APICardinalityMany,
+	}
+
+	j := batchOpJob{
+		serv:         mapper.Service,
+		oldmodelObjs: nil,
+		modelObjs:    modelObjs,
+
+		oldBefore: oldBefore,
+		oldAfter:  oldAfter,
+
+		ctrl: models.ModelRegistry[typeString].Controller,
+		data: &data,
+		info: &info,
+	}
+	return batchOpCore(j, mapper.Service.CreateOneCore)
+}
+
+// CreateOne creates an instance of this model based on json and store it in db
+func (mapper *BaseMapper) CreateOne(db *gorm.DB, who models.UserIDFetchable, typeString string, modelObj models.IModel,
+	options map[urlparam.Param]interface{}, cargo *controller.Cargo) (models.IModel, *webrender.RetVal) {
+	modelObj, err := mapper.Service.HookBeforeCreateOne(db, who, typeString, modelObj)
+	if err != nil {
+		return nil, &webrender.RetVal{Error: err}
+	}
+
+	var beforeFuncName, afterFuncName *string
 	if _, ok := modelObj.(models.IBeforeCreate); ok {
 		b := "BeforeCreateDB"
-		before = &b
+		beforeFuncName = &b
 	}
 	if _, ok := modelObj.(models.IAfterCreate); ok {
 		a := "AfterCreateDB"
-		after = &a
+		afterFuncName = &a
+	}
+
+	data := controller.Data{Ms: []models.IModel{modelObj}, DB: db, Who: who,
+		TypeString: typeString, Roles: []models.UserRole{models.UserRoleAdmin}, URLParams: options, Cargo: cargo}
+	info := controller.EndPointInfo{
+		Op:          controller.RESTOpCreate,
+		Cardinality: controller.APICardinalityOne,
 	}
 
 	j := opJob{
-		serv:       mapper.Service,
-		db:         db,
-		who:        who,
-		typeString: typeString,
+		serv: mapper.Service,
 		// oldModelObj: oldModelObj,
 		modelObj: modelObj,
-		crupdOp:  models.CRUPDOpCreate,
-		cargo:    cargo,
-		options:  options,
+
+		beforeFuncName: beforeFuncName,
+		afterFuncName:  afterFuncName,
+
+		ctrl: models.ModelRegistry[typeString].Controller,
+		data: &data,
+		info: &info,
 	}
-	return opCore(before, after, j, mapper.Service.CreateOneCore)
+	return opCore(j, mapper.Service.CreateOneCore)
 }
 
-// CreateMany creates an instance of this model based on json and store it in db
-func (mapper *BaseMapper) CreateMany(db *gorm.DB, who models.UserIDFetchable, typeString string, modelObjs []models.IModel,
-	options map[urlparam.Param]interface{}, cargo *models.BatchHookCargo) ([]models.IModel, error) {
-	modelObjs, err := mapper.Service.HookBeforeCreateMany(db, who, typeString, modelObjs)
-	if err != nil {
-		return nil, err
+func (mapper *BaseMapper) ReadMany(db *gorm.DB, who models.UserIDFetchable, typeString string,
+	options map[urlparam.Param]interface{}, cargo *controller.Cargo) ([]models.IModel, []models.UserRole, *int, *webrender.RetVal) {
+	dbClean := db
+	db = db.Set("gorm:auto_preload", true)
+
+	offset, limit, cstart, cstop, order, latestn, latestnons, totalcount := urlparam.GetOptions(options)
+	rtable := models.GetTableNameFromTypeString(typeString)
+
+	if cstart != nil && cstop != nil {
+		db = db.Where(rtable+".created_at BETWEEN ? AND ?", time.Unix(int64(*cstart), 0), time.Unix(int64(*cstop), 0))
 	}
 
-	before := models.ModelRegistry[typeString].BeforeCreate
-	after := models.ModelRegistry[typeString].AfterCreate
-	j := batchOpJob{
-		serv:         mapper.Service,
-		db:           db,
-		who:          who,
-		typeString:   typeString,
-		oldmodelObjs: nil,
-		modelObjs:    modelObjs,
-		crupdOp:      models.CRUPDOpCreate,
-		cargo:        cargo,
-		options:      options,
+	var err error
+	var builder *qry.PredicateRelationBuilder
+	if latestn != nil { // query module currently don't handle latestn, use old if so
+		db, err = constructInnerFieldParamQueries(db, typeString, options, latestn, latestnons)
+		if err != nil {
+			return nil, nil, nil, &webrender.RetVal{Error: err}
+		}
+	} else {
+		if urlParams, ok := options[urlparam.ParamOtherQueries].(url.Values); ok && len(urlParams) != 0 {
+			builder, err = createBuilderFromQueryParameters(urlParams, typeString)
+			if err != nil {
+				return nil, nil, nil, &webrender.RetVal{Error: err}
+			}
+		}
 	}
-	return batchOpCore(j, before, after, mapper.Service.CreateOneCore)
+
+	db = constructOrderFieldQueries(db, rtable, order)
+	db, err = mapper.Service.GetAllQueryContructCore(db, who, typeString)
+	if err != nil {
+		return nil, nil, nil, &webrender.RetVal{Error: err}
+	}
+
+	var no *int
+	if totalcount {
+		no = new(int)
+		if builder == nil {
+			// Query for total count, without offset and limit (all)
+			if err := db.Count(no).Error; err != nil {
+				log.Println("count error:", err)
+				return nil, nil, nil, &webrender.RetVal{Error: err}
+			}
+		} else {
+			q := qry.Q(db, builder)
+			if err := q.Count(models.NewFromTypeString(typeString), no).Error(); err != nil {
+				log.Println("count error:", err)
+				return nil, nil, nil, &webrender.RetVal{Error: err}
+			}
+
+			// Fetch it back, so the builder stuff is in there
+			// And resort back to Gorm.
+			// db = q.GetDB()
+		}
+	}
+
+	// chain offset and limit
+	if offset != nil && limit != nil {
+		db = db.Offset(*offset).Limit(*limit)
+	} else if cstart == nil && cstop == nil { // default to 100 maximum unless time is specified
+		db = db.Offset(0).Limit(100)
+	}
+
+	if builder != nil {
+		db, err = qry.Q(db, builder).BuildQuery(models.NewFromTypeString(typeString))
+		if err != nil {
+			return nil, nil, nil, &webrender.RetVal{Error: err}
+		}
+	}
+
+	// Actual quer in the following line
+	outmodels, err := models.NewSliceFromDBByTypeString(typeString, db.Find)
+	if err != nil {
+		return nil, nil, nil, &webrender.RetVal{Error: err}
+	}
+
+	roles, err := mapper.Service.GetAllRolesCore(db, dbClean, who, typeString, outmodels)
+	if err != nil {
+		return nil, nil, nil, &webrender.RetVal{Error: err}
+	}
+
+	// safeguard, Must be coded wrongly
+	if len(outmodels) != len(roles) {
+		return nil, nil, nil, &webrender.RetVal{Error: errors.New("unknown query error")}
+	}
+
+	// make many to many tag works
+	for _, m := range outmodels {
+		err = gormfixes.LoadManyToManyBecauseGormFailsWithID(dbClean, m)
+		if err != nil {
+			return nil, nil, nil, &webrender.RetVal{Error: err}
+		}
+	}
+
+	// use dbClean cuz it's not chained
+	data := controller.Data{Ms: outmodels, DB: dbClean, Who: who,
+		TypeString: typeString, Roles: roles, URLParams: options, Cargo: cargo}
+	info := controller.EndPointInfo{
+		Op:          controller.RESTOpRead,
+		Cardinality: controller.APICardinalityMany,
+	}
+
+	// Begin deprecated
+	if models.ModelRegistry[typeString].Controller == nil {
+		oldGeneric := models.ModelRegistry[data.TypeString].AfterCRUPD
+		oldSpecific := models.ModelRegistry[typeString].AfterRead
+
+		if err := callOldBatch(&data, &info, oldGeneric, oldSpecific); err != nil {
+			return nil, nil, nil, &webrender.RetVal{Error: err}
+		}
+	}
+	// End deprecated
+
+	if models.ModelRegistry[typeString].Controller != nil {
+		if ctrl, ok := models.ModelRegistry[typeString].Controller.(controller.IAfter); ok {
+			if retval := ctrl.After(&data, &info); retval != nil {
+				return nil, nil, nil, retval
+			}
+		}
+	}
+
+	return outmodels, roles, no, nil
 }
 
 // ReadOne get one model object based on its type and its id string
 func (mapper *BaseMapper) ReadOne(db *gorm.DB, who models.UserIDFetchable, typeString string, id *datatypes.UUID,
-	options map[urlparam.Param]interface{}, cargo *models.ModelCargo) (models.IModel, models.UserRole, error) {
+	options map[urlparam.Param]interface{}, cargo *controller.Cargo) (models.IModel, models.UserRole, *webrender.RetVal) {
+
 	// anyone permission can read as long as you are linked on db
 	modelObj, role, err := loadAndCheckErrorBeforeModify(mapper.Service, db, who, typeString, nil, id, []models.UserRole{models.UserRoleAny})
 	if err != nil {
-		return nil, models.UserRoleInvalid, err
+		return nil, models.UserRoleInvalid, &webrender.RetVal{Error: err}
 	}
 
-	// After CRUPD hook
-	if m, ok := modelObj.(models.IAfterCRUPD); ok {
-		hpdata := models.HookPointData{DB: db, Who: who, TypeString: typeString, Cargo: cargo, Role: &role, URLParams: options}
-		m.AfterCRUPDDB(hpdata, models.CRUPDOpRead)
+	if models.ModelRegistry[typeString].Controller == nil {
+		// old one
+		modelCargo := models.ModelCargo{Payload: cargo.Payload}
+		// After CRUPD hook
+		if m, ok := modelObj.(models.IAfterCRUPD); ok {
+			hpdata := models.HookPointData{DB: db, Who: who, TypeString: typeString, Cargo: &modelCargo, Role: &role, URLParams: options}
+			if err := m.AfterCRUPDDB(hpdata, models.CRUPDOpRead); err != nil {
+				return nil, 0, &webrender.RetVal{Error: err}
+			}
+		}
+
+		// AfterRead hook
+		if m, ok := modelObj.(models.IAfterRead); ok {
+			hpdata := models.HookPointData{DB: db, Who: who, TypeString: typeString, Cargo: &modelCargo, Role: &role, URLParams: options}
+			if err := m.AfterReadDB(hpdata); err != nil {
+				return nil, 0, &webrender.RetVal{Error: err}
+			}
+		}
+		cargo.Payload = modelCargo.Payload
+
+		return modelObj, role, nil
 	}
 
-	// AfterRead hook
-	if m, ok := modelObj.(models.IAfterRead); ok {
-		hpdata := models.HookPointData{DB: db, Who: who, TypeString: typeString, Cargo: cargo, Role: &role, URLParams: options}
-		if err := m.AfterReadDB(hpdata); err != nil {
-			return nil, 0, err
+	data := controller.Data{Ms: []models.IModel{modelObj}, DB: db, Who: who,
+		TypeString: typeString, Roles: []models.UserRole{role}, URLParams: options, Cargo: cargo}
+	info := controller.EndPointInfo{
+		Op:          controller.RESTOpRead,
+		Cardinality: controller.APICardinalityOne,
+	}
+
+	var retval *webrender.RetVal
+	if ctrl, ok := models.ModelRegistry[typeString].Controller.(controller.IAfter); ok {
+		if retval = ctrl.After(&data, &info); retval != nil {
+			return nil, role, retval
 		}
 	}
 
-	return modelObj, role, err
+	return modelObj, role, nil
 }
 
 func createBuilderFromQueryParameters(urlParams url.Values, typeString string) (*qry.PredicateRelationBuilder, error) {
@@ -158,216 +330,145 @@ func createBuilderFromQueryParameters(urlParams url.Values, typeString string) (
 	return builder, nil
 }
 
-func (mapper *BaseMapper) ReadMany(db *gorm.DB, who models.UserIDFetchable, typeString string,
-	options map[urlparam.Param]interface{}, cargo *models.BatchHookCargo) ([]models.IModel, []models.UserRole, *int, error) {
-	dbClean := db
-	db = db.Set("gorm:auto_preload", true)
-
-	offset, limit, cstart, cstop, order, latestn, latestnons, totalcount := urlparam.GetOptions(options)
-	rtable := models.GetTableNameFromTypeString(typeString)
-
-	if cstart != nil && cstop != nil {
-		db = db.Where(rtable+".created_at BETWEEN ? AND ?", time.Unix(int64(*cstart), 0), time.Unix(int64(*cstop), 0))
-	}
-
-	var err error
-	var builder *qry.PredicateRelationBuilder
-	if latestn != nil { // query module currently don't handle latestn, use old if so
-		db, err = constructInnerFieldParamQueries(db, typeString, options, latestn, latestnons)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-	} else {
-		if urlParams, ok := options[urlparam.ParamOtherQueries].(url.Values); ok && len(urlParams) != 0 {
-			builder, err = createBuilderFromQueryParameters(urlParams, typeString)
-			if err != nil {
-				return nil, nil, nil, err
-			}
-		}
-	}
-
-	db = constructOrderFieldQueries(db, rtable, order)
-	db, err = mapper.Service.GetAllQueryContructCore(db, who, typeString)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	var no *int
-	if totalcount {
-		no = new(int)
-		if builder == nil {
-			// Query for total count, without offset and limit (all)
-			if err := db.Count(no).Error; err != nil {
-				log.Println("count error:", err)
-				return nil, nil, nil, err
-			}
-		} else {
-			q := qry.Q(db, builder)
-			if err := q.Count(models.NewFromTypeString(typeString), no).Error(); err != nil {
-				log.Println("count error:", err)
-				return nil, nil, nil, err
-			}
-
-			// Fetch it back, so the builder stuff is in there
-			// And resort back to Gorm.
-			// db = q.GetDB()
-		}
-	}
-
-	// chain offset and limit
-	if offset != nil && limit != nil {
-		db = db.Offset(*offset).Limit(*limit)
-	} else if cstart == nil && cstop == nil { // default to 100 maximum unless time is specified
-		db = db.Offset(0).Limit(100)
-	}
-
-	if builder != nil {
-		db, err = qry.Q(db, builder).BuildQuery(models.NewFromTypeString(typeString))
-		if err != nil {
-			return nil, nil, nil, err
-		}
-	}
-
-	// Actual quer in the following line
-	outmodels, err := models.NewSliceFromDBByTypeString(typeString, db.Find)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	roles, err := mapper.Service.GetAllRolesCore(db, dbClean, who, typeString, outmodels)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	// safeguard, Must be coded wrongly
-	if len(outmodels) != len(roles) {
-		return nil, nil, nil, errors.New("unknown query error")
-	}
-
-	// make many to many tag works
-	for _, m := range outmodels {
-		err = gormfixes.LoadManyToManyBecauseGormFailsWithID(dbClean, m)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-	}
-
-	// the AfterCRUPD hookpoint
-	// use dbClean cuz it's not chained
-	if after := models.ModelRegistry[typeString].AfterCRUPD; after != nil {
-		bhpData := models.BatchHookPointData{Ms: outmodels, DB: dbClean, Who: who,
-			TypeString: typeString, Roles: roles, Cargo: cargo, URLParams: options}
-		if err = after(bhpData, models.CRUPDOpRead); err != nil {
-			return nil, nil, nil, err
-		}
-	}
-
-	// AfterRead hookpoint
-	// use dbClean cuz it's not chained
-	if after := models.ModelRegistry[typeString].AfterRead; after != nil {
-		bhpData := models.BatchHookPointData{Ms: outmodels, DB: dbClean, Who: who,
-			TypeString: typeString, Roles: roles, Cargo: cargo, URLParams: options}
-		if err = after(bhpData); err != nil {
-			return nil, nil, nil, err
-		}
-	}
-
-	return outmodels, roles, no, err
-}
-
 // UpdateOne updates model based on this json
 func (mapper *BaseMapper) UpdateOne(db *gorm.DB, who models.UserIDFetchable, typeString string,
-	modelObj models.IModel, id *datatypes.UUID, options map[urlparam.Param]interface{}, cargo *models.ModelCargo) (models.IModel, error) {
+	modelObj models.IModel, id *datatypes.UUID, options map[urlparam.Param]interface{}, cargo *controller.Cargo) (models.IModel, *webrender.RetVal) {
 	oldModelObj, _, err := loadAndCheckErrorBeforeModify(mapper.Service, db, who, typeString, modelObj, id, []models.UserRole{models.UserRoleAdmin})
 	if err != nil {
-		return nil, err
+		log.Println("update one 1 err:", err)
+		return nil, &webrender.RetVal{Error: err}
 	}
 
 	// TODO: Huh? How do we do validation here?!
-	var before, after *string
+	var beforeFuncName, afterFuncName *string
 	if _, ok := modelObj.(models.IBeforeUpdate); ok {
 		b := "BeforeUpdateDB"
-		before = &b
+		beforeFuncName = &b
 	}
 	if _, ok := modelObj.(models.IAfterUpdate); ok {
 		a := "AfterUpdateDB"
-		after = &a
+		afterFuncName = &a
+	}
+
+	data := controller.Data{Ms: []models.IModel{modelObj}, DB: db, Who: who,
+		TypeString: typeString, Roles: []models.UserRole{models.UserRoleAdmin}, URLParams: options, Cargo: cargo}
+	info := controller.EndPointInfo{
+		Op:          controller.RESTOpUpdate,
+		Cardinality: controller.APICardinalityOne,
 	}
 
 	j := opJob{
-		serv:        mapper.Service,
-		db:          db,
-		who:         who,
-		typeString:  typeString,
+		serv: mapper.Service,
+		// db:          db,
+		// who:         who,
+		// typeString:  typeString,
 		oldModelObj: oldModelObj,
 		modelObj:    modelObj,
-		crupdOp:     models.CRUPDOpUpdate,
-		cargo:       cargo,
-		options:     options,
+
+		beforeFuncName: beforeFuncName,
+		afterFuncName:  afterFuncName,
+
+		ctrl: models.ModelRegistry[typeString].Controller,
+		data: &data,
+		info: &info,
 	}
-	return opCore(before, after, j, mapper.Service.UpdateOneCore)
+	return opCore(j, mapper.Service.UpdateOneCore)
 }
 
 // UpdateMany updates multiple models
 func (mapper *BaseMapper) UpdateMany(db *gorm.DB, who models.UserIDFetchable, typeString string,
 	modelObjs []models.IModel, options map[urlparam.Param]interface{},
-	cargo *models.BatchHookCargo) ([]models.IModel, error) {
+	cargo *controller.Cargo) ([]models.IModel, *webrender.RetVal) {
 	// load old model data
 	ids := make([]*datatypes.UUID, len(modelObjs))
 	for i, modelObj := range modelObjs {
 		// Check error, make sure it has an id and not empty string (could potentially update all records!)
 		id := modelObj.GetID()
 		if id == nil || id.String() == "" {
-			return nil, service.ErrIDEmpty
+			return nil, &webrender.RetVal{Error: service.ErrIDEmpty}
 		}
 		ids[i] = id
 	}
 
 	oldModelObjs, _, err := loadManyAndCheckBeforeModify(mapper.Service, db, who, typeString, ids, []models.UserRole{models.UserRoleAdmin})
 	if err != nil {
-		return nil, err
+		return nil, &webrender.RetVal{Error: err}
 	}
 
 	// load and check is not in the same order as modelobj
 	oldModelObjs = mapper.sortOldModelByIds(oldModelObjs, ids)
 
-	before := models.ModelRegistry[typeString].BeforeUpdate
-	after := models.ModelRegistry[typeString].AfterUpdate
+	roles := make([]models.UserRole, len(modelObjs))
+	for i := 0; i < len(roles); i++ {
+		roles[i] = models.UserRoleAdmin
+	}
+
+	data := controller.Data{Ms: modelObjs, DB: db, Who: who,
+		TypeString: typeString, Roles: roles, URLParams: options, Cargo: cargo}
+	info := controller.EndPointInfo{
+		Op:          controller.RESTOpUpdate,
+		Cardinality: controller.APICardinalityMany,
+	}
+
+	oldBefore := models.ModelRegistry[typeString].BeforeUpdate
+	oldAfter := models.ModelRegistry[typeString].AfterUpdate
 	j := batchOpJob{
 		serv:         mapper.Service,
-		db:           db,
-		who:          who,
-		typeString:   typeString,
 		oldmodelObjs: oldModelObjs,
 		modelObjs:    modelObjs,
-		crupdOp:      models.CRUPDOpUpdate,
-		cargo:        cargo,
-		options:      options,
+
+		oldBefore: oldBefore,
+		oldAfter:  oldAfter,
+
+		ctrl: models.ModelRegistry[typeString].Controller,
+		data: &data,
+		info: &info,
 	}
-	return batchOpCore(j, before, after, mapper.Service.UpdateOneCore)
+	return batchOpCore(j, mapper.Service.UpdateOneCore)
 }
 
 // PatchOne updates model based on this json
 func (mapper *BaseMapper) PatchOne(db *gorm.DB, who models.UserIDFetchable, typeString string, jsonPatch []byte,
-	id *datatypes.UUID, options map[urlparam.Param]interface{}, cargo *models.ModelCargo) (models.IModel, error) {
+	id *datatypes.UUID, options map[urlparam.Param]interface{}, cargo *controller.Cargo) (models.IModel, *webrender.RetVal) {
 	oldModelObj, _, err := loadAndCheckErrorBeforeModify(mapper.Service, db, who, typeString, nil, id, []models.UserRole{models.UserRoleAdmin})
 	if err != nil {
-		return nil, err
+		return nil, &webrender.RetVal{Error: err}
 	}
 
-	if m, ok := oldModelObj.(models.IBeforePatchApply); ok {
-		hpdata := models.HookPointData{DB: db, Who: who, TypeString: typeString, Cargo: cargo}
-		if err := m.BeforePatchApplyDB(hpdata); err != nil {
-			return nil, err
+	// Begin deprecated
+	if models.ModelRegistry[typeString].Controller == nil {
+		if m, ok := oldModelObj.(models.IBeforePatchApply); ok {
+			modelCargo := models.ModelCargo{Payload: cargo.Payload}
+			hpdata := models.HookPointData{DB: db, Who: who, TypeString: typeString, Cargo: &modelCargo}
+			if err := m.BeforePatchApplyDB(hpdata); err != nil {
+				return nil, &webrender.RetVal{Error: err}
+			}
+			cargo.Payload = modelCargo.Payload
+		}
+	}
+	// End deprecated
+
+	data := controller.Data{Ms: []models.IModel{oldModelObj}, DB: db, Who: who,
+		TypeString: typeString, Roles: []models.UserRole{models.UserRoleAdmin}, URLParams: options, Cargo: cargo}
+	info := controller.EndPointInfo{
+		Op:          controller.RESTOpPatch,
+		Cardinality: controller.APICardinalityOne,
+	}
+	if models.ModelRegistry[typeString].Controller != nil {
+		if ctrl, ok := models.ModelRegistry[typeString].Controller.(controller.IBeforeApply); ok {
+			if retval := ctrl.BeforeApply(&data, &info); retval != nil {
+				return nil, retval
+			}
 		}
 	}
 
 	// Apply patch operations
 	modelObj, err := applyPatchCore(typeString, oldModelObj, jsonPatch)
 	if err != nil {
-		return nil, err
+		return nil, &webrender.RetVal{Error: err}
 	}
 
+	// VALIDATION, TODO: What is this?
 	err = models.Validate.Struct(modelObj)
 	if errs, ok := err.(validator.ValidationErrors); ok {
 		s, err2 := models.TranslateValidationErrorMessage(errs, modelObj)
@@ -378,62 +479,92 @@ func (mapper *BaseMapper) PatchOne(db *gorm.DB, who models.UserIDFetchable, type
 	}
 
 	// TODO: Huh? How do we do validation here?!
-	var before, after *string
+	var beforeFuncName, afterFuncName *string
 	if _, ok := modelObj.(models.IBeforePatch); ok {
 		b := "BeforePatchDB"
-		before = &b
+		beforeFuncName = &b
 	}
 
 	if _, ok := modelObj.(models.IAfterPatch); ok {
 		a := "AfterPatchDB"
-		after = &a
+		afterFuncName = &a
 	}
+
+	data.Ms = []models.IModel{modelObj}
 
 	j := opJob{
 		serv:        mapper.Service,
-		db:          db,
-		who:         who,
-		typeString:  typeString,
 		oldModelObj: oldModelObj,
 		modelObj:    modelObj,
-		crupdOp:     models.CRUPDOpPatch,
-		cargo:       cargo,
-		options:     options,
+
+		beforeFuncName: beforeFuncName,
+		afterFuncName:  afterFuncName,
+
+		ctrl: models.ModelRegistry[typeString].Controller,
+		data: &data,
+		info: &info,
 	}
-	return opCore(before, after, j, mapper.Service.UpdateOneCore)
+	return opCore(j, mapper.Service.UpdateOneCore)
 }
 
 // PatchMany patches multiple models
 func (mapper *BaseMapper) PatchMany(db *gorm.DB, who models.UserIDFetchable, typeString string,
 	jsonIDPatches []models.JSONIDPatch, options map[urlparam.Param]interface{},
-	cargo *models.BatchHookCargo) ([]models.IModel, error) {
+	cargo *controller.Cargo) ([]models.IModel, *webrender.RetVal) {
 	// Load data, patch it, then send it to the hookpoint
 	// Load IDs
 	ids := make([]*datatypes.UUID, len(jsonIDPatches))
 	for i, jsonIDPatch := range jsonIDPatches {
 		// Check error, make sure it has an id and not empty string (could potentially update all records!)
 		if jsonIDPatch.ID.String() == "" {
-			return nil, service.ErrIDEmpty
+			return nil, &webrender.RetVal{Error: service.ErrIDEmpty}
 		}
 		ids[i] = jsonIDPatch.ID
 	}
 
 	oldModelObjs, _, err := loadManyAndCheckBeforeModify(mapper.Service, db, who, typeString, ids, []models.UserRole{models.UserRoleAdmin})
 	if err != nil {
-		return nil, err
+		return nil, &webrender.RetVal{Error: err}
 	}
 
 	// load and check is not in the same order as modelobj
 	oldModelObjs = mapper.sortOldModelByIds(oldModelObjs, ids)
 
-	// Hookpoint BEFORE BeforeCRUD and BeforePatch
-	// This is called BEFORE the actual patch
-	beforeApply := models.ModelRegistry[typeString].BeforePatchApply
-	if beforeApply != nil {
-		bhpData := models.BatchHookPointData{Ms: oldModelObjs, DB: db, Who: who, TypeString: typeString,
-			Cargo: cargo}
-		if err := beforeApply(bhpData); err != nil {
-			return nil, err
+	roles := make([]models.UserRole, len(jsonIDPatches))
+	for i := range roles {
+		roles[i] = models.UserRoleAdmin // has to be admin to patch
+	}
+
+	// Begin Deprecated
+	if models.ModelRegistry[typeString].Controller == nil {
+		batchCargo := models.BatchHookCargo{Payload: cargo.Payload}
+		// Hookpoint BEFORE BeforeCRUD and BeforePatch
+		// This is called BEFORE the actual patch
+		beforeApply := models.ModelRegistry[typeString].BeforePatchApply
+		if beforeApply != nil {
+			bhpData := models.BatchHookPointData{Ms: oldModelObjs, DB: db, Who: who, TypeString: typeString,
+				Cargo: &batchCargo, Roles: roles}
+			if err := beforeApply(bhpData); err != nil {
+				return nil, &webrender.RetVal{Error: err}
+			}
+		}
+		cargo.Payload = batchCargo.Payload
+	}
+	// End Deprecated
+
+	// here we put the oldModelObjs, not patched yet
+	data := controller.Data{Ms: oldModelObjs, DB: db, Who: who,
+		TypeString: typeString, Roles: roles, URLParams: options, Cargo: cargo}
+	info := controller.EndPointInfo{
+		Op:          controller.RESTOpPatch,
+		Cardinality: controller.APICardinalityMany,
+	}
+
+	if models.ModelRegistry[typeString].Controller != nil {
+		if ctrl, ok := models.ModelRegistry[typeString].Controller.(controller.IBeforeApply); ok {
+			if renderer := ctrl.BeforeApply(&data, &info); renderer != nil {
+				return nil, renderer
+			}
 		}
 	}
 
@@ -444,34 +575,38 @@ func (mapper *BaseMapper) PatchMany(db *gorm.DB, who models.UserIDFetchable, typ
 		modelObjs[i], err = applyPatchCore(typeString, oldModelObjs[i], []byte(jsonIDPatch.Patch))
 		if err != nil {
 			log.Println("patch error: ", err, string(jsonIDPatch.Patch))
-			return nil, err
+			return nil, &webrender.RetVal{Error: err}
 		}
 	}
 
+	// here we put the new model objs
+	data.Ms = modelObjs
+
 	// Finally update them
-	before := models.ModelRegistry[typeString].BeforePatch
-	after := models.ModelRegistry[typeString].AfterPatch
+	oldBefore := models.ModelRegistry[typeString].BeforePatch
+	oldAfter := models.ModelRegistry[typeString].AfterPatch
 	j := batchOpJob{
 		serv:         mapper.Service,
-		db:           db,
-		who:          who,
-		typeString:   typeString,
 		oldmodelObjs: oldModelObjs,
 		modelObjs:    modelObjs,
-		crupdOp:      models.CRUPDOpPatch,
-		cargo:        cargo,
-		options:      options,
+
+		oldBefore: oldBefore,
+		oldAfter:  oldAfter,
+
+		ctrl: models.ModelRegistry[typeString].Controller,
+		data: &data,
+		info: &info,
 	}
-	return batchOpCore(j, before, after, mapper.Service.UpdateOneCore)
+	return batchOpCore(j, mapper.Service.UpdateOneCore)
 }
 
 // DeleteOne delete the model
 // TODO: delete the groups associated with this record?
 func (mapper *BaseMapper) DeleteOne(db *gorm.DB, who models.UserIDFetchable, typeString string,
-	id *datatypes.UUID, options map[urlparam.Param]interface{}, cargo *models.ModelCargo) (models.IModel, error) {
+	id *datatypes.UUID, options map[urlparam.Param]interface{}, cargo *controller.Cargo) (models.IModel, *webrender.RetVal) {
 	modelObj, _, err := loadAndCheckErrorBeforeModify(mapper.Service, db, who, typeString, nil, id, []models.UserRole{models.UserRoleAdmin})
 	if err != nil {
-		return nil, err
+		return nil, &webrender.RetVal{Error: err}
 	}
 
 	// Unscoped() for REAL delete!
@@ -483,50 +618,58 @@ func (mapper *BaseMapper) DeleteOne(db *gorm.DB, who models.UserIDFetchable, typ
 
 	modelObj, err = mapper.Service.HookBeforeDeleteOne(db, who, typeString, modelObj)
 	if err != nil {
-		return nil, err
+		return nil, &webrender.RetVal{Error: err}
 	}
 
-	var before, after *string
+	var beforeFuncName, afterFuncName *string
 	if _, ok := modelObj.(models.IBeforeDelete); ok {
 		b := "BeforeDeleteDB"
-		before = &b
+		beforeFuncName = &b
 	}
 	if _, ok := modelObj.(models.IAfterDelete); ok {
 		a := "AfterDeleteDB"
-		after = &a
+		afterFuncName = &a
+	}
+
+	data := controller.Data{Ms: []models.IModel{modelObj}, DB: db, Who: who,
+		TypeString: typeString, Roles: []models.UserRole{models.UserRoleAdmin}, URLParams: options, Cargo: cargo}
+	info := controller.EndPointInfo{
+		Op:          controller.RESTOpDelete,
+		Cardinality: controller.APICardinalityOne,
 	}
 
 	j := opJob{
-		serv:       mapper.Service,
-		db:         db,
-		who:        who,
-		typeString: typeString,
+		serv: mapper.Service,
 		// oldModelObj: oldModelObj,
 		modelObj: modelObj,
-		crupdOp:  models.CRUPDOpDelete,
-		cargo:    cargo,
-		options:  options,
+
+		beforeFuncName: beforeFuncName,
+		afterFuncName:  afterFuncName,
+
+		ctrl: models.ModelRegistry[typeString].Controller,
+		data: &data,
+		info: &info,
 	}
-	return opCore(before, after, j, mapper.Service.DeleteOneCore)
+	return opCore(j, mapper.Service.DeleteOneCore)
 }
 
 // DeleteMany deletes multiple models
 func (mapper *BaseMapper) DeleteMany(db *gorm.DB, who models.UserIDFetchable, typeString string, modelObjs []models.IModel,
-	options map[urlparam.Param]interface{}, cargo *models.BatchHookCargo) ([]models.IModel, error) {
+	options map[urlparam.Param]interface{}, cargo *controller.Cargo) ([]models.IModel, *webrender.RetVal) {
 	// load old model data
 	ids := make([]*datatypes.UUID, len(modelObjs))
 	for i, modelObj := range modelObjs {
 		// Check error, make sure it has an id and not empty string (could potentially update all records!)
 		id := modelObj.GetID()
 		if id == nil || id.String() == "" {
-			return nil, service.ErrIDEmpty
+			return nil, &webrender.RetVal{Error: service.ErrIDEmpty}
 		}
 		ids[i] = id
 	}
 
 	modelObjs, _, err := loadManyAndCheckBeforeModify(mapper.Service, db, who, typeString, ids, []models.UserRole{models.UserRoleAdmin})
 	if err != nil {
-		return nil, err
+		return nil, &webrender.RetVal{Error: err}
 	}
 
 	// Unscoped() for REAL delete!
@@ -536,25 +679,40 @@ func (mapper *BaseMapper) DeleteMany(db *gorm.DB, who models.UserIDFetchable, ty
 		db = db.Unscoped() // hookpoint will inherit this though
 	}
 
+	log.Println("HookBeforeDeleteMany...")
+
 	modelObjs, err = mapper.Service.HookBeforeDeleteMany(db, who, typeString, modelObjs)
 	if err != nil {
-		return nil, err
+		return nil, &webrender.RetVal{Error: err}
 	}
 
-	before := models.ModelRegistry[typeString].BeforeDelete
-	after := models.ModelRegistry[typeString].AfterDelete
+	roles := make([]models.UserRole, len(modelObjs))
+	for i := range roles {
+		roles[i] = models.UserRoleAdmin // has to be admin to delete
+	}
+
+	data := controller.Data{Ms: modelObjs, DB: db, Who: who,
+		TypeString: typeString, Roles: roles, URLParams: options, Cargo: cargo}
+	info := controller.EndPointInfo{
+		Op:          controller.RESTOpDelete,
+		Cardinality: controller.APICardinalityMany,
+	}
+
+	oldBefore := models.ModelRegistry[typeString].BeforeDelete
+	oldAfter := models.ModelRegistry[typeString].AfterDelete
 
 	j := batchOpJob{
-		serv:       mapper.Service,
-		db:         db,
-		who:        who,
-		typeString: typeString,
-		modelObjs:  modelObjs,
-		crupdOp:    models.CRUPDOpDelete,
-		cargo:      cargo,
-		options:    options,
+		serv:      mapper.Service,
+		modelObjs: modelObjs,
+
+		oldBefore: oldBefore,
+		oldAfter:  oldAfter,
+
+		ctrl: models.ModelRegistry[typeString].Controller,
+		data: &data,
+		info: &info,
 	}
-	return batchOpCore(j, before, after, mapper.Service.DeleteOneCore)
+	return batchOpCore(j, mapper.Service.DeleteOneCore)
 }
 
 // ----------------------------------------------------------------------------------------

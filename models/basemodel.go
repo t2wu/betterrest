@@ -50,7 +50,7 @@ type BaseModel struct {
 
 	// For Postgres
 	ID        *datatypes.UUID `gorm:"type:uuid;primary_key;" json:"id"`
-	CreatedAt time.Time       `sql:"index" json:"createdAt" json:"createdAt"`
+	CreatedAt time.Time       `sql:"index" json:"createdAt"`
 	UpdatedAt time.Time       `json:"updatedAt"`
 	DeletedAt *time.Time      `sql:"index" json:"deletedAt"`
 
@@ -74,6 +74,21 @@ func (b *BaseModel) SetID(id *datatypes.UUID) {
 	b.ID = id
 }
 
+// GetCreatedAt gets the time stamp the record is created
+func (b *BaseModel) GetCreatedAt() *time.Time {
+	return &b.CreatedAt
+}
+
+// GetUpdatedAt gets the time stamp the record is updated
+func (b *BaseModel) GetUpdatedAt() *time.Time {
+	return &b.UpdatedAt
+}
+
+// GetUpdatedAt gets the time stamp the record is deleted (which we don't use)
+func (b *BaseModel) GetDeletedAt() *time.Time {
+	return b.DeletedAt
+}
+
 // BeforeCreate sets a UUID if no ID is set
 // (this is Gorm's hookpoint)
 func (b *BaseModel) BeforeCreate(scope *gorm.Scope) error {
@@ -87,7 +102,7 @@ func (b *BaseModel) BeforeCreate(scope *gorm.Scope) error {
 
 // Validate validates the model
 func (b *BaseModel) Validate() error {
-	if ok, err := govalidator.ValidateStruct(b); ok == false && err != nil {
+	if ok, err := govalidator.ValidateStruct(b); !ok && err != nil {
 		return err
 	}
 	return nil
@@ -110,6 +125,9 @@ type IModel interface {
 	// The following two avoids having to use reflection to access ID
 	GetID() *datatypes.UUID
 	SetID(id *datatypes.UUID)
+	GetCreatedAt() *time.Time
+	GetUpdatedAt() *time.Time
+	// GetDeletedAt() // we don't use this one
 }
 
 // JSONIDPatch is the stuff inside "content" for PatchMany operation
@@ -492,6 +510,16 @@ func (o *OwnershipModelWithIDBase) SetModelID(id *datatypes.UUID) {
 // GetModelID gets the id of the model, comforms to IOwnership
 func (o *OwnershipModelWithIDBase) GetModelID() *datatypes.UUID {
 	return o.ModelID
+}
+
+// GetCreatedAt gets the time stamp the record is created
+func (b *OwnershipModelWithIDBase) GetCreatedAt() *time.Time {
+	return &b.CreatedAt
+}
+
+// GetUpdatedAt gets the time stamp the record is updated
+func (b *OwnershipModelWithIDBase) GetUpdatedAt() *time.Time {
+	return &b.UpdatedAt
 }
 
 // ---------------

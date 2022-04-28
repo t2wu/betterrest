@@ -98,6 +98,8 @@ type Reg struct {
 	AfterDelete  func(bhpData BatchHookPointData) error
 
 	BatchRenderer func(c *gin.Context, ms []IModel, bhpdata *BatchHookPointData, op CRUPDOp) bool
+
+	Controller interface{}
 }
 
 // func (g *Gateway) AfterCreateDB(db *gorm.DB, typeString string) error {

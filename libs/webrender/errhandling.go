@@ -447,3 +447,21 @@ func ErrorToSensibleString(err error) string {
 		return ""
 	}
 }
+
+// GuardRetVal is the return value for guard
+type GuardRetVal struct {
+	// ToPass is false if it is to guard against entry
+	ToPass bool
+
+	// CustomRenderer renderers controls HTTP status and return value instead of permission denied, if given.
+	// If not set, permission denied by default
+	CustomRenderer *render.Renderer
+}
+
+// RetVal is the hookpoint return structure
+type RetVal struct {
+	// Error to return error
+	Error error
+	// CustomRenderer if customize HTTP status
+	CustomRenderer *render.Renderer
+}

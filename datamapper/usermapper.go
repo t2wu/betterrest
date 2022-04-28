@@ -7,9 +7,11 @@ import (
 	"sync"
 
 	"github.com/go-playground/validator/v10"
+	"github.com/t2wu/betterrest/controller"
 	"github.com/t2wu/betterrest/datamapper/service"
 	"github.com/t2wu/betterrest/libs/datatypes"
 	"github.com/t2wu/betterrest/libs/urlparam"
+	"github.com/t2wu/betterrest/libs/webrender"
 	"github.com/t2wu/betterrest/models"
 
 	"github.com/jinzhu/gorm"
@@ -51,34 +53,43 @@ func SharedUserMapper() *UserMapper {
 // CreateOne creates an user model based on json and store it in db
 // Also creates a ownership with admin access
 func (mapper *UserMapper) CreateOne(db *gorm.DB, who models.UserIDFetchable, typeString string, modelObj models.IModel,
-	options map[urlparam.Param]interface{}, cargo *models.ModelCargo) (models.IModel, error) {
+	options map[urlparam.Param]interface{}, cargo *controller.Cargo) (models.IModel, *webrender.RetVal) {
 	modelObj, err := mapper.Service.HookBeforeCreateOne(db, who, typeString, modelObj)
 	if err != nil {
-		return nil, err
+		return nil, &webrender.RetVal{Error: err}
 	}
 
-	var before, after *string
+	var beforeFuncName, afterFuncName *string
 	if _, ok := modelObj.(models.IBeforeCreate); ok {
-		*before = "BeforeCreateDB"
+		*beforeFuncName = "BeforeCreateDB"
 	}
 	if _, ok := modelObj.(models.IAfterCreate); ok {
-		*after = "AfterCreateDB"
-	}
-	j := opJob{
-		serv:       mapper.Service,
-		db:         db,
-		who:        who,
-		typeString: typeString,
-		// oldModelObj: oldModelObj,
-		modelObj: modelObj,
-		crupdOp:  models.CRUPDOpCreate,
-		cargo:    cargo,
-		options:  options,
+		*afterFuncName = "AfterCreateDB"
 	}
 
-	modelObj2, err := opCore(before, after, j, mapper.Service.CreateOneCore)
-	if err != nil {
-		return modelObj2, err
+	data := controller.Data{Ms: []models.IModel{modelObj}, DB: db, Who: who,
+		TypeString: typeString, Roles: []models.UserRole{models.UserRoleAdmin}, URLParams: options, Cargo: cargo}
+	info := controller.EndPointInfo{
+		Op:          controller.RESTOpCreate,
+		Cardinality: controller.APICardinalityOne,
+	}
+
+	j := opJob{
+		serv: mapper.Service,
+		// oldModelObj: oldModelObj,
+		modelObj: modelObj,
+
+		beforeFuncName: beforeFuncName,
+		afterFuncName:  afterFuncName,
+
+		ctrl: models.ModelRegistry[typeString].Controller,
+		data: &data,
+		info: &info,
+	}
+
+	modelObj2, retval := opCore(j, mapper.Service.CreateOneCore)
+	if retval != nil {
+		return modelObj2, retval
 	}
 
 	return modelObj2, nil
@@ -92,23 +103,44 @@ func (mapper *UserMapper) CreateOne(db *gorm.DB, who models.UserIDFetchable, typ
 
 // ReadOne get one model object based on its type and its id string
 func (mapper *UserMapper) ReadOne(db *gorm.DB, who models.UserIDFetchable, typeString string,
-	id *datatypes.UUID, options map[urlparam.Param]interface{}, cargo *models.ModelCargo) (models.IModel, models.UserRole, error) {
+	id *datatypes.UUID, options map[urlparam.Param]interface{}, cargo *controller.Cargo) (models.IModel, models.UserRole, *webrender.RetVal) {
 	modelObj, role, err := mapper.Service.ReadOneCore(db, who, typeString, id)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, &webrender.RetVal{Error: err}
 	}
 
-	// After CRUPD hook
-	if m, ok := modelObj.(models.IAfterCRUPD); ok {
-		hpdata := models.HookPointData{DB: db, Who: who, TypeString: typeString, Cargo: cargo, Role: &role, URLParams: options}
-		m.AfterCRUPDDB(hpdata, models.CRUPDOpRead)
+	data := controller.Data{Ms: []models.IModel{modelObj}, DB: db, Who: who,
+		TypeString: typeString, Roles: []models.UserRole{models.UserRoleAdmin}, URLParams: options, Cargo: cargo}
+	info := controller.EndPointInfo{
+		Op:          controller.RESTOpRead,
+		Cardinality: controller.APICardinalityOne,
 	}
 
-	if m, ok := modelObj.(models.IAfterRead); ok {
-		hpdata := models.HookPointData{DB: db, Who: who, TypeString: typeString, Role: &role,
-			Cargo: cargo}
-		if err := m.AfterReadDB(hpdata); err != nil {
-			return nil, 0, err
+	// Begin deprecated
+	if models.ModelRegistry[typeString].Controller == nil {
+		modelCargo := models.ModelCargo{Payload: cargo.Payload}
+		// After CRUPD hook
+		if m, ok := modelObj.(models.IAfterCRUPD); ok {
+			hpdata := models.HookPointData{DB: db, Who: who, TypeString: typeString, Cargo: &modelCargo, Role: &role, URLParams: options}
+			m.AfterCRUPDDB(hpdata, models.CRUPDOpRead)
+		}
+
+		if m, ok := modelObj.(models.IAfterRead); ok {
+			hpdata := models.HookPointData{DB: db, Who: who, TypeString: typeString, Role: &role,
+				Cargo: &modelCargo}
+			if err := m.AfterReadDB(hpdata); err != nil {
+				return nil, 0, &webrender.RetVal{Error: err}
+			}
+		}
+		cargo.Payload = modelCargo.Payload
+	}
+	// End deprecated
+
+	if models.ModelRegistry[typeString].Controller == nil {
+		if ctrl, ok := models.ModelRegistry[typeString].Controller.(controller.IAfter); ok {
+			if retval := ctrl.After(&data, &info); retval != nil {
+				return nil, 0, retval
+			}
 		}
 	}
 
@@ -118,56 +150,83 @@ func (mapper *UserMapper) ReadOne(db *gorm.DB, who models.UserIDFetchable, typeS
 // UpdateOne updates model based on this json
 func (mapper *UserMapper) UpdateOne(db *gorm.DB, who models.UserIDFetchable, typeString string,
 	modelObj models.IModel, id *datatypes.UUID, options map[urlparam.Param]interface{},
-	cargo *models.ModelCargo) (models.IModel, error) {
+	cargo *controller.Cargo) (models.IModel, *webrender.RetVal) {
 
 	oldModelObj, _, err := loadAndCheckErrorBeforeModify(mapper.Service, db, who, typeString, modelObj, id, []models.UserRole{models.UserRoleAdmin})
 	if err != nil {
-		return nil, err
+		return nil, &webrender.RetVal{Error: err}
 	}
 
-	var before, after *string
+	data := controller.Data{Ms: []models.IModel{modelObj}, DB: db, Who: who,
+		TypeString: typeString, Roles: []models.UserRole{models.UserRoleAdmin}, URLParams: options, Cargo: cargo}
+	info := controller.EndPointInfo{
+		Op:          controller.RESTOpUpdate,
+		Cardinality: controller.APICardinalityOne,
+	}
+
+	var beforeFuncName, afterFuncName *string
 	if _, ok := modelObj.(models.IBeforeUpdate); ok {
 		b := "BeforeUpdateDB"
-		before = &b
+		beforeFuncName = &b
 	}
 	if _, ok := modelObj.(models.IAfterUpdate); ok {
 		a := "AfterUpdateDB"
-		after = &a
+		afterFuncName = &a
 	}
 
 	j := opJob{
-		serv:        mapper.Service,
-		db:          db,
-		who:         who,
-		typeString:  typeString,
+		serv: mapper.Service,
+
 		oldModelObj: oldModelObj,
 		modelObj:    modelObj,
-		crupdOp:     models.CRUPDOpUpdate,
-		cargo:       cargo,
-		options:     options,
+
+		beforeFuncName: beforeFuncName,
+		afterFuncName:  afterFuncName,
+
+		ctrl: models.ModelRegistry[typeString].Controller,
+		data: &data,
+		info: &info,
 	}
-	return opCore(before, after, j, mapper.Service.UpdateOneCore)
+	return opCore(j, mapper.Service.UpdateOneCore)
 }
 
 // PatchOne updates model based on this json
 func (mapper *UserMapper) PatchOne(db *gorm.DB, who models.UserIDFetchable, typeString string, jsonPatch []byte,
-	id *datatypes.UUID, options map[urlparam.Param]interface{}, cargo *models.ModelCargo) (models.IModel, error) {
+	id *datatypes.UUID, options map[urlparam.Param]interface{}, cargo *controller.Cargo) (models.IModel, *webrender.RetVal) {
 	oldModelObj, _, err := loadAndCheckErrorBeforeModify(mapper.Service, db, who, typeString, nil, id, []models.UserRole{models.UserRoleAdmin})
 	if err != nil {
-		return nil, err
+		return nil, &webrender.RetVal{Error: err}
 	}
 
-	if m, ok := oldModelObj.(models.IBeforePatchApply); ok {
-		hpdata := models.HookPointData{DB: db, Who: who, TypeString: typeString, Cargo: cargo}
-		if err := m.BeforePatchApplyDB(hpdata); err != nil {
-			return nil, err
+	if models.ModelRegistry[typeString].Controller == nil {
+		modelCargo := models.ModelCargo{Payload: cargo.Payload}
+		if m, ok := oldModelObj.(models.IBeforePatchApply); ok {
+			hpdata := models.HookPointData{DB: db, Who: who, TypeString: typeString, Cargo: &modelCargo}
+			if err := m.BeforePatchApplyDB(hpdata); err != nil {
+				return nil, &webrender.RetVal{Error: err}
+			}
+		}
+		cargo.Payload = modelCargo.Payload
+	}
+
+	data := controller.Data{Ms: nil, DB: db, Who: who,
+		TypeString: typeString, Roles: []models.UserRole{models.UserRoleAdmin}, URLParams: options, Cargo: cargo}
+	info := controller.EndPointInfo{
+		Op:          controller.RESTOpPatch,
+		Cardinality: controller.APICardinalityOne,
+	}
+	if models.ModelRegistry[typeString].Controller != nil {
+		if ctrl, ok := models.ModelRegistry[typeString].Controller.(controller.IBeforeApply); ok {
+			if retval := ctrl.BeforeApply(&data, &info); retval != nil {
+				return nil, retval
+			}
 		}
 	}
 
 	// Apply patch operations
 	modelObj, err := applyPatchCore(typeString, oldModelObj, jsonPatch)
 	if err != nil {
-		return nil, err
+		return nil, &webrender.RetVal{Error: err}
 	}
 
 	err = models.Validate.Struct(modelObj)
@@ -179,37 +238,41 @@ func (mapper *UserMapper) PatchOne(db *gorm.DB, who models.UserIDFetchable, type
 		err = errors.New(s)
 	}
 
-	var before, after *string
+	data.Ms = []models.IModel{modelObj}
+
+	var beforeFuncName, afterFuncName *string
 	if _, ok := modelObj.(models.IBeforePatch); ok {
 		b := "BeforePatchDB"
-		before = &b
+		beforeFuncName = &b
 	}
 
 	if _, ok := modelObj.(models.IAfterPatch); ok {
 		a := "AfterPatchDB"
-		after = &a
+		afterFuncName = &a
 	}
 
 	j := opJob{
-		serv:        mapper.Service,
-		db:          db,
-		who:         who,
-		typeString:  typeString,
+		serv: mapper.Service,
+
 		oldModelObj: oldModelObj,
 		modelObj:    modelObj,
-		crupdOp:     models.CRUPDOpPatch,
-		cargo:       cargo,
-		options:     options,
+
+		beforeFuncName: beforeFuncName,
+		afterFuncName:  afterFuncName,
+
+		ctrl: models.ModelRegistry[typeString].Controller,
+		data: &data,
+		info: &info,
 	}
-	return opCore(before, after, j, mapper.Service.UpdateOneCore)
+	return opCore(j, mapper.Service.UpdateOneCore)
 }
 
 // DeleteOne deletes the user with the ID
 func (mapper *UserMapper) DeleteOne(db *gorm.DB, who models.UserIDFetchable, typeString string, id *datatypes.UUID,
-	options map[urlparam.Param]interface{}, cargo *models.ModelCargo) (models.IModel, error) {
+	options map[urlparam.Param]interface{}, cargo *controller.Cargo) (models.IModel, *webrender.RetVal) {
 	modelObj, _, err := loadAndCheckErrorBeforeModify(mapper.Service, db, who, typeString, nil, id, []models.UserRole{models.UserRoleAdmin})
 	if err != nil {
-		return nil, err
+		return nil, &webrender.RetVal{Error: err}
 	}
 
 	// Unscoped() for REAL delete!
@@ -221,32 +284,41 @@ func (mapper *UserMapper) DeleteOne(db *gorm.DB, who models.UserIDFetchable, typ
 
 	modelObj, err = mapper.Service.HookBeforeDeleteOne(db, who, typeString, modelObj)
 	if err != nil {
-		return nil, err
+		return nil, &webrender.RetVal{Error: err}
 	}
 
-	var before, after *string
+	data := controller.Data{Ms: []models.IModel{modelObj}, DB: db, Who: who,
+		TypeString: typeString, Roles: []models.UserRole{models.UserRoleAdmin}, URLParams: options, Cargo: cargo}
+	info := controller.EndPointInfo{
+		Op:          controller.RESTOpDelete,
+		Cardinality: controller.APICardinalityOne,
+	}
+
+	var beforeFuncName, afterFuncName *string
 	if _, ok := modelObj.(models.IBeforeDelete); ok {
 		b := "BeforeDeleteDB"
-		before = &b
+		beforeFuncName = &b
 	}
 	if _, ok := modelObj.(models.IAfterDelete); ok {
 		a := "AfterDeleteDB"
-		after = &a
+		afterFuncName = &a
 	}
 
 	j := opJob{
-		serv:       mapper.Service,
-		db:         db,
-		who:        who,
-		typeString: typeString,
+		serv: mapper.Service,
+
 		// oldModelObj: oldModelObj,
 		modelObj: modelObj,
-		crupdOp:  models.CRUPDOpDelete,
-		cargo:    cargo,
-		options:  options,
+
+		beforeFuncName: beforeFuncName,
+		afterFuncName:  afterFuncName,
+
+		ctrl: models.ModelRegistry[typeString].Controller,
+		data: &data,
+		info: &info,
 	}
 
-	return opCore(before, after, j, mapper.Service.DeleteOneCore)
+	return opCore(j, mapper.Service.DeleteOneCore)
 }
 
 // CreateMany :-
