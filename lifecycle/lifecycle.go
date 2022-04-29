@@ -14,25 +14,8 @@ import (
 	"github.com/t2wu/betterrest/libs/utils/transact"
 	"github.com/t2wu/betterrest/libs/webrender"
 	"github.com/t2wu/betterrest/models"
+	"github.com/t2wu/betterrest/registry"
 )
-
-// ------------------------------------------------------
-// func LogTransID(tx *gorm.DB, method, url, cardinality string) {
-// 	if settings.Log {
-// 		res := struct {
-// 			TxidCurrent int
-// 		}{}
-// 		if err := tx.Raw("SELECT txid_current()").Scan(&res).Error; err != nil {
-// 			s := fmt.Sprintf("[BetterREST]: Error in HTTP method: %s, Endpoint: %s, cardinality: %s", method, url, cardinality)
-// 			log.Println(s)
-// 			// ignore error
-// 			return
-// 		}
-
-// 		s := fmt.Sprintf("[BetterREST]: %s %s (%s), transact: %d", method, url, cardinality, res.TxidCurrent)
-// 		log.Println(s)
-// 	}
-// }
 
 type Logger interface {
 	Log(tx *gorm.DB, method, url, cardinality string)
@@ -58,7 +41,7 @@ func callOldBatchTransact(data *controller.Data, info *controller.EndPointInfo) 
 	}
 
 	// the batch afterTransact hookpoint
-	if afterTransact := models.ModelRegistry[data.TypeString].AfterTransact; afterTransact != nil {
+	if afterTransact := registry.ModelRegistry[data.TypeString].AfterTransact; afterTransact != nil {
 		afterTransact(bhpData, op)
 	}
 
@@ -94,24 +77,27 @@ func callOldOneTransact(data *controller.Data, info *controller.EndPointInfo) {
 func CreateMany(mapper datamapper.IDataMapper, who models.UserIDFetchable, typeString string, modelObjs []models.IModel, options map[urlparam.Param]interface{}, logger Logger) (*controller.Data, *controller.EndPointInfo, render.Renderer) {
 	cargo := controller.Cargo{}
 
-	retval := transact.TransactCustomError(db.Shared(), func(tx *gorm.DB) (retval *webrender.RetVal) {
+	var retVal *datamapper.MapperRet
+	retErr := transact.TransactCustomError(db.Shared(), func(tx *gorm.DB) (retErr *webrender.RetError) {
 		if logger != nil {
 			logger.Log(tx, "POST", strings.ToLower(typeString), "n")
 		}
 
-		if modelObjs, retval = mapper.CreateMany(tx, who, typeString, modelObjs, options, &cargo); retval != nil {
-			log.Printf("Error in lifecycle.CreateMany: %s, %+v\n", typeString, retval)
-			return retval
+		if retVal, retErr = mapper.CreateMany(tx, who, typeString, modelObjs, options, &cargo); retErr != nil {
+			log.Printf("Error in lifecycle.CreateMany: %s, %+v\n", typeString, retErr)
+			return retErr
 		}
 		return nil
 	}, "lifecycle.CreateMany")
 
-	if retval != nil {
-		if retval.Renderer == nil {
-			return nil, nil, webrender.NewErrCreate(retval.Error)
+	if retErr != nil {
+		if retErr.Renderer == nil {
+			return nil, nil, webrender.NewErrCreate(retErr.Error)
 		}
-		return nil, nil, retval.Renderer
+		return nil, nil, retErr.Renderer
 	}
+
+	modelObjs = retVal.Ms
 
 	roles := make([]models.UserRole, len(modelObjs))
 	// admin is 0 so it's ok
@@ -127,14 +113,14 @@ func CreateMany(mapper datamapper.IDataMapper, who models.UserIDFetchable, typeS
 	}
 
 	// Handes transaction
-	if models.ModelRegistry[typeString].Controller == nil {
+	if !retVal.Fetcher.HasRegisteredController() {
 		// It's possible that the user has no controller, even if it's new code
 		callOldBatchTransact(&data, &info) // for backward compatibility, for now
 		return &data, &info, nil
 	}
 
-	if ctrl, ok := models.ModelRegistry[data.TypeString].Controller.(controller.IAfterTransact); ok {
-		ctrl.AfterTransact(&data, &info)
+	for _, ctrl := range retVal.Fetcher.FetchControllersForOpAndHook(info.Op, "T") {
+		ctrl.(controller.IAfterTransact).AfterTransact(&data, &info)
 	}
 
 	return &data, &info, nil
@@ -142,24 +128,28 @@ func CreateMany(mapper datamapper.IDataMapper, who models.UserIDFetchable, typeS
 
 func CreateOne(mapper datamapper.IDataMapper, who models.UserIDFetchable, typeString string, modelObj models.IModel, options map[urlparam.Param]interface{}, logger Logger) (*controller.Data, *controller.EndPointInfo, render.Renderer) {
 	cargo := controller.Cargo{}
-	retval := transact.TransactCustomError(db.Shared(), func(tx *gorm.DB) (retval *webrender.RetVal) {
+
+	var retVal *datamapper.MapperRet
+	retErr := transact.TransactCustomError(db.Shared(), func(tx *gorm.DB) (retErr *webrender.RetError) {
 		if logger != nil {
 			logger.Log(tx, "POST", strings.ToLower(typeString), "1")
 		}
 
-		if modelObj, retval = mapper.CreateOne(tx, who, typeString, modelObj, options, &cargo); retval != nil {
-			log.Printf("Error in lifecycle.CreateOne: %s, %+v\n", typeString, retval)
-			return retval
+		if retVal, retErr = mapper.CreateOne(tx, who, typeString, modelObj, options, &cargo); retErr != nil {
+			log.Printf("Error in lifecycle.CreateOne: %s, %+v\n", typeString, retErr)
+			return retErr
 		}
 		return nil
 	}, "lifecycle.CreateOne")
 
-	if retval != nil {
-		if retval.Renderer == nil {
-			return nil, nil, webrender.NewErrCreate(retval.Error)
+	if retErr != nil {
+		if retErr.Renderer == nil {
+			return nil, nil, webrender.NewErrCreate(retErr.Error)
 		}
-		return nil, nil, retval.Renderer
+		return nil, nil, retErr.Renderer
 	}
+
+	modelObj = retVal.Ms[0]
 
 	roles := []models.UserRole{models.UserRoleAdmin} // just one item
 	ms := []models.IModel{modelObj}
@@ -172,14 +162,14 @@ func CreateOne(mapper datamapper.IDataMapper, who models.UserIDFetchable, typeSt
 	}
 
 	// Handes transaction
-	if models.ModelRegistry[typeString].Controller == nil {
+	if !retVal.Fetcher.HasRegisteredController() {
 		// It's possible that the user has no controller, even if it's new code
 		callOldOneTransact(&data, &info) // for backward compatibility, for now
 		return &data, &info, nil
 	}
 
-	if ctrl, ok := models.ModelRegistry[data.TypeString].Controller.(controller.IAfterTransact); ok {
-		ctrl.AfterTransact(&data, &info)
+	for _, ctrl := range retVal.Fetcher.FetchControllersForOpAndHook(info.Op, "T") {
+		ctrl.(controller.IAfterTransact).AfterTransact(&data, &info)
 	}
 
 	return &data, &info, nil
@@ -192,13 +182,15 @@ func ReadMany(mapper datamapper.IDataMapper, who models.UserIDFetchable, typeStr
 	}
 
 	cargo := controller.Cargo{}
-	modelObjs, roles, no, retval := mapper.ReadMany(db.Shared(), who, typeString, options, &cargo)
-	if retval != nil {
-		if retval.Renderer == nil {
-			return nil, nil, no, webrender.NewErrInternalServerError(retval.Error)
+	var retVal *datamapper.MapperRet
+	retVal, roles, no, retErr := mapper.ReadMany(db.Shared(), who, typeString, options, &cargo)
+	if retErr != nil {
+		if retErr.Renderer == nil {
+			return nil, nil, no, webrender.NewErrInternalServerError(retErr.Error)
 		}
-		return nil, nil, no, retval.Renderer
+		return nil, nil, no, retErr.Renderer
 	}
+	modelObjs := retVal.Ms
 
 	data := controller.Data{Ms: modelObjs, DB: nil, Who: who,
 		TypeString: typeString, Roles: roles, URLParams: options, Cargo: &cargo}
@@ -208,14 +200,14 @@ func ReadMany(mapper datamapper.IDataMapper, who models.UserIDFetchable, typeStr
 	}
 
 	// Handes transaction
-	if models.ModelRegistry[typeString].Controller == nil {
+	if !retVal.Fetcher.HasRegisteredController() {
 		// It's possible that the user has no controller, even if it's new code
 		callOldBatchTransact(&data, &info) // for backward compatibility, for now
 		return &data, &info, no, nil
 	}
 
-	if ctrl, ok := models.ModelRegistry[data.TypeString].Controller.(controller.IAfterTransact); ok {
-		ctrl.AfterTransact(&data, &info)
+	for _, ctrl := range retVal.Fetcher.FetchControllersForOpAndHook(info.Op, "T") {
+		ctrl.(controller.IAfterTransact).AfterTransact(&data, &info)
 	}
 
 	return &data, &info, no, nil
@@ -227,16 +219,17 @@ func ReadOne(mapper datamapper.IDataMapper, who models.UserIDFetchable, typeStri
 	}
 
 	cargo := controller.Cargo{}
-	modelObj, role, retval := mapper.ReadOne(db.Shared(), who, typeString, id, options, &cargo)
-	if retval != nil {
-		if retval.Renderer == nil {
-			return nil, nil, retval.Renderer
+	retVal, role, retErr := mapper.ReadOne(db.Shared(), who, typeString, id, options, &cargo)
+	if retErr != nil {
+		if retErr.Renderer == nil {
+			return nil, nil, retErr.Renderer
 		}
-		if gorm.IsRecordNotFoundError(retval.Error) {
-			return nil, nil, webrender.NewErrNotFound(retval.Error)
+		if gorm.IsRecordNotFoundError(retErr.Error) {
+			return nil, nil, webrender.NewErrNotFound(retErr.Error)
 		}
-		return nil, nil, webrender.NewErrInternalServerError(retval.Error) // TODO, probably should have a READ error
+		return nil, nil, webrender.NewErrInternalServerError(retErr.Error) // TODO, probably should have a READ error
 	}
+	modelObj := retVal.Ms[0]
 
 	data := controller.Data{Ms: []models.IModel{modelObj}, DB: nil, Who: who,
 		TypeString: typeString, Roles: []models.UserRole{role}, URLParams: options, Cargo: &cargo}
@@ -245,13 +238,13 @@ func ReadOne(mapper datamapper.IDataMapper, who models.UserIDFetchable, typeStri
 		Cardinality: controller.APICardinalityOne,
 	}
 
-	if models.ModelRegistry[typeString].Controller == nil {
+	if !retVal.Fetcher.HasRegisteredController() {
 		callOldOneTransact(&data, &info) // for backward compatibility, for now
 		return &data, &info, nil
 	}
 
-	if ctrl, ok := models.ModelRegistry[data.TypeString].Controller.(controller.IAfterTransact); ok {
-		ctrl.AfterTransact(&data, &info)
+	for _, ctrl := range retVal.Fetcher.FetchControllersForOpAndHook(info.Op, "T") {
+		ctrl.(controller.IAfterTransact).AfterTransact(&data, &info)
 	}
 
 	return &data, &info, nil
@@ -259,25 +252,28 @@ func ReadOne(mapper datamapper.IDataMapper, who models.UserIDFetchable, typeStri
 
 func UpdateMany(mapper datamapper.IDataMapper, who models.UserIDFetchable, typeString string, modelObjs []models.IModel, options map[urlparam.Param]interface{}, logger Logger) (*controller.Data, *controller.EndPointInfo, render.Renderer) {
 	cargo := controller.Cargo{}
-	retval := transact.TransactCustomError(db.Shared(), func(tx *gorm.DB) (retval *webrender.RetVal) {
+	var retVal *datamapper.MapperRet
+	retErr := transact.TransactCustomError(db.Shared(), func(tx *gorm.DB) (retErr *webrender.RetError) {
 		if logger != nil {
 			logger.Log(tx, "PUT", strings.ToLower(typeString), "n")
 		}
 
-		if modelObjs, retval = mapper.UpdateMany(tx, who, typeString, modelObjs, options, &cargo); retval != nil {
-			log.Printf("Error in lifecycle.UpdateMany: %s, %+v\n", typeString, retval)
-			return retval
+		if retVal, retErr = mapper.UpdateMany(tx, who, typeString, modelObjs, options, &cargo); retErr != nil {
+			log.Printf("Error in lifecycle.UpdateMany: %s, %+v\n", typeString, retErr)
+			return retErr
 		}
 
 		return nil
 	}, "lifecycle.UpdateMany")
 
-	if retval != nil {
-		if retval.Renderer == nil {
-			return nil, nil, retval.Renderer
+	if retErr != nil {
+		if retErr.Renderer == nil {
+			return nil, nil, retErr.Renderer
 		}
-		return nil, nil, webrender.NewErrUpdate(retval.Error) // TODO, probably should have a READ error
+		return nil, nil, webrender.NewErrUpdate(retErr.Error) // TODO, probably should have a READ error
 	}
+
+	modelObjs = retVal.Ms
 
 	roles := make([]models.UserRole, len(modelObjs))
 	for i := 0; i < len(roles); i++ {
@@ -291,13 +287,13 @@ func UpdateMany(mapper datamapper.IDataMapper, who models.UserIDFetchable, typeS
 		Cardinality: controller.APICardinalityMany,
 	}
 
-	if models.ModelRegistry[typeString].Controller == nil {
+	if !retVal.Fetcher.HasRegisteredController() {
 		callOldBatchTransact(&data, &info) // for backward compatibility, for now
 		return &data, &info, nil
 	}
 
-	if ctrl, ok := models.ModelRegistry[data.TypeString].Controller.(controller.IAfterTransact); ok {
-		ctrl.AfterTransact(&data, &info)
+	for _, ctrl := range retVal.Fetcher.FetchControllersForOpAndHook(info.Op, "T") {
+		ctrl.(controller.IAfterTransact).AfterTransact(&data, &info)
 	}
 
 	return &data, &info, nil
@@ -305,23 +301,25 @@ func UpdateMany(mapper datamapper.IDataMapper, who models.UserIDFetchable, typeS
 
 func UpdateOne(mapper datamapper.IDataMapper, who models.UserIDFetchable, typeString string, modelObj models.IModel, id *datatypes.UUID, options map[urlparam.Param]interface{}, logger Logger) (*controller.Data, *controller.EndPointInfo, render.Renderer) {
 	cargo := controller.Cargo{}
-	retval := transact.TransactCustomError(db.Shared(), func(tx *gorm.DB) (retval *webrender.RetVal) {
+	var retVal *datamapper.MapperRet
+	retErr := transact.TransactCustomError(db.Shared(), func(tx *gorm.DB) (retErr *webrender.RetError) {
 		if logger != nil {
 			logger.Log(tx, "PUT", strings.ToLower(typeString), "1")
 		}
 
-		if modelObj, retval = mapper.UpdateOne(tx, who, typeString, modelObj, id, options, &cargo); retval != nil {
-			log.Printf("Error in lifecycle.UpdateOne: %s, %+v\n", typeString, retval)
-			return retval
+		if retVal, retErr = mapper.UpdateOne(tx, who, typeString, modelObj, id, options, &cargo); retErr != nil {
+			log.Printf("Error in lifecycle.UpdateOne: %s, %+v\n", typeString, retErr)
+			return retErr
 		}
 		return nil
 	}, "lifecycle.UpdateOne")
-	if retval != nil {
-		if retval.Renderer == nil {
-			return nil, nil, retval.Renderer
+	if retErr != nil {
+		if retErr.Renderer == nil {
+			return nil, nil, retErr.Renderer
 		}
-		return nil, nil, webrender.NewErrUpdate(retval.Error) // TODO, probably should have a READ error
+		return nil, nil, webrender.NewErrUpdate(retErr.Error) // TODO, probably should have a READ error
 	}
+	modelObj = retVal.Ms[0]
 
 	role := models.UserRoleAdmin
 	data := controller.Data{Ms: []models.IModel{modelObj}, DB: nil, Who: who,
@@ -331,13 +329,13 @@ func UpdateOne(mapper datamapper.IDataMapper, who models.UserIDFetchable, typeSt
 		Cardinality: controller.APICardinalityOne,
 	}
 
-	if models.ModelRegistry[typeString].Controller == nil {
+	if !retVal.Fetcher.HasRegisteredController() {
 		callOldOneTransact(&data, &info) // for backward compatibility, for now
 		return &data, &info, nil
 	}
 
-	if ctrl, ok := models.ModelRegistry[data.TypeString].Controller.(controller.IAfterTransact); ok {
-		ctrl.AfterTransact(&data, &info)
+	for _, ctrl := range retVal.Fetcher.FetchControllersForOpAndHook(info.Op, "T") {
+		ctrl.(controller.IAfterTransact).AfterTransact(&data, &info)
 	}
 
 	return &data, &info, nil
@@ -346,24 +344,27 @@ func UpdateOne(mapper datamapper.IDataMapper, who models.UserIDFetchable, typeSt
 func PatchMany(mapper datamapper.IDataMapper, who models.UserIDFetchable, typeString string, jsonIDPatches []models.JSONIDPatch, options map[urlparam.Param]interface{}, logger Logger) (*controller.Data, *controller.EndPointInfo, render.Renderer) {
 	var modelObjs []models.IModel
 	cargo := controller.Cargo{}
-	retval := transact.TransactCustomError(db.Shared(), func(tx *gorm.DB) (retval *webrender.RetVal) {
+	var retVal *datamapper.MapperRet
+	retErr := transact.TransactCustomError(db.Shared(), func(tx *gorm.DB) (retErr *webrender.RetError) {
 		if logger != nil {
 			logger.Log(tx, "PATCH", strings.ToLower(typeString), "n")
 		}
 
-		if modelObjs, retval = mapper.PatchMany(tx, who, typeString, jsonIDPatches, options, &cargo); retval != nil {
-			log.Printf("Error in lifecycle.PatchMany: %s, %+v\n", typeString, retval)
-			return retval
+		if retVal, retErr = mapper.PatchMany(tx, who, typeString, jsonIDPatches, options, &cargo); retErr != nil {
+			log.Printf("Error in lifecycle.PatchMany: %s, %+v\n", typeString, retErr)
+			return retErr
 		}
 		return nil
 	}, "lifecycle.PatchMany")
 
-	if retval != nil {
-		if retval.Renderer == nil {
-			return nil, nil, retval.Renderer
+	if retErr != nil {
+		if retErr.Renderer == nil {
+			return nil, nil, retErr.Renderer
 		}
-		return nil, nil, webrender.NewErrPatch(retval.Error) // TODO, probably should have a READ error
+		return nil, nil, webrender.NewErrPatch(retErr.Error) // TODO, probably should have a READ error
 	}
+
+	modelObjs = retVal.Ms
 
 	roles := make([]models.UserRole, len(modelObjs))
 	for i := 0; i < len(roles); i++ {
@@ -377,13 +378,13 @@ func PatchMany(mapper datamapper.IDataMapper, who models.UserIDFetchable, typeSt
 		Cardinality: controller.APICardinalityMany,
 	}
 
-	if models.ModelRegistry[typeString].Controller == nil {
+	if !retVal.Fetcher.HasRegisteredController() {
 		callOldBatchTransact(&data, &info) // for backward compatibility, for now
 		return &data, &info, nil
 	}
 
-	if ctrl, ok := models.ModelRegistry[data.TypeString].Controller.(controller.IAfterTransact); ok {
-		ctrl.AfterTransact(&data, &info)
+	for _, ctrl := range retVal.Fetcher.FetchControllersForOpAndHook(info.Op, "T") {
+		ctrl.(controller.IAfterTransact).AfterTransact(&data, &info)
 	}
 
 	return &data, &info, nil
@@ -392,25 +393,28 @@ func PatchMany(mapper datamapper.IDataMapper, who models.UserIDFetchable, typeSt
 func PatchOne(mapper datamapper.IDataMapper, who models.UserIDFetchable, typeString string, jsonPatch []byte, id *datatypes.UUID, options map[urlparam.Param]interface{}, logger Logger) (*controller.Data, *controller.EndPointInfo, render.Renderer) {
 	cargo := controller.Cargo{}
 	var modelObj models.IModel
-	retval := transact.TransactCustomError(db.Shared(), func(tx *gorm.DB) (retval *webrender.RetVal) {
+	var retVal *datamapper.MapperRet
+	retErr := transact.TransactCustomError(db.Shared(), func(tx *gorm.DB) (retErr *webrender.RetError) {
 		if logger != nil {
 			logger.Log(tx, "PATCH", strings.ToLower(typeString), "1")
 		}
 
-		if modelObj, retval = mapper.PatchOne(tx, who, typeString, jsonPatch, id, options, &cargo); retval != nil {
-			log.Printf("Error in lifecycle.PatchOne: %s, %+v\n", typeString, retval)
-			return retval
+		if retVal, retErr = mapper.PatchOne(tx, who, typeString, jsonPatch, id, options, &cargo); retErr != nil {
+			log.Printf("Error in lifecycle.PatchOne: %s, %+v\n", typeString, retErr)
+			return retErr
 		}
 
 		return nil
 	}, "lifecycle.PatchOne")
 
-	if retval != nil {
-		if retval.Renderer == nil {
-			return nil, nil, retval.Renderer
+	if retErr != nil {
+		if retErr.Renderer == nil {
+			return nil, nil, retErr.Renderer
 		}
-		return nil, nil, webrender.NewErrPatch(retval.Error) // TODO, probably should have a READ error
+		return nil, nil, webrender.NewErrPatch(retErr.Error) // TODO, probably should have a READ error
 	}
+
+	modelObj = retVal.Ms[0]
 
 	role := models.UserRoleAdmin
 	data := controller.Data{Ms: []models.IModel{modelObj}, DB: nil, Who: who,
@@ -420,13 +424,13 @@ func PatchOne(mapper datamapper.IDataMapper, who models.UserIDFetchable, typeStr
 		Cardinality: controller.APICardinalityOne,
 	}
 
-	if models.ModelRegistry[typeString].Controller == nil {
+	if !retVal.Fetcher.HasRegisteredController() {
 		callOldOneTransact(&data, &info) // for backward compatibility, for now
 		return &data, &info, nil
 	}
 
-	if ctrl, ok := models.ModelRegistry[data.TypeString].Controller.(controller.IAfterTransact); ok {
-		ctrl.AfterTransact(&data, &info)
+	for _, ctrl := range retVal.Fetcher.FetchControllersForOpAndHook(info.Op, "T") {
+		ctrl.(controller.IAfterTransact).AfterTransact(&data, &info)
 	}
 
 	return &data, &info, nil
@@ -434,24 +438,27 @@ func PatchOne(mapper datamapper.IDataMapper, who models.UserIDFetchable, typeStr
 
 func DeleteMany(mapper datamapper.IDataMapper, who models.UserIDFetchable, typeString string, modelObjs []models.IModel, options map[urlparam.Param]interface{}, logger Logger) (*controller.Data, *controller.EndPointInfo, render.Renderer) {
 	cargo := controller.Cargo{}
-	retval := transact.TransactCustomError(db.Shared(), func(tx *gorm.DB) (retval *webrender.RetVal) {
+	var retVal *datamapper.MapperRet
+	retErr := transact.TransactCustomError(db.Shared(), func(tx *gorm.DB) (retErr *webrender.RetError) {
 		if logger != nil {
 			logger.Log(tx, "DELETE", strings.ToLower(typeString), "n")
 		}
 
-		if modelObjs, retval = mapper.DeleteMany(tx, who, typeString, modelObjs, nil, &cargo); retval != nil {
-			log.Printf("Error in lifecycle.DeleteMany: %s, %+v\n", typeString, retval)
-			return retval
+		if retVal, retErr = mapper.DeleteMany(tx, who, typeString, modelObjs, nil, &cargo); retErr != nil {
+			log.Printf("Error in lifecycle.DeleteMany: %s, %+v\n", typeString, retErr)
+			return retErr
 		}
 		return nil
 	}, "lifecycle.DeleteMany")
 
-	if retval != nil {
-		if retval.Renderer == nil {
-			return nil, nil, retval.Renderer
+	if retErr != nil {
+		if retErr.Renderer == nil {
+			return nil, nil, retErr.Renderer
 		}
-		return nil, nil, webrender.NewErrDelete(retval.Error) // TODO, probably should have a READ error
+		return nil, nil, webrender.NewErrDelete(retErr.Error) // TODO, probably should have a READ error
 	}
+
+	modelObjs = retVal.Ms
 
 	roles := make([]models.UserRole, len(modelObjs))
 	for i := 0; i < len(roles); i++ {
@@ -465,13 +472,13 @@ func DeleteMany(mapper datamapper.IDataMapper, who models.UserIDFetchable, typeS
 		Cardinality: controller.APICardinalityMany,
 	}
 
-	if models.ModelRegistry[typeString].Controller == nil {
+	if !retVal.Fetcher.HasRegisteredController() {
 		callOldBatchTransact(&data, &info) // for backward compatibility, for now
 		return &data, &info, nil
 	}
 
-	if ctrl, ok := models.ModelRegistry[data.TypeString].Controller.(controller.IAfterTransact); ok {
-		ctrl.AfterTransact(&data, &info)
+	for _, ctrl := range retVal.Fetcher.FetchControllersForOpAndHook(info.Op, "T") {
+		ctrl.(controller.IAfterTransact).AfterTransact(&data, &info)
 	}
 
 	return &data, &info, nil
@@ -479,23 +486,23 @@ func DeleteMany(mapper datamapper.IDataMapper, who models.UserIDFetchable, typeS
 
 func DeleteOne(mapper datamapper.IDataMapper, who models.UserIDFetchable, typeString string, id *datatypes.UUID, options map[urlparam.Param]interface{}, logger Logger) (*controller.Data, *controller.EndPointInfo, render.Renderer) {
 	cargo := controller.Cargo{}
-	var modelObj models.IModel
-
-	retval := transact.TransactCustomError(db.Shared(), func(tx *gorm.DB) (retval *webrender.RetVal) {
+	var retVal *datamapper.MapperRet
+	retErr := transact.TransactCustomError(db.Shared(), func(tx *gorm.DB) (retErr *webrender.RetError) {
 		logger.Log(tx, "DELETE", strings.ToLower(typeString), "1")
 
-		if modelObj, retval = mapper.DeleteOne(tx, who, typeString, id, options, &cargo); retval != nil {
-			log.Printf("Error in lifecycle.DeleteOne: %s %+v\n", typeString, retval)
-			return retval
+		if retVal, retErr = mapper.DeleteOne(tx, who, typeString, id, options, &cargo); retErr != nil {
+			log.Printf("Error in lifecycle.DeleteOne: %s %+v\n", typeString, retErr)
+			return retErr
 		}
 		return
 	}, "lifecycle.DeleteOne")
-	if retval != nil {
-		if retval.Renderer == nil {
-			return nil, nil, retval.Renderer
+	if retErr != nil {
+		if retErr.Renderer == nil {
+			return nil, nil, retErr.Renderer
 		}
-		return nil, nil, webrender.NewErrDelete(retval.Error) // TODO, probably should have a READ error
+		return nil, nil, webrender.NewErrDelete(retErr.Error) // TODO, probably should have a READ error
 	}
+	modelObj := retVal.Ms[0]
 
 	role := models.UserRoleAdmin
 	data := controller.Data{Ms: []models.IModel{modelObj}, DB: nil, Who: who,
@@ -505,13 +512,13 @@ func DeleteOne(mapper datamapper.IDataMapper, who models.UserIDFetchable, typeSt
 		Cardinality: controller.APICardinalityOne,
 	}
 
-	if models.ModelRegistry[typeString].Controller == nil {
+	if !retVal.Fetcher.HasRegisteredController() {
 		callOldOneTransact(&data, &info) // for backward compatibility, for now
 		return &data, &info, nil
 	}
 
-	if ctrl, ok := models.ModelRegistry[data.TypeString].Controller.(controller.IAfterTransact); ok {
-		ctrl.AfterTransact(&data, &info)
+	for _, ctrl := range retVal.Fetcher.FetchControllersForOpAndHook(info.Op, "T") {
+		ctrl.(controller.IAfterTransact).AfterTransact(&data, &info)
 	}
 
 	return &data, &info, nil

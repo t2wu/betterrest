@@ -458,16 +458,16 @@ type GuardRetVal struct {
 	Renderer render.Renderer
 }
 
-func NewRetValWithError(err error) *RetVal {
-	return &RetVal{Error: err}
+func NewRetValWithError(err error) *RetError {
+	return &RetError{Error: err}
 }
 
-func NewRetValWithRendererError(err error, renderer render.Renderer) *RetVal {
-	return &RetVal{Error: err, Renderer: renderer}
+func NewRetValWithRendererError(err error, renderer render.Renderer) *RetError {
+	return &RetError{Error: err, Renderer: renderer}
 }
 
-// RetVal is the hookpoint return structure
-type RetVal struct {
+// RetError is the hookpoint return structure
+type RetError struct {
 	// Error to return error, should always be set, even when having custom renderer
 	// This is so that if we call datamapper or hookpoint, when we aren't using it in the
 	// HTTP context, we can still handle error properly

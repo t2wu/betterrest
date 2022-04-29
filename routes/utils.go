@@ -11,6 +11,7 @@ import (
 	"github.com/t2wu/betterrest/libs/utils/jsontrans"
 	"github.com/t2wu/betterrest/libs/webrender"
 	"github.com/t2wu/betterrest/models"
+	"github.com/t2wu/betterrest/registry"
 )
 
 // transformJSONToModel transforms fields when there is IFieldTransformJSONToModel
@@ -78,8 +79,8 @@ func GuardMiddleWare(typeString string) func(c *gin.Context) {
 		who := WhoFromContext(r)
 
 		// Old, deprecated
-		if models.ModelRegistry[typeString].Controller == nil {
-			modelObj := models.NewFromTypeString(typeString)
+		if !registry.ModelRegistry[typeString].ControllerMap.HasRegisteredAnyController() {
+			modelObj := registry.NewFromTypeString(typeString)
 			if m, ok := modelObj.(models.IGuardAPIEntry); ok {
 				http := models.HTTP{Endpoint: r.URL.Path, Op: models.HTTPMethodToCRUDOp(r.Method)}
 				if !m.GuardAPIEntry(who, http) {
@@ -99,8 +100,8 @@ func GuardMiddleWare(typeString string) func(c *gin.Context) {
 			Cardinality: controller.APICardinalityOne,
 		}
 
-		if ctrl, ok := models.ModelRegistry[typeString].Controller.(controller.IGuardAPIEntry); ok {
-			if guardRetVal := ctrl.GuardAPIEntry(&data, &info); !guardRetVal.ToPass {
+		if guard := registry.ModelRegistry[typeString].GuardMethod; guard != nil {
+			if guardRetVal := guard(data.Who, &info); !guardRetVal.ToPass {
 				defer c.Abort() // abort
 
 				if guardRetVal.Renderer == nil {

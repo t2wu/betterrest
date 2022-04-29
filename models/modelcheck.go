@@ -32,6 +32,19 @@ func IsFieldInModel(modelObj IModel, field string) bool {
 	return ok && ok2
 }
 
+func GetInnerModelIfValid(modelObj IModel, field string) (IModel, error) {
+	typ, err := GetModelFieldTypeInModelIfValid(modelObj, field)
+	if err != nil {
+		return nil, err
+	}
+
+	m, ok := reflect.New(typ).Interface().(IModel)
+	if !ok {
+		return nil, fmt.Errorf("not an IModel")
+	}
+	return m, nil
+}
+
 // Never returns the pointer value
 // Since what we want is reflec.New() and it would be a pointer
 func GetModelFieldTypeInModelIfValid(modelObj IModel, field string) (reflect.Type, error) {
@@ -63,27 +76,6 @@ func GetModelFieldTypeInModelIfValid(modelObj IModel, field string) (reflect.Typ
 	}
 
 	return typ, err
-}
-
-func GetModelTableNameInModelIfValid(modelObj IModel, field string) (string, error) {
-	typ, err := GetModelFieldTypeInModelIfValid(modelObj, field)
-	if err != nil {
-		return "", err
-	}
-	return GetTableNameFromType(typ), nil
-}
-
-func GetInnerModelIfValid(modelObj IModel, field string) (IModel, error) {
-	typ, err := GetModelFieldTypeInModelIfValid(modelObj, field)
-	if err != nil {
-		return nil, err
-	}
-
-	m, ok := reflect.New(typ).Interface().(IModel)
-	if !ok {
-		return nil, fmt.Errorf("not an IModel")
-	}
-	return m, nil
 }
 
 // FieldNotInModelError is for GetModelFieldTypeIfValid.

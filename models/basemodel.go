@@ -2,13 +2,11 @@ package models
 
 import (
 	"encoding/json"
-	"fmt"
 	"reflect"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/stoewer/go-strcase"
 	"github.com/t2wu/betterrest/libs/datatypes"
 	"github.com/t2wu/betterrest/libs/urlparam"
 	"github.com/t2wu/betterrest/libs/utils/jsontrans"
@@ -136,96 +134,6 @@ type JSONIDPatch struct {
 	Patch json.RawMessage `json:"patch"` // json.RawMessage is actually just typedefed to []byte
 }
 
-// -------------------------
-
-// OrgModelTypeFromOrgResourceTypeString given org resource typeString
-// returns the reflect type of the organization
-func OrgModelTypeFromOrgResourceTypeString(typeString string) reflect.Type {
-	if ModelRegistry[typeString].Mapper != MapperTypeViaOrganization {
-		// Programming error
-		panic(fmt.Sprintf("TypeString %s does not represents a resource under organization", typeString))
-	}
-
-	orgTypeString := ModelRegistry[typeString].OrgTypeString
-	return ModelRegistry[orgTypeString].Typ
-}
-
-// ----------------------------
-// The new models for all the link tables
-
-// NewOrgModelFromOrgResourceTypeString gets Organization object
-// If you're a resource under hooked up by Organization
-func NewOrgModelFromOrgResourceTypeString(typeString string) IModel {
-	if ModelRegistry[typeString].Mapper != MapperTypeViaOrganization {
-		// Programming error
-		panic(fmt.Sprintf("TypeString %s does not represents a resource under organization", typeString))
-	}
-
-	orgTypeString := ModelRegistry[typeString].OrgTypeString
-	return reflect.New(ModelRegistry[orgTypeString].Typ).Interface().(IModel)
-}
-
-// NewOrgOwnershipModelFromOrgResourceTypeString gets the joining table from the resource's
-// organization model to the user
-func NewOrgOwnershipModelFromOrgResourceTypeString(typeString string) IModel {
-	if ModelRegistry[typeString].Mapper != MapperTypeViaOrganization {
-		// Programming error
-		panic(fmt.Sprintf("TypeString %s does not represents a resource under organization", typeString))
-	}
-
-	orgTypeString := ModelRegistry[typeString].OrgTypeString // org is an ownership resource
-	return NewOwnershipModelFromOwnershipResourceTypeString(orgTypeString)
-}
-
-// NewOwnershipModelFromOwnershipResourceTypeString returns the model object
-// of the ownership table (the table that links from this resource represented by the type string
-// to the user)
-func NewOwnershipModelFromOwnershipResourceTypeString(typeString string) IModel {
-	if ModelRegistry[typeString].Mapper != MapperTypeViaOwnership {
-		// Programming error
-		panic(fmt.Sprintf("TypeString %s does not represents a resource under organization", typeString))
-	}
-
-	// Either custom one or the default one
-	typ := ModelRegistry[typeString].OwnershipType
-
-	return reflect.New(typ).Interface().(IModel)
-}
-
-// ----------------------------
-// The new linking table names
-
-// OrgModelNameFromOrgResourceTypeString given org resource typeString,
-// returns organization table name
-func OrgModelNameFromOrgResourceTypeString(typeString string) string {
-	m := NewOrgModelFromOrgResourceTypeString(typeString)
-	return GetTableNameFromIModel(m)
-}
-
-// OrgOwnershipModelNameFromOrgResourceTypeString given org resource typeString,
-// returns name of organization table's linking table (ownership table) to user
-func OrgOwnershipModelNameFromOrgResourceTypeString(typeString string) string {
-	m := NewOrgOwnershipModelFromOrgResourceTypeString(typeString)
-	return GetTableNameFromIModel(m)
-}
-
-// OwnershipTableNameFromOwnershipResourceTypeString given ownership resource typeStirng
-// returns name of ownership table to the user
-func OwnershipTableNameFromOwnershipResourceTypeString(typeString string) string {
-	// m := NewOwnershipModelFromOwnershipResourceTypeString(typeString)
-
-	// Either custom one or the default one
-
-	tableName := *ModelRegistry[typeString].OwnershipTableName
-
-	if tableName == "ownership_model_with_id_base" {
-		m := reflect.New(ModelRegistry[typeString].Typ).Interface().(IModel)
-		tableName = "user_owns_" + GetTableNameFromIModel(m)
-	}
-
-	return tableName
-}
-
 // ----------------------------
 
 // IDoRealDelete is an interface to customize specification for real db delete
@@ -233,6 +141,8 @@ type IDoRealDelete interface {
 	DoRealDelete() bool
 }
 
+// ------------------------------------------------------------------------------------
+// Old Rest Op
 // CRUPDOp designates the type of operations for BeforeCRUPD and AfterCRUPD hookpoints
 type CRUPDOp int
 
@@ -268,6 +178,9 @@ func HTTPMethodToCRUDOp(method string) CRUPDOp {
 	}
 }
 
+// End old Rest Op
+// ------------------------------------------------------------------------------------
+
 // IGuardAPIEntry supports method which guard access to API based on scope
 type IGuardAPIEntry interface {
 	GuardAPIEntry(models interface{}, http HTTP) bool
@@ -275,6 +188,11 @@ type IGuardAPIEntry interface {
 
 // ModelCargo is payload between hookpoints
 type ModelCargo struct {
+	Payload interface{}
+}
+
+// BatchHookCargo is payload between batch update and batch delete hookpoints
+type BatchHookCargo struct {
 	Payload interface{}
 }
 
@@ -527,45 +445,6 @@ func (b *OwnershipModelWithIDBase) GetUpdatedAt() *time.Time {
 // IHasTableName we know if there is Gorm's defined custom TableName
 type IHasTableName interface {
 	TableName() string
-}
-
-// GetTableNameFromIModel gets table name from an IModel
-func GetTableNameFromIModel(model IModel) string {
-	var tableName string
-	if m, ok := model.(IHasTableName); ok {
-		tableName = m.TableName()
-	} else {
-		tableName = reflect.TypeOf(model).String()
-		// If it is something like "models.XXX", we only want the stuff ater "."
-		if strings.Contains(tableName, ".") {
-			tableName = strings.Split(tableName, ".")[1]
-		}
-
-		tableName = strcase.SnakeCase(tableName)
-	}
-
-	// If it's a pointer, get rid of "*"
-	if strings.HasPrefix(tableName, "*") {
-		tableName = tableName[1:]
-	}
-
-	return tableName
-}
-
-// GetTableNameFromTypeString get table name from typeString
-func GetTableNameFromTypeString(typeString string) string {
-	model := NewFromTypeString(typeString)
-	return GetTableNameFromIModel(model)
-}
-
-// GetTableNameFromType get table name from the model reflect.type
-func GetTableNameFromType(typ reflect.Type) string {
-	model := reflect.New(typ).Interface().(IModel)
-	return GetTableNameFromIModel(model)
-}
-
-func GetModelTypeNameFromIModel(model IModel) string {
-	return reflect.TypeOf(model).Elem().Name()
 }
 
 // ----------------

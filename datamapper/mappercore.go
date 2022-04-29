@@ -10,6 +10,7 @@ import (
 	"github.com/t2wu/betterrest/libs/datatypes"
 	"github.com/t2wu/betterrest/libs/webrender"
 	"github.com/t2wu/betterrest/models"
+	"github.com/t2wu/betterrest/registry"
 )
 
 func callOldBatch(
@@ -44,7 +45,7 @@ func callOldBatch(
 	}
 
 	// Before batch update hookpoint
-	// if before := models.ModelRegistry[typeString].BeforeUpdate; before != nil {
+	// if before := registry.ModelRegistry[typeString].BeforeUpdate; before != nil {
 	if oldSpecific != nil {
 		if err := oldSpecific(bhpData); err != nil {
 			return err
@@ -121,35 +122,34 @@ type batchOpJob struct {
 	oldBefore func(bhpData models.BatchHookPointData) error
 	oldAfter  func(bhpData models.BatchHookPointData) error
 
-	ctrl interface{}
-	data *controller.Data
-	info *controller.EndPointInfo
+	fetcher *CtrlFetcher
+	data    *controller.Data
+	info    *controller.EndPointInfo
 }
 
 func batchOpCore(job batchOpJob,
 	taskFunc func(db *gorm.DB, who models.UserIDFetchable, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObj models.IModel) (models.IModel, error),
-) ([]models.IModel, *webrender.RetVal) {
+) (*MapperRet, *webrender.RetError) {
 	modelObjs, oldmodelObjs, oldBefore, oldAfter := job.modelObjs, job.oldmodelObjs, job.oldBefore, job.oldAfter
-	ctrl, data, info := job.ctrl, job.data, job.info
+	fetcher, data, info := job.fetcher, job.data, job.info
 
 	ms := make([]models.IModel, len(modelObjs))
 
 	if data.Cargo == nil {
-		return nil, &webrender.RetVal{Error: fmt.Errorf("cargo shouldn't be nil")}
+		return nil, &webrender.RetError{Error: fmt.Errorf("cargo shouldn't be nil")}
 	}
 
-	if ctrl == nil { // Everything within this is deprecated
-		if err := callOldBatch(data, info, models.ModelRegistry[data.TypeString].BeforeCUPD, oldBefore); err != nil {
-			return nil, &webrender.RetVal{Error: err}
+	// deprecated, only try to call when no controlelr exists
+	if !fetcher.HasRegisteredController() {
+		if err := callOldBatch(data, info, registry.ModelRegistry[data.TypeString].BeforeCUPD, oldBefore); err != nil {
+			return nil, &webrender.RetError{Error: err}
 		}
 	}
 
-	// New controller before hookpoint
-	if ctrl != nil {
-		if ctrl2, ok := ctrl.(controller.IBefore); ok {
-			if retval := ctrl2.Before(data, info); retval != nil {
-				return nil, retval
-			}
+	// fetch all controllers with before hooks
+	for _, ctrl := range fetcher.FetchControllersForOpAndHook(info.Op, "B") {
+		if renderer := ctrl.(controller.IBefore).Before(data, info); renderer != nil {
+			return nil, renderer
 		}
 	}
 
@@ -166,28 +166,29 @@ func batchOpCore(job batchOpJob,
 			m, err = taskFunc(data.DB, data.Who, data.TypeString, modelObj, id, oldmodelObjs[i])
 		}
 		if err != nil { // Error is "record not found" when not found
-			return nil, &webrender.RetVal{Error: err}
+			return nil, &webrender.RetError{Error: err}
 		}
 
 		ms[i] = m
 	}
 
-	if ctrl == nil { // Everything within this is deprecated
-		if err := callOldBatch(data, info, models.ModelRegistry[data.TypeString].AfterCRUPD, oldAfter); err != nil {
-			return nil, &webrender.RetVal{Error: err}
+	if !fetcher.HasRegisteredController() { // deprecated, only try to call when no controlelr exists
+		if err := callOldBatch(data, info, registry.ModelRegistry[data.TypeString].AfterCRUPD, oldAfter); err != nil {
+			return nil, &webrender.RetError{Error: err}
 		}
 	}
 
-	// New controller after hookpoint
-	if ctrl != nil {
-		if ctrl2, ok := ctrl.(controller.IAfter); ok {
-			if retval := ctrl2.After(data, info); retval != nil {
-				return nil, retval
-			}
+	// fetch all controllers with after hooks
+	for _, ctrl := range fetcher.FetchControllersForOpAndHook(info.Op, "A") {
+		if renderer := ctrl.(controller.IAfter).After(data, info); renderer != nil {
+			return nil, renderer
 		}
 	}
 
-	return ms, nil
+	return &MapperRet{
+		Ms:      ms,
+		Fetcher: fetcher,
+	}, nil
 }
 
 type opJob struct {
@@ -206,35 +207,36 @@ type opJob struct {
 	beforeFuncName *string
 	afterFuncName  *string
 
-	ctrl interface{}
-	data *controller.Data
-	info *controller.EndPointInfo
+	fetcher *CtrlFetcher
+	data    *controller.Data
+	info    *controller.EndPointInfo
 }
 
 func opCore(
 	job opJob,
 	taskFun func(db *gorm.DB, who models.UserIDFetchable, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObj models.IModel) (models.IModel, error),
-) (models.IModel, *webrender.RetVal) {
+) (*MapperRet, *webrender.RetError) {
 	oldModelObj, modelObj, beforeFuncName, afterFuncName := job.oldModelObj, job.modelObj, job.beforeFuncName, job.afterFuncName
-	data, info := job.data, job.info
+	fetcher, data, info := job.fetcher, job.data, job.info
 
 	if data.Cargo == nil {
-		return nil, &webrender.RetVal{Error: fmt.Errorf("cargo shouldn't be nil")}
+		return nil, &webrender.RetError{Error: fmt.Errorf("cargo shouldn't be nil")}
 	}
 
-	if job.ctrl == nil { // deprecated
+	// Deprecated
+	if !fetcher.HasRegisteredController() { // deprecated, only try to call when no controller exists
 		if m, ok := data.Ms[0].(models.IBeforeCUPD); ok {
 			if err := callOldSingle(data, info, m.BeforeCUPDDB, beforeFuncName); err != nil {
-				return nil, &webrender.RetVal{Error: err}
+				return nil, &webrender.RetError{Error: err}
 			}
 		}
 	}
+	// End deprecated
 
-	if job.ctrl != nil {
-		if ctrl2, ok := job.ctrl.(controller.IBefore); ok {
-			if renderer := ctrl2.Before(data, info); renderer != nil {
-				return nil, renderer
-			}
+	// fetch all controllers with before hooks
+	for _, ctrl := range fetcher.FetchControllersForOpAndHook(info.Op, "B") {
+		if renderer := ctrl.(controller.IBefore).Before(data, info); renderer != nil {
+			return nil, renderer
 		}
 	}
 
@@ -242,26 +244,30 @@ func opCore(
 	id := modelObj.GetID()
 	modelObjReloaded, err := taskFun(data.DB, data.Who, data.TypeString, modelObj, id, oldModelObj)
 	if err != nil {
-		return nil, &webrender.RetVal{Error: err}
+		return nil, &webrender.RetError{Error: err}
 	}
 
 	data.Ms[0] = modelObjReloaded
 
-	if job.ctrl == nil { // deprecated
+	// Deprecated
+	if !fetcher.HasRegisteredController() { // deprecated, only try to call when no controlelr exists
 		if m, ok := data.Ms[0].(models.IAfterCRUPD); ok {
 			if err := callOldSingle(data, info, m.AfterCRUPDDB, afterFuncName); err != nil {
-				return nil, &webrender.RetVal{Error: err}
+				return nil, &webrender.RetError{Error: err}
 			}
 		}
 	}
+	// End deprecated
 
-	if job.ctrl != nil {
-		if ctrl2, ok := job.ctrl.(controller.IAfter); ok {
-			if renderer := ctrl2.After(data, info); renderer != nil {
-				return nil, renderer
-			}
+	// fetch all controllers with after hooks
+	for _, ctrl := range fetcher.FetchControllersForOpAndHook(info.Op, "A") {
+		if renderer := ctrl.(controller.IAfter).After(data, info); renderer != nil {
+			return nil, renderer
 		}
 	}
 
-	return modelObjReloaded, nil
+	return &MapperRet{
+		Ms:      []models.IModel{modelObjReloaded},
+		Fetcher: fetcher,
+	}, nil
 }

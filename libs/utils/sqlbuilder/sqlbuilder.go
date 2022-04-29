@@ -12,6 +12,7 @@ import (
 	"github.com/t2wu/betterrest/libs/utils/letters"
 	"github.com/t2wu/betterrest/models"
 	qry "github.com/t2wu/betterrest/query"
+	"github.com/t2wu/betterrest/registry"
 )
 
 // Something like this.
@@ -42,7 +43,7 @@ type TwoLevelFilterCriteria struct { //看到I看不到 lower left bracket
 // AddWhereStmt adds where statement into db
 func AddWhereStmt(db *gorm.DB, typeString string, tableName string, filter FilterCriteria) (*gorm.DB, error) {
 	// I won't have both equal test AND >, <, <=, >= tests in these case
-	modelObj := models.NewFromTypeString(typeString)
+	modelObj := registry.NewFromTypeString(typeString)
 
 	urlFieldValues := make([]string, 0)
 	for _, predicates := range filter.PredicatesArr {
@@ -108,7 +109,7 @@ func AddNestedQueryJoinStmt(db *gorm.DB, typeString string, criteria TwoLevelFil
 		// fieldValues := filter.FieldValues
 
 		// Get inner field type
-		m := models.NewFromTypeString(typeString) // THIS IS TO BE FIXED
+		m := registry.NewFromTypeString(typeString) // THIS IS TO BE FIXED
 		fieldType, err := datatypes.GetModelFieldTypeElmIfValid(m, letters.CamelCaseToPascalCase(criteria.OuterFieldName))
 		if err != nil {
 			return nil, err
@@ -171,7 +172,7 @@ func AddLatestNCTEJoin(db *gorm.DB, typeString string, tableName string, latestn
 	partitionByArr := make([]string, 0)
 	latestnonWhereArr := make([]string, 0)
 	transformedValues := make([]interface{}, 0)
-	m := models.NewFromTypeString(typeString)
+	m := registry.NewFromTypeString(typeString)
 
 	for _, filter := range filterslatestnons {
 		// If there is any equality comparison other than equal
@@ -330,7 +331,7 @@ func latestnGetPartitionWhereAndTransformedValues(typeString, tableName string, 
 			}
 		}
 
-		m := models.NewFromTypeString(typeString)
+		m := registry.NewFromTypeString(typeString)
 
 		urlFieldValues := make([]string, 0)
 		for _, predicates := range filter.PredicatesArr {
@@ -419,7 +420,7 @@ func latestnGetPartitionWhereAndTransformedValues2(typeString, tableName string,
 			}
 		}
 
-		m := models.NewFromTypeString(typeString)
+		m := registry.NewFromTypeString(typeString)
 
 		urlFieldValues := make([]string, 0)
 		for _, predicates := range filter.PredicatesArr {
@@ -482,7 +483,7 @@ func latestnGetPartitionWhereAndTransformedValues2(typeString, tableName string,
 			}
 		}
 
-		m := models.NewFromTypeString(typeString)
+		m := registry.NewFromTypeString(typeString)
 
 		urlFieldValues := make([]string, 0)
 		for _, predicates := range filter.PredicatesArr {

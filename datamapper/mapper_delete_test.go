@@ -14,6 +14,7 @@ import (
 	"github.com/t2wu/betterrest/libs/utils/transact"
 	"github.com/t2wu/betterrest/libs/webrender"
 	"github.com/t2wu/betterrest/models"
+	"github.com/t2wu/betterrest/registry"
 )
 
 // ----------------------------------------------------------------------------------------------
@@ -34,6 +35,11 @@ func (suite *TestBaseMapperDeleteSuite) SetupTest() {
 	suite.mock = mock
 	suite.who = &WhoMock{Oid: datatypes.NewUUID()} // userid
 	suite.typeString = "cars"
+
+	// clear registry
+	delete(registry.ModelRegistry, "cars")
+
+	resetGlobals()
 }
 
 // All methods that begin with "Test" are run as tests within a
@@ -59,25 +65,25 @@ func (suite *TestBaseMapperDeleteSuite) TestDeleteOne_WhenGiven_GotCar() {
 	options := make(map[urlparam.Param]interface{})
 	cargo := controller.Cargo{}
 
-	opt := models.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: models.MapperTypeViaOwnership}
-	models.For(suite.typeString).ModelWithOption(&Car{}, opt)
+	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
+	registry.For(suite.typeString).ModelWithOption(&Car{}, opt)
 
 	mapper := SharedOwnershipMapper()
 
-	var modelObj2 models.IModel
-	retval := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retval *webrender.RetVal) {
-		if modelObj2, retval = mapper.DeleteOne(tx, suite.who, suite.typeString, modelObj.GetID(),
-			options, &cargo); retval != nil {
-			return retval
+	var retVal *MapperRet
+	retErr := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retErr *webrender.RetError) {
+		if retVal, retErr = mapper.DeleteOne(tx, suite.who, suite.typeString, modelObj.GetID(),
+			options, &cargo); retErr != nil {
+			return retErr
 		}
 		return nil
 	}, "lifecycle.DeleteOne")
 
-	if !assert.Nil(suite.T(), retval) {
+	if !assert.Nil(suite.T(), retErr) {
 		return
 	}
 
-	if car, ok := modelObj2.(*Car); assert.True(suite.T(), ok) {
+	if car, ok := retVal.Ms[0].(*Car); assert.True(suite.T(), ok) {
 		assert.Equal(suite.T(), carName, car.Name)
 		assert.Equal(suite.T(), carID, car.ID)
 	}
@@ -104,22 +110,22 @@ func (suite *TestBaseMapperDeleteSuite) TestDeleteOne_WhenNoController_CallRelev
 	options := make(map[urlparam.Param]interface{})
 	cargo := controller.Cargo{}
 
-	opt := models.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: models.MapperTypeViaOwnership}
-	models.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt)
+	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
+	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt)
 
 	mapper := SharedOwnershipMapper()
-	var modelObj2 models.IModel
+	var retVal *MapperRet
 	var tx2 *gorm.DB
-	retval := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retval *webrender.RetVal) {
+	retErr := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retErr *webrender.RetError) {
 		tx2 = tx
-		if modelObj2, retval = mapper.DeleteOne(tx2, suite.who, suite.typeString, modelObj.GetID(),
-			options, &cargo); retval != nil {
-			return retval
+		if retVal, retErr = mapper.DeleteOne(tx2, suite.who, suite.typeString, modelObj.GetID(),
+			options, &cargo); retErr != nil {
+			return retErr
 		}
 		return nil
 	}, "lifecycle.DeleteOne")
 
-	if !assert.Nil(suite.T(), retval) {
+	if !assert.Nil(suite.T(), retErr) {
 		return
 	}
 
@@ -129,7 +135,7 @@ func (suite *TestBaseMapperDeleteSuite) TestDeleteOne_WhenNoController_CallRelev
 
 	// No, update is not easy to test because I load the obj from the db first, and it's not the
 	// same as the car object I have now (all the more reason controller make more sense)
-	if _, ok := modelObj2.(*CarWithCallbacks); assert.True(suite.T(), ok) {
+	if _, ok := retVal.Ms[0].(*CarWithCallbacks); assert.True(suite.T(), ok) {
 		assert.False(suite.T(), guardAPIEntryCalled) // not called when going through mapper
 
 		if assert.True(suite.T(), beforeCUPDDBCalled) {
@@ -173,26 +179,26 @@ func (suite *TestBaseMapperDeleteSuite) TestDeleteOne_WhenHavingController_NotCa
 	options := make(map[urlparam.Param]interface{})
 	cargo := controller.Cargo{}
 
-	opt := models.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: models.MapperTypeViaOwnership}
-	models.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).Controller(&CarControllerWithoutCallbacks{})
+	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
+	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).Controller(&CarControllerWithoutCallbacks{}, "CRUPD", "JBAT")
 
 	mapper := SharedOwnershipMapper()
 
-	var modelObj2 models.IModel
+	var retVal *MapperRet
 	var tx2 *gorm.DB
-	retval := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retval *webrender.RetVal) {
+	retErr := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retErr *webrender.RetError) {
 		tx2 = tx
-		if modelObj2, retval = mapper.DeleteOne(tx2, suite.who, suite.typeString, modelObj.GetID(),
-			options, &cargo); retval != nil {
-			return retval
+		if retVal, retErr = mapper.DeleteOne(tx2, suite.who, suite.typeString, modelObj.GetID(),
+			options, &cargo); retErr != nil {
+			return retErr
 		}
 		return nil
 	}, "lifecycle.DeleteOne")
-	if !assert.Nil(suite.T(), retval) {
+	if !assert.Nil(suite.T(), retErr) {
 		return
 	}
 
-	if _, ok := modelObj2.(*CarWithCallbacks); assert.True(suite.T(), ok) {
+	if _, ok := retVal.Ms[0].(*CarWithCallbacks); assert.True(suite.T(), ok) {
 		assert.False(suite.T(), guardAPIEntryCalled) // not called when going through mapper
 		assert.False(suite.T(), beforeCUPDDBCalled)
 		assert.False(suite.T(), beforeDeleteDBCalled)
@@ -222,22 +228,22 @@ func (suite *TestBaseMapperDeleteSuite) TestDeleteOne_WhenHavingController_CallR
 	options := make(map[urlparam.Param]interface{})
 	cargo := controller.Cargo{}
 
-	ctrl := CarController{}
-	opt := models.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: models.MapperTypeViaOwnership}
-	models.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).Controller(&ctrl)
+	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
+	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).Controller(&CarController{}, "CRUPD", "JBAT")
 
 	mapper := SharedOwnershipMapper()
 
 	var tx2 *gorm.DB
-	retval := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retval *webrender.RetVal) {
+	var retVal *MapperRet
+	retErr := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retErr *webrender.RetError) {
 		tx2 = tx
-		if _, retval = mapper.DeleteOne(tx2, suite.who, suite.typeString, modelObj.GetID(),
-			options, &cargo); retval != nil {
-			return retval
+		if retVal, retErr = mapper.DeleteOne(tx2, suite.who, suite.typeString, modelObj.GetID(),
+			options, &cargo); retErr != nil {
+			return retErr
 		}
 		return nil
 	}, "lifecycle.DeleteOne")
-	if !assert.Nil(suite.T(), retval) {
+	if !assert.Nil(suite.T(), retErr) {
 		return
 	}
 
@@ -245,6 +251,16 @@ func (suite *TestBaseMapperDeleteSuite) TestDeleteOne_WhenHavingController_CallR
 	data := controller.Data{Ms: []models.IModel{&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID}, Name: carName}},
 		DB: tx2, Who: suite.who, TypeString: suite.typeString, Roles: []models.UserRole{role}, Cargo: &cargo}
 	info := controller.EndPointInfo{Op: controller.RESTOpDelete, Cardinality: controller.APICardinalityOne}
+
+	ctrls := retVal.Fetcher.GetAllInstantiatedControllers()
+	if !assert.Len(suite.T(), ctrls, 1) {
+		return
+	}
+
+	ctrl, ok := ctrls[0].(*CarController)
+	if !assert.True(suite.T(), ok) {
+		return
+	}
 
 	assert.False(suite.T(), ctrl.guardAPIEntryCalled) // Not called when going through mapper (or lifecycle for that matter)
 
@@ -300,26 +316,26 @@ func (suite *TestBaseMapperDeleteSuite) TestDeleteMany_WhenGiven_GotCars() {
 	options := make(map[urlparam.Param]interface{})
 	cargo := controller.Cargo{}
 
-	opt := models.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: models.MapperTypeViaOwnership}
-	models.For(suite.typeString).ModelWithOption(&Car{}, opt)
+	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
+	registry.For(suite.typeString).ModelWithOption(&Car{}, opt)
 
-	var modelObjs2 []models.IModel
-	retval := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retval *webrender.RetVal) {
+	var retVal *MapperRet
+	retErr := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retErr *webrender.RetError) {
 		mapper := SharedOwnershipMapper()
-		modelObjs2, retval = mapper.DeleteMany(tx, suite.who, suite.typeString, modelObjs, options, &cargo)
-		return retval
+		retVal, retErr = mapper.DeleteMany(tx, suite.who, suite.typeString, modelObjs, options, &cargo)
+		return retErr
 	}, "lifecycle.DeleteMany")
-	if !assert.Nil(suite.T(), retval) {
+	if !assert.Nil(suite.T(), retErr) {
 		return
 	}
 
-	if assert.Len(suite.T(), modelObjs2, 3) {
-		assert.Equal(suite.T(), carID1.String(), modelObjs2[0].GetID().String())
-		assert.Equal(suite.T(), carID2.String(), modelObjs2[1].GetID().String())
-		assert.Equal(suite.T(), carID3.String(), modelObjs2[2].GetID().String())
-		assert.Equal(suite.T(), carName1, modelObjs2[0].(*Car).Name)
-		assert.Equal(suite.T(), carName2, modelObjs2[1].(*Car).Name)
-		assert.Equal(suite.T(), carName3, modelObjs2[2].(*Car).Name)
+	if assert.Len(suite.T(), retVal.Ms, 3) {
+		assert.Equal(suite.T(), carID1.String(), retVal.Ms[0].GetID().String())
+		assert.Equal(suite.T(), carID2.String(), retVal.Ms[1].GetID().String())
+		assert.Equal(suite.T(), carID3.String(), retVal.Ms[2].GetID().String())
+		assert.Equal(suite.T(), carName1, retVal.Ms[0].(*Car).Name)
+		assert.Equal(suite.T(), carName2, retVal.Ms[1].(*Car).Name)
+		assert.Equal(suite.T(), carName3, retVal.Ms[2].(*Car).Name)
 	}
 }
 
@@ -381,18 +397,18 @@ func (suite *TestBaseMapperDeleteSuite) TestDeleteMany_WhenNoController_CallRele
 	options := make(map[urlparam.Param]interface{})
 	cargo := controller.Cargo{}
 
-	opt := models.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: models.MapperTypeViaOwnership}
-	models.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).BatchCRUPDHooks(before, after).
+	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
+	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).BatchCRUPDHooks(before, after).
 		BatchDeleteHooks(beforeDelete, afterDelete)
 
 	var tx2 *gorm.DB
-	retval := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retval *webrender.RetVal) {
+	retErr := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retErr *webrender.RetError) {
 		tx2 = tx
 		mapper := SharedOwnershipMapper()
-		_, retval = mapper.DeleteMany(tx2, suite.who, suite.typeString, modelObjs, options, &cargo)
-		return retval
+		_, retErr = mapper.DeleteMany(tx2, suite.who, suite.typeString, modelObjs, options, &cargo)
+		return retErr
 	}, "lifecycle.DeleteMany")
-	if !assert.Nil(suite.T(), retval) {
+	if !assert.Nil(suite.T(), retErr) {
 		return
 	}
 	roles := []models.UserRole{models.UserRoleAdmin, models.UserRoleAdmin, models.UserRoleAdmin}
@@ -485,18 +501,18 @@ func (suite *TestBaseMapperDeleteSuite) TestCreateMany_WhenHavingController_NotC
 	options := make(map[urlparam.Param]interface{})
 	cargo := controller.Cargo{}
 
-	opt := models.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: models.MapperTypeViaOwnership}
-	models.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).BatchCRUPDHooks(before, after).
-		BatchDeleteHooks(beforeDelete, afterDelete).Controller(&CarControllerWithoutCallbacks{})
+	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
+	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).BatchCRUPDHooks(before, after).
+		BatchDeleteHooks(beforeDelete, afterDelete).Controller(&CarControllerWithoutCallbacks{}, "CRUPD", "JBAT")
 
 	var tx2 *gorm.DB
-	retval := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retval *webrender.RetVal) {
+	retErr := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retErr *webrender.RetError) {
 		tx2 = tx
 		mapper := SharedOwnershipMapper()
-		_, retval = mapper.DeleteMany(tx2, suite.who, suite.typeString, modelObjs, options, &cargo)
-		return retval
+		_, retErr = mapper.DeleteMany(tx2, suite.who, suite.typeString, modelObjs, options, &cargo)
+		return retErr
 	}, "lifecycle.DeleteMany")
-	if !assert.Nil(suite.T(), retval) {
+	if !assert.Nil(suite.T(), retErr) {
 		return
 	}
 
@@ -546,18 +562,18 @@ func (suite *TestBaseMapperDeleteSuite) TestCreateMany_WhenHavingController_Call
 	options := make(map[urlparam.Param]interface{})
 	cargo := controller.Cargo{}
 
-	ctrl := CarController{}
-	opt := models.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: models.MapperTypeViaOwnership}
-	models.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).Controller(&ctrl)
+	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
+	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).Controller(&CarController{}, "CRUPD", "JBAT")
 
 	var tx2 *gorm.DB
-	retval := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retval *webrender.RetVal) {
+	var retVal *MapperRet
+	retErr := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retErr *webrender.RetError) {
 		tx2 = tx
 		mapper := SharedOwnershipMapper()
-		_, retval = mapper.DeleteMany(tx2, suite.who, suite.typeString, modelObjs, options, &cargo)
-		return retval
+		retVal, retErr = mapper.DeleteMany(tx2, suite.who, suite.typeString, modelObjs, options, &cargo)
+		return retErr
 	}, "lifecycle.DeleteMany")
-	if !assert.Nil(suite.T(), retval) {
+	if !assert.Nil(suite.T(), retErr) {
 		return
 	}
 
@@ -569,6 +585,16 @@ func (suite *TestBaseMapperDeleteSuite) TestCreateMany_WhenHavingController_Call
 		&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID3}, Name: carName3},
 	}, DB: tx2, Who: suite.who, TypeString: suite.typeString, Roles: roles, Cargo: &cargo}
 	info := controller.EndPointInfo{Op: controller.RESTOpDelete, Cardinality: controller.APICardinalityMany}
+
+	ctrls := retVal.Fetcher.GetAllInstantiatedControllers()
+	if !assert.Len(suite.T(), ctrls, 1) {
+		return
+	}
+
+	ctrl, ok := ctrls[0].(*CarController)
+	if !assert.True(suite.T(), ok) {
+		return
+	}
 
 	assert.False(suite.T(), ctrl.guardAPIEntryCalled) // not called when call createMany directly
 	assert.False(suite.T(), ctrl.beforeApplyCalled)

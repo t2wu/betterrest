@@ -10,8 +10,8 @@ import (
 	"github.com/t2wu/betterrest/libs/datatypes"
 	"github.com/t2wu/betterrest/libs/utils/letters"
 	"github.com/t2wu/betterrest/libs/utils/sqlbuilder"
-	"github.com/t2wu/betterrest/models"
 	qry "github.com/t2wu/betterrest/query"
+	"github.com/t2wu/betterrest/registry"
 )
 
 func getPredicateAndValueFromFieldValue2(fieldVal string) (string, string) {
@@ -127,7 +127,7 @@ func constructDbFromURLFieldQuery(db *gorm.DB, typeString string, urlParams map[
 
 	for _, filter := range filters {
 		// We used the fact that repeatedly call AddWhereStmt genereates only ONE WHERE with multiple filters
-		db, err = sqlbuilder.AddWhereStmt(db, typeString, models.GetTableNameFromTypeString(typeString), filter)
+		db, err = sqlbuilder.AddWhereStmt(db, typeString, registry.GetTableNameFromTypeString(typeString), filter)
 		if _, ok := err.(*datatypes.FieldNotInModelError); ok {
 			// custom url parameter
 			continue
@@ -148,21 +148,21 @@ func constructDbFromURLFieldQuery(db *gorm.DB, typeString string, urlParams map[
 	// if latestn != nil && len(filterslatestnons) > 0 {
 	if latestn != nil && len(latestnons) > 0 {
 		// log.Println("filterslatestnons:", filterslatestnons)
-		db, err = sqlbuilder.AddLatestNCTEJoin(db, typeString, models.GetTableNameFromTypeString(typeString), *latestn, latestnons, filterslatestnons)
+		db, err = sqlbuilder.AddLatestNCTEJoin(db, typeString, registry.GetTableNameFromTypeString(typeString), *latestn, latestnons, filterslatestnons)
 		if err != nil {
 			return db, err
 		}
 	} else if latestn != nil {
 		log.Println("GOING TO BE DEPRECATED")
 		// DEPRECATED: old behavior where there may is latestn but not latestnons
-		db, err = sqlbuilder.AddLatestJoinWithOneLevelFilter(db, typeString, models.GetTableNameFromTypeString(typeString), *latestn, filters)
+		db, err = sqlbuilder.AddLatestJoinWithOneLevelFilter(db, typeString, registry.GetTableNameFromTypeString(typeString), *latestn, filters)
 		if err != nil {
 			return db, err
 		}
 	} else {
 		for _, filter := range filters {
 			// We used the fact that repeatedly call AddWhereStmt genereates only ONE WHERE with multiple filters
-			db, err = sqlbuilder.AddWhereStmt(db, typeString, models.GetTableNameFromTypeString(typeString), filter)
+			db, err = sqlbuilder.AddWhereStmt(db, typeString, registry.GetTableNameFromTypeString(typeString), filter)
 			if _, ok := err.(*datatypes.FieldNotInModelError); ok {
 				// custom url parameter
 				continue
@@ -182,13 +182,7 @@ func constructDbFromURLInnerFieldQuery(db *gorm.DB, typeString string, urlParams
 		return db, err
 	}
 
-	// if len(urlParamDic) != 0 {
-	// 	if latestn != nil {
-	// 		return db, errors.New("latestn with two-level query is currently not supported")
-	// 	}
-	// }
-
-	obj := models.NewFromTypeString(typeString)
+	obj := registry.NewFromTypeString(typeString)
 
 	for outerFieldName, filters := range urlParamDic {
 		// Important!! Check if fieldName is actually part of the schema, otherwise risk of sequal injection
@@ -197,7 +191,7 @@ func constructDbFromURLInnerFieldQuery(db *gorm.DB, typeString string, urlParams
 			return nil, err
 		}
 
-		rtable := models.GetTableNameFromTypeString(typeString)
+		rtable := registry.GetTableNameFromTypeString(typeString)
 		innerTable := strcase.SnakeCase(strings.Split(innerType.String(), ".")[1])
 		twoLevelFilter := sqlbuilder.TwoLevelFilterCriteria{
 			OuterTableName: rtable,

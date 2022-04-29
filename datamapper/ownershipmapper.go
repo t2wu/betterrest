@@ -23,7 +23,7 @@ func SetMockOwnershipMapper(mapper IDataMapper) {
 // SharedOwnershipMapper creats a singleton of Crud object
 func SharedOwnershipMapper() IDataMapper {
 	onceOwnership.Do(func() {
-		crudOwnership = &BaseMapper{Service: &service.OwnershipService{BaseService: service.BaseService{}}}
+		crudOwnership = &DataMapper{Service: &service.OwnershipService{BaseService: service.BaseService{}}}
 	})
 
 	return crudOwnership

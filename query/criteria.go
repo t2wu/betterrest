@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/t2wu/betterrest/models"
+	"github.com/t2wu/betterrest/registry"
 )
 
 // Defines Predicate{} and PredicateRelation{}
@@ -115,7 +116,7 @@ func (p *Predicate) BuildQueryStringAndValues(modelObj models.IModel) (string, [
 		}
 	}
 
-	tblName = models.GetTableNameFromIModel(currModelObj)
+	tblName = registry.GetTableNameFromIModel(currModelObj)
 	col, err = fieldToColumn(currModelObj, field)
 	if err != nil {
 		return "", nil, err

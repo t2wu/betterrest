@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/t2wu/betterrest/libs/settings"
+	"github.com/t2wu/betterrest/registry"
 	"github.com/t2wu/betterrest/routes"
 
 	"github.com/jinzhu/gorm"
@@ -38,4 +39,4 @@ func RegisterContextFunction(f func(r *http.Request) models.UserIDFetchable) {
 	routes.WhoFromContext = f
 }
 
-var For func(typeString string) *models.Registrar = models.For
+var For func(typeString string) *registry.Registrar = registry.For

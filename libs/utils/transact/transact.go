@@ -89,7 +89,7 @@ func Transact(db *gorm.DB, txFunc func(*gorm.DB) error, labels ...string) (err e
 	return err
 }
 
-func TransactCustomError(db *gorm.DB, txFunc func(*gorm.DB) *webrender.RetVal, labels ...string) (retval *webrender.RetVal) {
+func TransactCustomError(db *gorm.DB, txFunc func(*gorm.DB) *webrender.RetError, labels ...string) (retval *webrender.RetError) {
 	debug := false
 	if len(labels) != 0 && settings.TransactDebug {
 		debug = true

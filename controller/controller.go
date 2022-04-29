@@ -2,13 +2,59 @@ package controller
 
 import (
 	"github.com/gin-gonic/gin"
-	"github.com/t2wu/betterrest/libs/datatypes"
+	"github.com/jinzhu/gorm"
 	"github.com/t2wu/betterrest/libs/urlparam"
 	"github.com/t2wu/betterrest/libs/webrender"
 	"github.com/t2wu/betterrest/models"
-
-	"github.com/jinzhu/gorm"
 )
+
+// Interface for controllers
+// It seems better to pass structure than to use signature
+// Changing signature without changing controller will silently ignore them
+
+// ------------------------------------------------------------------------------------
+// New REST and others
+
+type ControllerInitData struct {
+	Who models.UserIDFetchable
+	// TypeString
+	TypeString string
+	// Role of this user in relation to this data, only available during read
+	Roles []models.UserRole
+	// URL parameters
+	URLParams map[urlparam.Param]interface{}
+	// Info is endpoint information
+	Info *EndPointInfo
+}
+
+// Cargo is payload between hookpoints
+type Cargo struct {
+	Payload interface{}
+}
+
+// Data is the data send to batch model hookpoints
+type Data struct {
+	// Ms is the slice of IModels
+	Ms []models.IModel
+	// DB is the DB handle
+	DB *gorm.DB
+	// Who is operating this CRUPD right now
+	Who models.UserIDFetchable
+	// TypeString
+	TypeString string
+	// Cargo between Before and After hookpoints (not used in AfterRead since there is before read hookpoint.)
+	Cargo *Cargo
+	// Role of this user in relation to this data, only available during read
+	Roles []models.UserRole
+	// URL parameters
+	URLParams map[urlparam.Param]interface{}
+}
+
+// Endpoint information
+type EndPointInfo struct {
+	Op          RESTOp
+	Cardinality APICardinality
+}
 
 func HTTPMethodToRESTOp(method string) RESTOp {
 	switch method {
@@ -46,64 +92,30 @@ const (
 	APICardinalityMany APICardinality = 2
 )
 
-// Cargo is payload between hookpoints
-type Cargo struct {
-	Payload interface{}
-}
+// End new REST Op
+// ------------------------------------------------------------------------------------
 
-type UserIDFetchable interface {
-	GetUserID() *datatypes.UUID
-}
+// Type for all controllers
 
-// Data is the data send to batch model hookpoints
-type Data struct {
-	// Ms is the slice of IModels
-	Ms []models.IModel
-	// DB is the DB handle
-	DB *gorm.DB
-	// Who is operating this CRUPD right now
-	Who UserIDFetchable
-	// TypeString
-	TypeString string
-	// Cargo between Before and After hookpoints (not used in AfterRead since there is before read hookpoint.)
-	Cargo *Cargo
-	// Role of this user in relation to this data, only available during read
-	Roles []models.UserRole
-	// URL parameters
-	URLParams map[urlparam.Param]interface{}
-}
-
-// Endpoint information
-type EndPointInfo struct {
-	Op          RESTOp
-	Cardinality APICardinality
-}
-
-// Interface for controllers
-// It seems better to pass structure than to use signature
-// Changing signature without changing controller will silently ignore them
-
-// IGuardAPIEntry supports method which guard access to API based on scope
-type IGuardAPIEntry interface {
-	// GuardAPIEntry returs false to block entry, and optional customRenderer
-	// to return custom error code (Read enters this as well before having any model)
-	GuardAPIEntry(data *Data, info *EndPointInfo) *webrender.GuardRetVal
+type IController interface {
+	// Initialize data for this REST operation
+	Initialize(data *ControllerInitData)
 }
 
 // IBeforeApply before patching operation occurred. Only called for Patch.
 // This comes before patch is applied. Before "Before"
 type IBeforeApply interface {
-	BeforeApply(data *Data, info *EndPointInfo) *webrender.RetVal
+	BeforeApply(data *Data, info *EndPointInfo) *webrender.RetError
 }
 
 // IBefore supports method to be called before data is fetched for all CRUPD operations
 type IBefore interface {
-	Before(data *Data, info *EndPointInfo) *webrender.RetVal
+	Before(data *Data, info *EndPointInfo) *webrender.RetError
 }
 
 // IAfter supports method to be called after data is after all CRUPD operations
 type IAfter interface {
-	After(data *Data, info *EndPointInfo) *webrender.RetVal
+	After(data *Data, info *EndPointInfo) *webrender.RetError
 }
 
 // IAfterTransact is the method to be called after data is after the entire database

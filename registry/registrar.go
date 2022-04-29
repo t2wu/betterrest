@@ -1,4 +1,4 @@
-package models
+package registry
 
 import (
 	"encoding/json"
@@ -8,7 +8,12 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
+	"github.com/stoewer/go-strcase"
+	"github.com/t2wu/betterrest/controller"
 	"github.com/t2wu/betterrest/libs/utils/jsontrans"
+	"github.com/t2wu/betterrest/libs/webrender"
+	"github.com/t2wu/betterrest/models"
+	"github.com/t2wu/betterrest/registry/ctrlmap"
 )
 
 /*
@@ -19,7 +24,9 @@ import (
 func For(typeString string) *Registrar {
 	r := NewRegistrar(typeString)
 	if _, ok := ModelRegistry[typeString]; !ok {
-		ModelRegistry[typeString] = &Reg{}
+		ModelRegistry[typeString] = &Reg{
+			ControllerMap: ctrlmap.NewCtrlMap(),
+		}
 	}
 	return r
 }
@@ -33,17 +40,15 @@ type Registrar struct {
 	currentTypeString string
 }
 
-// Model adds a New function for an IModel (convenient function of RegModelWithOption)
-func (r *Registrar) Model(modelObj IModel) *Registrar {
+// Model adds a New function for an models.IModel (convenient function of RegModelWithOption)
+func (r *Registrar) Model(modelObj models.IModel) *Registrar {
 	options := RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: MapperTypeViaOwnership}
 	return r.ModelWithOption(modelObj, options)
 }
 
-// ModelWithOption adds a New function for an IModel
-func (r *Registrar) ModelWithOption(modelObj IModel, options RegOptions) *Registrar {
+// ModelWithOption adds a New function for an models.IModel
+func (r *Registrar) ModelWithOption(modelObj models.IModel, options RegOptions) *Registrar {
 	typeString := r.currentTypeString
-
-	ModelRegistry[typeString] = &Reg{}
 
 	// For JSON href
 	jsontrans.ModelNameToTypeStringMapping[reflect.TypeOf(modelObj).String()] = typeString
@@ -74,7 +79,7 @@ func (r *Registrar) ModelWithOption(modelObj IModel, options RegOptions) *Regist
 	case MapperTypeViaOrganization:
 		// We want the model type. So we get that by getting name first
 		// since the foreign key field name is always nameID
-		v := GetTagValueFromModelByTagKeyBetterRestAndValueKey(modelObj, "org")
+		v := models.GetTagValueFromModelByTagKeyBetterRestAndValueKey(modelObj, "org")
 		if v == nil {
 			panic(fmt.Sprintf("%s missing betterrest:\"org:typeString\" tag", typeString))
 		}
@@ -95,17 +100,17 @@ func (r *Registrar) ModelWithOption(modelObj IModel, options RegOptions) *Regist
 		fallthrough
 	default:
 		recursiveIntoEmbedded := true
-		typ := GetFieldTypeFromModelByTagKeyBetterRestAndValueKey(modelObj, "ownership", recursiveIntoEmbedded)
+		typ := models.GetFieldTypeFromModelByTagKeyBetterRestAndValueKey(modelObj, "ownership", recursiveIntoEmbedded)
 		if typ == nil {
 			panic(fmt.Sprintf("%s missing betterrest:\"ownership\" tag", typeString))
 		}
-		m := reflect.New(typ).Interface().(IModel)
+		m := reflect.New(typ).Interface().(models.IModel)
 		s := GetTableNameFromIModel(m)
 		reg.OwnershipTableName = &s
 		reg.OwnershipType = typ
 	}
 
-	// Check if there is any struct or element of IModel which has no betterrest:"peg" or "peg-associate"
+	// Check if there is any struct or element of models.IModel which has no betterrest:"peg" or "peg-associate"
 	// field. There should be a designation for every struct unless it's ownership or org table
 	// Traverse through the tree
 
@@ -115,19 +120,163 @@ func (r *Registrar) ModelWithOption(modelObj IModel, options RegOptions) *Regist
 	return r
 }
 
-// Controller adds the subject for new hookpoints
-// If controller is added, other hookpoint is not called
-func (r *Registrar) Controller(controller interface{}) *Registrar {
-	ModelRegistry[r.currentTypeString].Controller = controller
+// Controllers adds the controllers to be instantiate when a REST op occurs.
+// If any controller exists, old model-based hookpoints and batch hookpoints are not called
+func (r *Registrar) Controller(ctrl controller.IController, method, firstHook string) *Registrar {
+	if ModelRegistry[r.currentTypeString].ControllerMap == nil {
+		ModelRegistry[r.currentTypeString].ControllerMap = ctrlmap.NewCtrlMap()
+	}
+
+	ModelRegistry[r.currentTypeString].ControllerMap.RegisterController(ctrl, method, firstHook)
+	return r
+}
+
+// Guard register guard function
+func (r *Registrar) Guard(guard func(who models.UserIDFetchable, info *controller.EndPointInfo) *webrender.GuardRetVal) *Registrar {
+	ModelRegistry[r.currentTypeString].GuardMethod = guard
 	return r
 }
 
 // CustomCreate register custom create table funtion
-func (r *Registrar) CustomCreate(modelObj IModel, f func(db *gorm.DB) (*gorm.DB, error)) *Registrar {
+func (r *Registrar) CustomCreate(modelObj models.IModel, f func(db *gorm.DB) (*gorm.DB, error)) *Registrar {
 	reg := ModelRegistry[r.currentTypeString] // pointer type
 	reg.CreateObj = modelObj
 	reg.CreateMethod = f
 	return r
+}
+
+// GetTableNameFromIModel gets table name from an models.IModel
+func GetTableNameFromIModel(model models.IModel) string {
+	var tableName string
+	if m, ok := model.(models.IHasTableName); ok {
+		tableName = m.TableName()
+	} else {
+		tableName = reflect.TypeOf(model).String()
+		// If it is something like "models.XXX", we only want the stuff ater "."
+		if strings.Contains(tableName, ".") {
+			tableName = strings.Split(tableName, ".")[1]
+		}
+
+		tableName = strcase.SnakeCase(tableName)
+	}
+
+	// If it's a pointer, get rid of "*"
+	tableName = strings.TrimPrefix(tableName, "*")
+
+	return tableName
+}
+
+// GetTableNameFromTypeString get table name from typeString
+func GetTableNameFromTypeString(typeString string) string {
+	model := NewFromTypeString(typeString)
+	return GetTableNameFromIModel(model)
+}
+
+// GetTableNameFromType get table name from the model reflect.type
+func GetTableNameFromType(typ reflect.Type) string {
+	model := reflect.New(typ).Interface().(models.IModel)
+	return GetTableNameFromIModel(model)
+}
+
+func GetModelTypeNameFromIModel(model models.IModel) string {
+	return reflect.TypeOf(model).Elem().Name()
+}
+
+func GetModelTableNameInModelIfValid(modelObj models.IModel, field string) (string, error) {
+	typ, err := models.GetModelFieldTypeInModelIfValid(modelObj, field)
+	if err != nil {
+		return "", err
+	}
+	return GetTableNameFromType(typ), nil
+}
+
+// -------------------------
+// OrgModelTypeFromOrgResourceTypeString given org resource typeString
+// returns the reflect type of the organization
+func OrgModelTypeFromOrgResourceTypeString(typeString string) reflect.Type {
+	if ModelRegistry[typeString].Mapper != MapperTypeViaOrganization {
+		// Programming error
+		panic(fmt.Sprintf("TypeString %s does not represents a resource under organization", typeString))
+	}
+
+	orgTypeString := ModelRegistry[typeString].OrgTypeString
+	return ModelRegistry[orgTypeString].Typ
+}
+
+// ----------------------------
+// The new models for all the link tables
+
+// NewOrgModelFromOrgResourceTypeString gets Organization object
+// If you're a resource under hooked up by Organization
+func NewOrgModelFromOrgResourceTypeString(typeString string) models.IModel {
+	if ModelRegistry[typeString].Mapper != MapperTypeViaOrganization {
+		// Programming error
+		panic(fmt.Sprintf("TypeString %s does not represents a resource under organization", typeString))
+	}
+
+	orgTypeString := ModelRegistry[typeString].OrgTypeString
+	return reflect.New(ModelRegistry[orgTypeString].Typ).Interface().(models.IModel)
+}
+
+// NewOrgOwnershipModelFromOrgResourceTypeString gets the joining table from the resource's
+// organization model to the user
+func NewOrgOwnershipModelFromOrgResourceTypeString(typeString string) models.IModel {
+	if ModelRegistry[typeString].Mapper != MapperTypeViaOrganization {
+		// Programming error
+		panic(fmt.Sprintf("TypeString %s does not represents a resource under organization", typeString))
+	}
+
+	orgTypeString := ModelRegistry[typeString].OrgTypeString // org is an ownership resource
+	return NewOwnershipModelFromOwnershipResourceTypeString(orgTypeString)
+}
+
+// NewOwnershipModelFromOwnershipResourceTypeString returns the model object
+// of the ownership table (the table that links from this resource represented by the type string
+// to the user)
+func NewOwnershipModelFromOwnershipResourceTypeString(typeString string) models.IModel {
+	if ModelRegistry[typeString].Mapper != MapperTypeViaOwnership {
+		// Programming error
+		panic(fmt.Sprintf("TypeString %s does not represents a resource under organization", typeString))
+	}
+
+	// Either custom one or the default one
+	typ := ModelRegistry[typeString].OwnershipType
+
+	return reflect.New(typ).Interface().(models.IModel)
+}
+
+// ----------------------------
+// The new linking table names
+
+// OrgModelNameFromOrgResourceTypeString given org resource typeString,
+// returns organization table name
+func OrgModelNameFromOrgResourceTypeString(typeString string) string {
+	m := NewOrgModelFromOrgResourceTypeString(typeString)
+	return GetTableNameFromIModel(m)
+}
+
+// OrgOwnershipModelNameFromOrgResourceTypeString given org resource typeString,
+// returns name of organization table's linking table (ownership table) to user
+func OrgOwnershipModelNameFromOrgResourceTypeString(typeString string) string {
+	m := NewOrgOwnershipModelFromOrgResourceTypeString(typeString)
+	return GetTableNameFromIModel(m)
+}
+
+// OwnershipTableNameFromOwnershipResourceTypeString given ownership resource typeStirng
+// returns name of ownership table to the user
+func OwnershipTableNameFromOwnershipResourceTypeString(typeString string) string {
+	// m := NewOwnershipModelFromOwnershipResourceTypeString(typeString)
+
+	// Either custom one or the default one
+
+	tableName := *ModelRegistry[typeString].OwnershipTableName
+
+	if tableName == "ownership_model_with_id_base" {
+		m := reflect.New(ModelRegistry[typeString].Typ).Interface().(models.IModel)
+		tableName = "user_owns_" + GetTableNameFromIModel(m)
+	}
+
+	return tableName
 }
 
 // ----------------------------------
@@ -137,8 +286,8 @@ func (r *Registrar) CustomCreate(modelObj IModel, f func(db *gorm.DB) (*gorm.DB,
 // BatchCRUPDHooks adds hookpoints which are called before
 // CUPD (no read) and after batch CRUPD. Either one can be left as nil
 func (r *Registrar) BatchCRUPDHooks(
-	before func(bhpData BatchHookPointData, op CRUPDOp) error,
-	after func(bhpData BatchHookPointData, op CRUPDOp) error) *Registrar {
+	before func(bhpData models.BatchHookPointData, op models.CRUPDOp) error,
+	after func(bhpData models.BatchHookPointData, op models.CRUPDOp) error) *Registrar {
 	typeString := r.currentTypeString
 
 	if _, ok := ModelRegistry[typeString]; !ok {
@@ -154,7 +303,7 @@ func (r *Registrar) BatchCRUPDHooks(
 // BatchCRUPDHooks adds hookpoints which are called before
 // CUPD (no read) and after batch CRUPD. Either one can be left as nil
 func (r *Registrar) BatchAfterTransactHook(
-	hook func(bhpData BatchHookPointData, op CRUPDOp)) *Registrar {
+	hook func(bhpData models.BatchHookPointData, op models.CRUPDOp)) *Registrar {
 	typeString := r.currentTypeString
 
 	if _, ok := ModelRegistry[typeString]; !ok {
@@ -169,8 +318,8 @@ func (r *Registrar) BatchAfterTransactHook(
 // BatchCreateHooks adds hookpoints which are called before
 // and after batch update. Either one can be left as nil
 func (r *Registrar) BatchCreateHooks(
-	before func(bhpData BatchHookPointData) error,
-	after func(bhpData BatchHookPointData) error) *Registrar {
+	before func(bhpData models.BatchHookPointData) error,
+	after func(bhpData models.BatchHookPointData) error) *Registrar {
 	typeString := r.currentTypeString
 
 	if _, ok := ModelRegistry[typeString]; !ok {
@@ -184,7 +333,7 @@ func (r *Registrar) BatchCreateHooks(
 
 // BatchReadHooks adds hookpoints which are called after
 // and read, can be left as nil
-func (r *Registrar) BatchReadHooks(after func(bhpData BatchHookPointData) error) *Registrar {
+func (r *Registrar) BatchReadHooks(after func(bhpData models.BatchHookPointData) error) *Registrar {
 	typeString := r.currentTypeString
 
 	if _, ok := ModelRegistry[typeString]; !ok {
@@ -198,8 +347,8 @@ func (r *Registrar) BatchReadHooks(after func(bhpData BatchHookPointData) error)
 // BatchUpdateHooks adds hookpoints which are called before
 // and after batch update. Either one can be left as nil
 func (r *Registrar) BatchUpdateHooks(
-	before func(bhpData BatchHookPointData) error,
-	after func(bhpData BatchHookPointData) error) *Registrar {
+	before func(bhpData models.BatchHookPointData) error,
+	after func(bhpData models.BatchHookPointData) error) *Registrar {
 	typeString := r.currentTypeString
 
 	if _, ok := ModelRegistry[typeString]; !ok {
@@ -214,9 +363,9 @@ func (r *Registrar) BatchUpdateHooks(
 // BatchPatchHooks adds hookpoints which are called before
 // and after batch update. Either one can be left as nil
 func (r *Registrar) BatchPatchHooks(
-	beforeApply func(bhpData BatchHookPointData) error,
-	before func(bhpData BatchHookPointData) error,
-	after func(bhpData BatchHookPointData) error) *Registrar {
+	beforeApply func(bhpData models.BatchHookPointData) error,
+	before func(bhpData models.BatchHookPointData) error,
+	after func(bhpData models.BatchHookPointData) error) *Registrar {
 
 	typeString := r.currentTypeString
 
@@ -233,8 +382,8 @@ func (r *Registrar) BatchPatchHooks(
 // BatchDeleteHooks adds hookpoints which are called before
 // and after batch delete. Either one can be left as nil
 func (r *Registrar) BatchDeleteHooks(
-	before func(bhpData BatchHookPointData) error,
-	after func(bhpData BatchHookPointData) error) *Registrar {
+	before func(bhpData models.BatchHookPointData) error,
+	after func(bhpData models.BatchHookPointData) error) *Registrar {
 
 	typeString := r.currentTypeString
 
@@ -247,8 +396,9 @@ func (r *Registrar) BatchDeleteHooks(
 	return r
 }
 
+// Deprecated
 // BatchRenderer register custom batch renderer (do your own output, not necessarily JSON)
-func (r *Registrar) BatchRenderer(renderer func(c *gin.Context, ms []IModel, bhpdata *BatchHookPointData, op CRUPDOp) bool) *Registrar {
+func (r *Registrar) BatchRenderer(renderer func(c *gin.Context, ms []models.IModel, bhpdata *models.BatchHookPointData, op models.CRUPDOp) bool) *Registrar {
 	typeString := r.currentTypeString
 
 	if _, ok := ModelRegistry[typeString]; !ok {
@@ -259,10 +409,24 @@ func (r *Registrar) BatchRenderer(renderer func(c *gin.Context, ms []IModel, bhp
 	return r
 }
 
+// End deprecated
+
+// Renderer is called for both cardinalities when registered
+func (r *Registrar) Renderer(renderer func(c *gin.Context, data *controller.Data, info *controller.EndPointInfo) bool) *Registrar {
+	typeString := r.currentTypeString
+
+	if _, ok := ModelRegistry[typeString]; !ok {
+		ModelRegistry[typeString] = &Reg{}
+	}
+
+	ModelRegistry[typeString].RendererMethod = renderer
+	return r
+}
+
 // If within the model there is a struct that doesn't implement marshaler (which is considered "atomic"),
 // it needs to be labeled in one of the ownership models
 // checked slice is needed because it can be recursive in a pegassoc-manytomany
-func checkFieldsThatAreStructsForBetterTags(modelObj IModel, checked map[string]bool) {
+func checkFieldsThatAreStructsForBetterTags(modelObj models.IModel, checked map[string]bool) {
 	modelName := reflect.TypeOf(modelObj).Elem().Name()
 	if _, ok := checked[modelName]; ok { // if already checked
 		return
@@ -309,7 +473,7 @@ func checkFieldsThatAreStructsForBetterTags(modelObj IModel, checked map[string]
 
 		if nextType != nil {
 			// only array []*model will work, what now? if it's not array?
-			if nextModel, ok := reflect.New(nextType).Interface().(IModel); ok {
+			if nextModel, ok := reflect.New(nextType).Interface().(models.IModel); ok {
 				checkFieldsThatAreStructsForBetterTags(nextModel, checked) // how to get the name of struct
 			}
 		}

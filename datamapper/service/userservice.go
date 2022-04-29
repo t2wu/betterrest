@@ -9,6 +9,7 @@ import (
 	"github.com/t2wu/betterrest/datamapper/gormfixes"
 	"github.com/t2wu/betterrest/libs/datatypes"
 	"github.com/t2wu/betterrest/models"
+	"github.com/t2wu/betterrest/registry"
 )
 
 type UserService struct {
@@ -46,7 +47,7 @@ func (serv *UserService) ReadOneCore(db *gorm.DB, who models.UserIDFetchable, ty
 		return nil, 0, ErrPermission
 	}
 
-	modelObj := models.NewFromTypeString(typeString)
+	modelObj := registry.NewFromTypeString(typeString)
 	modelObj.SetID(who.GetUserID())
 
 	if err := db.First(modelObj).Error; err != nil {

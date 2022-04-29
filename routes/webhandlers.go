@@ -21,6 +21,7 @@ import (
 	"github.com/t2wu/betterrest/lifecycle"
 	"github.com/t2wu/betterrest/models"
 	"github.com/t2wu/betterrest/models/tools"
+	"github.com/t2wu/betterrest/registry"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-chi/render"
@@ -171,11 +172,10 @@ func modelObjsToJSON(typeString string, modelObjs []models.IModel, roles []model
 }
 
 func RenderModelSlice(c *gin.Context, total *int, data *controller.Data, info *controller.EndPointInfo) {
-	if models.ModelRegistry[data.TypeString].Controller != nil {
-		if ctrl := models.ModelRegistry[data.TypeString].Controller.(controller.IHasRenderer); ctrl != nil {
-			if ctrl.Render(c, data, info) { // custom render if true
-				return
-			}
+	// Any custom rendering?
+	if method := registry.ModelRegistry[data.TypeString].RendererMethod; method != nil {
+		if method(c, data, info) { // custom render if true
+			return
 		}
 	}
 
@@ -213,11 +213,9 @@ func RenderModelSlice(c *gin.Context, total *int, data *controller.Data, info *c
 
 func RenderModel(c *gin.Context, total *int, data *controller.Data, info *controller.EndPointInfo) {
 	// Any custom rendering?
-	if models.ModelRegistry[data.TypeString].Controller != nil {
-		if ctrl := models.ModelRegistry[data.TypeString].Controller.(controller.IHasRenderer); ctrl != nil {
-			if ctrl.Render(c, data, info) { // custom render if true
-				return
-			}
+	if method := registry.ModelRegistry[data.TypeString].RendererMethod; method != nil {
+		if method(c, data, info) { // custom render if true
+			return
 		}
 	}
 
@@ -242,7 +240,7 @@ func RenderJSONForModel(c *gin.Context, modelObj models.IModel, data *controller
 
 func RenderModelSliceOri(c *gin.Context, modelObjs []models.IModel, total *int, bhpdata *models.BatchHookPointData, op models.CRUPDOp) {
 	// BatchRenderer
-	if renderer := models.ModelRegistry[bhpdata.TypeString].BatchRenderer; renderer != nil {
+	if renderer := registry.ModelRegistry[bhpdata.TypeString].BatchRenderer; renderer != nil {
 		if renderer(c, modelObjs, bhpdata, op) {
 			return
 		}
@@ -348,7 +346,7 @@ func w(handler func(c *gin.Context)) func(c *gin.Context) {
 
 func batchRenderHelper(c *gin.Context, typeString string, data *controller.Data, info *controller.EndPointInfo, no *int) {
 	// Does old renderer exists?
-	if renderer := models.ModelRegistry[typeString].BatchRenderer; renderer != nil {
+	if renderer := registry.ModelRegistry[typeString].BatchRenderer; renderer != nil {
 		// Re-create it again to remain backward compatible
 		oldBatchCargo := models.BatchHookCargo{Payload: data.Cargo.Payload}
 		bhpData := models.BatchHookPointData{Ms: data.Ms, DB: nil, Who: data.Who,
@@ -378,7 +376,7 @@ func batchRenderHelper(c *gin.Context, typeString string, data *controller.Data,
 
 func singleRenderHelper(c *gin.Context, typeString string, data *controller.Data, info *controller.EndPointInfo) {
 	// Does old renderer exists?
-	if renderer := models.ModelRegistry[typeString].BatchRenderer; renderer != nil {
+	if renderer := registry.ModelRegistry[typeString].BatchRenderer; renderer != nil {
 		// Re-create it again to remain backward compatible
 		oldBatchCargo := models.ModelCargo{Payload: data.Cargo.Payload}
 		hpdata := models.HookPointData{DB: nil, Who: data.Who,

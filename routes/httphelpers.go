@@ -10,6 +10,7 @@ import (
 	"github.com/t2wu/betterrest/libs/utils/jsontrans"
 	"github.com/t2wu/betterrest/libs/webrender"
 	"github.com/t2wu/betterrest/models"
+	"github.com/t2wu/betterrest/registry"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-chi/render"
@@ -34,7 +35,7 @@ func ModelOrModelsFromJSONBody(r *http.Request, typeString string, who models.Us
 
 	var jcmodel JSONBodyWithContent
 
-	modelObj := models.NewFromTypeString(typeString)
+	modelObj := registry.NewFromTypeString(typeString)
 
 	needTransform := false
 	var fields jsontrans.JSONFields
@@ -105,7 +106,7 @@ func ModelOrModelsFromJSONBody(r *http.Request, typeString string, who models.Us
 			}
 		}
 
-		modelObj := models.NewFromTypeString(typeString)
+		modelObj := registry.NewFromTypeString(typeString)
 		err = json.Unmarshal(jsnModel, modelObj)
 		if err != nil {
 			return nil, nil, webrender.NewErrParsingJSON(err)
@@ -151,7 +152,7 @@ func ModelsFromJSONBody(r *http.Request, typeString string, who models.UserIDFet
 		return nil, webrender.NewErrParsingJSON(err)
 	}
 
-	modelTest := models.NewFromTypeString(typeString)
+	modelTest := registry.NewFromTypeString(typeString)
 	needTransform := false
 	var fields jsontrans.JSONFields
 	if modelObjPerm, ok := modelTest.(models.IHasPermissions); ok {
@@ -175,7 +176,7 @@ func ModelsFromJSONBody(r *http.Request, typeString string, who models.UserIDFet
 			}
 		}
 
-		modelObj := models.NewFromTypeString(typeString)
+		modelObj := registry.NewFromTypeString(typeString)
 		err = json.Unmarshal(jsnModel, modelObj)
 		if err != nil {
 			return nil, webrender.NewErrParsingJSON(err)
@@ -212,7 +213,7 @@ func ModelFromJSONBody(r *http.Request, typeString string, who models.UserIDFetc
 		return nil, webrender.NewErrReadingBody(err)
 	}
 
-	modelObj := models.NewFromTypeString(typeString)
+	modelObj := registry.NewFromTypeString(typeString)
 
 	if modelObjPerm, ok := modelObj.(models.IHasPermissions); ok {
 		// removeCreated := false

@@ -8,6 +8,7 @@ import (
 	"github.com/jinzhu/gorm"
 	"github.com/t2wu/betterrest/libs/datatypes"
 	"github.com/t2wu/betterrest/models"
+	"github.com/t2wu/betterrest/registry"
 )
 
 // Remove strategy
@@ -64,7 +65,7 @@ func markForDelete(db *gorm.DB, v reflect.Value, car cargo) error {
 			switch v.Field(i).Kind() {
 			case reflect.Struct:
 				m := v.Field(i).Addr().Interface().(models.IModel)
-				fieldTableName := models.GetTableNameFromIModel(m)
+				fieldTableName := registry.GetTableNameFromIModel(m)
 				if _, ok := car.peg[fieldTableName]; ok {
 					mids := car.peg[fieldTableName]
 					mids.ids = append(mids.ids, m.GetID())
@@ -81,7 +82,7 @@ func markForDelete(db *gorm.DB, v reflect.Value, car cargo) error {
 			case reflect.Slice:
 				typ := v.Type().Field(i).Type.Elem()
 				m, _ := reflect.New(typ).Interface().(models.IModel)
-				fieldTableName := models.GetTableNameFromIModel(m)
+				fieldTableName := registry.GetTableNameFromIModel(m)
 				for j := 0; j < v.Field(i).Len(); j++ {
 					if _, ok := car.peg[fieldTableName]; ok {
 						mids := car.peg[fieldTableName]
@@ -144,8 +145,8 @@ func removeManyToManyAssociationTableElem(db *gorm.DB, modelObj models.IModel) e
 			linkTableName := strings.Split(tag, ":")[1]
 			typ := v.Type().Field(i).Type.Elem() // Get the type of the element of slice
 			m2, _ := reflect.New(typ).Interface().(models.IModel)
-			fieldTableName := models.GetTableNameFromIModel(m2)
-			selfTableName := models.GetTableNameFromIModel(modelObj)
+			fieldTableName := registry.GetTableNameFromIModel(m2)
+			selfTableName := registry.GetTableNameFromIModel(modelObj)
 
 			fieldVal := v.Field(i)
 			if fieldVal.Len() >= 1 {
@@ -200,7 +201,7 @@ func CreatePeggedAssocFields(db *gorm.DB, modelObj models.IModel) (err error) {
 						return err
 					}
 
-					tableName := models.GetTableNameFromIModel(modelObj)
+					tableName := registry.GetTableNameFromIModel(modelObj)
 					correspondingColumnName := tableName + "_id"
 
 					db.Model(nestedModel).Update(correspondingColumnName, modelObj.GetID())
@@ -303,10 +304,10 @@ func UpdatePeggedFields(db *gorm.DB, oldModelObj models.IModel, newModelObj mode
 					typ := reflect.TypeOf(inter).Elem() // Get the type of the element of slice
 					m2, _ := reflect.New(typ).Interface().(models.IModel)
 
-					fieldTableName := models.GetTableNameFromIModel(m2)
+					fieldTableName := registry.GetTableNameFromIModel(m2)
 					fieldIDName := fieldTableName + "_id"
 
-					selfTableName := models.GetTableNameFromIModel(oldModelObj)
+					selfTableName := registry.GetTableNameFromIModel(oldModelObj)
 					selfID := selfTableName + "_id"
 
 					// The following line seems to puke on a many-to-many, I hope I don't need it anywhere
@@ -385,7 +386,7 @@ func LoadManyToManyBecauseGormFailsWithID(db *gorm.DB, modelObj models.IModel) e
 
 		// log.Println("tag:", tag)
 		if strings.HasPrefix(tag, "pegassoc-manytomany") {
-			tableName := models.GetTableNameFromIModel(reflect.ValueOf(modelObj).Interface().(models.IModel))
+			tableName := registry.GetTableNameFromIModel(reflect.ValueOf(modelObj).Interface().(models.IModel))
 
 			linkTableName := strings.Split(tag, ":")[1]
 
@@ -394,7 +395,7 @@ func LoadManyToManyBecauseGormFailsWithID(db *gorm.DB, modelObj models.IModel) e
 			typ := reflect.TypeOf(inter).Elem() // Get the type of the element of slice
 
 			m2, _ := reflect.New(typ).Interface().(models.IModel)
-			fieldTableName := models.GetTableNameFromIModel(m2)
+			fieldTableName := registry.GetTableNameFromIModel(m2)
 
 			sliceOfField := reflect.New(reflect.TypeOf(inter))
 

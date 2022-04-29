@@ -10,6 +10,7 @@ import (
 	"github.com/t2wu/betterrest/datamapper/gormfixes"
 	"github.com/t2wu/betterrest/libs/datatypes"
 	"github.com/t2wu/betterrest/models"
+	"github.com/t2wu/betterrest/registry"
 )
 
 type LinkTableService struct {
@@ -76,7 +77,7 @@ func (serv *LinkTableService) HookBeforeDeleteMany(db *gorm.DB, who models.UserI
 
 // ReadOneCore get one model object based on its type and its id string
 func (service *LinkTableService) ReadOneCore(db *gorm.DB, who models.UserIDFetchable, typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error) {
-	modelObj := models.NewFromTypeString(typeString)
+	modelObj := registry.NewFromTypeString(typeString)
 
 	// Check if link table
 	if _, ok := modelObj.(models.IOwnership); !ok {
@@ -84,7 +85,7 @@ func (service *LinkTableService) ReadOneCore(db *gorm.DB, who models.UserIDFetch
 		return nil, models.UserRoleInvalid, fmt.Errorf("%s not an IOwnership type", typeString)
 	}
 
-	rtable := models.GetTableNameFromIModel(modelObj)
+	rtable := registry.GetTableNameFromIModel(modelObj)
 
 	// Subquery: find all models where user_id has ME in it, then find
 	// record where model_id from subquery and id matches the one we query for
@@ -118,10 +119,10 @@ func (service *LinkTableService) ReadOneCore(db *gorm.DB, who models.UserIDFetch
 }
 
 func (serv *LinkTableService) GetManyCore(db *gorm.DB, who models.UserIDFetchable, typeString string, ids []*datatypes.UUID) ([]models.IModel, []models.UserRole, error) {
-	rtable := models.GetTableNameFromTypeString(typeString)
+	rtable := registry.GetTableNameFromTypeString(typeString)
 	subquery := fmt.Sprintf("model_id IN (select model_id from %s where user_id = ?)", rtable)
 	db2 := db.Table(rtable).Where(subquery, who.GetUserID()).Where("id IN (?)", ids)
-	modelObjs, err := models.NewSliceFromDBByTypeString(typeString, db2.Set("gorm:auto_preload", true).Find)
+	modelObjs, err := registry.NewSliceFromDBByTypeString(typeString, db2.Set("gorm:auto_preload", true).Find)
 	if err != nil {
 		log.Println("calling NewSliceFromDBByTypeString err:", err)
 		return nil, nil, err
@@ -156,10 +157,10 @@ func (serv *LinkTableService) GetManyCore(db *gorm.DB, who models.UserIDFetchabl
 
 // GetAllQueryContructCore construct query core
 func (serv *LinkTableService) GetAllQueryContructCore(db *gorm.DB, who models.UserIDFetchable, typeString string) (*gorm.DB, error) {
-	rtable := models.GetTableNameFromTypeString(typeString)
+	rtable := registry.GetTableNameFromTypeString(typeString)
 
 	// Check if link table
-	testModel := models.NewFromTypeString(typeString)
+	testModel := registry.NewFromTypeString(typeString)
 	// IOwnership means link table
 	if _, ok := testModel.(models.IOwnership); !ok {
 		log.Printf("%s not an IOwnership type\n", typeString)
@@ -211,7 +212,7 @@ func (serv *LinkTableService) userHasPermissionToEdit(db *gorm.DB, who models.Us
 
 	// If you're admin to this model, you can only update/delete link data to other
 	// If you're guest to this model, then you can remove yourself, but not others
-	rtable := models.GetTableNameFromTypeString(typeString)
+	rtable := registry.GetTableNameFromTypeString(typeString)
 	type result struct {
 		Role models.UserRole
 	}
@@ -242,7 +243,7 @@ func userHasAdminAccessToOriginalModel(db *gorm.DB, oid *datatypes.UUID, typeStr
 
 	// We make sure we NOT by checking the original model table
 	// but check link table which we have admin access for
-	rtable := models.GetTableNameFromTypeString(typeString)
+	rtable := registry.GetTableNameFromTypeString(typeString)
 
 	result := struct {
 		ID *datatypes.UUID

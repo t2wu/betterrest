@@ -1,4 +1,4 @@
-package models
+package registry
 
 import (
 	"log"

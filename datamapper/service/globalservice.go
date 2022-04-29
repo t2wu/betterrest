@@ -8,6 +8,7 @@ import (
 	"github.com/t2wu/betterrest/datamapper/gormfixes"
 	"github.com/t2wu/betterrest/libs/datatypes"
 	"github.com/t2wu/betterrest/models"
+	"github.com/t2wu/betterrest/registry"
 )
 
 type GlobalService struct {
@@ -37,12 +38,12 @@ func (serv *GlobalService) HookBeforeDeleteMany(db *gorm.DB, who models.UserIDFe
 
 // ReadOneCore get one model object based on its type and its id string
 func (service *GlobalService) ReadOneCore(db *gorm.DB, who models.UserIDFetchable, typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error) {
-	modelObj := models.NewFromTypeString(typeString)
+	modelObj := registry.NewFromTypeString(typeString)
 	modelObj.SetID(id)
 
 	db = db.Set("gorm:auto_preload", true)
 
-	// rtable := models.GetTableNameFromIModel(modelObj)
+	// rtable := registry.GetTableNameFromIModel(modelObj)
 
 	// Global object, everyone can find it, simply find it
 	err := db.Find(modelObj).Error
@@ -61,10 +62,10 @@ func (service *GlobalService) ReadOneCore(db *gorm.DB, who models.UserIDFetchabl
 }
 
 func (service *GlobalService) GetManyCore(db *gorm.DB, who models.UserIDFetchable, typeString string, ids []*datatypes.UUID) ([]models.IModel, []models.UserRole, error) {
-	rtable := models.GetTableNameFromTypeString(typeString)
+	rtable := registry.GetTableNameFromTypeString(typeString)
 	db = db.Table(rtable).Where(fmt.Sprintf("\"%s\".\"id\" IN (?)", rtable), ids).Set("gorm:auto_preload", true)
 
-	modelObjs, err := models.NewSliceFromDBByTypeString(typeString, db.Set("gorm:auto_preload", true).Find)
+	modelObjs, err := registry.NewSliceFromDBByTypeString(typeString, db.Set("gorm:auto_preload", true).Find)
 	if err != nil {
 		log.Println("calling NewSliceFromDBByTypeString err:", err)
 		return nil, nil, err
@@ -91,7 +92,7 @@ func (service *GlobalService) GetManyCore(db *gorm.DB, who models.UserIDFetchabl
 
 // GetAllQueryContructCore construct the meat of the query
 func (serv *GlobalService) GetAllQueryContructCore(db *gorm.DB, who models.UserIDFetchable, typeString string) (*gorm.DB, error) {
-	rtable := models.GetTableNameFromTypeString(typeString)
+	rtable := registry.GetTableNameFromTypeString(typeString)
 	return db.Table(rtable), nil // that's it
 }
 

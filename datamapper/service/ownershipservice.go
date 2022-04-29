@@ -10,6 +10,7 @@ import (
 	"github.com/t2wu/betterrest/libs/datatypes"
 	"github.com/t2wu/betterrest/models"
 	qry "github.com/t2wu/betterrest/query"
+	"github.com/t2wu/betterrest/registry"
 )
 
 // check out
@@ -32,7 +33,7 @@ func (serv *OwnershipService) HookBeforeCreateOne(db *gorm.DB, who models.UserID
 		modelObj.SetID(modelID)
 	}
 
-	g := models.NewOwnershipModelFromOwnershipResourceTypeString(typeString).(models.IOwnership)
+	g := registry.NewOwnershipModelFromOwnershipResourceTypeString(typeString).(models.IOwnership)
 	g.SetUserID(who.GetUserID())
 	g.SetModelID(modelID)
 	g.SetRole(models.UserRoleAdmin)
@@ -52,7 +53,7 @@ func (serv *OwnershipService) HookBeforeCreateMany(db *gorm.DB, who models.UserI
 	for _, modelObj := range modelObjs {
 		// reflect.SliceOf
 		// g := reflect.New(ownershipType).Interface().(models.IOwnership)
-		g := models.NewOwnershipModelFromOwnershipResourceTypeString(typeString).(models.IOwnership)
+		g := registry.NewOwnershipModelFromOwnershipResourceTypeString(typeString).(models.IOwnership)
 
 		// Since I need to create a user_owns join table, I need to create ID now
 		modelID := modelObj.GetID()
@@ -82,7 +83,7 @@ func (serv *OwnershipService) HookBeforeDeleteOne(db *gorm.DB, who models.UserID
 	// everyone who is linked to this table!
 
 	// stmt := fmt.Sprintf("DELETE FROM %s WHERE user_id = ? AND model_id = ? AND role = ?", models.GetJoinTableName(modelObjOwnership))
-	tableName := models.OwnershipTableNameFromOwnershipResourceTypeString(typeString)
+	tableName := registry.OwnershipTableNameFromOwnershipResourceTypeString(typeString)
 	stmt := fmt.Sprintf("DELETE FROM %s WHERE model_id = ?", tableName)
 
 	// Can't do db.Raw and db.Delete at the same time?!
@@ -100,7 +101,7 @@ func (serv *OwnershipService) HookBeforeDeleteMany(db *gorm.DB, who models.UserI
 	for _, modelObj := range modelObjs {
 		// Also remove entries from ownership table
 		// Maybe getting table
-		tableName := models.OwnershipTableNameFromOwnershipResourceTypeString(typeString)
+		tableName := registry.OwnershipTableNameFromOwnershipResourceTypeString(typeString)
 		stmt := fmt.Sprintf("DELETE FROM %s WHERE model_id = ?", tableName)
 		db2 := db.Exec(stmt, modelObj.GetID().String())
 		if err := db2.Error; err != nil {
@@ -124,7 +125,7 @@ func (serv *OwnershipService) CreateOneCore(db *gorm.DB, who models.UserIDFetcha
 	}
 
 	// Create ownership table
-	tableName := models.OwnershipTableNameFromOwnershipResourceTypeString(typeString)
+	tableName := registry.OwnershipTableNameFromOwnershipResourceTypeString(typeString)
 	if err := db.Table(tableName).Create(g).Error; err != nil {
 		return nil, err
 	}
@@ -146,11 +147,11 @@ func (serv *OwnershipService) CreateOneCore(db *gorm.DB, who models.UserIDFetcha
 
 // ReadOneCore get one model object based on its type and its id string
 func (serv *OwnershipService) ReadOneCore(db *gorm.DB, who models.UserIDFetchable, typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error) {
-	modelObj := models.NewFromTypeString(typeString)
+	modelObj := registry.NewFromTypeString(typeString)
 
 	db = db.Set("gorm:auto_preload", true)
 
-	rtable := models.GetTableNameFromIModel(modelObj)
+	rtable := registry.GetTableNameFromIModel(modelObj)
 
 	/*
 		SELECT * from some_model
@@ -158,7 +159,7 @@ func (serv *OwnershipService) ReadOneCore(db *gorm.DB, who models.UserIDFetchabl
 		INNER JOIN user ON user.id = user_owns_somemodel.user_id AND user.id = UUID_TO_BIN(oid)
 	*/
 
-	joinTableName := models.OwnershipTableNameFromOwnershipResourceTypeString(typeString)
+	joinTableName := registry.OwnershipTableNameFromOwnershipResourceTypeString(typeString)
 	// log.Println("joinTableName???", joinTableName)
 	// joinTableName := models.GetJoinTableName(modelObj)
 
@@ -197,7 +198,7 @@ func (serv *OwnershipService) GetManyCore(db *gorm.DB, who models.UserIDFetchabl
 	secondJoin := fmt.Sprintf("INNER JOIN \"user\" ON \"user\".id = \"%s\".user_id AND \"%s\".user_id = ?", joinTableName, joinTableName)
 
 	db2 := db.Table(rtable).Joins(firstJoin, ids).Joins(secondJoin, who.GetUserID())
-	modelObjs, err := models.NewSliceFromDBByTypeString(typeString, db2.Set("gorm:auto_preload", true).Find)
+	modelObjs, err := registry.NewSliceFromDBByTypeString(typeString, db2.Set("gorm:auto_preload", true).Find)
 	if err != nil {
 		log.Println("calling NewSliceFromDBByTypeString err:", err)
 		return nil, nil, err

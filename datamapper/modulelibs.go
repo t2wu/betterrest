@@ -10,6 +10,7 @@ import (
 	"github.com/t2wu/betterrest/libs/datatypes"
 	"github.com/t2wu/betterrest/libs/urlparam"
 	"github.com/t2wu/betterrest/models"
+	"github.com/t2wu/betterrest/registry"
 
 	jsonpatch "github.com/evanphx/json-patch"
 	"github.com/jinzhu/gorm"
@@ -144,7 +145,7 @@ func applyPatchCore(typeString string, modelObj models.IModel, jsonPatch []byte)
 	}
 
 	// Now turn it back to modelObj
-	modelObj2 = models.NewFromTypeString(typeString)
+	modelObj2 = registry.NewFromTypeString(typeString)
 	err = json.Unmarshal(modified, modelObj2)
 	if err != nil {
 		// there shouldn't be any error unless it's a patching mistake...

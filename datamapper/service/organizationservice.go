@@ -11,6 +11,7 @@ import (
 	"github.com/t2wu/betterrest/db"
 	"github.com/t2wu/betterrest/libs/datatypes"
 	"github.com/t2wu/betterrest/models"
+	"github.com/t2wu/betterrest/registry"
 )
 
 // OrganizationService handles all the ownership specific db calls
@@ -59,7 +60,7 @@ func (serv *OrganizationService) HookBeforeDeleteMany(db *gorm.DB, who models.Us
 // getOneWithIDCore get one model object based on its type and its id string
 // since this is organizationMapper, need to make sure it's the same organization
 func (serv *OrganizationService) ReadOneCore(db *gorm.DB, who models.UserIDFetchable, typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error) {
-	modelObj := models.NewFromTypeString(typeString)
+	modelObj := registry.NewFromTypeString(typeString)
 
 	db = db.Set("gorm:auto_preload", true)
 
@@ -67,7 +68,7 @@ func (serv *OrganizationService) ReadOneCore(db *gorm.DB, who models.UserIDFetch
 	// var modelObjHavingOrganization models.IHasOrganizationLink
 	// // (Maybe organization should be defined in the library)
 	// // And it's organizational type has a user which includes
-	// if modelObjHavingOrganization, ok = models.NewFromTypeString(typeString).(models.IHasOrganizationLink); !ok {
+	// if modelObjHavingOrganization, ok = registry.NewFromTypeString(typeString).(models.IHasOrganizationLink); !ok {
 	// 	return nil, models.UserRoleGuest, fmt.Errorf("Model %s does not comform to IHasOrganizationLink", typeString)
 	// }
 
@@ -75,18 +76,18 @@ func (serv *OrganizationService) ReadOneCore(db *gorm.DB, who models.UserIDFetch
 	// Model -- Org -- Join Table -- User
 	// orgTableName := models.GetOrganizationTableName(modelObjHavingOrganization)
 	// orgTable := reflect.New(modelObjHavingOrganization.OrganizationType()).Interface()
-	orgTableName := models.OrgModelNameFromOrgResourceTypeString(typeString)
+	orgTableName := registry.OrgModelNameFromOrgResourceTypeString(typeString)
 	// orgTableName := models.GetOrganizationalTableNameFromModelTypeString(typeString)
 
 	joinTableName := orgJoinTableName(typeString)
 	// orgTable, _ := reflect.New(models.GetOrganizationTypeFromTypeString(typeString)).Interface().(models.IModel)
 	// joinTableName := models.GetJoinTableName(orgTable)
 
-	orgIDFieldName := *models.GetFieldNameFromModelByTagKey(models.NewFromTypeString(typeString), "org")
+	orgIDFieldName := *models.GetFieldNameFromModelByTagKey(registry.NewFromTypeString(typeString), "org")
 	orgFieldName := strcase.SnakeCase(orgIDFieldName)
 	// orgFieldName := strcase.SnakeCase(modelObjHavingOrganization.GetOrganizationIDFieldName())
 
-	rtable := models.GetTableNameFromIModel(modelObj)
+	rtable := registry.GetTableNameFromIModel(modelObj)
 
 	// e.g. INNER JOIN \"organization\" ON \"dock\".\"OrganizationID\" = \"organization\".id
 	firstJoin := fmt.Sprintf("INNER JOIN \"%s\" ON \"%s\".\"%s\" = \"%s\".id AND \"%s\".\"id\" = ?", orgTableName, rtable, orgFieldName, orgTableName, rtable)
@@ -99,7 +100,7 @@ func (serv *OrganizationService) ReadOneCore(db *gorm.DB, who models.UserIDFetch
 		return nil, 0, err
 	}
 
-	joinTable := models.NewOrgOwnershipModelFromOrgResourceTypeString(typeString)
+	joinTable := registry.NewOrgOwnershipModelFromOrgResourceTypeString(typeString)
 	role := models.UserRoleGuest // just some default
 
 	orgID := models.GetFieldValueFromModelByTagKeyBetterRestAndValueKey(modelObj, "org").(*datatypes.UUID)
@@ -126,23 +127,23 @@ func (serv *OrganizationService) ReadOneCore(db *gorm.DB, who models.UserIDFetch
 func (serv *OrganizationService) GetManyCore(db *gorm.DB, who models.UserIDFetchable, typeString string, ids []*datatypes.UUID) ([]models.IModel, []models.UserRole, error) {
 	// var ok bool
 	// var modelObjHavingOrganization models.IHasOrganizationLink
-	// if modelObjHavingOrganization, ok = models.NewFromTypeString(typeString).(models.IHasOrganizationLink); !ok {
+	// if modelObjHavingOrganization, ok = registry.NewFromTypeString(typeString).(models.IHasOrganizationLink); !ok {
 	// 	return nil, nil, fmt.Errorf("Model %s does not comform to IHasOrganizationLink", typeString)
 	// }
 
 	// Graphically:
 	// Model -- Org -- Join Table -- User
-	rtable := models.GetTableNameFromTypeString(typeString)
+	rtable := registry.GetTableNameFromTypeString(typeString)
 	// orgTableName := models.GetOrganizationTableName(modelObjHavingOrganization)
 	// orgTable := reflect.New(modelObjHavingOrganization.OrganizationType()).Interface()
-	orgTableName := models.OrgModelNameFromOrgResourceTypeString(typeString)
+	orgTableName := registry.OrgModelNameFromOrgResourceTypeString(typeString)
 	joinTableName := orgJoinTableName(typeString)
 
 	// orgTableName := models.GetOrganizationalTableNameFromModelTypeString(typeString)
 	// orgTable, _ := reflect.New(models.GetOrganizationTypeFromTypeString(typeString)).Interface().(models.IModel)
 	// joinTableName := models.GetJoinTableName(orgTable)
 
-	ofield := *models.GetFieldNameFromModelByTagKey(models.NewFromTypeString(typeString), "org")
+	ofield := *models.GetFieldNameFromModelByTagKey(registry.NewFromTypeString(typeString), "org")
 	orgFieldName := strcase.SnakeCase(ofield)
 	// orgFieldName := strcase.SnakeCase(modelObjHavingOrganization.GetOrganizationIDFieldName())
 
@@ -154,7 +155,7 @@ func (serv *OrganizationService) GetManyCore(db *gorm.DB, who models.UserIDFetch
 
 	db2 := db.Table(rtable).Joins(firstJoin, ids).Joins(secondJoin).Joins(thirdJoin, who.GetUserID()) // .Find(modelObj).Error
 
-	modelObjs, err := models.NewSliceFromDBByTypeString(typeString, db2.Set("gorm:auto_preload", true).Find)
+	modelObjs, err := registry.NewSliceFromDBByTypeString(typeString, db2.Set("gorm:auto_preload", true).Find)
 	if err != nil {
 		log.Println("calling NewSliceFromDBByTypeString err:", err)
 		return nil, nil, err
@@ -193,14 +194,14 @@ func (serv *OrganizationService) GetAllQueryContructCore(db *gorm.DB, who models
 	// Model -- Org -- Join Table -- User
 	// (Maybe organization should be defined in the library)
 	// And it's organizational type has a user which includes
-	// modelObjHavingOrganization, ok := models.NewFromTypeString(typeString).(models.IHasOrganizationLink)
+	// modelObjHavingOrganization, ok := registry.NewFromTypeString(typeString).(models.IHasOrganizationLink)
 	// if !ok {
 	// 	return nil, fmt.Errorf("Model %s does not comform to IHasOrganizationLink", typeString)
 	// }
 
-	rtable := models.GetTableNameFromTypeString(typeString)
+	rtable := registry.GetTableNameFromTypeString(typeString)
 	// orgTableName := models.GetOrganizationTableName(modelObjHavingOrganization)
-	orgTableName := models.OrgModelNameFromOrgResourceTypeString(typeString)
+	orgTableName := registry.OrgModelNameFromOrgResourceTypeString(typeString)
 
 	joinTableName := orgJoinTableName(typeString)
 
@@ -215,7 +216,7 @@ func (serv *OrganizationService) GetAllQueryContructCore(db *gorm.DB, who models
 	// orgTable := reflect.New(models.GetOrganizationTypeFromTypeString(typeString)).Interface().(models.IModel)
 	// joinTableName := models.GetJoinTableName(orgTable)
 
-	ofield := *models.GetFieldNameFromModelByTagKey(models.NewFromTypeString(typeString), "org")
+	ofield := *models.GetFieldNameFromModelByTagKey(registry.NewFromTypeString(typeString), "org")
 	orgFieldName := strcase.SnakeCase(ofield)
 
 	// e.g. INNER JOIN \"organization\" ON \"dock\".\"OrganizationID\" = \"organization\".id
@@ -229,7 +230,7 @@ func (serv *OrganizationService) GetAllQueryContructCore(db *gorm.DB, who models
 
 // GetAllRolesCore gets all roles according to the criteria
 func (serv *OrganizationService) GetAllRolesCore(dbChained *gorm.DB, dbClean *gorm.DB, who models.UserIDFetchable, typeString string, modelObjs []models.IModel) ([]models.UserRole, error) {
-	// modelObjHavingOrganization, _ := models.NewFromTypeString(typeString).(models.IHasOrganizationLink)
+	// modelObjHavingOrganization, _ := registry.NewFromTypeString(typeString).(models.IHasOrganizationLink)
 	// orgTable := reflect.New(modelObjHavingOrganization.OrganizationType()).Interface()
 	// orgTable := reflect.New(models.GetOrganizationTypeFromTypeString(typeString)).Interface().(models.IModel)
 	// joinTableName := models.GetJoinTableName(orgTable)
@@ -269,7 +270,7 @@ func (serv *OrganizationService) GetAllRolesCore(dbChained *gorm.DB, dbClean *go
 // ---------------------------------------
 // The model object should have link to the ownership object which has a linking table to the user
 func userHasRolesAccessToModelOrg(db *gorm.DB, who models.UserIDFetchable, typeString string, modelObj models.IModel, roles []models.UserRole) (bool, error) {
-	organizationTableName := models.OrgModelNameFromOrgResourceTypeString(typeString)
+	organizationTableName := registry.OrgModelNameFromOrgResourceTypeString(typeString)
 	organizationJoinTableName := orgJoinTableName(typeString)
 
 	organizationID := models.GetFieldValueFromModelByTagKeyBetterRestAndValueKey(modelObj, "org").(*datatypes.UUID)
@@ -280,7 +281,7 @@ func userHasRolesAccessToModelOrg(db *gorm.DB, who models.UserIDFetchable, typeS
 	whereStmt := fmt.Sprintf("\"%s\".model_id = ?", organizationJoinTableName)
 	db = db.Table(organizationTableName).Joins(firstJoin, roles).Joins(secondJoin, who.GetUserID().String()).Where(whereStmt, organizationID)
 
-	organizations, err := models.NewSliceFromDBByType(models.OrgModelTypeFromOrgResourceTypeString(typeString), db.Find)
+	organizations, err := registry.NewSliceFromDBByType(registry.OrgModelTypeFromOrgResourceTypeString(typeString), db.Find)
 	if err != nil {
 		return false, err
 	}
@@ -340,12 +341,12 @@ func (serv *OrganizationService) UpdateOneCore(db *gorm.DB, who models.UserIDFet
 // ----------------------------------------
 
 func orgJoinTableName(typeString string) string {
-	joinTableName := models.OrgOwnershipModelNameFromOrgResourceTypeString(typeString)
+	joinTableName := registry.OrgOwnershipModelNameFromOrgResourceTypeString(typeString)
 
 	// This is the go to class for join. So if they use this it's a different
 	// join table name from main resource name (org table)
 	if joinTableName == "ownership_model_with_id_base" {
-		orgTableName := models.OrgModelNameFromOrgResourceTypeString(typeString)
+		orgTableName := registry.OrgModelNameFromOrgResourceTypeString(typeString)
 		joinTableName = "user_owns_" + orgTableName
 	}
 

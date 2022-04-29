@@ -12,6 +12,7 @@ import (
 	"github.com/t2wu/betterrest/libs/datatypes"
 	"github.com/t2wu/betterrest/libs/urlparam"
 	"github.com/t2wu/betterrest/models"
+	"github.com/t2wu/betterrest/registry"
 )
 
 type TestBaseMapperReadSuite struct {
@@ -30,6 +31,11 @@ func (suite *TestBaseMapperReadSuite) SetupTest() {
 	suite.mock = mock
 	suite.who = &WhoMock{Oid: datatypes.NewUUID()} // userid
 	suite.typeString = "cars"
+
+	// clear registry
+	delete(registry.ModelRegistry, "cars")
+
+	resetGlobals()
 }
 
 // All methods that begin with "Test" are run as tests within a
@@ -48,18 +54,18 @@ func (suite *TestBaseMapperReadSuite) TestReadOne_WhenGiven_GotCar() {
 	options := make(map[urlparam.Param]interface{})
 	cargo := controller.Cargo{}
 
-	opt := models.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: models.MapperTypeViaOwnership}
-	models.For(suite.typeString).ModelWithOption(&Car{}, opt)
+	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
+	registry.For(suite.typeString).ModelWithOption(&Car{}, opt)
 
 	mapper := SharedOwnershipMapper()
-	modelObj, role, retval := mapper.ReadOne(suite.db, suite.who, suite.typeString, modelID, options, &cargo)
-	if !assert.Nil(suite.T(), retval) {
+	retVal, role, retErr := mapper.ReadOne(suite.db, suite.who, suite.typeString, modelID, options, &cargo)
+	if !assert.Nil(suite.T(), retErr) {
 		return
 	}
 
 	assert.Equal(suite.T(), models.UserRoleGuest, role)
 
-	if car, ok := modelObj.(*Car); assert.True(suite.T(), ok) {
+	if car, ok := retVal.Ms[0].(*Car); assert.True(suite.T(), ok) {
 		assert.Equal(suite.T(), carName, car.Name)
 		assert.Equal(suite.T(), carID, car.ID)
 	}
@@ -80,21 +86,21 @@ func (suite *TestBaseMapperReadSuite) TestReadOne_WhenNoController_CallRelevantO
 	options := make(map[urlparam.Param]interface{})
 	cargo := controller.Cargo{}
 
-	opt := models.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: models.MapperTypeViaOwnership}
-	models.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt)
-	// opt := models.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: models.MapperTypeViaOwnership}
-	// models.For(typeString).ModelWithOption(&Car{}, opt)
+	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
+	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt)
+	// opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
+	// registry.For(typeString).ModelWithOption(&Car{}, opt)
 
 	mapper := SharedOwnershipMapper()
-	modelObj, _, retval := mapper.ReadOne(suite.db, suite.who, suite.typeString, modelID, options, &cargo)
-	if !assert.Nil(suite.T(), retval) {
+	retVal, _, retErr := mapper.ReadOne(suite.db, suite.who, suite.typeString, modelID, options, &cargo)
+	if !assert.Nil(suite.T(), retErr) {
 		return
 	}
 
 	hpdata := models.HookPointData{DB: suite.db, Who: suite.who, TypeString: suite.typeString,
 		Cargo: &models.ModelCargo{Payload: cargo.Payload}, Role: &role, URLParams: options}
 
-	if _, ok := modelObj.(*CarWithCallbacks); assert.True(suite.T(), ok) {
+	if _, ok := retVal.Ms[0].(*CarWithCallbacks); assert.True(suite.T(), ok) {
 		assert.False(suite.T(), guardAPIEntryCalled) // not called when going through mapper
 		// Read has no before callback since haven't been read
 		assert.False(suite.T(), beforeCUPDDBCalled)
@@ -120,21 +126,21 @@ func (suite *TestBaseMapperReadSuite) TestReadOne_WhenHavingController_NotCallOl
 	suite.mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "user_owns_car"  WHERE (user_id = $1 AND model_id = $2)`)).
 		WillReturnRows(sqlmock.NewRows([]string{"user_id", "model_id", "role"}).AddRow(suite.who.GetUserID(), carID, models.UserRoleAdmin))
 
-	opt := models.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: models.MapperTypeViaOwnership}
+	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
 	ctrl := CarControllerWithoutCallbacks{}
-	models.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).Controller(&ctrl)
+	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).Controller(&ctrl, "CRUPD", "JBAT")
 
 	modelID := datatypes.NewUUID()
 	options := make(map[urlparam.Param]interface{})
 	cargo := controller.Cargo{}
 
 	mapper := SharedOwnershipMapper()
-	modelObj, _, retval := mapper.ReadOne(suite.db, suite.who, suite.typeString, modelID, options, &cargo)
-	if !assert.Nil(suite.T(), retval) {
+	retVal, _, retErr := mapper.ReadOne(suite.db, suite.who, suite.typeString, modelID, options, &cargo)
+	if !assert.Nil(suite.T(), retErr) {
 		return
 	}
 
-	if _, ok := modelObj.(*CarWithCallbacks); assert.True(suite.T(), ok) {
+	if _, ok := retVal.Ms[0].(*CarWithCallbacks); assert.True(suite.T(), ok) {
 		// None of the model callback should be called when there is controller
 		assert.False(suite.T(), guardAPIEntryCalled) // not called when going through mapper
 		assert.False(suite.T(), beforeCUPDDBCalled)
@@ -159,18 +165,28 @@ func (suite *TestBaseMapperReadSuite) TestReadOne_WhenHavingController_CallRelev
 	options := make(map[urlparam.Param]interface{})
 	cargo := controller.Cargo{}
 
-	opt := models.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: models.MapperTypeViaOwnership}
-	ctrl := CarController{}
-	models.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).Controller(&ctrl)
+	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
+	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).Controller(&CarController{}, "CRUPD", "JBAT")
 
 	mapper := SharedOwnershipMapper()
-	_, _, retval := mapper.ReadOne(suite.db, suite.who, suite.typeString, modelID, options, &cargo)
-	if !assert.Nil(suite.T(), retval) {
+	var retVal *MapperRet
+	retVal, _, retErr := mapper.ReadOne(suite.db, suite.who, suite.typeString, modelID, options, &cargo)
+	if !assert.Nil(suite.T(), retErr) {
 		return
 	}
 
 	data := controller.Data{Ms: []models.IModel{&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID}, Name: carName}}, DB: suite.db, Who: suite.who, TypeString: suite.typeString, Roles: []models.UserRole{role}, Cargo: &cargo}
 	info := controller.EndPointInfo{Op: controller.RESTOpRead, Cardinality: controller.APICardinalityOne}
+
+	ctrls := retVal.Fetcher.GetAllInstantiatedControllers()
+	if !assert.Len(suite.T(), ctrls, 1) {
+		return
+	}
+
+	ctrl, ok := ctrls[0].(*CarController)
+	if !assert.True(suite.T(), ok) {
+		return
+	}
 
 	assert.False(suite.T(), ctrl.guardAPIEntryCalled) // Not called when going through mapper (or lifecycle for that matter)
 
@@ -201,25 +217,25 @@ func (suite *TestBaseMapperReadSuite) TestReadMany_WhenGiven_GotCars() {
 	options := make(map[urlparam.Param]interface{})
 	cargo := controller.Cargo{}
 
-	opt := models.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: models.MapperTypeViaOwnership}
-	models.For(suite.typeString).ModelWithOption(&Car{}, opt)
+	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
+	registry.For(suite.typeString).ModelWithOption(&Car{}, opt)
 
 	mapper := SharedOwnershipMapper()
-	modelObjs, roles, no, retval := mapper.ReadMany(suite.db, suite.who, suite.typeString, options, &cargo)
-	if !assert.Nil(suite.T(), retval) {
+	retVal, roles, no, retErr := mapper.ReadMany(suite.db, suite.who, suite.typeString, options, &cargo)
+	if !assert.Nil(suite.T(), retErr) {
 		return
 	}
 
 	assert.Nil(suite.T(), no) // since I didn't ask for total count
 
 	assert.ElementsMatch(suite.T(), []models.UserRole{models.UserRoleAdmin, models.UserRoleGuest, models.UserRoleAdmin}, roles)
-	if assert.Len(suite.T(), modelObjs, 3) {
-		assert.Equal(suite.T(), carID1.String(), modelObjs[0].GetID().String())
-		assert.Equal(suite.T(), carID2.String(), modelObjs[1].GetID().String())
-		assert.Equal(suite.T(), carID3.String(), modelObjs[2].GetID().String())
-		assert.Equal(suite.T(), carName1, modelObjs[0].(*Car).Name)
-		assert.Equal(suite.T(), carName2, modelObjs[1].(*Car).Name)
-		assert.Equal(suite.T(), carName3, modelObjs[2].(*Car).Name)
+	if assert.Len(suite.T(), retVal.Ms, 3) {
+		assert.Equal(suite.T(), carID1.String(), retVal.Ms[0].GetID().String())
+		assert.Equal(suite.T(), carID2.String(), retVal.Ms[1].GetID().String())
+		assert.Equal(suite.T(), carID3.String(), retVal.Ms[2].GetID().String())
+		assert.Equal(suite.T(), carName1, retVal.Ms[0].(*Car).Name)
+		assert.Equal(suite.T(), carName2, retVal.Ms[1].(*Car).Name)
+		assert.Equal(suite.T(), carName3, retVal.Ms[2].(*Car).Name)
 	}
 }
 
@@ -257,13 +273,13 @@ func (suite *TestBaseMapperReadSuite) TestReadMany_WhenNoController_CallRelevant
 	var afterReadData models.BatchHookPointData
 	afterRead := createBatchSingleMethodHookPoint(&afterReadCalled, &afterReadData)
 
-	opt := models.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: models.MapperTypeViaOwnership}
-	models.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).
+	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
+	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).
 		BatchCRUPDHooks(before, after).BatchReadHooks(afterRead)
 
 	mapper := SharedOwnershipMapper()
-	_, _, _, retval := mapper.ReadMany(suite.db, suite.who, suite.typeString, options, &cargo)
-	if !assert.Nil(suite.T(), retval) {
+	_, _, _, retErr := mapper.ReadMany(suite.db, suite.who, suite.typeString, options, &cargo)
+	if !assert.Nil(suite.T(), retErr) {
 		return
 	}
 
@@ -324,17 +340,17 @@ func (suite *TestBaseMapperReadSuite) TestReadMany_WhenHavingController_NotCallO
 	var afterReadData models.BatchHookPointData
 	afterRead := createBatchSingleMethodHookPoint(&afterReadCalled, &afterReadData)
 
-	opt := models.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: models.MapperTypeViaOwnership}
+	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
 
 	ctrl := CarController{}
 
 	// Both old and new are given
-	models.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).
-		BatchCRUPDHooks(before, after).BatchReadHooks(afterRead).Controller(&ctrl)
+	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).
+		BatchCRUPDHooks(before, after).BatchReadHooks(afterRead).Controller(&ctrl, "CRUPD", "JBAT")
 
 	mapper := SharedOwnershipMapper()
-	_, _, _, retval := mapper.ReadMany(suite.db, suite.who, suite.typeString, options, &cargo)
-	if !assert.Nil(suite.T(), retval) {
+	_, _, _, retErr := mapper.ReadMany(suite.db, suite.who, suite.typeString, options, &cargo)
+	if !assert.Nil(suite.T(), retErr) {
 		return
 	}
 
@@ -364,15 +380,15 @@ func (suite *TestBaseMapperReadSuite) TestReadMany_WhenHavingController_CallRele
 	options := make(map[urlparam.Param]interface{})
 	cargo := controller.Cargo{}
 
-	opt := models.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: models.MapperTypeViaOwnership}
-	ctrl := CarController{}
+	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
 
 	// Both old and new are given
-	models.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).Controller(&ctrl)
+	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).Controller(&CarController{}, "CRUPD", "JBAT")
 
+	var retVal *MapperRet
 	mapper := SharedOwnershipMapper()
-	_, _, _, retval := mapper.ReadMany(suite.db, suite.who, suite.typeString, options, &cargo)
-	if !assert.Nil(suite.T(), retval) {
+	retVal, _, _, retErr := mapper.ReadMany(suite.db, suite.who, suite.typeString, options, &cargo)
+	if !assert.Nil(suite.T(), retErr) {
 		return
 	}
 
@@ -387,6 +403,16 @@ func (suite *TestBaseMapperReadSuite) TestReadMany_WhenHavingController_CallRele
 		Roles:      roles, Cargo: &cargo,
 	}
 	info := controller.EndPointInfo{Op: controller.RESTOpRead, Cardinality: controller.APICardinalityMany}
+
+	ctrls := retVal.Fetcher.GetAllInstantiatedControllers()
+	if !assert.Len(suite.T(), ctrls, 1) {
+		return
+	}
+
+	ctrl, ok := ctrls[0].(*CarController)
+	if !assert.True(suite.T(), ok) {
+		return
+	}
 
 	assert.False(suite.T(), ctrl.beforeCalled)
 	if assert.True(suite.T(), ctrl.afterCalled) {

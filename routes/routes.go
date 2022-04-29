@@ -4,12 +4,12 @@ import (
 	"strings"
 
 	"github.com/t2wu/betterrest/datamapper"
-	"github.com/t2wu/betterrest/models"
+	"github.com/t2wu/betterrest/registry"
 
 	"github.com/gin-gonic/gin"
 )
 
-func addRoute(r *gin.Engine, typeString string, reg *models.Reg, mapper datamapper.IDataMapper) {
+func addRoute(r *gin.Engine, typeString string, reg *registry.Reg, mapper datamapper.IDataMapper) {
 	endpoint := strings.ToLower(typeString)
 	g := r.Group("/" + endpoint)
 	{
@@ -66,27 +66,27 @@ func addRoute(r *gin.Engine, typeString string, reg *models.Reg, mapper datamapp
 
 // AddRESTRoutes adds all routes
 func AddRESTRoutes(r *gin.Engine) {
-	models.CreateBetterRESTTable()
-	for typestring, reg := range models.ModelRegistry {
+	registry.CreateBetterRESTTable()
+	for typestring, reg := range registry.ModelRegistry {
 		var dm datamapper.IDataMapper
 		switch reg.Mapper {
-		case models.MapperTypeGlobal:
+		case registry.MapperTypeGlobal:
 			dm = datamapper.SharedGlobalMapper()
 			addRoute(r, typestring, reg, dm)
 			break
-		case models.MapperTypeViaOrganization:
+		case registry.MapperTypeViaOrganization:
 			dm = datamapper.SharedOrganizationMapper()
 			addRoute(r, typestring, reg, dm)
 			break
-		case models.MapperTypeLinkTable:
+		case registry.MapperTypeLinkTable:
 			dm = datamapper.SharedLinkTableMapper()
 			addRoute(r, typestring, reg, dm)
 			break
-		case models.MapperTypeViaOwnership:
+		case registry.MapperTypeViaOwnership:
 			dm = datamapper.SharedOwnershipMapper()
 			addRoute(r, typestring, reg, dm)
 			break
-		case models.MapperTypeUser:
+		case registry.MapperTypeUser:
 			// don't add the user one
 			break
 		default:
