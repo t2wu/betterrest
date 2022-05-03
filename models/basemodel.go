@@ -183,7 +183,7 @@ func HTTPMethodToCRUDOp(method string) CRUPDOp {
 
 // IGuardAPIEntry supports method which guard access to API based on scope
 type IGuardAPIEntry interface {
-	GuardAPIEntry(models interface{}, http HTTP) bool
+	GuardAPIEntry(who UserIDFetchable, http HTTP) bool
 }
 
 // ModelCargo is payload between hookpoints
