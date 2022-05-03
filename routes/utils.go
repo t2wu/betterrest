@@ -101,14 +101,14 @@ func GuardMiddleWare(typeString string) func(c *gin.Context) {
 		}
 
 		if guard := registry.ModelRegistry[typeString].GuardMethod; guard != nil {
-			if guardRetVal := guard(data.Who, &info); !guardRetVal.ToPass {
+			if retErr := guard(data.Who, &info); retErr != nil {
 				defer c.Abort() // abort
 
-				if guardRetVal.Renderer == nil {
-					render.Render(w, r, webrender.NewErrPermissionDeniedForAPIEndpoint(nil))
+				if retErr.Renderer == nil {
+					render.Render(w, r, webrender.NewErrPermissionDeniedForAPIEndpoint(retErr.Error))
 					return
 				}
-				render.Render(w, r, guardRetVal.Renderer)
+				render.Render(w, r, retErr.Renderer)
 				return
 			}
 		}

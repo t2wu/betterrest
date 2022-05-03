@@ -145,7 +145,7 @@ func (r *Registrar) Controller(ctrl controller.IController, method string) *Regi
 }
 
 // Guard register guard function
-func (r *Registrar) Guard(guard func(who models.UserIDFetchable, info *controller.EndPointInfo) *webrender.GuardRetVal) *Registrar {
+func (r *Registrar) Guard(guard func(who models.UserIDFetchable, info *controller.EndPointInfo) *webrender.RetError) *Registrar {
 	ModelRegistry[r.currentTypeString].GuardMethod = guard
 	return r
 }

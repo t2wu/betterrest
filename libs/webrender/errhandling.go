@@ -458,6 +458,10 @@ type GuardRetVal struct {
 	Renderer render.Renderer
 }
 
+func NewRetValErrorWithMsg(msg string) *RetError {
+	return &RetError{Error: fmt.Errorf(msg)}
+}
+
 func NewRetValWithError(err error) *RetError {
 	return &RetError{Error: err}
 }
