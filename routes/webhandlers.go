@@ -451,7 +451,7 @@ func ReadManyHandler(typeString string, mapper datamapper.IDataMapper) func(c *g
 		w, r := c.Writer, c.Request
 
 		if settings.Log {
-			log.Println(fmt.Sprintf("[BetterREST]: %s %s (n), transact: n/a", c.Request.Method, c.Request.URL.String()))
+			log.Printf("[BetterREST]: %s %s (n), transact: n/a", c.Request.Method, c.Request.URL.String())
 		}
 
 		who := WhoFromContext(r)

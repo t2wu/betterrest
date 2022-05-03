@@ -122,9 +122,22 @@ func (r *Registrar) ModelWithOption(modelObj models.IModel, options RegOptions) 
 
 // Controllers adds the controllers to be instantiate when a REST op occurs.
 // If any controller exists, old model-based hookpoints and batch hookpoints are not called
-func (r *Registrar) Controller(ctrl controller.IController, method, firstHook string) *Registrar {
+func (r *Registrar) Controller(ctrl controller.IController, method string) *Registrar {
 	if ModelRegistry[r.currentTypeString].ControllerMap == nil {
 		ModelRegistry[r.currentTypeString].ControllerMap = ctrlmap.NewCtrlMap()
+	}
+
+	var firstHook string
+
+	// Determine first hook, one of JBAT
+	if _, ok := ctrl.(controller.IBeforeApply); ok {
+		firstHook = "J"
+	} else if _, ok := ctrl.(controller.IBefore); ok {
+		firstHook = "B"
+	} else if _, ok := ctrl.(controller.IAfter); ok {
+		firstHook = "A"
+	} else if _, ok := ctrl.(controller.IAfterTransact); ok {
+		firstHook = "T"
 	}
 
 	ModelRegistry[r.currentTypeString].ControllerMap.RegisterController(ctrl, method, firstHook)
