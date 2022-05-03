@@ -71,8 +71,6 @@ func (m *EWKBPoint) Scan(src interface{}) error {
 	// 	return err
 	// }
 
-	// log.Println("wkbType:", wkbType)
-
 	// hexdata, err := hex.DecodeString(string(src.([]byte)))
 
 	// srid := binary.LittleEndian.Uint32(hexdata[1:5]) // uint32

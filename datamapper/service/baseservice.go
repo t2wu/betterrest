@@ -94,7 +94,6 @@ func (serv *BaseService) UpdateOneCore(db *gorm.DB, who models.UserIDFetchable, 
 	// This so we have the preloading.
 	modelObj2, _, err = serv.ReadOneCore(db, who, typeString, id)
 	if err != nil { // Error is "record not found" when not found
-		log.Println("Error:", err)
 		return nil, err
 	}
 

@@ -3,7 +3,6 @@ package datatypes
 import (
 	"database/sql/driver"
 	"fmt"
-	"log"
 	"strings"
 
 	uuid "github.com/satori/go.uuid"
@@ -21,8 +20,7 @@ func NewUUID() *UUID {
 	toks2 := strings.SplitN(uuid.NewV4().String(), "-", 2)
 	u, err := uuid.FromString(toks1[0] + "-" + toks2[1])
 	if err != nil {
-		log.Println("err:", err)
-		panic("NewUUID() error")
+		panic(fmt.Sprintf("NewUUID() error %s", err.Error()))
 	}
 
 	return &UUID{UUID: u}

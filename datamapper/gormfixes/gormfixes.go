@@ -249,12 +249,11 @@ func UpdatePeggedFields(db *gorm.DB, oldModelObj models.IModel, newModelObj mode
 			case reflect.Slice:
 				// Loop through the slice
 				for j := 0; j < fieldVal1.Len(); j++ {
-					// For example, each fieldVal1.Index(j) is a "Dock{}"
+					// For example, each fieldVal1.Index(j) is a model object
 					id := fieldVal1.Index(j).FieldByName("ID").Interface().(*datatypes.UUID)
 					set1.Add(id.String())
 
 					m[id.String()] = fieldVal1.Index(j).Addr().Interface() // re-wrap a dock
-					// log.Println("----> tim: fieldVal1's type?", fieldVal1.Index(j).Type())
 				}
 
 				for j := 0; j < fieldVal2.Len(); j++ {
@@ -384,7 +383,6 @@ func LoadManyToManyBecauseGormFailsWithID(db *gorm.DB, modelObj models.IModel) e
 	for i := 0; i < v1.NumField(); i++ {
 		tag := v1.Type().Field(i).Tag.Get("betterrest")
 
-		// log.Println("tag:", tag)
 		if strings.HasPrefix(tag, "pegassoc-manytomany") {
 			tableName := registry.GetTableNameFromIModel(reflect.ValueOf(modelObj).Interface().(models.IModel))
 

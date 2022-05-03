@@ -124,7 +124,6 @@ func (serv *LinkTableService) GetManyCore(db *gorm.DB, who models.UserIDFetchabl
 	db2 := db.Table(rtable).Where(subquery, who.GetUserID()).Where("id IN (?)", ids)
 	modelObjs, err := registry.NewSliceFromDBByTypeString(typeString, db2.Set("gorm:auto_preload", true).Find)
 	if err != nil {
-		log.Println("calling NewSliceFromDBByTypeString err:", err)
 		return nil, nil, err
 	}
 
@@ -273,20 +272,7 @@ func (serv *LinkTableService) UpdateOneCore(db *gorm.DB, who models.UserIDFetcha
 		return nil, err
 	}
 
-	// For some unknown reason
-	// insert many-to-many works cuz Gorm does and works???
-	// [2020-05-22 18:50:17]  [1.63ms]  INSERT INTO \"dock_group\" (\"group_id\",\"dock_id\") SELECT '<binary>','<binary>' FROM DUAL WHERE NOT EXISTS (SELECT * FROM \"dock_group\" WHERE \"group_id\" = '<binary>' AND \"dock_id\" = '<binary>')
-	// [0 rows affected or returned ]
-
-	// (/Users/t2wu/Documents/Go/pkg/mod/github.com/t2wu/betterrest@v0.1.19/datamapper/modulelibs.go:62)
-	// [2020-05-22 18:50:17]  [1.30ms]  UPDATE \"dock\" SET \"updated_at\" = '2020-05-22 18:50:17', \"deleted_at\" = NULL, \"name\" = '', \"model\" = '', \"serial_no\" = '', \"mac\" = '', \"hub_id\" = NULL, \"is_online\" = false, \"room_id\" = NULL  WHERE \"dock\".\"deleted_at\" IS NULL AND \"dock\".\"id\" = '{2920e86e-33b1-4848-a773-e68e5bde4fc0}'
-	// [1 rows affected or returned ]
-
-	// (/Users/t2wu/Documents/Go/pkg/mod/github.com/t2wu/betterrest@v0.1.19/datamapper/modulelibs.go:62)
-	// [2020-05-22 18:50:17]  [2.84ms]  INSERT INTO \"dock_group\" (\"dock_id\",\"group_id\") SELECT ') �n3�HH�s�[�O�','<binary>' FROM DUAL WHERE NOT EXISTS (SELECT * FROM \"dock_group\" WHERE \"dock_id\" = ') �n3�HH�s�[�O�' AND \"group_id\" = '<binary>')
-	// [1 rows affected or returned ]
 	if err = db.Save(modelObj).Error; err != nil { // save updates all fields (FIXME: need to check for required)
-		log.Println("Error updating:", err)
 		return nil, err
 	}
 
@@ -294,7 +280,6 @@ func (serv *LinkTableService) UpdateOneCore(db *gorm.DB, who models.UserIDFetcha
 	// This so we have the preloading.
 	modelObj2, _, err = serv.ReadOneCore(db, who, typeString, id)
 	if err != nil { // Error is "record not found" when not found
-		log.Println("Error:", err)
 		return nil, err
 	}
 

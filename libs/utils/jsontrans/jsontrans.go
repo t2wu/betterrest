@@ -161,7 +161,6 @@ func cherryPickCore(data map[string]interface{}, f *JSONFields, dataPicked map[s
 				// // if nil, default to empty list
 				// dataPicked[k] = make([]interface{}, 0)
 			}
-			// log.Println("reflect.TypeOf(data[k]):", reflect.TypeOf(data[k]))
 		} else if datastring, ok := data[k].(string); ok && datastring == "" {
 			// I can use pointer in a model, but then govalidator is having issue with it
 			// I don't know if I switch to Gin and govalidator things would be better?

@@ -1,7 +1,6 @@
 package lifecycle
 
 import (
-	"log"
 	"strings"
 
 	"github.com/go-chi/render"
@@ -84,7 +83,6 @@ func CreateMany(mapper datamapper.IDataMapper, who models.UserIDFetchable, typeS
 		}
 
 		if retVal, retErr = mapper.CreateMany(tx, who, typeString, modelObjs, options, &cargo); retErr != nil {
-			log.Printf("Error in lifecycle.CreateMany: %s, %+v\n", typeString, retErr)
 			return retErr
 		}
 		return nil
@@ -136,7 +134,6 @@ func CreateOne(mapper datamapper.IDataMapper, who models.UserIDFetchable, typeSt
 		}
 
 		if retVal, retErr = mapper.CreateOne(tx, who, typeString, modelObj, options, &cargo); retErr != nil {
-			log.Printf("Error in lifecycle.CreateOne: %s, %+v\n", typeString, retErr)
 			return retErr
 		}
 		return nil
@@ -186,10 +183,11 @@ func ReadMany(mapper datamapper.IDataMapper, who models.UserIDFetchable, typeStr
 	retVal, roles, no, retErr := mapper.ReadMany(db.Shared(), who, typeString, options, &cargo)
 	if retErr != nil {
 		if retErr.Renderer == nil {
-			return nil, nil, no, webrender.NewErrInternalServerError(retErr.Error)
+			return nil, nil, no, webrender.NewErrInternalServerError(retErr.Error) // TODO, probably should have a READ error
 		}
 		return nil, nil, no, retErr.Renderer
 	}
+
 	modelObjs := retVal.Ms
 
 	data := controller.Data{Ms: modelObjs, DB: nil, Who: who,
@@ -222,13 +220,14 @@ func ReadOne(mapper datamapper.IDataMapper, who models.UserIDFetchable, typeStri
 	retVal, role, retErr := mapper.ReadOne(db.Shared(), who, typeString, id, options, &cargo)
 	if retErr != nil {
 		if retErr.Renderer == nil {
-			return nil, nil, retErr.Renderer
+			return nil, nil, webrender.NewErrInternalServerError(retErr.Error) // TODO, probably should have a READ error
 		}
 		if gorm.IsRecordNotFoundError(retErr.Error) {
 			return nil, nil, webrender.NewErrNotFound(retErr.Error)
 		}
-		return nil, nil, webrender.NewErrInternalServerError(retErr.Error) // TODO, probably should have a READ error
+		return nil, nil, retErr.Renderer
 	}
+
 	modelObj := retVal.Ms[0]
 
 	data := controller.Data{Ms: []models.IModel{modelObj}, DB: nil, Who: who,
@@ -259,18 +258,16 @@ func UpdateMany(mapper datamapper.IDataMapper, who models.UserIDFetchable, typeS
 		}
 
 		if retVal, retErr = mapper.UpdateMany(tx, who, typeString, modelObjs, options, &cargo); retErr != nil {
-			log.Printf("Error in lifecycle.UpdateMany: %s, %+v\n", typeString, retErr)
 			return retErr
 		}
 
 		return nil
 	}, "lifecycle.UpdateMany")
-
 	if retErr != nil {
 		if retErr.Renderer == nil {
-			return nil, nil, retErr.Renderer
+			return nil, nil, webrender.NewErrUpdate(retErr.Error)
 		}
-		return nil, nil, webrender.NewErrUpdate(retErr.Error) // TODO, probably should have a READ error
+		return nil, nil, retErr.Renderer
 	}
 
 	modelObjs = retVal.Ms
@@ -308,17 +305,17 @@ func UpdateOne(mapper datamapper.IDataMapper, who models.UserIDFetchable, typeSt
 		}
 
 		if retVal, retErr = mapper.UpdateOne(tx, who, typeString, modelObj, id, options, &cargo); retErr != nil {
-			log.Printf("Error in lifecycle.UpdateOne: %s, %+v\n", typeString, retErr)
 			return retErr
 		}
 		return nil
 	}, "lifecycle.UpdateOne")
 	if retErr != nil {
 		if retErr.Renderer == nil {
-			return nil, nil, retErr.Renderer
+			return nil, nil, webrender.NewErrUpdate(retErr.Error)
 		}
-		return nil, nil, webrender.NewErrUpdate(retErr.Error) // TODO, probably should have a READ error
+		return nil, nil, retErr.Renderer
 	}
+
 	modelObj = retVal.Ms[0]
 
 	role := models.UserRoleAdmin
@@ -351,7 +348,6 @@ func PatchMany(mapper datamapper.IDataMapper, who models.UserIDFetchable, typeSt
 		}
 
 		if retVal, retErr = mapper.PatchMany(tx, who, typeString, jsonIDPatches, options, &cargo); retErr != nil {
-			log.Printf("Error in lifecycle.PatchMany: %s, %+v\n", typeString, retErr)
 			return retErr
 		}
 		return nil
@@ -359,9 +355,9 @@ func PatchMany(mapper datamapper.IDataMapper, who models.UserIDFetchable, typeSt
 
 	if retErr != nil {
 		if retErr.Renderer == nil {
-			return nil, nil, retErr.Renderer
+			return nil, nil, webrender.NewErrPatch(retErr.Error)
 		}
-		return nil, nil, webrender.NewErrPatch(retErr.Error) // TODO, probably should have a READ error
+		return nil, nil, retErr.Renderer
 	}
 
 	modelObjs = retVal.Ms
@@ -400,7 +396,6 @@ func PatchOne(mapper datamapper.IDataMapper, who models.UserIDFetchable, typeStr
 		}
 
 		if retVal, retErr = mapper.PatchOne(tx, who, typeString, jsonPatch, id, options, &cargo); retErr != nil {
-			log.Printf("Error in lifecycle.PatchOne: %s, %+v\n", typeString, retErr)
 			return retErr
 		}
 
@@ -409,9 +404,9 @@ func PatchOne(mapper datamapper.IDataMapper, who models.UserIDFetchable, typeStr
 
 	if retErr != nil {
 		if retErr.Renderer == nil {
-			return nil, nil, retErr.Renderer
+			return nil, nil, webrender.NewErrPatch(retErr.Error)
 		}
-		return nil, nil, webrender.NewErrPatch(retErr.Error) // TODO, probably should have a READ error
+		return nil, nil, retErr.Renderer
 	}
 
 	modelObj = retVal.Ms[0]
@@ -445,7 +440,6 @@ func DeleteMany(mapper datamapper.IDataMapper, who models.UserIDFetchable, typeS
 		}
 
 		if retVal, retErr = mapper.DeleteMany(tx, who, typeString, modelObjs, nil, &cargo); retErr != nil {
-			log.Printf("Error in lifecycle.DeleteMany: %s, %+v\n", typeString, retErr)
 			return retErr
 		}
 		return nil
@@ -453,9 +447,9 @@ func DeleteMany(mapper datamapper.IDataMapper, who models.UserIDFetchable, typeS
 
 	if retErr != nil {
 		if retErr.Renderer == nil {
-			return nil, nil, retErr.Renderer
+			return nil, nil, webrender.NewErrDelete(retErr.Error)
 		}
-		return nil, nil, webrender.NewErrDelete(retErr.Error) // TODO, probably should have a READ error
+		return nil, nil, retErr.Renderer
 	}
 
 	modelObjs = retVal.Ms
@@ -491,17 +485,17 @@ func DeleteOne(mapper datamapper.IDataMapper, who models.UserIDFetchable, typeSt
 		logger.Log(tx, "DELETE", strings.ToLower(typeString), "1")
 
 		if retVal, retErr = mapper.DeleteOne(tx, who, typeString, id, options, &cargo); retErr != nil {
-			log.Printf("Error in lifecycle.DeleteOne: %s %+v\n", typeString, retErr)
 			return retErr
 		}
 		return
 	}, "lifecycle.DeleteOne")
 	if retErr != nil {
 		if retErr.Renderer == nil {
-			return nil, nil, retErr.Renderer
+			return nil, nil, webrender.NewErrDelete(retErr.Error)
 		}
-		return nil, nil, webrender.NewErrDelete(retErr.Error) // TODO, probably should have a READ error
+		return nil, nil, retErr.Renderer
 	}
+
 	modelObj := retVal.Ms[0]
 
 	role := models.UserRoleAdmin

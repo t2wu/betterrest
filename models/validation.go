@@ -32,7 +32,7 @@ func ValidateModel(modelObj IModel) error {
 		if errs, ok := err.(validator.ValidationErrors); ok {
 			s, err2 := TranslateValidationErrorMessage(errs, modelObj)
 			if err2 != nil {
-				log.Println("error translating validaiton message:", err)
+				log.Println("error translating validaiton message:", err2)
 			}
 			err = errors.New(s)
 		}

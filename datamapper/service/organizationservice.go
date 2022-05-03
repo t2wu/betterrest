@@ -157,7 +157,6 @@ func (serv *OrganizationService) GetManyCore(db *gorm.DB, who models.UserIDFetch
 
 	modelObjs, err := registry.NewSliceFromDBByTypeString(typeString, db2.Set("gorm:auto_preload", true).Find)
 	if err != nil {
-		log.Println("calling NewSliceFromDBByTypeString err:", err)
 		return nil, nil, err
 	}
 
@@ -319,7 +318,6 @@ func (serv *OrganizationService) UpdateOneCore(db *gorm.DB, who models.UserIDFet
 	}
 
 	if err = db.Save(modelObj).Error; err != nil { // save updates all fields (FIXME: need to check for required)
-		log.Println("Error updating:", err)
 		return nil, err
 	}
 
@@ -327,7 +325,6 @@ func (serv *OrganizationService) UpdateOneCore(db *gorm.DB, who models.UserIDFet
 	// This so we have the preloading.
 	modelObj2, _, err = serv.ReadOneCore(db, who, typeString, id)
 	if err != nil { // Error is "record not found" when not found
-		log.Println("Error:", err)
 		return nil, err
 	}
 

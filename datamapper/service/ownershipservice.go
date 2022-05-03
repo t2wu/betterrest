@@ -160,7 +160,6 @@ func (serv *OwnershipService) ReadOneCore(db *gorm.DB, who models.UserIDFetchabl
 	*/
 
 	joinTableName := registry.OwnershipTableNameFromOwnershipResourceTypeString(typeString)
-	// log.Println("joinTableName???", joinTableName)
 	// joinTableName := models.GetJoinTableName(modelObj)
 
 	firstJoin := fmt.Sprintf("INNER JOIN \"%s\" ON \"%s\".id = \"%s\".model_id AND \"%s\".id = ?", joinTableName, rtable, joinTableName, rtable)
@@ -200,7 +199,6 @@ func (serv *OwnershipService) GetManyCore(db *gorm.DB, who models.UserIDFetchabl
 	db2 := db.Table(rtable).Joins(firstJoin, ids).Joins(secondJoin, who.GetUserID())
 	modelObjs, err := registry.NewSliceFromDBByTypeString(typeString, db2.Set("gorm:auto_preload", true).Find)
 	if err != nil {
-		log.Println("calling NewSliceFromDBByTypeString err:", err)
 		return nil, nil, err
 	}
 
@@ -301,7 +299,6 @@ func (serv *OwnershipService) UpdateOneCore(db *gorm.DB, who models.UserIDFetcha
 	// [2020-05-22 18:50:17]  [2.84ms]  INSERT INTO \"dock_group\" (\"dock_id\",\"group_id\") SELECT ') �n3�HH�s�[�O�','<binary>' FROM DUAL WHERE NOT EXISTS (SELECT * FROM \"dock_group\" WHERE \"dock_id\" = ') �n3�HH�s�[�O�' AND \"group_id\" = '<binary>')
 	// [1 rows affected or returned ]
 	if err = db.Save(modelObj).Error; err != nil { // save updates all fields (FIXME: need to check for required)
-		log.Println("Error updating:", err)
 		return nil, err
 	}
 
@@ -309,7 +306,6 @@ func (serv *OwnershipService) UpdateOneCore(db *gorm.DB, who models.UserIDFetcha
 	// This so we have the preloading.
 	modelObj2, _, err = serv.ReadOneCore(db, who, typeString, id)
 	if err != nil { // Error is "record not found" when not found
-		log.Println("Error:", err)
 		return nil, err
 	}
 

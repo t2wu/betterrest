@@ -283,13 +283,11 @@ func AddLatestJoinWithOneLevelFilter(db *gorm.DB, typeString string, tableName s
 	if hasLatestOn {
 		partitionBy, latestnonWhereStmt, whereOnStmt, transformedValues, err = latestnGetPartitionWhereAndTransformedValues2(typeString, tableName, filters)
 		if err != nil {
-			log.Println("AddLatestJoinWithOneLevelFilter error:", err)
 			return db, err
 		}
 	} else {
 		partitionBy, latestnonWhereStmt, transformedValues, err = latestnGetPartitionWhereAndTransformedValues(typeString, tableName, filters)
 		if err != nil {
-			log.Println("AddLatestJoinWithOneLevelFilter error:", err)
 			return db, err
 		}
 	}

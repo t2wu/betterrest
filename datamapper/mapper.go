@@ -149,13 +149,11 @@ func (mapper *DataMapper) ReadMany(db *gorm.DB, who models.UserIDFetchable, type
 		if builder == nil {
 			// Query for total count, without offset and limit (all)
 			if err := db.Count(no).Error; err != nil {
-				log.Println("count error:", err)
 				return nil, nil, nil, &webrender.RetError{Error: err}
 			}
 		} else {
 			q := qry.Q(db, builder)
 			if err := q.Count(registry.NewFromTypeString(typeString), no).Error(); err != nil {
-				log.Println("count error:", err)
 				return nil, nil, nil, &webrender.RetError{Error: err}
 			}
 
@@ -307,7 +305,6 @@ func (mapper *DataMapper) UpdateOne(db *gorm.DB, who models.UserIDFetchable, typ
 	modelObj models.IModel, id *datatypes.UUID, options map[urlparam.Param]interface{}, cargo *controller.Cargo) (*MapperRet, *webrender.RetError) {
 	oldModelObj, _, err := loadAndCheckErrorBeforeModify(mapper.Service, db, who, typeString, modelObj, id, []models.UserRole{models.UserRoleAdmin})
 	if err != nil {
-		log.Println("update one 1 err:", err)
 		return nil, &webrender.RetError{Error: err}
 	}
 
@@ -545,7 +542,6 @@ func (mapper *DataMapper) PatchMany(db *gorm.DB, who models.UserIDFetchable, typ
 		// Apply patch operations
 		modelObjs[i], err = applyPatchCore(typeString, oldModelObjs[i], []byte(jsonIDPatch.Patch))
 		if err != nil {
-			log.Println("patch error: ", err, string(jsonIDPatch.Patch))
 			return nil, &webrender.RetError{Error: err}
 		}
 	}
