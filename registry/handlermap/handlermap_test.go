@@ -10,6 +10,12 @@ import (
 	"github.com/t2wu/betterrest/libs/webrender"
 )
 
+type Handler1NoHook struct {
+}
+
+func (c *Handler1NoHook) Init(data *hookhandler.InitData) {
+}
+
 type Handler1FirstHookBeforeApply struct {
 }
 
@@ -87,7 +93,21 @@ func getType(obj interface{}) string {
 	return strings.Split(t, ".")[1]
 }
 
-func Test_ControllerMap_AddControllerWhoseFirstHookIsBefore_ShouldReturnOnlyWhenBeforeQueried(t *testing.T) {
+func Test_ControllerMap_AddHookHandlerWhenNoHook_ShouldNotRegisterAnyHandler(t *testing.T) {
+	c := NewHandlerMap()
+	c.RegisterHandler(&Handler1NoHook{}, "C")
+	arr := c.InstantiateHandlersWithFirstHookAt("C", "J") // has this, but shouldn't response to this
+	assert.Len(t, arr, 0)
+	arr = c.InstantiateHandlersWithFirstHookAt("C", "B")
+	assert.Len(t, arr, 0)
+	arr = c.InstantiateHandlersWithFirstHookAt("C", "A")
+	assert.Len(t, arr, 0)
+	arr = c.InstantiateHandlersWithFirstHookAt("C", "T")
+	assert.Len(t, arr, 0)
+	assert.Equal(t, 0, c.HasRegisteredAnyHandler())
+}
+
+func Test_ControllerMap_AddHookHandlerWhoseFirstHookIsBefore_ShouldReturnOnlyWhenBeforeQueried(t *testing.T) {
 	c := NewHandlerMap()
 	c.RegisterHandler(&Handler1FirstHookBeforeApply{}, "C")
 	arr := c.InstantiateHandlersWithFirstHookAt("C", "J") // has this, but shouldn't response to this
@@ -102,7 +122,7 @@ func Test_ControllerMap_AddControllerWhoseFirstHookIsBefore_ShouldReturnOnlyWhen
 	assert.Len(t, arr, 0)
 }
 
-func Test_ControllerMap_AddControllerWhoseFirstHookIsReadBefore_ShouldReturnOnReadAfterIsQueried(t *testing.T) {
+func Test_ControllerMap_AddHookHandlerWhoseFirstHookIsReadBefore_ShouldReturnOnReadAfterIsQueried(t *testing.T) {
 	c := NewHandlerMap()
 	c.RegisterHandler(&Handler1FirstHookBeforeApply{}, "R") // should respond to after
 	arr := c.InstantiateHandlersWithFirstHookAt("R", "J")
@@ -117,7 +137,7 @@ func Test_ControllerMap_AddControllerWhoseFirstHookIsReadBefore_ShouldReturnOnRe
 	assert.Len(t, arr, 0)
 }
 
-func Test_ControllerMap_AddControllerWhoseFirstHookIsUpdate_ShouldReturnOnPatchBeforeIsQueried(t *testing.T) {
+func Test_ControllerMap_AddHookHandlerWhoseFirstHookIsUpdate_ShouldReturnOnPatchBeforeIsQueried(t *testing.T) {
 	c := NewHandlerMap()
 	c.RegisterHandler(&Handler1FirstHookBeforeApply{}, "U")
 	arr := c.InstantiateHandlersWithFirstHookAt("U", "J")
@@ -132,7 +152,7 @@ func Test_ControllerMap_AddControllerWhoseFirstHookIsUpdate_ShouldReturnOnPatchB
 	assert.Len(t, arr, 0)
 }
 
-func Test_ControllerMap_AddControllerWhoseFirstHookIsPatchJSON_ShouldReturnOnPatchJsonIsQueried(t *testing.T) {
+func Test_ControllerMap_AddHookHandlerWhoseFirstHookIsPatchJSON_ShouldReturnOnPatchJsonIsQueried(t *testing.T) {
 	c := NewHandlerMap()
 	c.RegisterHandler(&Handler1FirstHookBeforeApply{}, "P")
 	arr := c.InstantiateHandlersWithFirstHookAt("P", "J")
@@ -147,7 +167,7 @@ func Test_ControllerMap_AddControllerWhoseFirstHookIsPatchJSON_ShouldReturnOnPat
 	assert.Len(t, arr, 0)
 }
 
-func Test_ControllerMap_AddControllerWhoseFirstHookIsDeleteBefore_ShouldReturnOnDeleteBeforeIsQueried(t *testing.T) {
+func Test_ControllerMap_AddHookHandlerWhoseFirstHookIsDeleteBefore_ShouldReturnOnDeleteBeforeIsQueried(t *testing.T) {
 	c := NewHandlerMap()
 	c.RegisterHandler(&Handler1FirstHookBeforeApply{}, "D")
 	arr := c.InstantiateHandlersWithFirstHookAt("D", "J")
@@ -162,7 +182,7 @@ func Test_ControllerMap_AddControllerWhoseFirstHookIsDeleteBefore_ShouldReturnOn
 	assert.Len(t, arr, 0)
 }
 
-func Test_ControllerMap_AddControllerWithNoMethod_NoReturnedController(t *testing.T) {
+func Test_ControllerMap_AddHookHandlerWithNoMethod_NoReturnedController(t *testing.T) {
 	c := NewHandlerMap()
 	c.RegisterHandler(&Handler1FirstHookBeforeApply{}, "")
 	arr := c.InstantiateHandlersWithFirstHookAt("C", "B")
@@ -175,7 +195,7 @@ func Test_ControllerMap_AddControllerWithNoMethod_NoReturnedController(t *testin
 	assert.Len(t, arr, 0)
 }
 
-func Test_ControllerMap_AddControllerControllerWhoseFirstHookIsJson_ShouldReturnJsonQueriedExceptPatch(t *testing.T) {
+func Test_ControllerMap_AddHookHandlerControllerWhoseFirstHookIsJson_ShouldReturnJsonQueriedExceptPatch(t *testing.T) {
 	c := NewHandlerMap()
 	c.RegisterHandler(&Handler1FirstHookBeforeApply{}, "CRUPD")
 	arr := c.InstantiateHandlersWithFirstHookAt("C", "J")
@@ -223,7 +243,7 @@ func Test_ControllerMap_AddControllerControllerWhoseFirstHookIsJson_ShouldReturn
 	assert.Len(t, arr, 0)
 }
 
-func Test_ControllerMap_AddControllerControllerWhoseFirstHookIsBefore_ShouldReturnBeforeQueriedExceptRead(t *testing.T) {
+func Test_ControllerMap_AddHookHandlerControllerWhoseFirstHookIsBefore_ShouldReturnBeforeQueriedExceptRead(t *testing.T) {
 	c := NewHandlerMap()
 	c.RegisterHandler(&Handler1FirstHookBefore{}, "CRUPD")
 	arr := c.InstantiateHandlersWithFirstHookAt("C", "B")
@@ -260,7 +280,7 @@ func Test_ControllerMap_AddControllerControllerWhoseFirstHookIsBefore_ShouldRetu
 	assert.Len(t, arr, 0)
 }
 
-func Test_ControllerMap_AddControllerControllerWhoseFirstHookIsAfter_ShouldReturnOnlyWhenAfterQueried(t *testing.T) {
+func Test_ControllerMap_AddHookHandlerControllerWhoseFirstHookIsAfter_ShouldReturnOnlyWhenAfterQueried(t *testing.T) {
 	c := NewHandlerMap()
 	c.RegisterHandler(&Handler1FirstHookAfter{}, "CRUPD")
 	arr := c.InstantiateHandlersWithFirstHookAt("C", "B")
@@ -297,7 +317,7 @@ func Test_ControllerMap_AddControllerControllerWhoseFirstHookIsAfter_ShouldRetur
 	assert.Len(t, arr, 0)
 }
 
-func Test_ControllerMap_AddControllerControllerWhoseFirstHookIsTransact_ShouldReturnOnlyWhenTransactQueried(t *testing.T) {
+func Test_ControllerMap_AddHookHandlerControllerWhoseFirstHookIsTransact_ShouldReturnOnlyWhenTransactQueried(t *testing.T) {
 	c := NewHandlerMap()
 	c.RegisterHandler(&Handler1FirstHookTransact{}, "CRUPD")
 	arr := c.InstantiateHandlersWithFirstHookAt("C", "B")
@@ -432,7 +452,7 @@ func Test_ControllerMap_AddMultipleControllerWithDifferentFirstHook(t *testing.T
 	}
 }
 
-func Test_ControllerMap_AddController_ShouldReturnHavingController(t *testing.T) {
+func Test_ControllerMap_AddHookHandler_ShouldReturnHavingController(t *testing.T) {
 	c := NewHandlerMap()
 	c.RegisterHandler(&Handler1FirstHookAfter{}, "C")
 	assert.True(t, c.HasRegisteredAnyHandler())

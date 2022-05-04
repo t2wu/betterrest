@@ -34,24 +34,29 @@ type HandlerMap struct {
 func (c *HandlerMap) RegisterHandler(hdlr hookhandler.IHookhandler, restMethods string) {
 	typ := reflect.TypeOf(hdlr).Elem()
 	if strings.Contains(restMethods, "C") {
-		firstHook := c.getFirstHookType(hookhandler.RESTOpCreate, hdlr)
-		c.putControllerWithMethodAndHookInMap("C", firstHook, typ)
+		if firstHook := c.getFirstHookType(hookhandler.RESTOpCreate, hdlr); firstHook != "" {
+			c.putControllerWithMethodAndHookInMap("C", firstHook, typ)
+		}
 	}
 	if strings.Contains(restMethods, "R") {
-		firstHook := c.getFirstHookType(hookhandler.RESTOpRead, hdlr)
-		c.putControllerWithMethodAndHookInMap("R", firstHook, typ)
+		if firstHook := c.getFirstHookType(hookhandler.RESTOpRead, hdlr); firstHook != "" {
+			c.putControllerWithMethodAndHookInMap("R", firstHook, typ)
+		}
 	}
 	if strings.Contains(restMethods, "U") {
-		firstHook := c.getFirstHookType(hookhandler.RESTOpUpdate, hdlr)
-		c.putControllerWithMethodAndHookInMap("U", firstHook, typ)
+		if firstHook := c.getFirstHookType(hookhandler.RESTOpUpdate, hdlr); firstHook != "" {
+			c.putControllerWithMethodAndHookInMap("U", firstHook, typ)
+		}
 	}
 	if strings.Contains(restMethods, "P") {
-		firstHook := c.getFirstHookType(hookhandler.RESTOpPatch, hdlr)
-		c.putControllerWithMethodAndHookInMap("P", firstHook, typ)
+		if firstHook := c.getFirstHookType(hookhandler.RESTOpPatch, hdlr); firstHook != "" {
+			c.putControllerWithMethodAndHookInMap("P", firstHook, typ)
+		}
 	}
 	if strings.Contains(restMethods, "D") {
-		firstHook := c.getFirstHookType(hookhandler.RESTOpDelete, hdlr)
-		c.putControllerWithMethodAndHookInMap("D", firstHook, typ)
+		if firstHook := c.getFirstHookType(hookhandler.RESTOpDelete, hdlr); firstHook != "" {
+			c.putControllerWithMethodAndHookInMap("D", firstHook, typ)
+		}
 	}
 }
 
