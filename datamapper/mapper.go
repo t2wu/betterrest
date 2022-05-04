@@ -271,7 +271,8 @@ func (mapper *DataMapper) ReadOne(db *gorm.DB, who models.UserIDFetchable, typeS
 		}
 		cargo.Payload = modelCargo.Payload
 		ret := MapperRet{
-			Ms: []models.IModel{modelObj},
+			Ms:      []models.IModel{modelObj},
+			Fetcher: fetcher,
 		}
 
 		return &ret, role, nil
