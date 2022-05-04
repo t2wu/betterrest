@@ -8,14 +8,14 @@ import (
 	"github.com/t2wu/betterrest/models"
 )
 
-// Interface for controllers
+// Interface for handlers
 // It seems better to pass structure than to use signature
-// Changing signature without changing controller will silently ignore them
+// Changing signature without changing hookhandler will silently ignore them
 
 // ------------------------------------------------------------------------------------
 // New REST and others
 
-type ControllerInitData struct {
+type InitData struct {
 	Who models.UserIDFetchable
 	// TypeString
 	TypeString string
@@ -95,11 +95,11 @@ const (
 // End new REST Op
 // ------------------------------------------------------------------------------------
 
-// Type for all controllers
+// Type for all handlers
 
 type IHookhandler interface {
-	// Initialize data for this REST operation
-	Initialize(data *ControllerInitData)
+	// Init data for this REST operation
+	Init(data *InitData)
 }
 
 // IBeforeApply before patching operation occurred. Only called for Patch.

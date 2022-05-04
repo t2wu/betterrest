@@ -13,7 +13,7 @@ import (
 type Handler1FirstHookBeforeApply struct {
 }
 
-func (c *Handler1FirstHookBeforeApply) Initialize(data *hookhandler.ControllerInitData) {
+func (c *Handler1FirstHookBeforeApply) Init(data *hookhandler.InitData) {
 }
 func (c *Handler1FirstHookBeforeApply) BeforeApply(data *hookhandler.Data, info *hookhandler.EndPointInfo) *webrender.RetError {
 	return nil
@@ -30,7 +30,7 @@ func (c *Handler1FirstHookBeforeApply) AfterTransact(data *hookhandler.Data, inf
 type Handler1FirstHookBefore struct {
 }
 
-func (c *Handler1FirstHookBefore) Initialize(data *hookhandler.ControllerInitData) {
+func (c *Handler1FirstHookBefore) Init(data *hookhandler.InitData) {
 }
 func (c *Handler1FirstHookBefore) Before(data *hookhandler.Data, info *hookhandler.EndPointInfo) *webrender.RetError {
 	return nil
@@ -44,7 +44,7 @@ func (c *Handler1FirstHookBefore) AfterTransact(data *hookhandler.Data, info *ho
 type Handler1FirstHookAfter struct {
 }
 
-func (c *Handler1FirstHookAfter) Initialize(data *hookhandler.ControllerInitData) {
+func (c *Handler1FirstHookAfter) Init(data *hookhandler.InitData) {
 }
 func (c *Handler1FirstHookAfter) After(data *hookhandler.Data, info *hookhandler.EndPointInfo) *webrender.RetError {
 	return nil
@@ -55,7 +55,7 @@ func (c *Handler1FirstHookAfter) AfterTransact(data *hookhandler.Data, info *hoo
 type Handler1FirstHookTransact struct {
 }
 
-func (c *Handler1FirstHookTransact) Initialize(data *hookhandler.ControllerInitData) {
+func (c *Handler1FirstHookTransact) Init(data *hookhandler.InitData) {
 }
 func (c *Handler1FirstHookTransact) AfterTransact(data *hookhandler.Data, info *hookhandler.EndPointInfo) {
 }
@@ -63,7 +63,7 @@ func (c *Handler1FirstHookTransact) AfterTransact(data *hookhandler.Data, info *
 type Handler2FirstHookBefore struct {
 }
 
-func (c *Handler2FirstHookBefore) Initialize(data *hookhandler.ControllerInitData) {
+func (c *Handler2FirstHookBefore) Init(data *hookhandler.InitData) {
 }
 func (c *Handler2FirstHookBefore) Before(data *hookhandler.Data, info *hookhandler.EndPointInfo) *webrender.RetError {
 	return nil
@@ -77,7 +77,7 @@ func (c *Handler2FirstHookBefore) AfterTransact(data *hookhandler.Data, info *ho
 type Handler2FirstHookAfterTransact struct {
 }
 
-func (c *Handler2FirstHookAfterTransact) Initialize(data *hookhandler.ControllerInitData) {
+func (c *Handler2FirstHookAfterTransact) Init(data *hookhandler.InitData) {
 }
 func (c *Handler2FirstHookAfterTransact) AfterTransact(data *hookhandler.Data, info *hookhandler.EndPointInfo) {
 }

@@ -139,7 +139,7 @@ func (mapper *UserMapper) ReadOne(db *gorm.DB, who models.UserIDFetchable, typeS
 	}
 	// End deprecated
 
-	// fetch all controllers with before hooks
+	// fetch all handlers with before hooks
 	for _, hdlr := range fetcher.FetchHandlersForOpAndHook(info.Op, "A") {
 		if retErr := hdlr.(hookhandler.IAfter).After(&data, &info); retErr != nil {
 			return nil, 0, retErr

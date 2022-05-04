@@ -12,7 +12,7 @@ import (
 type HandlerJBAT struct {
 }
 
-func (c *HandlerJBAT) Initialize(data *hookhandler.ControllerInitData) {
+func (c *HandlerJBAT) Init(data *hookhandler.InitData) {
 }
 func (c *HandlerJBAT) BeforeApply(data *hookhandler.Data, info *hookhandler.EndPointInfo) *webrender.RetError {
 	return nil
@@ -31,7 +31,7 @@ type HandlerBAT struct {
 	checked bool
 }
 
-func (c *HandlerBAT) Initialize(data *hookhandler.ControllerInitData) {
+func (c *HandlerBAT) Init(data *hookhandler.InitData) {
 }
 func (c *HandlerBAT) Before(data *hookhandler.Data, info *hookhandler.EndPointInfo) *webrender.RetError {
 	c.name = "beforeRun"
@@ -51,7 +51,7 @@ type HandlerBA struct {
 	checked bool
 }
 
-func (c *HandlerBA) Initialize(data *hookhandler.ControllerInitData) {
+func (c *HandlerBA) Init(data *hookhandler.InitData) {
 }
 func (c *HandlerBA) Before(data *hookhandler.Data, info *hookhandler.EndPointInfo) *webrender.RetError {
 	c.name = "beforeRun"
@@ -69,7 +69,7 @@ type HandlerAT struct {
 	checked bool
 }
 
-func (c *HandlerAT) Initialize(data *hookhandler.ControllerInitData) {
+func (c *HandlerAT) Init(data *hookhandler.InitData) {
 }
 func (c *HandlerAT) After(data *hookhandler.Data, info *hookhandler.EndPointInfo) *webrender.RetError {
 	c.name = "afterRun"
@@ -84,66 +84,66 @@ func (c *HandlerAT) AfterTransact(data *hookhandler.Data, info *hookhandler.EndP
 type HandlerT struct {
 }
 
-func (c *HandlerT) Initialize(data *hookhandler.ControllerInitData) {
+func (c *HandlerT) Init(data *hookhandler.InitData) {
 }
 func (c *HandlerT) AfterTransact(data *hookhandler.Data, info *hookhandler.EndPointInfo) {
 }
 
-func TestCtrlFetcher_FetchController_ShouldGetOnesForRegistered(t *testing.T) {
+func TestHandlerFetcher_FetchHandler_ShouldGetOnesForRegistered(t *testing.T) {
 	cm := handlermap.NewHandlerMap()
 	cm.RegisterHandler(&HandlerBAT{}, "CRUPD") // BAT
 	cm.RegisterHandler(&HandlerAT{}, "CRUPD")  // AT
 
 	f := NewHandlerFetcher(cm)
-	controllers := f.FetchHandlersForOpAndHook(hookhandler.RESTOpCreate, "B")
-	if assert.Len(t, controllers, 1) {
-		_, ok := controllers[0].(*HandlerBAT)
+	handlers := f.FetchHandlersForOpAndHook(hookhandler.RESTOpCreate, "B")
+	if assert.Len(t, handlers, 1) {
+		_, ok := handlers[0].(*HandlerBAT)
 		assert.True(t, ok)
 	}
 }
 
-func TestCtrlFetcher_TheSameControllerIsRunInAnotherHook(t *testing.T) {
+func TestHandlerFetcher_TheSameControllerIsRunInAnotherHook(t *testing.T) {
 	cm := handlermap.NewHandlerMap()
 	cm.RegisterHandler(&HandlerBA{}, "CRUPD")
 	cm.RegisterHandler(&HandlerAT{}, "CRUPD")
 
 	f := NewHandlerFetcher(cm)
-	controllers := f.FetchHandlersForOpAndHook(hookhandler.RESTOpCreate, "B")
-	if !assert.Len(t, controllers, 1) {
+	handlers := f.FetchHandlersForOpAndHook(hookhandler.RESTOpCreate, "B")
+	if !assert.Len(t, handlers, 1) {
 		return
 	}
 
-	for _, hdlr := range controllers {
+	for _, hdlr := range handlers {
 		hdlr := hdlr.(hookhandler.IBefore)
 		hdlr.Before(nil, nil)
 	}
 
-	controllers = f.FetchHandlersForOpAndHook(hookhandler.RESTOpCreate, "A")
-	if !assert.Len(t, controllers, 2) {
+	handlers = f.FetchHandlersForOpAndHook(hookhandler.RESTOpCreate, "A")
+	if !assert.Len(t, handlers, 2) {
 		return
 	}
 
-	for _, hdlr := range controllers {
+	for _, hdlr := range handlers {
 		hdlr := hdlr.(hookhandler.IAfter)
 		hdlr.After(nil, nil)
 	}
 
-	hdlr, ok := controllers[0].(*HandlerBA)
+	hdlr, ok := handlers[0].(*HandlerBA)
 	if assert.True(t, ok) {
 		assert.True(t, hdlr.checked)
 	}
 
-	controllers = f.FetchHandlersForOpAndHook(hookhandler.RESTOpCreate, "T")
-	if !assert.Len(t, controllers, 1) {
+	handlers = f.FetchHandlersForOpAndHook(hookhandler.RESTOpCreate, "T")
+	if !assert.Len(t, handlers, 1) {
 		return
 	}
 
-	for _, hdlr := range controllers {
+	for _, hdlr := range handlers {
 		hdlr := hdlr.(hookhandler.IAfterTransact)
 		hdlr.AfterTransact(nil, nil)
 	}
 
-	ctrl2, ok := controllers[0].(*HandlerAT)
+	ctrl2, ok := handlers[0].(*HandlerAT)
 	if assert.True(t, ok) {
 		assert.True(t, ctrl2.checked)
 	}
@@ -151,32 +151,32 @@ func TestCtrlFetcher_TheSameControllerIsRunInAnotherHook(t *testing.T) {
 
 // GetAllInstantiatedHanders
 
-func TestCtrlFetcher_RunControllers_CheckHandledInstances(t *testing.T) {
+func TestHandlerFetcher_RunControllers_CheckHandledInstances(t *testing.T) {
 	cm := handlermap.NewHandlerMap()
 	cm.RegisterHandler(&HandlerBAT{}, "CRUPD") // This handles CRUPD all at once
 	cm.RegisterHandler(&HandlerBA{}, "RUPD")   // This handles RUPD all at once
 
-	f := NewHandlerFetcher(cm)                                                // this only handles either C, R, U, P, or D at one time though, agnostic.
-	controllers := f.FetchHandlersForOpAndHook(hookhandler.RESTOpCreate, "B") // make it handle create
-	if !assert.Len(t, controllers, 1) {
+	f := NewHandlerFetcher(cm)                                             // this only handles either C, R, U, P, or D at one time though, agnostic.
+	handlers := f.FetchHandlersForOpAndHook(hookhandler.RESTOpCreate, "B") // make it handle create
+	if !assert.Len(t, handlers, 1) {
 		return
 	}
 
 	f2 := NewHandlerFetcher(cm)
-	controllers = f2.FetchHandlersForOpAndHook(hookhandler.RESTOpUpdate, "B") // make it handles update
-	if !assert.Len(t, controllers, 2) {                                       // two hooks cuz update is
+	handlers = f2.FetchHandlersForOpAndHook(hookhandler.RESTOpUpdate, "B") // make it handles update
+	if !assert.Len(t, handlers, 2) {                                       // two hooks cuz update is
 		return
 	}
 
 	assert.Len(t, f2.GetAllInstantiatedHanders(), 2) // two is instantiated because there are two handles U
 
-	controllers = f.FetchHandlersForOpAndHook(hookhandler.RESTOpCreate, "A")
-	if !assert.Len(t, controllers, 1) {
+	handlers = f.FetchHandlersForOpAndHook(hookhandler.RESTOpCreate, "A")
+	if !assert.Len(t, handlers, 1) {
 		return
 	}
 
-	controllers = f2.FetchHandlersForOpAndHook(hookhandler.RESTOpUpdate, "A")
-	if !assert.Len(t, controllers, 2) {
+	handlers = f2.FetchHandlersForOpAndHook(hookhandler.RESTOpUpdate, "A")
+	if !assert.Len(t, handlers, 2) {
 		return
 	}
 
@@ -184,7 +184,7 @@ func TestCtrlFetcher_RunControllers_CheckHandledInstances(t *testing.T) {
 	assert.Len(t, f2.GetAllInstantiatedHanders(), 2) // only one is instantiated, and handled for U
 }
 
-func TestCtrlFetcher_HasController_ReportHavingController(t *testing.T) {
+func TestHandlerFetcher_HasController_ReportHavingController(t *testing.T) {
 	cm := handlermap.NewHandlerMap()
 	cm.RegisterHandler(&HandlerBA{}, "CRUPD")
 
@@ -192,7 +192,7 @@ func TestCtrlFetcher_HasController_ReportHavingController(t *testing.T) {
 	assert.True(t, f.HasRegisteredHandler())
 }
 
-func TestCtrlFetcher_HasNoControllerController_ReportHavingNoController(t *testing.T) {
+func TestHandlerFetcher_HasNoControllerController_ReportHavingNoController(t *testing.T) {
 	cm := handlermap.NewHandlerMap()
 
 	f := NewHandlerFetcher(cm)

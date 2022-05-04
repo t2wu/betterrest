@@ -146,7 +146,7 @@ func batchOpCore(job batchOpJob,
 		}
 	}
 
-	// fetch all controllers with before hooks
+	// fetch all handlers with before hooks
 	for _, hdlr := range fetcher.FetchHandlersForOpAndHook(info.Op, "B") { // FetchHandlersForOpAndHook is stateful, cannot be repeated called
 		if renderer := hdlr.(hookhandler.IBefore).Before(data, info); renderer != nil {
 			return nil, renderer
@@ -178,7 +178,7 @@ func batchOpCore(job batchOpJob,
 		}
 	}
 
-	// fetch all controllers with after hooks
+	// fetch all handlers with after hooks
 	for _, hdlr := range fetcher.FetchHandlersForOpAndHook(info.Op, "A") {
 		if renderer := hdlr.(hookhandler.IAfter).After(data, info); renderer != nil {
 			return nil, renderer
@@ -233,7 +233,7 @@ func opCore(
 	}
 	// End deprecated
 
-	// fetch all controllers with before hooks
+	// fetch all handlers with before hooks
 	for _, hdlr := range fetcher.FetchHandlersForOpAndHook(info.Op, "B") {
 		if renderer := hdlr.(hookhandler.IBefore).Before(data, info); renderer != nil {
 			return nil, renderer
@@ -259,7 +259,7 @@ func opCore(
 	}
 	// End deprecated
 
-	// fetch all controllers with after hooks
+	// fetch all handlers with after hooks
 	for _, hdlr := range fetcher.FetchHandlersForOpAndHook(info.Op, "A") {
 		if renderer := hdlr.(hookhandler.IAfter).After(data, info); renderer != nil {
 			return nil, renderer

@@ -279,7 +279,7 @@ func createBatchSingleMethodHookPoint(called *bool, bhpDataCalled *models.BatchH
 type CarControllerWithoutCallbacks struct {
 }
 
-func (c *CarControllerWithoutCallbacks) Initialize(data *hookhandler.ControllerInitData) {
+func (c *CarControllerWithoutCallbacks) Init(data *hookhandler.InitData) {
 }
 
 type CarHandlerJBT struct {
@@ -307,7 +307,7 @@ type CarHandlerJBT struct {
 	afterInfo   *hookhandler.EndPointInfo
 }
 
-func (c *CarHandlerJBT) Initialize(data *hookhandler.ControllerInitData) {
+func (c *CarHandlerJBT) Init(data *hookhandler.InitData) {
 	c.who = data.Who
 	c.typeString = data.TypeString
 	c.roles = data.Roles

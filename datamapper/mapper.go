@@ -223,7 +223,7 @@ func (mapper *DataMapper) ReadMany(db *gorm.DB, who models.UserIDFetchable, type
 	// End deprecated
 
 	// New after hooks
-	// fetch all controllers with before hooks
+	// fetch all handlers with before hooks
 	for _, hdlr := range fetcher.FetchHandlersForOpAndHook(info.Op, "A") {
 		if retErr := hdlr.(hookhandler.IAfter).After(&data, &info); retErr != nil {
 			return nil, nil, nil, retErr
@@ -285,7 +285,7 @@ func (mapper *DataMapper) ReadOne(db *gorm.DB, who models.UserIDFetchable, typeS
 		Cardinality: hookhandler.APICardinalityOne,
 	}
 
-	// fetch all controllers with before hooks
+	// fetch all handlers with before hooks
 	for _, hdlr := range fetcher.FetchHandlersForOpAndHook(info.Op, "A") {
 		if retErr := hdlr.(hookhandler.IAfter).After(&data, &info); retErr != nil {
 			return nil, role, retErr
@@ -529,7 +529,7 @@ func (mapper *DataMapper) PatchMany(db *gorm.DB, who models.UserIDFetchable, typ
 		Cardinality: hookhandler.APICardinalityMany,
 	}
 
-	// fetch all controllers with before hooks
+	// fetch all handlers with before hooks
 	for _, hdlr := range fetcher.FetchHandlersForOpAndHook(info.Op, "J") {
 		if retErr := hdlr.(hookhandler.IBeforeApply).BeforeApply(&data, &info); retErr != nil {
 			return nil, retErr
