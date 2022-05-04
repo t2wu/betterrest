@@ -8,7 +8,7 @@ import (
 	"github.com/jinzhu/gorm"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
-	"github.com/t2wu/betterrest/controller"
+	"github.com/t2wu/betterrest/hookhandler"
 	"github.com/t2wu/betterrest/libs/datatypes"
 	"github.com/t2wu/betterrest/libs/urlparam"
 	"github.com/t2wu/betterrest/models"
@@ -52,7 +52,7 @@ func (suite *TestBaseMapperReadSuite) TestReadOne_WhenGiven_GotCar() {
 
 	modelID := carID
 	options := make(map[urlparam.Param]interface{})
-	cargo := controller.Cargo{}
+	cargo := hookhandler.Cargo{}
 
 	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
 	registry.For(suite.typeString).ModelWithOption(&Car{}, opt)
@@ -84,7 +84,7 @@ func (suite *TestBaseMapperReadSuite) TestReadOne_WhenNoController_CallRelevantO
 
 	modelID := datatypes.NewUUID()
 	options := make(map[urlparam.Param]interface{})
-	cargo := controller.Cargo{}
+	cargo := hookhandler.Cargo{}
 
 	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
 	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt)
@@ -127,12 +127,12 @@ func (suite *TestBaseMapperReadSuite) TestReadOne_WhenHavingController_NotCallOl
 		WillReturnRows(sqlmock.NewRows([]string{"user_id", "model_id", "role"}).AddRow(suite.who.GetUserID(), carID, models.UserRoleAdmin))
 
 	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
-	ctrl := CarControllerWithoutCallbacks{}
-	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).Controller(&ctrl, "CRUPD", "JBAT")
+	hdlr := CarControllerWithoutCallbacks{}
+	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).HookHandler(&hdlr, "CRUPD")
 
 	modelID := datatypes.NewUUID()
 	options := make(map[urlparam.Param]interface{})
-	cargo := controller.Cargo{}
+	cargo := hookhandler.Cargo{}
 
 	mapper := SharedOwnershipMapper()
 	retVal, _, retErr := mapper.ReadOne(suite.db, suite.who, suite.typeString, modelID, options, &cargo)
@@ -141,7 +141,7 @@ func (suite *TestBaseMapperReadSuite) TestReadOne_WhenHavingController_NotCallOl
 	}
 
 	if _, ok := retVal.Ms[0].(*CarWithCallbacks); assert.True(suite.T(), ok) {
-		// None of the model callback should be called when there is controller
+		// None of the model callback should be called when there is hookhandler
 		assert.False(suite.T(), guardAPIEntryCalled) // not called when going through mapper
 		assert.False(suite.T(), beforeCUPDDBCalled)
 		assert.False(suite.T(), beforeReadDBCalled)
@@ -163,10 +163,10 @@ func (suite *TestBaseMapperReadSuite) TestReadOne_WhenHavingController_CallRelev
 
 	modelID := datatypes.NewUUID()
 	options := make(map[urlparam.Param]interface{})
-	cargo := controller.Cargo{}
+	cargo := hookhandler.Cargo{}
 
 	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
-	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).Controller(&CarController{}, "CRUPD", "JBAT")
+	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).HookHandler(&CarHandlerJBT{}, "CRUPD")
 
 	mapper := SharedOwnershipMapper()
 	var retVal *MapperRet
@@ -175,26 +175,26 @@ func (suite *TestBaseMapperReadSuite) TestReadOne_WhenHavingController_CallRelev
 		return
 	}
 
-	data := controller.Data{Ms: []models.IModel{&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID}, Name: carName}}, DB: suite.db, Who: suite.who, TypeString: suite.typeString, Roles: []models.UserRole{role}, Cargo: &cargo}
-	info := controller.EndPointInfo{Op: controller.RESTOpRead, Cardinality: controller.APICardinalityOne}
+	data := hookhandler.Data{Ms: []models.IModel{&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID}, Name: carName}}, DB: suite.db, Who: suite.who, TypeString: suite.typeString, Roles: []models.UserRole{role}, Cargo: &cargo}
+	info := hookhandler.EndPointInfo{Op: hookhandler.RESTOpRead, Cardinality: hookhandler.APICardinalityOne}
 
-	ctrls := retVal.Fetcher.GetAllInstantiatedControllers()
+	ctrls := retVal.Fetcher.GetAllInstantiatedHanders()
 	if !assert.Len(suite.T(), ctrls, 1) {
 		return
 	}
 
-	ctrl, ok := ctrls[0].(*CarController)
+	hdlr, ok := ctrls[0].(*CarHandlerJBT)
 	if !assert.True(suite.T(), ok) {
 		return
 	}
 
-	assert.False(suite.T(), ctrl.guardAPIEntryCalled) // Not called when going through mapper (or lifecycle for that matter)
+	assert.False(suite.T(), hdlr.guardAPIEntryCalled) // Not called when going through mapper (or lifecycle for that matter)
 
-	assert.False(suite.T(), ctrl.beforeApplyCalled)
-	assert.False(suite.T(), ctrl.beforeCalled)
-	if assert.True(suite.T(), ctrl.afterCalled) {
-		assert.Condition(suite.T(), dataComparison(&data, ctrl.afterData))
-		assert.Equal(suite.T(), info, *ctrl.afterInfo)
+	assert.False(suite.T(), hdlr.beforeApplyCalled)
+	assert.False(suite.T(), hdlr.beforeCalled)
+	if assert.True(suite.T(), hdlr.afterCalled) {
+		assert.Condition(suite.T(), dataComparison(&data, hdlr.afterData))
+		assert.Equal(suite.T(), info, *hdlr.afterInfo)
 	}
 }
 
@@ -215,7 +215,7 @@ func (suite *TestBaseMapperReadSuite) TestReadMany_WhenGiven_GotCars() {
 		WillReturnRows(sqlmock.NewRows([]string{"role"}).AddRow(models.UserRoleAdmin).AddRow(models.UserRoleGuest).AddRow(models.UserRoleAdmin))
 
 	options := make(map[urlparam.Param]interface{})
-	cargo := controller.Cargo{}
+	cargo := hookhandler.Cargo{}
 
 	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
 	registry.For(suite.typeString).ModelWithOption(&Car{}, opt)
@@ -257,7 +257,7 @@ func (suite *TestBaseMapperReadSuite) TestReadMany_WhenNoController_CallRelevant
 		WillReturnRows(sqlmock.NewRows([]string{"role"}).AddRow(roles[0]).AddRow(roles[1]).AddRow(roles[2]))
 
 	options := make(map[urlparam.Param]interface{})
-	cargo := controller.Cargo{}
+	cargo := hookhandler.Cargo{}
 
 	var beforeCalled bool
 	var beforeData models.BatchHookPointData
@@ -324,7 +324,7 @@ func (suite *TestBaseMapperReadSuite) TestReadMany_WhenHavingController_NotCallO
 		WillReturnRows(sqlmock.NewRows([]string{"role"}).AddRow(roles[0]).AddRow(roles[1]).AddRow(roles[2]))
 
 	options := make(map[urlparam.Param]interface{})
-	cargo := controller.Cargo{}
+	cargo := hookhandler.Cargo{}
 
 	var beforeCalled bool
 	var beforeData models.BatchHookPointData
@@ -342,11 +342,11 @@ func (suite *TestBaseMapperReadSuite) TestReadMany_WhenHavingController_NotCallO
 
 	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
 
-	ctrl := CarController{}
+	hdlr := CarHandlerJBT{}
 
 	// Both old and new are given
 	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).
-		BatchCRUPDHooks(before, after).BatchReadHooks(afterRead).Controller(&ctrl, "CRUPD", "JBAT")
+		BatchCRUPDHooks(before, after).BatchReadHooks(afterRead).HookHandler(&hdlr, "CRUPD")
 
 	mapper := SharedOwnershipMapper()
 	_, _, _, retErr := mapper.ReadMany(suite.db, suite.who, suite.typeString, options, &cargo)
@@ -378,12 +378,12 @@ func (suite *TestBaseMapperReadSuite) TestReadMany_WhenHavingController_CallRele
 		WillReturnRows(sqlmock.NewRows([]string{"role"}).AddRow(roles[0]).AddRow(roles[1]).AddRow(roles[2]))
 
 	options := make(map[urlparam.Param]interface{})
-	cargo := controller.Cargo{}
+	cargo := hookhandler.Cargo{}
 
 	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
 
 	// Both old and new are given
-	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).Controller(&CarController{}, "CRUPD", "JBAT")
+	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).HookHandler(&CarHandlerJBT{}, "CRUPD")
 
 	var retVal *MapperRet
 	mapper := SharedOwnershipMapper()
@@ -392,7 +392,7 @@ func (suite *TestBaseMapperReadSuite) TestReadMany_WhenHavingController_CallRele
 		return
 	}
 
-	data := controller.Data{
+	data := hookhandler.Data{
 		Ms: []models.IModel{
 			&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID1}, Name: carName1},
 			&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID2}, Name: carName2},
@@ -402,22 +402,22 @@ func (suite *TestBaseMapperReadSuite) TestReadMany_WhenHavingController_CallRele
 		TypeString: suite.typeString,
 		Roles:      roles, Cargo: &cargo,
 	}
-	info := controller.EndPointInfo{Op: controller.RESTOpRead, Cardinality: controller.APICardinalityMany}
+	info := hookhandler.EndPointInfo{Op: hookhandler.RESTOpRead, Cardinality: hookhandler.APICardinalityMany}
 
-	ctrls := retVal.Fetcher.GetAllInstantiatedControllers()
+	ctrls := retVal.Fetcher.GetAllInstantiatedHanders()
 	if !assert.Len(suite.T(), ctrls, 1) {
 		return
 	}
 
-	ctrl, ok := ctrls[0].(*CarController)
+	hdlr, ok := ctrls[0].(*CarHandlerJBT)
 	if !assert.True(suite.T(), ok) {
 		return
 	}
 
-	assert.False(suite.T(), ctrl.beforeCalled)
-	if assert.True(suite.T(), ctrl.afterCalled) {
-		assert.Condition(suite.T(), dataComparison(&data, ctrl.afterData))
-		assert.Equal(suite.T(), info, *ctrl.afterInfo)
+	assert.False(suite.T(), hdlr.beforeCalled)
+	if assert.True(suite.T(), hdlr.afterCalled) {
+		assert.Condition(suite.T(), dataComparison(&data, hdlr.afterData))
+		assert.Equal(suite.T(), info, *hdlr.afterInfo)
 	}
 }
 

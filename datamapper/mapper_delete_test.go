@@ -8,7 +8,7 @@ import (
 	"github.com/jinzhu/gorm"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
-	"github.com/t2wu/betterrest/controller"
+	"github.com/t2wu/betterrest/hookhandler"
 	"github.com/t2wu/betterrest/libs/datatypes"
 	"github.com/t2wu/betterrest/libs/urlparam"
 	"github.com/t2wu/betterrest/libs/utils/transact"
@@ -63,7 +63,7 @@ func (suite *TestBaseMapperDeleteSuite) TestDeleteOne_WhenGiven_GotCar() {
 	suite.mock.ExpectCommit()
 
 	options := make(map[urlparam.Param]interface{})
-	cargo := controller.Cargo{}
+	cargo := hookhandler.Cargo{}
 
 	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
 	registry.For(suite.typeString).ModelWithOption(&Car{}, opt)
@@ -108,7 +108,7 @@ func (suite *TestBaseMapperDeleteSuite) TestDeleteOne_WhenNoController_CallRelev
 	suite.mock.ExpectCommit()
 
 	options := make(map[urlparam.Param]interface{})
-	cargo := controller.Cargo{}
+	cargo := hookhandler.Cargo{}
 
 	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
 	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt)
@@ -134,7 +134,7 @@ func (suite *TestBaseMapperDeleteSuite) TestDeleteOne_WhenNoController_CallRelev
 		Cargo: &models.ModelCargo{Payload: cargo.Payload}, Role: &role, URLParams: options}
 
 	// No, update is not easy to test because I load the obj from the db first, and it's not the
-	// same as the car object I have now (all the more reason controller make more sense)
+	// same as the car object I have now (all the more reason hookhandler make more sense)
 	if _, ok := retVal.Ms[0].(*CarWithCallbacks); assert.True(suite.T(), ok) {
 		assert.False(suite.T(), guardAPIEntryCalled) // not called when going through mapper
 
@@ -177,10 +177,10 @@ func (suite *TestBaseMapperDeleteSuite) TestDeleteOne_WhenHavingController_NotCa
 	suite.mock.ExpectCommit()
 
 	options := make(map[urlparam.Param]interface{})
-	cargo := controller.Cargo{}
+	cargo := hookhandler.Cargo{}
 
 	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
-	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).Controller(&CarControllerWithoutCallbacks{}, "CRUPD", "JBAT")
+	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).HookHandler(&CarControllerWithoutCallbacks{}, "CRUPD")
 
 	mapper := SharedOwnershipMapper()
 
@@ -226,10 +226,10 @@ func (suite *TestBaseMapperDeleteSuite) TestDeleteOne_WhenHavingController_CallR
 	suite.mock.ExpectCommit()
 
 	options := make(map[urlparam.Param]interface{})
-	cargo := controller.Cargo{}
+	cargo := hookhandler.Cargo{}
 
 	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
-	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).Controller(&CarController{}, "CRUPD", "JBAT")
+	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).HookHandler(&CarHandlerJBT{}, "CRUPD")
 
 	mapper := SharedOwnershipMapper()
 
@@ -248,31 +248,31 @@ func (suite *TestBaseMapperDeleteSuite) TestDeleteOne_WhenHavingController_CallR
 	}
 
 	role := models.UserRoleAdmin
-	data := controller.Data{Ms: []models.IModel{&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID}, Name: carName}},
+	data := hookhandler.Data{Ms: []models.IModel{&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID}, Name: carName}},
 		DB: tx2, Who: suite.who, TypeString: suite.typeString, Roles: []models.UserRole{role}, Cargo: &cargo}
-	info := controller.EndPointInfo{Op: controller.RESTOpDelete, Cardinality: controller.APICardinalityOne}
+	info := hookhandler.EndPointInfo{Op: hookhandler.RESTOpDelete, Cardinality: hookhandler.APICardinalityOne}
 
-	ctrls := retVal.Fetcher.GetAllInstantiatedControllers()
+	ctrls := retVal.Fetcher.GetAllInstantiatedHanders()
 	if !assert.Len(suite.T(), ctrls, 1) {
 		return
 	}
 
-	ctrl, ok := ctrls[0].(*CarController)
+	hdlr, ok := ctrls[0].(*CarHandlerJBT)
 	if !assert.True(suite.T(), ok) {
 		return
 	}
 
-	assert.False(suite.T(), ctrl.guardAPIEntryCalled) // Not called when going through mapper (or lifecycle for that matter)
+	assert.False(suite.T(), hdlr.guardAPIEntryCalled) // Not called when going through mapper (or lifecycle for that matter)
 
-	if assert.True(suite.T(), ctrl.beforeCalled) {
-		assert.Equal(suite.T(), info, *ctrl.beforeInfo)
-		assert.Condition(suite.T(), dataComparisonNoDB(&data, ctrl.beforeData))
+	if assert.True(suite.T(), hdlr.beforeCalled) {
+		assert.Equal(suite.T(), info, *hdlr.beforeInfo)
+		assert.Condition(suite.T(), dataComparisonNoDB(&data, hdlr.beforeData))
 	}
 
-	if assert.True(suite.T(), ctrl.afterCalled) {
-		assert.Condition(suite.T(), dataComparisonNoDB(&data, ctrl.afterData))
-		assert.Equal(suite.T(), info.Cardinality, ctrl.afterInfo.Cardinality)
-		assert.Equal(suite.T(), info, *ctrl.afterInfo)
+	if assert.True(suite.T(), hdlr.afterCalled) {
+		assert.Condition(suite.T(), dataComparisonNoDB(&data, hdlr.afterData))
+		assert.Equal(suite.T(), info.Cardinality, hdlr.afterInfo.Cardinality)
+		assert.Equal(suite.T(), info, *hdlr.afterInfo)
 	}
 }
 
@@ -314,7 +314,7 @@ func (suite *TestBaseMapperDeleteSuite) TestDeleteMany_WhenGiven_GotCars() {
 	suite.mock.ExpectCommit()
 
 	options := make(map[urlparam.Param]interface{})
-	cargo := controller.Cargo{}
+	cargo := hookhandler.Cargo{}
 
 	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
 	registry.For(suite.typeString).ModelWithOption(&Car{}, opt)
@@ -395,7 +395,7 @@ func (suite *TestBaseMapperDeleteSuite) TestDeleteMany_WhenNoController_CallRele
 	afterDelete := createBatchSingleMethodHookPoint(&afterDeleteCalled, &afterDeleteData)
 
 	options := make(map[urlparam.Param]interface{})
-	cargo := controller.Cargo{}
+	cargo := hookhandler.Cargo{}
 
 	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
 	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).BatchCRUPDHooks(before, after).
@@ -499,11 +499,11 @@ func (suite *TestBaseMapperDeleteSuite) TestCreateMany_WhenHavingController_NotC
 	afterDelete := createBatchSingleMethodHookPoint(&afterDeleteCalled, &afterDeleteData)
 
 	options := make(map[urlparam.Param]interface{})
-	cargo := controller.Cargo{}
+	cargo := hookhandler.Cargo{}
 
 	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
 	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).BatchCRUPDHooks(before, after).
-		BatchDeleteHooks(beforeDelete, afterDelete).Controller(&CarControllerWithoutCallbacks{}, "CRUPD", "JBAT")
+		BatchDeleteHooks(beforeDelete, afterDelete).HookHandler(&CarControllerWithoutCallbacks{}, "CRUPD")
 
 	var tx2 *gorm.DB
 	retErr := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retErr *webrender.RetError) {
@@ -560,10 +560,10 @@ func (suite *TestBaseMapperDeleteSuite) TestCreateMany_WhenHavingController_Call
 	suite.mock.ExpectCommit()
 
 	options := make(map[urlparam.Param]interface{})
-	cargo := controller.Cargo{}
+	cargo := hookhandler.Cargo{}
 
 	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
-	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).Controller(&CarController{}, "CRUPD", "JBAT")
+	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).HookHandler(&CarHandlerJBT{}, "CRUPD")
 
 	var tx2 *gorm.DB
 	var retVal *MapperRet
@@ -579,34 +579,34 @@ func (suite *TestBaseMapperDeleteSuite) TestCreateMany_WhenHavingController_Call
 
 	// Expected
 	roles := []models.UserRole{models.UserRoleAdmin, models.UserRoleAdmin, models.UserRoleAdmin}
-	data := controller.Data{Ms: []models.IModel{
+	data := hookhandler.Data{Ms: []models.IModel{
 		&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID1}, Name: carName1},
 		&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID2}, Name: carName2},
 		&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID3}, Name: carName3},
 	}, DB: tx2, Who: suite.who, TypeString: suite.typeString, Roles: roles, Cargo: &cargo}
-	info := controller.EndPointInfo{Op: controller.RESTOpDelete, Cardinality: controller.APICardinalityMany}
+	info := hookhandler.EndPointInfo{Op: hookhandler.RESTOpDelete, Cardinality: hookhandler.APICardinalityMany}
 
-	ctrls := retVal.Fetcher.GetAllInstantiatedControllers()
+	ctrls := retVal.Fetcher.GetAllInstantiatedHanders()
 	if !assert.Len(suite.T(), ctrls, 1) {
 		return
 	}
 
-	ctrl, ok := ctrls[0].(*CarController)
+	hdlr, ok := ctrls[0].(*CarHandlerJBT)
 	if !assert.True(suite.T(), ok) {
 		return
 	}
 
-	assert.False(suite.T(), ctrl.guardAPIEntryCalled) // not called when call createMany directly
-	assert.False(suite.T(), ctrl.beforeApplyCalled)
-	if assert.True(suite.T(), ctrl.beforeCalled) {
-		assert.Condition(suite.T(), dataComparisonNoDB(&data, ctrl.beforeData))
-		assert.Equal(suite.T(), info.Op, ctrl.beforeInfo.Op)
-		assert.Equal(suite.T(), info.Cardinality, ctrl.beforeInfo.Cardinality)
+	assert.False(suite.T(), hdlr.guardAPIEntryCalled) // not called when call createMany directly
+	assert.False(suite.T(), hdlr.beforeApplyCalled)
+	if assert.True(suite.T(), hdlr.beforeCalled) {
+		assert.Condition(suite.T(), dataComparisonNoDB(&data, hdlr.beforeData))
+		assert.Equal(suite.T(), info.Op, hdlr.beforeInfo.Op)
+		assert.Equal(suite.T(), info.Cardinality, hdlr.beforeInfo.Cardinality)
 	}
-	if assert.True(suite.T(), ctrl.afterCalled) {
-		assert.Condition(suite.T(), dataComparisonNoDB(&data, ctrl.afterData))
-		assert.Equal(suite.T(), info.Op, ctrl.afterInfo.Op)
-		assert.Equal(suite.T(), info.Cardinality, ctrl.afterInfo.Cardinality)
+	if assert.True(suite.T(), hdlr.afterCalled) {
+		assert.Condition(suite.T(), dataComparisonNoDB(&data, hdlr.afterData))
+		assert.Equal(suite.T(), info.Op, hdlr.afterInfo.Op)
+		assert.Equal(suite.T(), info.Cardinality, hdlr.afterInfo.Cardinality)
 	}
 }
 

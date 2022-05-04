@@ -5,10 +5,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
-	"github.com/t2wu/betterrest/controller"
+	"github.com/t2wu/betterrest/hookhandler"
 	"github.com/t2wu/betterrest/libs/webrender"
 	"github.com/t2wu/betterrest/models"
-	"github.com/t2wu/betterrest/registry/ctrlmap"
+	"github.com/t2wu/betterrest/registry/handlermap"
 )
 
 // ModelRegistry is model registry
@@ -72,7 +72,7 @@ type Reg struct {
 	// CreateMethod can be defined with RegCustomCreate()
 	CreateMethod func(db *gorm.DB) (*gorm.DB, error)
 
-	GuardMethod func(who models.UserIDFetchable, info *controller.EndPointInfo) *webrender.RetError
+	GuardMethod func(who models.UserIDFetchable, info *hookhandler.EndPointInfo) *webrender.RetError
 
 	BatchMethods string     // Batch endpoints, "CRUD" for create, batch read, batch update, batch delete
 	IdvMethods   string     //  ID end points, "RUD" for read one, update one, and delete one
@@ -102,14 +102,14 @@ type Reg struct {
 	BatchRenderer func(c *gin.Context, ms []models.IModel, bhpdata *models.BatchHookPointData, op models.CRUPDOp) bool
 	// End deprecated
 
-	// ControllerMap is the new method where we keep controllers
-	// You can register any number of controller to handle the rest process.
-	// When each conncection is intantiated, the controller remain in memory until the REST op is returned
-	// If there are two controller which handles the same method and the same hook, they will both be called.
+	// HandlerMap is the new method where we keep handlers
+	// You can register any number of hookhandler to handle the rest process.
+	// When each conncection is intantiated, the hookhandler remain in memory until the REST op is returned
+	// If there are two hookhandler which handles the same method and the same hook, they will both be called.
 	// The calling order is not guaranteed.
-	ControllerMap *ctrlmap.CtrlMap
+	HandlerMap *handlermap.HandlerMap
 
-	RendererMethod func(c *gin.Context, data *controller.Data, info *controller.EndPointInfo) bool
+	RendererMethod func(c *gin.Context, data *hookhandler.Data, info *hookhandler.EndPointInfo) bool
 }
 
 // func (g *Gateway) AfterCreateDB(db *gorm.DB, typeString string) error {

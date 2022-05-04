@@ -9,11 +9,11 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
 	"github.com/stoewer/go-strcase"
-	"github.com/t2wu/betterrest/controller"
+	"github.com/t2wu/betterrest/hookhandler"
 	"github.com/t2wu/betterrest/libs/utils/jsontrans"
 	"github.com/t2wu/betterrest/libs/webrender"
 	"github.com/t2wu/betterrest/models"
-	"github.com/t2wu/betterrest/registry/ctrlmap"
+	"github.com/t2wu/betterrest/registry/handlermap"
 )
 
 /*
@@ -25,7 +25,7 @@ func For(typeString string) *Registrar {
 	r := NewRegistrar(typeString)
 	if _, ok := ModelRegistry[typeString]; !ok {
 		ModelRegistry[typeString] = &Reg{
-			ControllerMap: ctrlmap.NewCtrlMap(),
+			HandlerMap: handlermap.NewHandlerMap(),
 		}
 	}
 	return r
@@ -120,32 +120,19 @@ func (r *Registrar) ModelWithOption(modelObj models.IModel, options RegOptions) 
 	return r
 }
 
-// Controllers adds the controllers to be instantiate when a REST op occurs.
-// If any controller exists, old model-based hookpoints and batch hookpoints are not called
-func (r *Registrar) Controller(ctrl controller.IController, method string) *Registrar {
-	if ModelRegistry[r.currentTypeString].ControllerMap == nil {
-		ModelRegistry[r.currentTypeString].ControllerMap = ctrlmap.NewCtrlMap()
+// HookHandler adds the handler (contains one or more hooks) to be instantiate when a REST op occurs.
+// If any hookhandler exists, old model-based hookpoints and batch hookpoints are not called
+func (r *Registrar) HookHandler(hdlr hookhandler.IHookhandler, method string) *Registrar {
+	if ModelRegistry[r.currentTypeString].HandlerMap == nil {
+		ModelRegistry[r.currentTypeString].HandlerMap = handlermap.NewHandlerMap()
 	}
 
-	var firstHook string
-
-	// Determine first hook, one of JBAT
-	if _, ok := ctrl.(controller.IBeforeApply); ok {
-		firstHook = "J"
-	} else if _, ok := ctrl.(controller.IBefore); ok {
-		firstHook = "B"
-	} else if _, ok := ctrl.(controller.IAfter); ok {
-		firstHook = "A"
-	} else if _, ok := ctrl.(controller.IAfterTransact); ok {
-		firstHook = "T"
-	}
-
-	ModelRegistry[r.currentTypeString].ControllerMap.RegisterController(ctrl, method, firstHook)
+	ModelRegistry[r.currentTypeString].HandlerMap.RegisterHandler(hdlr, method)
 	return r
 }
 
 // Guard register guard function
-func (r *Registrar) Guard(guard func(who models.UserIDFetchable, info *controller.EndPointInfo) *webrender.RetError) *Registrar {
+func (r *Registrar) Guard(guard func(who models.UserIDFetchable, info *hookhandler.EndPointInfo) *webrender.RetError) *Registrar {
 	ModelRegistry[r.currentTypeString].GuardMethod = guard
 	return r
 }
@@ -425,7 +412,7 @@ func (r *Registrar) BatchRenderer(renderer func(c *gin.Context, ms []models.IMod
 // End deprecated
 
 // Renderer is called for both cardinalities when registered
-func (r *Registrar) Renderer(renderer func(c *gin.Context, data *controller.Data, info *controller.EndPointInfo) bool) *Registrar {
+func (r *Registrar) Renderer(renderer func(c *gin.Context, data *hookhandler.Data, info *hookhandler.EndPointInfo) bool) *Registrar {
 	typeString := r.currentTypeString
 
 	if _, ok := ModelRegistry[typeString]; !ok {

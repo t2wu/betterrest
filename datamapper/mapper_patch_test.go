@@ -9,7 +9,7 @@ import (
 	"github.com/jinzhu/gorm"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
-	"github.com/t2wu/betterrest/controller"
+	"github.com/t2wu/betterrest/hookhandler"
 	"github.com/t2wu/betterrest/libs/datatypes"
 	"github.com/t2wu/betterrest/libs/urlparam"
 	"github.com/t2wu/betterrest/libs/utils/transact"
@@ -74,7 +74,7 @@ func (suite *TestBaseMapperPatchSuite) TestPatchOne_WhenGiven_GotCar() {
 	suite.mock.ExpectCommit()
 
 	options := make(map[urlparam.Param]interface{})
-	cargo := controller.Cargo{}
+	cargo := hookhandler.Cargo{}
 
 	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
 	registry.For(suite.typeString).ModelWithOption(&Car{}, opt)
@@ -128,7 +128,7 @@ func (suite *TestBaseMapperPatchSuite) TestPatchOne_WhenNoController_CallRelevan
 	suite.mock.ExpectCommit()
 
 	options := make(map[urlparam.Param]interface{})
-	cargo := controller.Cargo{}
+	cargo := hookhandler.Cargo{}
 
 	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
 	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt)
@@ -157,7 +157,7 @@ func (suite *TestBaseMapperPatchSuite) TestPatchOne_WhenNoController_CallRelevan
 		Cargo: &models.ModelCargo{Payload: cargo.Payload}, Role: &role, URLParams: options}
 
 	// No, update is not easy to test because I load the obj from the db first, and it's not the
-	// same as the car object I have now (all the more reason controller make more sense)
+	// same as the car object I have now (all the more reason hookhandler make more sense)
 
 	if _, ok := retVal.Ms[0].(*CarWithCallbacks); assert.True(suite.T(), ok) {
 		assert.False(suite.T(), guardAPIEntryCalled) // not called when going through mapper
@@ -206,11 +206,11 @@ func (suite *TestBaseMapperPatchSuite) TestPatchOne_WhenHavingController_NotCall
 	suite.mock.ExpectCommit()
 
 	options := make(map[urlparam.Param]interface{})
-	cargo := controller.Cargo{}
+	cargo := hookhandler.Cargo{}
 
-	ctrl := CarControllerWithoutCallbacks{}
+	hdlr := CarControllerWithoutCallbacks{}
 	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
-	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).Controller(&ctrl, "CRUPD", "JBAT")
+	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).HookHandler(&hdlr, "CRUPD")
 
 	var jsonPatch = []byte(fmt.Sprintf(`[{
 		"op": "replace", "path": "/name", "value": "%s"
@@ -265,10 +265,10 @@ func (suite *TestBaseMapperPatchSuite) TestPatchOne_WhenHavingController_CallRel
 	suite.mock.ExpectCommit()
 
 	options := make(map[urlparam.Param]interface{})
-	cargo := controller.Cargo{}
+	cargo := hookhandler.Cargo{}
 
 	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
-	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).Controller(&CarController{}, "CRUPD", "JBAT")
+	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).HookHandler(&CarHandlerJBT{}, "CRUPD")
 
 	jsonPatch := []byte(fmt.Sprintf(`[{
 		"op": "replace", "path": "/name", "value": "%s"
@@ -290,45 +290,45 @@ func (suite *TestBaseMapperPatchSuite) TestPatchOne_WhenHavingController_CallRel
 	}
 
 	role := models.UserRoleAdmin
-	dataBeforeApply := controller.Data{Ms: []models.IModel{&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID},
+	dataBeforeApply := hookhandler.Data{Ms: []models.IModel{&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID},
 		Name: carName}}, DB: tx2, Who: suite.who,
 		TypeString: suite.typeString, Roles: []models.UserRole{role}, Cargo: &cargo}
 
-	data := controller.Data{Ms: []models.IModel{&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID},
+	data := hookhandler.Data{Ms: []models.IModel{&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID},
 		Name: carNameNew}}, DB: tx2, Who: suite.who,
 		TypeString: suite.typeString, Roles: []models.UserRole{role}, Cargo: &cargo}
 
-	info := controller.EndPointInfo{Op: controller.RESTOpPatch, Cardinality: controller.APICardinalityOne}
+	info := hookhandler.EndPointInfo{Op: hookhandler.RESTOpPatch, Cardinality: hookhandler.APICardinalityOne}
 
-	ctrls := retVal.Fetcher.GetAllInstantiatedControllers()
+	ctrls := retVal.Fetcher.GetAllInstantiatedHanders()
 	if !assert.Len(suite.T(), ctrls, 1) {
 		return
 	}
 
-	ctrl, ok := ctrls[0].(*CarController)
+	hdlr, ok := ctrls[0].(*CarHandlerJBT)
 	if !assert.True(suite.T(), ok) {
 		return
 	}
 
-	assert.False(suite.T(), ctrl.guardAPIEntryCalled) // Not called when going through mapper (or lifecycle for that matter)
+	assert.False(suite.T(), hdlr.guardAPIEntryCalled) // Not called when going through mapper (or lifecycle for that matter)
 
-	if assert.True(suite.T(), ctrl.beforeApplyCalled) {
-		assert.Equal(suite.T(), info, *ctrl.beforeApplyInfo)
-		assert.Condition(suite.T(), dataComparison(&dataBeforeApply, ctrl.beforeApplyData))
+	if assert.True(suite.T(), hdlr.beforeApplyCalled) {
+		assert.Equal(suite.T(), info, *hdlr.beforeApplyInfo)
+		assert.Condition(suite.T(), dataComparison(&dataBeforeApply, hdlr.beforeApplyData))
 	}
 
-	if assert.True(suite.T(), ctrl.beforeCalled) {
-		assert.Equal(suite.T(), info, *ctrl.beforeInfo)
-		assert.Condition(suite.T(), dataComparison(&data, ctrl.beforeData))
-		assert.Equal(suite.T(), info.Op, ctrl.beforeInfo.Op)
-		assert.Equal(suite.T(), info, *ctrl.beforeInfo)
+	if assert.True(suite.T(), hdlr.beforeCalled) {
+		assert.Equal(suite.T(), info, *hdlr.beforeInfo)
+		assert.Condition(suite.T(), dataComparison(&data, hdlr.beforeData))
+		assert.Equal(suite.T(), info.Op, hdlr.beforeInfo.Op)
+		assert.Equal(suite.T(), info, *hdlr.beforeInfo)
 	}
 
-	if assert.True(suite.T(), ctrl.afterCalled) {
-		assert.Condition(suite.T(), dataComparison(&data, ctrl.afterData))
-		assert.Equal(suite.T(), info.Op, ctrl.afterInfo.Op)
-		assert.Equal(suite.T(), info.Cardinality, ctrl.afterInfo.Cardinality)
-		assert.Equal(suite.T(), info, *ctrl.afterInfo)
+	if assert.True(suite.T(), hdlr.afterCalled) {
+		assert.Condition(suite.T(), dataComparison(&data, hdlr.afterData))
+		assert.Equal(suite.T(), info.Op, hdlr.afterInfo.Op)
+		assert.Equal(suite.T(), info.Cardinality, hdlr.afterInfo.Cardinality)
+		assert.Equal(suite.T(), info, *hdlr.afterInfo)
 	}
 }
 
@@ -369,7 +369,7 @@ func (suite *TestBaseMapperPatchSuite) TestPatchMany_WhenGiven_GotCars() {
 	suite.mock.ExpectCommit()
 
 	options := make(map[urlparam.Param]interface{})
-	cargo := controller.Cargo{}
+	cargo := hookhandler.Cargo{}
 
 	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
 	registry.For(suite.typeString).ModelWithOption(&Car{}, opt)
@@ -474,7 +474,7 @@ func (suite *TestBaseMapperPatchSuite) TestPatchMany_WhenNoController_CallReleva
 	afterPatch := createBatchSingleMethodHookPoint(&afterPatchCalled, &afterPatchData)
 
 	options := make(map[urlparam.Param]interface{})
-	cargo := controller.Cargo{}
+	cargo := hookhandler.Cargo{}
 
 	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
 	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).BatchCRUPDHooks(before, after).
@@ -618,12 +618,12 @@ func (suite *TestBaseMapperPatchSuite) TestCreateMany_WhenHavingController_NotCa
 	afterPatch := createBatchSingleMethodHookPoint(&afterPatchCalled, &afterPatchData)
 
 	options := make(map[urlparam.Param]interface{})
-	cargo := controller.Cargo{}
+	cargo := hookhandler.Cargo{}
 
-	ctrl := CarControllerWithoutCallbacks{}
+	hdlr := CarControllerWithoutCallbacks{}
 	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
 	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).BatchCRUPDHooks(before, after).
-		BatchPatchHooks(beforeApplyPatch, beforePatch, afterPatch).Controller(&ctrl, "CRUPD", "JBAT")
+		BatchPatchHooks(beforeApplyPatch, beforePatch, afterPatch).HookHandler(&hdlr, "CRUPD")
 
 	jsonPatches := []models.JSONIDPatch{
 		{
@@ -701,10 +701,10 @@ func (suite *TestBaseMapperPatchSuite) TestCreateMany_WhenHavingController_CallR
 	suite.mock.ExpectCommit()
 
 	options := make(map[urlparam.Param]interface{})
-	cargo := controller.Cargo{}
+	cargo := hookhandler.Cargo{}
 
 	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
-	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).Controller(&CarController{}, "CRUPD", "JBAT")
+	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).HookHandler(&CarHandlerJBT{}, "CRUPD")
 
 	jsonPatches := []models.JSONIDPatch{
 		{
@@ -741,45 +741,45 @@ func (suite *TestBaseMapperPatchSuite) TestCreateMany_WhenHavingController_CallR
 
 	// Expected
 	roles := []models.UserRole{models.UserRoleAdmin, models.UserRoleAdmin, models.UserRoleAdmin}
-	dataBeforePatch := controller.Data{Ms: []models.IModel{
+	dataBeforePatch := hookhandler.Data{Ms: []models.IModel{
 		&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID1}, Name: carName1},
 		&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID2}, Name: carName2},
 		&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID3}, Name: carName3},
 	}, DB: tx2, Who: suite.who, TypeString: suite.typeString, Roles: roles, Cargo: &cargo}
-	data := controller.Data{Ms: []models.IModel{
+	data := hookhandler.Data{Ms: []models.IModel{
 		&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID1}, Name: carNameNew1},
 		&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID2}, Name: carNameNew2},
 		&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID3}, Name: carNameNew3},
 	}, DB: tx2, Who: suite.who, TypeString: suite.typeString, Roles: roles, Cargo: &cargo}
-	info := controller.EndPointInfo{Op: controller.RESTOpPatch, Cardinality: controller.APICardinalityMany}
+	info := hookhandler.EndPointInfo{Op: hookhandler.RESTOpPatch, Cardinality: hookhandler.APICardinalityMany}
 
-	ctrls := retVal.Fetcher.GetAllInstantiatedControllers()
+	ctrls := retVal.Fetcher.GetAllInstantiatedHanders()
 	if !assert.Len(suite.T(), ctrls, 1) {
 		return
 	}
 
-	ctrl, ok := ctrls[0].(*CarController)
+	hdlr, ok := ctrls[0].(*CarHandlerJBT)
 	if !assert.True(suite.T(), ok) {
 		return
 	}
 
-	assert.False(suite.T(), ctrl.guardAPIEntryCalled) // not called when call createMany directly
-	if assert.True(suite.T(), ctrl.beforeApplyCalled) {
-		assert.Condition(suite.T(), dataComparison(&dataBeforePatch, ctrl.beforeApplyData))
-		assert.Equal(suite.T(), info.Op, ctrl.beforeInfo.Op)
-		assert.Equal(suite.T(), info.Cardinality, ctrl.beforeInfo.Cardinality)
+	assert.False(suite.T(), hdlr.guardAPIEntryCalled) // not called when call createMany directly
+	if assert.True(suite.T(), hdlr.beforeApplyCalled) {
+		assert.Condition(suite.T(), dataComparison(&dataBeforePatch, hdlr.beforeApplyData))
+		assert.Equal(suite.T(), info.Op, hdlr.beforeInfo.Op)
+		assert.Equal(suite.T(), info.Cardinality, hdlr.beforeInfo.Cardinality)
 	}
 
-	if assert.True(suite.T(), ctrl.beforeCalled) {
-		assert.Condition(suite.T(), dataComparison(&data, ctrl.beforeData))
-		assert.Equal(suite.T(), info.Op, ctrl.beforeInfo.Op)
-		assert.Equal(suite.T(), info.Cardinality, ctrl.beforeInfo.Cardinality)
+	if assert.True(suite.T(), hdlr.beforeCalled) {
+		assert.Condition(suite.T(), dataComparison(&data, hdlr.beforeData))
+		assert.Equal(suite.T(), info.Op, hdlr.beforeInfo.Op)
+		assert.Equal(suite.T(), info.Cardinality, hdlr.beforeInfo.Cardinality)
 	}
 
-	if assert.True(suite.T(), ctrl.afterCalled) {
-		assert.Condition(suite.T(), dataComparison(&data, ctrl.afterData))
-		assert.Equal(suite.T(), info.Op, ctrl.afterInfo.Op)
-		assert.Equal(suite.T(), info.Cardinality, ctrl.afterInfo.Cardinality)
+	if assert.True(suite.T(), hdlr.afterCalled) {
+		assert.Condition(suite.T(), dataComparison(&data, hdlr.afterData))
+		assert.Equal(suite.T(), info.Op, hdlr.afterInfo.Op)
+		assert.Equal(suite.T(), info.Cardinality, hdlr.afterInfo.Cardinality)
 	}
 }
 

@@ -13,8 +13,8 @@ import (
 	"time"
 
 	"github.com/jinzhu/gorm"
-	"github.com/t2wu/betterrest/controller"
 	"github.com/t2wu/betterrest/datamapper"
+	"github.com/t2wu/betterrest/hookhandler"
 	"github.com/t2wu/betterrest/libs/settings"
 	"github.com/t2wu/betterrest/libs/urlparam"
 	"github.com/t2wu/betterrest/libs/webrender"
@@ -171,7 +171,7 @@ func modelObjsToJSON(typeString string, modelObjs []models.IModel, roles []model
 	return content, nil
 }
 
-func RenderModelSlice(c *gin.Context, total *int, data *controller.Data, info *controller.EndPointInfo) {
+func RenderModelSlice(c *gin.Context, total *int, data *hookhandler.Data, info *hookhandler.EndPointInfo) {
 	// Any custom rendering?
 	if method := registry.ModelRegistry[data.TypeString].RendererMethod; method != nil {
 		if method(c, data, info) { // custom render if true
@@ -211,7 +211,7 @@ func RenderModelSlice(c *gin.Context, total *int, data *controller.Data, info *c
 	// c.JSON(http.StatusOK, content)
 }
 
-func RenderModel(c *gin.Context, total *int, data *controller.Data, info *controller.EndPointInfo) {
+func RenderModel(c *gin.Context, total *int, data *hookhandler.Data, info *hookhandler.EndPointInfo) {
 	// Any custom rendering?
 	if method := registry.ModelRegistry[data.TypeString].RendererMethod; method != nil {
 		if method(c, data, info) { // custom render if true
@@ -222,7 +222,7 @@ func RenderModel(c *gin.Context, total *int, data *controller.Data, info *contro
 	RenderJSONForModel(c, data.Ms[0], data)
 }
 
-func RenderJSONForModel(c *gin.Context, modelObj models.IModel, data *controller.Data) {
+func RenderJSONForModel(c *gin.Context, modelObj models.IModel, data *hookhandler.Data) {
 	// render.JSON(w, r, modelObj) // cannot use this since no picking the field we need
 	jsonBytes, err := tools.ToJSON(data.TypeString, modelObj, data.Roles[0], data.Who)
 	if err != nil {
@@ -344,7 +344,7 @@ func w(handler func(c *gin.Context)) func(c *gin.Context) {
 	}
 }
 
-func batchRenderHelper(c *gin.Context, typeString string, data *controller.Data, info *controller.EndPointInfo, no *int) {
+func batchRenderHelper(c *gin.Context, typeString string, data *hookhandler.Data, info *hookhandler.EndPointInfo, no *int) {
 	// Does old renderer exists?
 	if renderer := registry.ModelRegistry[typeString].BatchRenderer; renderer != nil {
 		// Re-create it again to remain backward compatible
@@ -354,15 +354,15 @@ func batchRenderHelper(c *gin.Context, typeString string, data *controller.Data,
 
 		var op models.CRUPDOp
 		switch info.Op {
-		case controller.RESTOpRead:
+		case hookhandler.RESTOpRead:
 			op = models.CRUPDOpRead
-		case controller.RESTOpCreate:
+		case hookhandler.RESTOpCreate:
 			op = models.CRUPDOpCreate
-		case controller.RESTOpUpdate:
+		case hookhandler.RESTOpUpdate:
 			op = models.CRUPDOpUpdate
-		case controller.RESTOpPatch:
+		case hookhandler.RESTOpPatch:
 			op = models.CRUPDOpPatch
-		case controller.RESTOpDelete:
+		case hookhandler.RESTOpDelete:
 			op = models.CRUPDOpDelete
 		}
 
@@ -374,7 +374,7 @@ func batchRenderHelper(c *gin.Context, typeString string, data *controller.Data,
 	RenderModelSlice(c, no, data, info)
 }
 
-func singleRenderHelper(c *gin.Context, typeString string, data *controller.Data, info *controller.EndPointInfo) {
+func singleRenderHelper(c *gin.Context, typeString string, data *hookhandler.Data, info *hookhandler.EndPointInfo) {
 	// Does old renderer exists?
 	if renderer := registry.ModelRegistry[typeString].BatchRenderer; renderer != nil {
 		// Re-create it again to remain backward compatible
@@ -384,15 +384,15 @@ func singleRenderHelper(c *gin.Context, typeString string, data *controller.Data
 
 		var op models.CRUPDOp
 		switch info.Op {
-		case controller.RESTOpRead:
+		case hookhandler.RESTOpRead:
 			op = models.CRUPDOpRead
-		case controller.RESTOpCreate:
+		case hookhandler.RESTOpCreate:
 			op = models.CRUPDOpCreate
-		case controller.RESTOpUpdate:
+		case hookhandler.RESTOpUpdate:
 			op = models.CRUPDOpUpdate
-		case controller.RESTOpPatch:
+		case hookhandler.RESTOpPatch:
 			op = models.CRUPDOpPatch
-		case controller.RESTOpDelete:
+		case hookhandler.RESTOpDelete:
 			op = models.CRUPDOpDelete
 		}
 

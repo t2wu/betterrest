@@ -2,7 +2,7 @@ package datamapper
 
 import (
 	"github.com/jinzhu/gorm"
-	"github.com/t2wu/betterrest/controller"
+	"github.com/t2wu/betterrest/hookhandler"
 	"github.com/t2wu/betterrest/libs/datatypes"
 	"github.com/t2wu/betterrest/libs/urlparam"
 	"github.com/t2wu/betterrest/libs/webrender"
@@ -11,51 +11,51 @@ import (
 
 type MapperRet struct {
 	Ms      []models.IModel // if for cardinality 1, only contains one element
-	Fetcher *CtrlFetcher
+	Fetcher *HandlerFetcher
 }
 
 // IDataMapper has all the crud interfaces
 type IDataMapper interface {
 	CreateMany(db *gorm.DB, who models.UserIDFetchable, typeString string, modelObj []models.IModel,
-		options map[urlparam.Param]interface{}, cargo *controller.Cargo) (*MapperRet, *webrender.RetError)
+		options map[urlparam.Param]interface{}, cargo *hookhandler.Cargo) (*MapperRet, *webrender.RetError)
 
 	CreateOne(db *gorm.DB, who models.UserIDFetchable, typeString string, modelObj models.IModel,
-		options map[urlparam.Param]interface{}, cargo *controller.Cargo) (*MapperRet, *webrender.RetError)
+		options map[urlparam.Param]interface{}, cargo *hookhandler.Cargo) (*MapperRet, *webrender.RetError)
 
 	ReadMany(db *gorm.DB, who models.UserIDFetchable,
 		typeString string, options map[urlparam.Param]interface{},
-		cargo *controller.Cargo) (*MapperRet, []models.UserRole, *int, *webrender.RetError)
+		cargo *hookhandler.Cargo) (*MapperRet, []models.UserRole, *int, *webrender.RetError)
 
 	ReadOne(db *gorm.DB, who models.UserIDFetchable,
 		typeString string, id *datatypes.UUID, options map[urlparam.Param]interface{},
-		cargo *controller.Cargo) (*MapperRet, models.UserRole, *webrender.RetError)
+		cargo *hookhandler.Cargo) (*MapperRet, models.UserRole, *webrender.RetError)
 
 	UpdateMany(db *gorm.DB, who models.UserIDFetchable,
 		typeString string, modelObjs []models.IModel,
 		options map[urlparam.Param]interface{},
-		cargo *controller.Cargo) (*MapperRet, *webrender.RetError)
+		cargo *hookhandler.Cargo) (*MapperRet, *webrender.RetError)
 
 	UpdateOne(db *gorm.DB, who models.UserIDFetchable,
 		typeString string, modelobj models.IModel, id *datatypes.UUID,
 		options map[urlparam.Param]interface{},
-		cargo *controller.Cargo) (*MapperRet, *webrender.RetError)
+		cargo *hookhandler.Cargo) (*MapperRet, *webrender.RetError)
 
 	PatchMany(db *gorm.DB, who models.UserIDFetchable,
 		typeString string, jsonIDPatches []models.JSONIDPatch,
 		options map[urlparam.Param]interface{},
-		cargo *controller.Cargo) (*MapperRet, *webrender.RetError)
+		cargo *hookhandler.Cargo) (*MapperRet, *webrender.RetError)
 
 	PatchOne(db *gorm.DB, who models.UserIDFetchable,
 		typeString string, jsonPatch []byte, id *datatypes.UUID,
 		options map[urlparam.Param]interface{},
-		cargo *controller.Cargo) (*MapperRet, *webrender.RetError)
+		cargo *hookhandler.Cargo) (*MapperRet, *webrender.RetError)
 
 	DeleteMany(db *gorm.DB, who models.UserIDFetchable,
 		typeString string, modelObjs []models.IModel,
 		options map[urlparam.Param]interface{},
-		cargo *controller.Cargo) (*MapperRet, *webrender.RetError)
+		cargo *hookhandler.Cargo) (*MapperRet, *webrender.RetError)
 
 	DeleteOne(db *gorm.DB, who models.UserIDFetchable,
 		typeString string, id *datatypes.UUID, options map[urlparam.Param]interface{},
-		cargo *controller.Cargo) (*MapperRet, *webrender.RetError)
+		cargo *hookhandler.Cargo) (*MapperRet, *webrender.RetError)
 }

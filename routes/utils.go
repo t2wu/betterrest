@@ -6,7 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-chi/render"
-	"github.com/t2wu/betterrest/controller"
+	"github.com/t2wu/betterrest/hookhandler"
 	"github.com/t2wu/betterrest/libs/urlparam"
 	"github.com/t2wu/betterrest/libs/utils/jsontrans"
 	"github.com/t2wu/betterrest/libs/webrender"
@@ -79,7 +79,7 @@ func GuardMiddleWare(typeString string) func(c *gin.Context) {
 		who := WhoFromContext(r)
 
 		// Old, deprecated
-		if !registry.ModelRegistry[typeString].ControllerMap.HasRegisteredAnyController() {
+		if !registry.ModelRegistry[typeString].HandlerMap.HasRegisteredAnyHandler() {
 			modelObj := registry.NewFromTypeString(typeString)
 			if m, ok := modelObj.(models.IGuardAPIEntry); ok {
 				http := models.HTTP{Endpoint: r.URL.Path, Op: models.HTTPMethodToCRUDOp(r.Method)}
@@ -93,11 +93,11 @@ func GuardMiddleWare(typeString string) func(c *gin.Context) {
 		}
 		// End Old, deprecated
 
-		data := controller.Data{Ms: nil, DB: nil, Who: who,
+		data := hookhandler.Data{Ms: nil, DB: nil, Who: who,
 			TypeString: typeString, Roles: nil, URLParams: options, Cargo: nil}
-		info := controller.EndPointInfo{
-			Op:          controller.HTTPMethodToRESTOp(r.Method),
-			Cardinality: controller.APICardinalityOne,
+		info := hookhandler.EndPointInfo{
+			Op:          hookhandler.HTTPMethodToRESTOp(r.Method),
+			Cardinality: hookhandler.APICardinalityOne,
 		}
 
 		if guard := registry.ModelRegistry[typeString].GuardMethod; guard != nil {

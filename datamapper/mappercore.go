@@ -5,8 +5,8 @@ import (
 	"reflect"
 
 	"github.com/jinzhu/gorm"
-	"github.com/t2wu/betterrest/controller"
 	"github.com/t2wu/betterrest/datamapper/service"
+	"github.com/t2wu/betterrest/hookhandler"
 	"github.com/t2wu/betterrest/libs/datatypes"
 	"github.com/t2wu/betterrest/libs/webrender"
 	"github.com/t2wu/betterrest/models"
@@ -14,8 +14,8 @@ import (
 )
 
 func callOldBatch(
-	data *controller.Data,
-	info *controller.EndPointInfo,
+	data *hookhandler.Data,
+	info *hookhandler.EndPointInfo,
 	oldGeneric func(bhpData models.BatchHookPointData, op models.CRUPDOp) error, // before or after
 	oldSpecific func(bhpData models.BatchHookPointData) error, // before or after
 ) error {
@@ -25,15 +25,15 @@ func callOldBatch(
 
 	var op models.CRUPDOp
 	switch info.Op {
-	case controller.RESTOpRead:
+	case hookhandler.RESTOpRead:
 		op = models.CRUPDOpRead
-	case controller.RESTOpCreate:
+	case hookhandler.RESTOpCreate:
 		op = models.CRUPDOpCreate
-	case controller.RESTOpUpdate:
+	case hookhandler.RESTOpUpdate:
 		op = models.CRUPDOpUpdate
-	case controller.RESTOpPatch:
+	case hookhandler.RESTOpPatch:
 		op = models.CRUPDOpPatch
-	case controller.RESTOpDelete:
+	case hookhandler.RESTOpDelete:
 		op = models.CRUPDOpDelete
 	}
 
@@ -59,8 +59,8 @@ func callOldBatch(
 // old specific (before and after) is in string, because once we load it from the DB the hooks
 // should be the new one. (at least for after)
 func callOldSingle(
-	data *controller.Data,
-	info *controller.EndPointInfo,
+	data *hookhandler.Data,
+	info *hookhandler.EndPointInfo,
 	oldGeneric func(hpdata models.HookPointData, op models.CRUPDOp) error,
 	oldSpecific *string, // before or after
 ) error {
@@ -70,15 +70,15 @@ func callOldSingle(
 
 	var op models.CRUPDOp
 	switch info.Op {
-	case controller.RESTOpRead:
+	case hookhandler.RESTOpRead:
 		op = models.CRUPDOpRead
-	case controller.RESTOpCreate:
+	case hookhandler.RESTOpCreate:
 		op = models.CRUPDOpCreate
-	case controller.RESTOpUpdate:
+	case hookhandler.RESTOpUpdate:
 		op = models.CRUPDOpUpdate
-	case controller.RESTOpPatch:
+	case hookhandler.RESTOpPatch:
 		op = models.CRUPDOpPatch
-	case controller.RESTOpDelete:
+	case hookhandler.RESTOpDelete:
 		op = models.CRUPDOpDelete
 	}
 
@@ -114,7 +114,7 @@ type batchOpJob struct {
 	// typeString   string
 	oldmodelObjs []models.IModel // use for update (need to load and override for pegged fields)
 	modelObjs    []models.IModel // current field value from the user if update, or from the loaded field if delete
-	// cargo        *controller.Cargo
+	// cargo        *hookhandler.Cargo
 
 	// crupdOp      models.CRUPDOp
 	// options      map[urlparam.Param]interface{}
@@ -122,9 +122,9 @@ type batchOpJob struct {
 	oldBefore func(bhpData models.BatchHookPointData) error
 	oldAfter  func(bhpData models.BatchHookPointData) error
 
-	fetcher *CtrlFetcher
-	data    *controller.Data
-	info    *controller.EndPointInfo
+	fetcher *HandlerFetcher
+	data    *hookhandler.Data
+	info    *hookhandler.EndPointInfo
 }
 
 func batchOpCore(job batchOpJob,
@@ -140,15 +140,15 @@ func batchOpCore(job batchOpJob,
 	}
 
 	// deprecated, only try to call when no controlelr exists
-	if !fetcher.HasRegisteredController() {
+	if !fetcher.HasRegisteredHandler() {
 		if err := callOldBatch(data, info, registry.ModelRegistry[data.TypeString].BeforeCUPD, oldBefore); err != nil {
 			return nil, &webrender.RetError{Error: err}
 		}
 	}
 
 	// fetch all controllers with before hooks
-	for _, ctrl := range fetcher.FetchControllersForOpAndHook(info.Op, "B") {
-		if renderer := ctrl.(controller.IBefore).Before(data, info); renderer != nil {
+	for _, hdlr := range fetcher.FetchHandlersForOpAndHook(info.Op, "B") { // FetchHandlersForOpAndHook is stateful, cannot be repeated called
+		if renderer := hdlr.(hookhandler.IBefore).Before(data, info); renderer != nil {
 			return nil, renderer
 		}
 	}
@@ -172,15 +172,15 @@ func batchOpCore(job batchOpJob,
 		ms[i] = m
 	}
 
-	if !fetcher.HasRegisteredController() { // deprecated, only try to call when no controlelr exists
+	if !fetcher.HasRegisteredHandler() { // deprecated, only try to call when no controlelr exists
 		if err := callOldBatch(data, info, registry.ModelRegistry[data.TypeString].AfterCRUPD, oldAfter); err != nil {
 			return nil, &webrender.RetError{Error: err}
 		}
 	}
 
 	// fetch all controllers with after hooks
-	for _, ctrl := range fetcher.FetchControllersForOpAndHook(info.Op, "A") {
-		if renderer := ctrl.(controller.IAfter).After(data, info); renderer != nil {
+	for _, hdlr := range fetcher.FetchHandlersForOpAndHook(info.Op, "A") {
+		if renderer := hdlr.(hookhandler.IAfter).After(data, info); renderer != nil {
 			return nil, renderer
 		}
 	}
@@ -199,7 +199,7 @@ type opJob struct {
 	// crupdOp     models.CRUPDOp
 	oldModelObj models.IModel // use for update (need to load and override for pegged fields)
 	modelObj    models.IModel // current field value from the user if update, or from the loaded field if delete
-	// cargo       *controller.Cargo // This only is used because we may have an even earlier hookpoint for PatchApply
+	// cargo       *hookhandler.Cargo // This only is used because we may have an even earlier hookpoint for PatchApply
 	// options     map[urlparam.Param]interface{}
 
 	// before and after are strings, because once we load it from the DB the hooks
@@ -207,9 +207,9 @@ type opJob struct {
 	beforeFuncName *string
 	afterFuncName  *string
 
-	fetcher *CtrlFetcher
-	data    *controller.Data
-	info    *controller.EndPointInfo
+	fetcher *HandlerFetcher
+	data    *hookhandler.Data
+	info    *hookhandler.EndPointInfo
 }
 
 func opCore(
@@ -224,7 +224,7 @@ func opCore(
 	}
 
 	// Deprecated
-	if !fetcher.HasRegisteredController() { // deprecated, only try to call when no controller exists
+	if !fetcher.HasRegisteredHandler() { // deprecated, only try to call when no hookhandler exists
 		if m, ok := data.Ms[0].(models.IBeforeCUPD); ok {
 			if err := callOldSingle(data, info, m.BeforeCUPDDB, beforeFuncName); err != nil {
 				return nil, &webrender.RetError{Error: err}
@@ -234,8 +234,8 @@ func opCore(
 	// End deprecated
 
 	// fetch all controllers with before hooks
-	for _, ctrl := range fetcher.FetchControllersForOpAndHook(info.Op, "B") {
-		if renderer := ctrl.(controller.IBefore).Before(data, info); renderer != nil {
+	for _, hdlr := range fetcher.FetchHandlersForOpAndHook(info.Op, "B") {
+		if renderer := hdlr.(hookhandler.IBefore).Before(data, info); renderer != nil {
 			return nil, renderer
 		}
 	}
@@ -250,7 +250,7 @@ func opCore(
 	data.Ms[0] = modelObjReloaded
 
 	// Deprecated
-	if !fetcher.HasRegisteredController() { // deprecated, only try to call when no controlelr exists
+	if !fetcher.HasRegisteredHandler() { // deprecated, only try to call when no controlelr exists
 		if m, ok := data.Ms[0].(models.IAfterCRUPD); ok {
 			if err := callOldSingle(data, info, m.AfterCRUPDDB, afterFuncName); err != nil {
 				return nil, &webrender.RetError{Error: err}
@@ -260,8 +260,8 @@ func opCore(
 	// End deprecated
 
 	// fetch all controllers with after hooks
-	for _, ctrl := range fetcher.FetchControllersForOpAndHook(info.Op, "A") {
-		if renderer := ctrl.(controller.IAfter).After(data, info); renderer != nil {
+	for _, hdlr := range fetcher.FetchHandlersForOpAndHook(info.Op, "A") {
+		if renderer := hdlr.(hookhandler.IAfter).After(data, info); renderer != nil {
 			return nil, renderer
 		}
 	}

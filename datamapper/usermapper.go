@@ -7,8 +7,8 @@ import (
 	"sync"
 
 	"github.com/go-playground/validator/v10"
-	"github.com/t2wu/betterrest/controller"
 	"github.com/t2wu/betterrest/datamapper/service"
+	"github.com/t2wu/betterrest/hookhandler"
 	"github.com/t2wu/betterrest/libs/datatypes"
 	"github.com/t2wu/betterrest/libs/urlparam"
 	"github.com/t2wu/betterrest/libs/webrender"
@@ -54,7 +54,7 @@ func SharedUserMapper() *UserMapper {
 // CreateOne creates an user model based on json and store it in db
 // Also creates a ownership with admin access
 func (mapper *UserMapper) CreateOne(db *gorm.DB, who models.UserIDFetchable, typeString string, modelObj models.IModel,
-	options map[urlparam.Param]interface{}, cargo *controller.Cargo) (*MapperRet, *webrender.RetError) {
+	options map[urlparam.Param]interface{}, cargo *hookhandler.Cargo) (*MapperRet, *webrender.RetError) {
 	modelObj, err := mapper.Service.HookBeforeCreateOne(db, who, typeString, modelObj)
 	if err != nil {
 		return nil, &webrender.RetError{Error: err}
@@ -68,11 +68,11 @@ func (mapper *UserMapper) CreateOne(db *gorm.DB, who models.UserIDFetchable, typ
 		*afterFuncName = "AfterCreateDB"
 	}
 
-	data := controller.Data{Ms: []models.IModel{modelObj}, DB: db, Who: who,
+	data := hookhandler.Data{Ms: []models.IModel{modelObj}, DB: db, Who: who,
 		TypeString: typeString, Roles: []models.UserRole{models.UserRoleAdmin}, URLParams: options, Cargo: cargo}
-	info := controller.EndPointInfo{
-		Op:          controller.RESTOpCreate,
-		Cardinality: controller.APICardinalityOne,
+	info := hookhandler.EndPointInfo{
+		Op:          hookhandler.RESTOpCreate,
+		Cardinality: hookhandler.APICardinalityOne,
 	}
 
 	j := opJob{
@@ -83,7 +83,7 @@ func (mapper *UserMapper) CreateOne(db *gorm.DB, who models.UserIDFetchable, typ
 		beforeFuncName: beforeFuncName,
 		afterFuncName:  afterFuncName,
 
-		fetcher: NewCtrlFetcher(registry.ModelRegistry[typeString].ControllerMap),
+		fetcher: NewHandlerFetcher(registry.ModelRegistry[typeString].HandlerMap),
 		data:    &data,
 		info:    &info,
 	}
@@ -104,23 +104,23 @@ func (mapper *UserMapper) CreateOne(db *gorm.DB, who models.UserIDFetchable, typ
 
 // ReadOne get one model object based on its type and its id string
 func (mapper *UserMapper) ReadOne(db *gorm.DB, who models.UserIDFetchable, typeString string,
-	id *datatypes.UUID, options map[urlparam.Param]interface{}, cargo *controller.Cargo) (*MapperRet, models.UserRole, *webrender.RetError) {
+	id *datatypes.UUID, options map[urlparam.Param]interface{}, cargo *hookhandler.Cargo) (*MapperRet, models.UserRole, *webrender.RetError) {
 	modelObj, role, err := mapper.Service.ReadOneCore(db, who, typeString, id)
 	if err != nil {
 		return nil, 0, &webrender.RetError{Error: err}
 	}
 
-	data := controller.Data{Ms: []models.IModel{modelObj}, DB: db, Who: who,
+	data := hookhandler.Data{Ms: []models.IModel{modelObj}, DB: db, Who: who,
 		TypeString: typeString, Roles: []models.UserRole{models.UserRoleAdmin}, URLParams: options, Cargo: cargo}
-	info := controller.EndPointInfo{
-		Op:          controller.RESTOpRead,
-		Cardinality: controller.APICardinalityOne,
+	info := hookhandler.EndPointInfo{
+		Op:          hookhandler.RESTOpRead,
+		Cardinality: hookhandler.APICardinalityOne,
 	}
 
-	fetcher := NewCtrlFetcher(registry.ModelRegistry[typeString].ControllerMap)
+	fetcher := NewHandlerFetcher(registry.ModelRegistry[typeString].HandlerMap)
 
 	// Begin deprecated
-	if !fetcher.HasRegisteredController() {
+	if !fetcher.HasRegisteredHandler() {
 		modelCargo := models.ModelCargo{Payload: cargo.Payload}
 		// After CRUPD hook
 		if m, ok := modelObj.(models.IAfterCRUPD); ok {
@@ -140,8 +140,8 @@ func (mapper *UserMapper) ReadOne(db *gorm.DB, who models.UserIDFetchable, typeS
 	// End deprecated
 
 	// fetch all controllers with before hooks
-	for _, ctrl := range fetcher.FetchControllersForOpAndHook(info.Op, "A") {
-		if retErr := ctrl.(controller.IAfter).After(&data, &info); retErr != nil {
+	for _, hdlr := range fetcher.FetchHandlersForOpAndHook(info.Op, "A") {
+		if retErr := hdlr.(hookhandler.IAfter).After(&data, &info); retErr != nil {
 			return nil, 0, retErr
 		}
 	}
@@ -157,18 +157,18 @@ func (mapper *UserMapper) ReadOne(db *gorm.DB, who models.UserIDFetchable, typeS
 // UpdateOne updates model based on this json
 func (mapper *UserMapper) UpdateOne(db *gorm.DB, who models.UserIDFetchable, typeString string,
 	modelObj models.IModel, id *datatypes.UUID, options map[urlparam.Param]interface{},
-	cargo *controller.Cargo) (*MapperRet, *webrender.RetError) {
+	cargo *hookhandler.Cargo) (*MapperRet, *webrender.RetError) {
 
 	oldModelObj, _, err := loadAndCheckErrorBeforeModify(mapper.Service, db, who, typeString, modelObj, id, []models.UserRole{models.UserRoleAdmin})
 	if err != nil {
 		return nil, &webrender.RetError{Error: err}
 	}
 
-	data := controller.Data{Ms: []models.IModel{modelObj}, DB: db, Who: who,
+	data := hookhandler.Data{Ms: []models.IModel{modelObj}, DB: db, Who: who,
 		TypeString: typeString, Roles: []models.UserRole{models.UserRoleAdmin}, URLParams: options, Cargo: cargo}
-	info := controller.EndPointInfo{
-		Op:          controller.RESTOpUpdate,
-		Cardinality: controller.APICardinalityOne,
+	info := hookhandler.EndPointInfo{
+		Op:          hookhandler.RESTOpUpdate,
+		Cardinality: hookhandler.APICardinalityOne,
 	}
 
 	var beforeFuncName, afterFuncName *string
@@ -190,7 +190,7 @@ func (mapper *UserMapper) UpdateOne(db *gorm.DB, who models.UserIDFetchable, typ
 		beforeFuncName: beforeFuncName,
 		afterFuncName:  afterFuncName,
 
-		fetcher: NewCtrlFetcher(registry.ModelRegistry[typeString].ControllerMap),
+		fetcher: NewHandlerFetcher(registry.ModelRegistry[typeString].HandlerMap),
 		data:    &data,
 		info:    &info,
 	}
@@ -199,16 +199,16 @@ func (mapper *UserMapper) UpdateOne(db *gorm.DB, who models.UserIDFetchable, typ
 
 // PatchOne updates model based on this json
 func (mapper *UserMapper) PatchOne(db *gorm.DB, who models.UserIDFetchable, typeString string, jsonPatch []byte,
-	id *datatypes.UUID, options map[urlparam.Param]interface{}, cargo *controller.Cargo) (*MapperRet, *webrender.RetError) {
+	id *datatypes.UUID, options map[urlparam.Param]interface{}, cargo *hookhandler.Cargo) (*MapperRet, *webrender.RetError) {
 	oldModelObj, _, err := loadAndCheckErrorBeforeModify(mapper.Service, db, who, typeString, nil, id, []models.UserRole{models.UserRoleAdmin})
 	if err != nil {
 		return nil, &webrender.RetError{Error: err}
 	}
 
-	fetcher := NewCtrlFetcher(registry.ModelRegistry[typeString].ControllerMap)
+	fetcher := NewHandlerFetcher(registry.ModelRegistry[typeString].HandlerMap)
 
 	// Deprecated
-	if !fetcher.HasRegisteredController() {
+	if !fetcher.HasRegisteredHandler() {
 		modelCargo := models.ModelCargo{Payload: cargo.Payload}
 		if m, ok := oldModelObj.(models.IBeforePatchApply); ok {
 			hpdata := models.HookPointData{DB: db, Who: who, TypeString: typeString, Cargo: &modelCargo}
@@ -220,15 +220,15 @@ func (mapper *UserMapper) PatchOne(db *gorm.DB, who models.UserIDFetchable, type
 	}
 	// End deprecated
 
-	data := controller.Data{Ms: nil, DB: db, Who: who,
+	data := hookhandler.Data{Ms: nil, DB: db, Who: who,
 		TypeString: typeString, Roles: []models.UserRole{models.UserRoleAdmin}, URLParams: options, Cargo: cargo}
-	info := controller.EndPointInfo{
-		Op:          controller.RESTOpPatch,
-		Cardinality: controller.APICardinalityOne,
+	info := hookhandler.EndPointInfo{
+		Op:          hookhandler.RESTOpPatch,
+		Cardinality: hookhandler.APICardinalityOne,
 	}
 
-	for _, ctrl := range fetcher.FetchControllersForOpAndHook(info.Op, "J") {
-		if retErr := ctrl.(controller.IBeforeApply).BeforeApply(&data, &info); retErr != nil {
+	for _, hdlr := range fetcher.FetchHandlersForOpAndHook(info.Op, "J") {
+		if retErr := hdlr.(hookhandler.IBeforeApply).BeforeApply(&data, &info); retErr != nil {
 			return nil, retErr
 		}
 	}
@@ -279,7 +279,7 @@ func (mapper *UserMapper) PatchOne(db *gorm.DB, who models.UserIDFetchable, type
 
 // DeleteOne deletes the user with the ID
 func (mapper *UserMapper) DeleteOne(db *gorm.DB, who models.UserIDFetchable, typeString string, id *datatypes.UUID,
-	options map[urlparam.Param]interface{}, cargo *controller.Cargo) (*MapperRet, *webrender.RetError) {
+	options map[urlparam.Param]interface{}, cargo *hookhandler.Cargo) (*MapperRet, *webrender.RetError) {
 	modelObj, _, err := loadAndCheckErrorBeforeModify(mapper.Service, db, who, typeString, nil, id, []models.UserRole{models.UserRoleAdmin})
 	if err != nil {
 		return nil, &webrender.RetError{Error: err}
@@ -297,11 +297,11 @@ func (mapper *UserMapper) DeleteOne(db *gorm.DB, who models.UserIDFetchable, typ
 		return nil, &webrender.RetError{Error: err}
 	}
 
-	data := controller.Data{Ms: []models.IModel{modelObj}, DB: db, Who: who,
+	data := hookhandler.Data{Ms: []models.IModel{modelObj}, DB: db, Who: who,
 		TypeString: typeString, Roles: []models.UserRole{models.UserRoleAdmin}, URLParams: options, Cargo: cargo}
-	info := controller.EndPointInfo{
-		Op:          controller.RESTOpDelete,
-		Cardinality: controller.APICardinalityOne,
+	info := hookhandler.EndPointInfo{
+		Op:          hookhandler.RESTOpDelete,
+		Cardinality: hookhandler.APICardinalityOne,
 	}
 
 	var beforeFuncName, afterFuncName *string
@@ -323,7 +323,7 @@ func (mapper *UserMapper) DeleteOne(db *gorm.DB, who models.UserIDFetchable, typ
 		beforeFuncName: beforeFuncName,
 		afterFuncName:  afterFuncName,
 
-		fetcher: NewCtrlFetcher(registry.ModelRegistry[typeString].ControllerMap),
+		fetcher: NewHandlerFetcher(registry.ModelRegistry[typeString].HandlerMap),
 		data:    &data,
 		info:    &info,
 	}
@@ -333,32 +333,32 @@ func (mapper *UserMapper) DeleteOne(db *gorm.DB, who models.UserIDFetchable, typ
 
 // CreateMany :-
 func (mapper *UserMapper) CreateMany(db *gorm.DB, who models.UserIDFetchable, typeString string,
-	modelObj []models.IModel, options map[urlparam.Param]interface{}, cargo *controller.Cargo) (*MapperRet, *webrender.RetError) {
+	modelObj []models.IModel, options map[urlparam.Param]interface{}, cargo *hookhandler.Cargo) (*MapperRet, *webrender.RetError) {
 	return nil, webrender.NewRetValWithError(fmt.Errorf("Not implemented"))
 }
 
 // ReadMany :-
 func (mapper *UserMapper) ReadMany(db *gorm.DB, who models.UserIDFetchable, typeString string,
-	options map[urlparam.Param]interface{}, cargo *controller.Cargo) (*MapperRet, []models.UserRole, *int, *webrender.RetError) {
+	options map[urlparam.Param]interface{}, cargo *hookhandler.Cargo) (*MapperRet, []models.UserRole, *int, *webrender.RetError) {
 	return nil, nil, nil, webrender.NewRetValWithError(fmt.Errorf("Not implemented"))
 }
 
 // UpdateMany :-
 func (mapper *UserMapper) UpdateMany(db *gorm.DB, who models.UserIDFetchable, typeString string,
-	modelObjs []models.IModel, options map[urlparam.Param]interface{}, cargo *controller.Cargo) (*MapperRet, *webrender.RetError) {
+	modelObjs []models.IModel, options map[urlparam.Param]interface{}, cargo *hookhandler.Cargo) (*MapperRet, *webrender.RetError) {
 	return nil, webrender.NewRetValWithError(fmt.Errorf("Not implemented"))
 }
 
 // PatchMany :-
 func (mapper *UserMapper) PatchMany(db *gorm.DB, who models.UserIDFetchable,
 	typeString string, jsonIDPatches []models.JSONIDPatch, options map[urlparam.Param]interface{},
-	cargo *controller.Cargo) (*MapperRet, *webrender.RetError) {
+	cargo *hookhandler.Cargo) (*MapperRet, *webrender.RetError) {
 	return nil, webrender.NewRetValWithError(fmt.Errorf("Not implemented"))
 }
 
 // DeleteMany :-
 func (mapper *UserMapper) DeleteMany(db *gorm.DB, who models.UserIDFetchable,
 	typeString string, modelObjs []models.IModel, options map[urlparam.Param]interface{},
-	cargo *controller.Cargo) (*MapperRet, *webrender.RetError) {
+	cargo *hookhandler.Cargo) (*MapperRet, *webrender.RetError) {
 	return nil, webrender.NewRetValWithError(fmt.Errorf("Not implemented"))
 }

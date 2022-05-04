@@ -1,4 +1,4 @@
-package controller
+package hookhandler
 
 import (
 	"github.com/gin-gonic/gin"
@@ -97,7 +97,7 @@ const (
 
 // Type for all controllers
 
-type IController interface {
+type IHookhandler interface {
 	// Initialize data for this REST operation
 	Initialize(data *ControllerInitData)
 }
