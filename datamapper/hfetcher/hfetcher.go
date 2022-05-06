@@ -1,8 +1,8 @@
 package hfetcher
 
 import (
-	"runtime/debug"
 	"reflect"
+	"runtime/debug"
 
 	"github.com/t2wu/betterrest/hookhandler"
 	"github.com/t2wu/betterrest/registry/handlermap"
@@ -64,8 +64,8 @@ func (h *HandlerFetcher) FetchHandlersForOpAndHook(op hookhandler.RESTOp, hook s
 	newHandlerTypeAndArgIfAny := h.handlerMap.GetHandlerTypeAndArgWithFirstHookAt(method, hook)
 	for _, newHandlerTypeAndArg := range newHandlerTypeAndArgIfAny {
 		newHandler := reflect.New(newHandlerTypeAndArg.HandlerType).Interface().(hookhandler.IHookhandler)
-		newHandler.Init(h.initData, newHandlerTypeAndArg.Args) // dependency injection with h.args
-		h.handlers = append(h.handlers, newHandler) // add to all handlers
+		newHandler.Init(h.initData, newHandlerTypeAndArg.Args...) // dependency injection with h.args
+		h.handlers = append(h.handlers, newHandler)               // add to all handlers
 	}
 
 	// Check for all handlers with this interface and return it

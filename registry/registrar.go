@@ -127,7 +127,7 @@ func (r *Registrar) Hook(hdlr hookhandler.IHookhandler, method string, args ...i
 		ModelRegistry[r.currentTypeString].HandlerMap = handlermap.NewHandlerMap()
 	}
 
-	ModelRegistry[r.currentTypeString].HandlerMap.RegisterHandler(hdlr, method, args)
+	ModelRegistry[r.currentTypeString].HandlerMap.RegisterHandler(hdlr, method, args...)
 	return r
 }
 
