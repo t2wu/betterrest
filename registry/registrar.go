@@ -120,14 +120,14 @@ func (r *Registrar) ModelWithOption(modelObj models.IModel, options RegOptions) 
 	return r
 }
 
-// HookHandler adds the handler (contains one or more hooks) to be instantiate when a REST op occurs.
+// Hook adds the handler (contains one or more hooks) to be instantiate when a REST op occurs.
 // If any hookhandler exists, old model-based hookpoints and batch hookpoints are not called
-func (r *Registrar) HookHandler(hdlr hookhandler.IHookhandler, method string) *Registrar {
+func (r *Registrar) Hook(hdlr hookhandler.IHookhandler, method string, args ...interface{}) *Registrar {
 	if ModelRegistry[r.currentTypeString].HandlerMap == nil {
 		ModelRegistry[r.currentTypeString].HandlerMap = handlermap.NewHandlerMap()
 	}
 
-	ModelRegistry[r.currentTypeString].HandlerMap.RegisterHandler(hdlr, method)
+	ModelRegistry[r.currentTypeString].HandlerMap.RegisterHandler(hdlr, method, args)
 	return r
 }
 

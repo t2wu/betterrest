@@ -136,33 +136,6 @@ type CarWithCallbacks struct {
 	Name string `json:"name"`
 
 	Ownerships []models.OwnershipModelWithIDBase `gorm:"PRELOAD:false" json:"-" betterrest:"ownership"`
-
-	// GuardAPIEntryCalled bool                   `gorm:"-" json:"-"`
-	// GuardAPIEntryWho    models.UserIDFetchable `gorm:"-" json:"-" betterrest:"peg-ignore"`
-	// GuardAPIEntryHTTP   models.HTTP            `gorm:"-" json:"-" betterrest:"peg-ignore"`
-
-	// BeforeCUPDDBCalled bool                 `gorm:"-" json:"-"`
-	// BeforeCUPDDBHpdata models.HookPointData `gorm:"-" json:"-" betterrest:"peg-ignore"`
-	// BeforeCUPDDBOp     models.CRUPDOp       `gorm:"-" json:"-" betterrest:"peg-ignore"`
-
-	// BeforeCreateDBCalled bool                 `gorm:"-" json:"-"`
-	// BeforeCreateDBHpdata models.HookPointData `gorm:"-" json:"-" betterrest:"peg-ignore"`
-
-	// BeforeReadDBCalled bool                 `gorm:"-" json:"-"`
-	// BeforeReadDBHpdata models.HookPointData `gorm:"-" json:"-" betterrest:"peg-ignore"`
-
-	// BeforeUpdateDBCalled bool                 `gorm:"-" json:"-"`
-	// BeforeUpdateDBHpdata models.HookPointData `gorm:"-" json:"-" betterrest:"peg-ignore"`
-
-	// AfterCRUPDDBCalled bool                 `gorm:"-" json:"-"`
-	// AfterCRUPDDBHpdata models.HookPointData `gorm:"-" json:"-" betterrest:"peg-ignore"`
-	// AfterCRUPDDBOp     models.CRUPDOp       `gorm:"-" json:"-" betterrest:"peg-ignore"`
-
-	// AfterCreateDBCalled bool                 `gorm:"-" json:"-"`
-	// AfterCreateDBHpdata models.HookPointData `gorm:"-" json:"-" betterrest:"peg-ignore"`
-
-	// AfterReadDBCalled bool                 `gorm:"-" json:"-"`
-	// AfterReadDBHpdata models.HookPointData `gorm:"-" json:"-" betterrest:"peg-ignore"`
 }
 
 func (CarWithCallbacks) TableName() string {
@@ -279,7 +252,7 @@ func createBatchSingleMethodHookPoint(called *bool, bhpDataCalled *models.BatchH
 type CarControllerWithoutCallbacks struct {
 }
 
-func (c *CarControllerWithoutCallbacks) Init(data *hookhandler.InitData) {
+func (c *CarControllerWithoutCallbacks) Init(data *hookhandler.InitData, args ...interface{}) {
 }
 
 type CarHandlerJBT struct {
@@ -307,7 +280,7 @@ type CarHandlerJBT struct {
 	afterInfo   *hookhandler.EndPointInfo
 }
 
-func (c *CarHandlerJBT) Init(data *hookhandler.InitData) {
+func (c *CarHandlerJBT) Init(data *hookhandler.InitData, args ...interface{}) {
 	c.who = data.Who
 	c.typeString = data.TypeString
 	c.roles = data.Roles
@@ -493,7 +466,7 @@ func (suite *TestBaseMapperCreateSuite) TestCreateOne_WhenHavingController_NotCa
 
 	hdlr := CarControllerWithoutCallbacks{}
 	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
-	registry.For(suite.typeString).ModelWithOption(&Car{}, opt).HookHandler(&hdlr, "CRUPD")
+	registry.For(suite.typeString).ModelWithOption(&Car{}, opt).Hook(&hdlr, "CRUPD")
 
 	mapper := SharedOwnershipMapper()
 
@@ -545,7 +518,7 @@ func (suite *TestBaseMapperCreateSuite) TestCreateOne_WhenHavingController_CallR
 	cargo := hookhandler.Cargo{}
 
 	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
-	registry.For(suite.typeString).ModelWithOption(&Car{}, opt).HookHandler(&CarHandlerJBT{}, "CRUPD")
+	registry.For(suite.typeString).ModelWithOption(&Car{}, opt).Hook(&CarHandlerJBT{}, "CRUPD")
 
 	mapper := SharedOwnershipMapper()
 
@@ -821,7 +794,7 @@ func (suite *TestBaseMapperCreateSuite) TestCreateMany_WhenHavingController_NotC
 
 	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
 	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).
-		BatchCRUPDHooks(before, after).BatchCreateHooks(beforeCreate, afterCreate).HookHandler(&CarControllerWithoutCallbacks{}, "CRUPD")
+		BatchCRUPDHooks(before, after).BatchCreateHooks(beforeCreate, afterCreate).Hook(&CarControllerWithoutCallbacks{}, "CRUPD")
 
 	retErr := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retErr *webrender.RetError) {
 		mapper := SharedOwnershipMapper()
@@ -876,7 +849,7 @@ func (suite *TestBaseMapperCreateSuite) TestCreateMany_WhenHavingController_Call
 	cargo := hookhandler.Cargo{}
 
 	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
-	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).HookHandler(&CarHandlerJBT{}, "CRUPD")
+	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).Hook(&CarHandlerJBT{}, "CRUPD")
 
 	var tx2 *gorm.DB
 	var retVal *MapperRet

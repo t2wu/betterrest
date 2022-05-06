@@ -61,8 +61,6 @@ func loadAndCheckErrorBeforeModify(serv service.IService, db *gorm.DB, who model
 		return nil, models.UserRoleInvalid, service.ErrIDNotMatch
 	}
 
-	// If you're able to read, you have the permission to update...
-	// Not really now you have to check role
 	// TODO: Is there a more efficient way?
 	// For ownership: role is the role of the model to the user
 	// for models under organization, the role is the role of the organization to the user
@@ -119,7 +117,7 @@ func loadManyAndCheckBeforeModify(serv service.IService, db *gorm.DB, who models
 		}
 	}
 
-	return modelObjs, nil, nil
+	return modelObjs, roles, nil
 }
 
 func applyPatchCore(typeString string, modelObj models.IModel, jsonPatch []byte) (modelObj2 models.IModel, err error) {

@@ -5,6 +5,7 @@ import (
 	"reflect"
 
 	"github.com/jinzhu/gorm"
+	"github.com/t2wu/betterrest/datamapper/hfetcher"
 	"github.com/t2wu/betterrest/datamapper/service"
 	"github.com/t2wu/betterrest/hookhandler"
 	"github.com/t2wu/betterrest/libs/datatypes"
@@ -122,7 +123,7 @@ type batchOpJob struct {
 	oldBefore func(bhpData models.BatchHookPointData) error
 	oldAfter  func(bhpData models.BatchHookPointData) error
 
-	fetcher *HandlerFetcher
+	fetcher *hfetcher.HandlerFetcher
 	data    *hookhandler.Data
 	info    *hookhandler.EndPointInfo
 }
@@ -140,7 +141,7 @@ func batchOpCore(job batchOpJob,
 	}
 
 	// deprecated, only try to call when no controlelr exists
-	if !fetcher.HasRegisteredHandler() {
+	if !fetcher.HasAttemptRegisteringHandler() {
 		if err := callOldBatch(data, info, registry.ModelRegistry[data.TypeString].BeforeCUPD, oldBefore); err != nil {
 			return nil, &webrender.RetError{Error: err}
 		}
@@ -172,7 +173,7 @@ func batchOpCore(job batchOpJob,
 		ms[i] = m
 	}
 
-	if !fetcher.HasRegisteredHandler() { // deprecated, only try to call when no controlelr exists
+	if !fetcher.HasAttemptRegisteringHandler() { // deprecated, only try to call when no controlelr exists
 		if err := callOldBatch(data, info, registry.ModelRegistry[data.TypeString].AfterCRUPD, oldAfter); err != nil {
 			return nil, &webrender.RetError{Error: err}
 		}
@@ -207,7 +208,7 @@ type opJob struct {
 	beforeFuncName *string
 	afterFuncName  *string
 
-	fetcher *HandlerFetcher
+	fetcher *hfetcher.HandlerFetcher
 	data    *hookhandler.Data
 	info    *hookhandler.EndPointInfo
 }
@@ -224,7 +225,7 @@ func opCore(
 	}
 
 	// Deprecated
-	if !fetcher.HasRegisteredHandler() { // deprecated, only try to call when no hookhandler exists
+	if !fetcher.HasAttemptRegisteringHandler() { // deprecated, only try to call when no hookhandler exists
 		if m, ok := data.Ms[0].(models.IBeforeCUPD); ok {
 			if err := callOldSingle(data, info, m.BeforeCUPDDB, beforeFuncName); err != nil {
 				return nil, &webrender.RetError{Error: err}
@@ -250,7 +251,7 @@ func opCore(
 	data.Ms[0] = modelObjReloaded
 
 	// Deprecated
-	if !fetcher.HasRegisteredHandler() { // deprecated, only try to call when no controlelr exists
+	if !fetcher.HasAttemptRegisteringHandler() { // deprecated, only try to call when no controlelr exists
 		if m, ok := data.Ms[0].(models.IAfterCRUPD); ok {
 			if err := callOldSingle(data, info, m.AfterCRUPDDB, afterFuncName); err != nil {
 				return nil, &webrender.RetError{Error: err}

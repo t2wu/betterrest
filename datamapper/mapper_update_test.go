@@ -192,7 +192,7 @@ func (suite *TestBaseMapperUpdateSuite) TestUpdateOne_WhenHavingController_NotCa
 	cargo := hookhandler.Cargo{}
 
 	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
-	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).HookHandler(&CarControllerWithoutCallbacks{}, "CRUPD")
+	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).Hook(&CarControllerWithoutCallbacks{}, "CRUPD")
 
 	mapper := SharedOwnershipMapper()
 
@@ -245,7 +245,7 @@ func (suite *TestBaseMapperUpdateSuite) TestUpdateOne_WhenHavingController_CallR
 	cargo := hookhandler.Cargo{}
 
 	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
-	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).HookHandler(&CarHandlerJBT{}, "CRUPD")
+	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).Hook(&CarHandlerJBT{}, "CRUPD")
 
 	mapper := SharedOwnershipMapper()
 
@@ -524,7 +524,7 @@ func (suite *TestBaseMapperUpdateSuite) TestCreateMany_WhenHavingController_NotC
 	hdlr := CarControllerWithoutCallbacks{}
 	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
 	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).BatchCRUPDHooks(before, after).
-		BatchUpdateHooks(beforeUpdate, afterUpdate).HookHandler(&hdlr, "CRUPD")
+		BatchUpdateHooks(beforeUpdate, afterUpdate).Hook(&hdlr, "CRUPD")
 
 	var tx2 *gorm.DB
 	retErr := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retErr *webrender.RetError) {
@@ -585,7 +585,7 @@ func (suite *TestBaseMapperUpdateSuite) TestCreateMany_WhenHavingController_Call
 	cargo := hookhandler.Cargo{}
 
 	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
-	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).HookHandler(&CarHandlerJBT{}, "CRUPD")
+	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).Hook(&CarHandlerJBT{}, "CRUPD")
 
 	var tx2 *gorm.DB
 	var retVal *MapperRet

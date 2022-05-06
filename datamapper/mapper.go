@@ -10,6 +10,7 @@ import (
 
 	"github.com/go-playground/validator/v10"
 	"github.com/t2wu/betterrest/datamapper/gormfixes"
+	"github.com/t2wu/betterrest/datamapper/hfetcher"
 	"github.com/t2wu/betterrest/datamapper/service"
 	"github.com/t2wu/betterrest/hookhandler"
 	"github.com/t2wu/betterrest/libs/datatypes"
@@ -53,6 +54,7 @@ func (mapper *DataMapper) CreateMany(db *gorm.DB, who models.UserIDFetchable, ty
 		Op:          hookhandler.RESTOpCreate,
 		Cardinality: hookhandler.APICardinalityMany,
 	}
+	initData := hookhandler.InitData{Who: who, TypeString: typeString, Roles: roles, URLParams: options, Info: &info}
 
 	j := batchOpJob{
 		serv:         mapper.Service,
@@ -62,7 +64,7 @@ func (mapper *DataMapper) CreateMany(db *gorm.DB, who models.UserIDFetchable, ty
 		oldBefore: oldBefore,
 		oldAfter:  oldAfter,
 
-		fetcher: NewHandlerFetcher(registry.ModelRegistry[typeString].HandlerMap),
+		fetcher: hfetcher.NewHandlerFetcher(registry.ModelRegistry[typeString].HandlerMap, &initData),
 		data:    &data,
 		info:    &info,
 	}
@@ -93,6 +95,7 @@ func (mapper *DataMapper) CreateOne(db *gorm.DB, who models.UserIDFetchable, typ
 		Op:          hookhandler.RESTOpCreate,
 		Cardinality: hookhandler.APICardinalityOne,
 	}
+	initData := hookhandler.InitData{Who: who, TypeString: typeString, Roles: []models.UserRole{models.UserRoleAdmin}, URLParams: options, Info: &info}
 
 	j := opJob{
 		serv: mapper.Service,
@@ -102,7 +105,7 @@ func (mapper *DataMapper) CreateOne(db *gorm.DB, who models.UserIDFetchable, typ
 		beforeFuncName: beforeFuncName,
 		afterFuncName:  afterFuncName,
 
-		fetcher: NewHandlerFetcher(registry.ModelRegistry[typeString].HandlerMap),
+		fetcher: hfetcher.NewHandlerFetcher(registry.ModelRegistry[typeString].HandlerMap, &initData),
 		data:    &data,
 		info:    &info,
 	}
@@ -208,11 +211,12 @@ func (mapper *DataMapper) ReadMany(db *gorm.DB, who models.UserIDFetchable, type
 		Op:          hookhandler.RESTOpRead,
 		Cardinality: hookhandler.APICardinalityMany,
 	}
+	initData := hookhandler.InitData{Who: who, TypeString: typeString, Roles: roles, URLParams: options, Info: &info}
 
-	fetcher := NewHandlerFetcher(registry.ModelRegistry[typeString].HandlerMap)
+	fetcher := hfetcher.NewHandlerFetcher(registry.ModelRegistry[typeString].HandlerMap, &initData)
 
 	// Begin deprecated
-	if !fetcher.HasRegisteredHandler() {
+	if !fetcher.HasAttemptRegisteringHandler() {
 		oldGeneric := registry.ModelRegistry[data.TypeString].AfterCRUPD
 		oldSpecific := registry.ModelRegistry[typeString].AfterRead
 
@@ -248,10 +252,15 @@ func (mapper *DataMapper) ReadOne(db *gorm.DB, who models.UserIDFetchable, typeS
 		return nil, models.UserRoleInvalid, &webrender.RetError{Error: err}
 	}
 
-	fetcher := NewHandlerFetcher(registry.ModelRegistry[typeString].HandlerMap)
+	info := hookhandler.EndPointInfo{
+		Op:          hookhandler.RESTOpRead,
+		Cardinality: hookhandler.APICardinalityOne,
+	}
+	initData := hookhandler.InitData{Who: who, TypeString: typeString, Roles: []models.UserRole{role}, URLParams: options, Info: &info}
+	fetcher := hfetcher.NewHandlerFetcher(registry.ModelRegistry[typeString].HandlerMap, &initData)
 
 	// Deprecated
-	if !fetcher.HasRegisteredHandler() {
+	if !fetcher.HasAttemptRegisteringHandler() {
 		// old one
 		modelCargo := models.ModelCargo{Payload: cargo.Payload}
 		// After CRUPD hook
@@ -281,10 +290,6 @@ func (mapper *DataMapper) ReadOne(db *gorm.DB, who models.UserIDFetchable, typeS
 
 	data := hookhandler.Data{Ms: []models.IModel{modelObj}, DB: db, Who: who,
 		TypeString: typeString, Roles: []models.UserRole{role}, URLParams: options, Cargo: cargo}
-	info := hookhandler.EndPointInfo{
-		Op:          hookhandler.RESTOpRead,
-		Cardinality: hookhandler.APICardinalityOne,
-	}
 
 	// fetch all handlers with before hooks
 	for _, hdlr := range fetcher.FetchHandlersForOpAndHook(info.Op, "A") {
@@ -326,6 +331,7 @@ func (mapper *DataMapper) UpdateOne(db *gorm.DB, who models.UserIDFetchable, typ
 		Op:          hookhandler.RESTOpUpdate,
 		Cardinality: hookhandler.APICardinalityOne,
 	}
+	initData := hookhandler.InitData{Who: who, TypeString: typeString, Roles: []models.UserRole{models.UserRoleAdmin}, URLParams: options, Info: &info}
 
 	j := opJob{
 		serv:        mapper.Service,
@@ -335,7 +341,7 @@ func (mapper *DataMapper) UpdateOne(db *gorm.DB, who models.UserIDFetchable, typ
 		beforeFuncName: beforeFuncName,
 		afterFuncName:  afterFuncName,
 
-		fetcher: NewHandlerFetcher(registry.ModelRegistry[typeString].HandlerMap),
+		fetcher: hfetcher.NewHandlerFetcher(registry.ModelRegistry[typeString].HandlerMap, &initData),
 		data:    &data,
 		info:    &info,
 	}
@@ -376,6 +382,7 @@ func (mapper *DataMapper) UpdateMany(db *gorm.DB, who models.UserIDFetchable, ty
 		Op:          hookhandler.RESTOpUpdate,
 		Cardinality: hookhandler.APICardinalityMany,
 	}
+	initData := hookhandler.InitData{Who: who, TypeString: typeString, Roles: roles, URLParams: options, Info: &info}
 
 	oldBefore := registry.ModelRegistry[typeString].BeforeUpdate
 	oldAfter := registry.ModelRegistry[typeString].AfterUpdate
@@ -387,7 +394,7 @@ func (mapper *DataMapper) UpdateMany(db *gorm.DB, who models.UserIDFetchable, ty
 		oldBefore: oldBefore,
 		oldAfter:  oldAfter,
 
-		fetcher: NewHandlerFetcher(registry.ModelRegistry[typeString].HandlerMap),
+		fetcher: hfetcher.NewHandlerFetcher(registry.ModelRegistry[typeString].HandlerMap, &initData),
 		data:    &data,
 		info:    &info,
 	}
@@ -397,15 +404,20 @@ func (mapper *DataMapper) UpdateMany(db *gorm.DB, who models.UserIDFetchable, ty
 // PatchOne updates model based on this json
 func (mapper *DataMapper) PatchOne(db *gorm.DB, who models.UserIDFetchable, typeString string, jsonPatch []byte,
 	id *datatypes.UUID, options map[urlparam.Param]interface{}, cargo *hookhandler.Cargo) (*MapperRet, *webrender.RetError) {
-	oldModelObj, _, err := loadAndCheckErrorBeforeModify(mapper.Service, db, who, typeString, nil, id, []models.UserRole{models.UserRoleAdmin})
+	oldModelObj, role, err := loadAndCheckErrorBeforeModify(mapper.Service, db, who, typeString, nil, id, []models.UserRole{models.UserRoleAdmin})
 	if err != nil {
 		return nil, &webrender.RetError{Error: err}
 	}
 
-	fetcher := NewHandlerFetcher(registry.ModelRegistry[typeString].HandlerMap)
+	info := hookhandler.EndPointInfo{
+		Op:          hookhandler.RESTOpPatch,
+		Cardinality: hookhandler.APICardinalityOne,
+	}
+	initData := hookhandler.InitData{Who: who, TypeString: typeString, Roles: []models.UserRole{role}, URLParams: options, Info: &info}
+	fetcher := hfetcher.NewHandlerFetcher(registry.ModelRegistry[typeString].HandlerMap, &initData)
 
 	// Begin deprecated
-	if !fetcher.HasRegisteredHandler() {
+	if !fetcher.HasAttemptRegisteringHandler() {
 		if m, ok := oldModelObj.(models.IBeforePatchApply); ok {
 			modelCargo := models.ModelCargo{Payload: cargo.Payload}
 			hpdata := models.HookPointData{DB: db, Who: who, TypeString: typeString, Cargo: &modelCargo}
@@ -418,11 +430,7 @@ func (mapper *DataMapper) PatchOne(db *gorm.DB, who models.UserIDFetchable, type
 	// End deprecated
 
 	data := hookhandler.Data{Ms: []models.IModel{oldModelObj}, DB: db, Who: who,
-		TypeString: typeString, Roles: []models.UserRole{models.UserRoleAdmin}, URLParams: options, Cargo: cargo}
-	info := hookhandler.EndPointInfo{
-		Op:          hookhandler.RESTOpPatch,
-		Cardinality: hookhandler.APICardinalityOne,
-	}
+		TypeString: typeString, Roles: []models.UserRole{role}, URLParams: options, Cargo: cargo}
 
 	for _, hdlr := range fetcher.FetchHandlersForOpAndHook(info.Op, "J") {
 		if retErr := hdlr.(hookhandler.IBeforeApply).BeforeApply(&data, &info); retErr != nil {
@@ -490,7 +498,7 @@ func (mapper *DataMapper) PatchMany(db *gorm.DB, who models.UserIDFetchable, typ
 		ids[i] = jsonIDPatch.ID
 	}
 
-	oldModelObjs, _, err := loadManyAndCheckBeforeModify(mapper.Service, db, who, typeString, ids, []models.UserRole{models.UserRoleAdmin})
+	oldModelObjs, roles, err := loadManyAndCheckBeforeModify(mapper.Service, db, who, typeString, ids, []models.UserRole{models.UserRoleAdmin})
 	if err != nil {
 		return nil, &webrender.RetError{Error: err}
 	}
@@ -498,15 +506,21 @@ func (mapper *DataMapper) PatchMany(db *gorm.DB, who models.UserIDFetchable, typ
 	// load and check is not in the same order as modelobj
 	oldModelObjs = mapper.sortOldModelByIds(oldModelObjs, ids)
 
-	roles := make([]models.UserRole, len(jsonIDPatches))
-	for i := range roles {
-		roles[i] = models.UserRoleAdmin // has to be admin to patch
+	// roles := make([]models.UserRole, len(jsonIDPatches))
+	// for i := range roles {
+	// 	roles[i] = models.UserRoleAdmin // has to be admin to patch
+	// }
+
+	info := hookhandler.EndPointInfo{
+		Op:          hookhandler.RESTOpPatch,
+		Cardinality: hookhandler.APICardinalityMany,
 	}
+	initData := hookhandler.InitData{Who: who, TypeString: typeString, Roles: roles, URLParams: options, Info: &info}
 
 	// Begin Deprecated
-	fetcher := NewHandlerFetcher(registry.ModelRegistry[typeString].HandlerMap)
+	fetcher := hfetcher.NewHandlerFetcher(registry.ModelRegistry[typeString].HandlerMap, &initData)
 
-	if !fetcher.HasRegisteredHandler() {
+	if !fetcher.HasAttemptRegisteringHandler() {
 		batchCargo := models.BatchHookCargo{Payload: cargo.Payload}
 		// Hookpoint BEFORE BeforeCRUD and BeforePatch
 		// This is called BEFORE the actual patch
@@ -525,10 +539,6 @@ func (mapper *DataMapper) PatchMany(db *gorm.DB, who models.UserIDFetchable, typ
 	// here we put the oldModelObjs, not patched yet
 	data := hookhandler.Data{Ms: oldModelObjs, DB: db, Who: who,
 		TypeString: typeString, Roles: roles, URLParams: options, Cargo: cargo}
-	info := hookhandler.EndPointInfo{
-		Op:          hookhandler.RESTOpPatch,
-		Cardinality: hookhandler.APICardinalityMany,
-	}
 
 	// fetch all handlers with before hooks
 	for _, hdlr := range fetcher.FetchHandlersForOpAndHook(info.Op, "J") {
@@ -572,7 +582,7 @@ func (mapper *DataMapper) PatchMany(db *gorm.DB, who models.UserIDFetchable, typ
 // TODO: delete the groups associated with this record?
 func (mapper *DataMapper) DeleteOne(db *gorm.DB, who models.UserIDFetchable, typeString string,
 	id *datatypes.UUID, options map[urlparam.Param]interface{}, cargo *hookhandler.Cargo) (*MapperRet, *webrender.RetError) {
-	modelObj, _, err := loadAndCheckErrorBeforeModify(mapper.Service, db, who, typeString, nil, id, []models.UserRole{models.UserRoleAdmin})
+	modelObj, role, err := loadAndCheckErrorBeforeModify(mapper.Service, db, who, typeString, nil, id, []models.UserRole{models.UserRoleAdmin})
 	if err != nil {
 		return nil, &webrender.RetError{Error: err}
 	}
@@ -600,11 +610,12 @@ func (mapper *DataMapper) DeleteOne(db *gorm.DB, who models.UserIDFetchable, typ
 	}
 
 	data := hookhandler.Data{Ms: []models.IModel{modelObj}, DB: db, Who: who,
-		TypeString: typeString, Roles: []models.UserRole{models.UserRoleAdmin}, URLParams: options, Cargo: cargo}
+		TypeString: typeString, Roles: []models.UserRole{role}, URLParams: options, Cargo: cargo}
 	info := hookhandler.EndPointInfo{
 		Op:          hookhandler.RESTOpDelete,
 		Cardinality: hookhandler.APICardinalityOne,
 	}
+	initData := hookhandler.InitData{Who: who, TypeString: typeString, Roles: []models.UserRole{role}, URLParams: options, Info: &info}
 
 	j := opJob{
 		serv: mapper.Service,
@@ -614,7 +625,7 @@ func (mapper *DataMapper) DeleteOne(db *gorm.DB, who models.UserIDFetchable, typ
 		beforeFuncName: beforeFuncName,
 		afterFuncName:  afterFuncName,
 
-		fetcher: NewHandlerFetcher(registry.ModelRegistry[typeString].HandlerMap),
+		fetcher: hfetcher.NewHandlerFetcher(registry.ModelRegistry[typeString].HandlerMap, &initData),
 		data:    &data,
 		info:    &info,
 	}
@@ -635,7 +646,7 @@ func (mapper *DataMapper) DeleteMany(db *gorm.DB, who models.UserIDFetchable, ty
 		ids[i] = id
 	}
 
-	modelObjs, _, err := loadManyAndCheckBeforeModify(mapper.Service, db, who, typeString, ids, []models.UserRole{models.UserRoleAdmin})
+	modelObjs, roles, err := loadManyAndCheckBeforeModify(mapper.Service, db, who, typeString, ids, []models.UserRole{models.UserRoleAdmin})
 	if err != nil {
 		return nil, &webrender.RetError{Error: err}
 	}
@@ -652,17 +663,13 @@ func (mapper *DataMapper) DeleteMany(db *gorm.DB, who models.UserIDFetchable, ty
 		return nil, &webrender.RetError{Error: err}
 	}
 
-	roles := make([]models.UserRole, len(modelObjs))
-	for i := range roles {
-		roles[i] = models.UserRoleAdmin // has to be admin to delete
-	}
-
 	data := hookhandler.Data{Ms: modelObjs, DB: db, Who: who,
 		TypeString: typeString, Roles: roles, URLParams: options, Cargo: cargo}
 	info := hookhandler.EndPointInfo{
 		Op:          hookhandler.RESTOpDelete,
 		Cardinality: hookhandler.APICardinalityMany,
 	}
+	initData := hookhandler.InitData{Who: who, TypeString: typeString, Roles: roles, URLParams: options, Info: &info}
 
 	oldBefore := registry.ModelRegistry[typeString].BeforeDelete
 	oldAfter := registry.ModelRegistry[typeString].AfterDelete
@@ -674,7 +681,7 @@ func (mapper *DataMapper) DeleteMany(db *gorm.DB, who models.UserIDFetchable, ty
 		oldBefore: oldBefore,
 		oldAfter:  oldAfter,
 
-		fetcher: NewHandlerFetcher(registry.ModelRegistry[typeString].HandlerMap),
+		fetcher: hfetcher.NewHandlerFetcher(registry.ModelRegistry[typeString].HandlerMap, &initData),
 		data:    &data,
 		info:    &info,
 	}

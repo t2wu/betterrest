@@ -79,7 +79,7 @@ func GuardMiddleWare(typeString string) func(c *gin.Context) {
 		who := WhoFromContext(r)
 
 		// Old, deprecated
-		if !registry.ModelRegistry[typeString].HandlerMap.HasRegisteredAnyHandler() {
+		if !registry.ModelRegistry[typeString].HandlerMap.HasAttemptRegisteringAnyHandler() {
 			modelObj := registry.NewFromTypeString(typeString)
 			if m, ok := modelObj.(models.IGuardAPIEntry); ok {
 				http := models.HTTP{Endpoint: r.URL.Path, Op: models.HTTPMethodToCRUDOp(r.Method)}

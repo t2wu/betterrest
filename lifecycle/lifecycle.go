@@ -111,7 +111,7 @@ func CreateMany(mapper datamapper.IDataMapper, who models.UserIDFetchable, typeS
 	}
 
 	// Handes transaction
-	if !retVal.Fetcher.HasRegisteredHandler() {
+	if !retVal.Fetcher.HasAttemptRegisteringHandler() {
 		// It's possible that the user has no hookhandler, even if it's new code
 		callOldBatchTransact(&data, &info) // for backward compatibility, for now
 		return &data, &info, nil
@@ -159,7 +159,7 @@ func CreateOne(mapper datamapper.IDataMapper, who models.UserIDFetchable, typeSt
 	}
 
 	// Handes transaction
-	if !retVal.Fetcher.HasRegisteredHandler() {
+	if !retVal.Fetcher.HasAttemptRegisteringHandler() {
 		// It's possible that the user has no hookhandler, even if it's new code
 		callOldOneTransact(&data, &info) // for backward compatibility, for now
 		return &data, &info, nil
@@ -198,7 +198,7 @@ func ReadMany(mapper datamapper.IDataMapper, who models.UserIDFetchable, typeStr
 	}
 
 	// Handes transaction
-	if !retVal.Fetcher.HasRegisteredHandler() {
+	if !retVal.Fetcher.HasAttemptRegisteringHandler() {
 		// It's possible that the user has no hookhandler, even if it's new code
 		callOldBatchTransact(&data, &info) // for backward compatibility, for now
 		return &data, &info, no, nil
@@ -237,7 +237,7 @@ func ReadOne(mapper datamapper.IDataMapper, who models.UserIDFetchable, typeStri
 		Cardinality: hookhandler.APICardinalityOne,
 	}
 
-	if !retVal.Fetcher.HasRegisteredHandler() {
+	if !retVal.Fetcher.HasAttemptRegisteringHandler() {
 		callOldOneTransact(&data, &info) // for backward compatibility, for now
 		return &data, &info, nil
 	}
@@ -284,7 +284,7 @@ func UpdateMany(mapper datamapper.IDataMapper, who models.UserIDFetchable, typeS
 		Cardinality: hookhandler.APICardinalityMany,
 	}
 
-	if !retVal.Fetcher.HasRegisteredHandler() {
+	if !retVal.Fetcher.HasAttemptRegisteringHandler() {
 		callOldBatchTransact(&data, &info) // for backward compatibility, for now
 		return &data, &info, nil
 	}
@@ -326,7 +326,7 @@ func UpdateOne(mapper datamapper.IDataMapper, who models.UserIDFetchable, typeSt
 		Cardinality: hookhandler.APICardinalityOne,
 	}
 
-	if !retVal.Fetcher.HasRegisteredHandler() {
+	if !retVal.Fetcher.HasAttemptRegisteringHandler() {
 		callOldOneTransact(&data, &info) // for backward compatibility, for now
 		return &data, &info, nil
 	}
@@ -374,7 +374,7 @@ func PatchMany(mapper datamapper.IDataMapper, who models.UserIDFetchable, typeSt
 		Cardinality: hookhandler.APICardinalityMany,
 	}
 
-	if !retVal.Fetcher.HasRegisteredHandler() {
+	if !retVal.Fetcher.HasAttemptRegisteringHandler() {
 		callOldBatchTransact(&data, &info) // for backward compatibility, for now
 		return &data, &info, nil
 	}
@@ -419,7 +419,7 @@ func PatchOne(mapper datamapper.IDataMapper, who models.UserIDFetchable, typeStr
 		Cardinality: hookhandler.APICardinalityOne,
 	}
 
-	if !retVal.Fetcher.HasRegisteredHandler() {
+	if !retVal.Fetcher.HasAttemptRegisteringHandler() {
 		callOldOneTransact(&data, &info) // for backward compatibility, for now
 		return &data, &info, nil
 	}
@@ -466,7 +466,7 @@ func DeleteMany(mapper datamapper.IDataMapper, who models.UserIDFetchable, typeS
 		Cardinality: hookhandler.APICardinalityMany,
 	}
 
-	if !retVal.Fetcher.HasRegisteredHandler() {
+	if !retVal.Fetcher.HasAttemptRegisteringHandler() {
 		callOldBatchTransact(&data, &info) // for backward compatibility, for now
 		return &data, &info, nil
 	}
@@ -506,7 +506,7 @@ func DeleteOne(mapper datamapper.IDataMapper, who models.UserIDFetchable, typeSt
 		Cardinality: hookhandler.APICardinalityOne,
 	}
 
-	if !retVal.Fetcher.HasRegisteredHandler() {
+	if !retVal.Fetcher.HasAttemptRegisteringHandler() {
 		callOldOneTransact(&data, &info) // for backward compatibility, for now
 		return &data, &info, nil
 	}

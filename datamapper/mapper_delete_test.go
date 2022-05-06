@@ -180,7 +180,7 @@ func (suite *TestBaseMapperDeleteSuite) TestDeleteOne_WhenHavingController_NotCa
 	cargo := hookhandler.Cargo{}
 
 	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
-	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).HookHandler(&CarControllerWithoutCallbacks{}, "CRUPD")
+	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).Hook(&CarControllerWithoutCallbacks{}, "CRUPD")
 
 	mapper := SharedOwnershipMapper()
 
@@ -229,7 +229,7 @@ func (suite *TestBaseMapperDeleteSuite) TestDeleteOne_WhenHavingController_CallR
 	cargo := hookhandler.Cargo{}
 
 	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
-	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).HookHandler(&CarHandlerJBT{}, "CRUPD")
+	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).Hook(&CarHandlerJBT{}, "CRUPD")
 
 	mapper := SharedOwnershipMapper()
 
@@ -443,7 +443,7 @@ func (suite *TestBaseMapperDeleteSuite) TestDeleteMany_WhenNoController_CallRele
 	}
 }
 
-func (suite *TestBaseMapperDeleteSuite) TestCreateMany_WhenHavingController_NotCallOldCallbacks() {
+func (suite *TestBaseMapperDeleteSuite) TestDeleteMany_WhenHavingController_NotCallOldCallbacks() {
 	carID1 := datatypes.NewUUID()
 	carName1 := "DSM"
 	carID2 := datatypes.NewUUID()
@@ -503,7 +503,7 @@ func (suite *TestBaseMapperDeleteSuite) TestCreateMany_WhenHavingController_NotC
 
 	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
 	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).BatchCRUPDHooks(before, after).
-		BatchDeleteHooks(beforeDelete, afterDelete).HookHandler(&CarControllerWithoutCallbacks{}, "CRUPD")
+		BatchDeleteHooks(beforeDelete, afterDelete).Hook(&CarControllerWithoutCallbacks{}, "CRUPD")
 
 	var tx2 *gorm.DB
 	retErr := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retErr *webrender.RetError) {
@@ -522,7 +522,7 @@ func (suite *TestBaseMapperDeleteSuite) TestCreateMany_WhenHavingController_NotC
 	assert.False(suite.T(), afterDeleteCalled)
 }
 
-func (suite *TestBaseMapperDeleteSuite) TestCreateMany_WhenHavingController_CallRelevantControllerCallbacks() {
+func (suite *TestBaseMapperDeleteSuite) TestDeleteMany_WhenHavingController_CallRelevantControllerCallbacks() {
 	carID1 := datatypes.NewUUID()
 	carName1 := "DSM"
 	carID2 := datatypes.NewUUID()
@@ -563,7 +563,7 @@ func (suite *TestBaseMapperDeleteSuite) TestCreateMany_WhenHavingController_Call
 	cargo := hookhandler.Cargo{}
 
 	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
-	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).HookHandler(&CarHandlerJBT{}, "CRUPD")
+	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).Hook(&CarHandlerJBT{}, "CRUPD")
 
 	var tx2 *gorm.DB
 	var retVal *MapperRet

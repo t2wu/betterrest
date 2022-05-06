@@ -210,7 +210,7 @@ func (suite *TestBaseMapperPatchSuite) TestPatchOne_WhenHavingController_NotCall
 
 	hdlr := CarControllerWithoutCallbacks{}
 	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
-	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).HookHandler(&hdlr, "CRUPD")
+	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).Hook(&hdlr, "CRUPD")
 
 	var jsonPatch = []byte(fmt.Sprintf(`[{
 		"op": "replace", "path": "/name", "value": "%s"
@@ -268,7 +268,7 @@ func (suite *TestBaseMapperPatchSuite) TestPatchOne_WhenHavingController_CallRel
 	cargo := hookhandler.Cargo{}
 
 	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
-	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).HookHandler(&CarHandlerJBT{}, "CRUPD")
+	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).Hook(&CarHandlerJBT{}, "CRUPD")
 
 	jsonPatch := []byte(fmt.Sprintf(`[{
 		"op": "replace", "path": "/name", "value": "%s"
@@ -623,7 +623,7 @@ func (suite *TestBaseMapperPatchSuite) TestCreateMany_WhenHavingController_NotCa
 	hdlr := CarControllerWithoutCallbacks{}
 	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
 	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).BatchCRUPDHooks(before, after).
-		BatchPatchHooks(beforeApplyPatch, beforePatch, afterPatch).HookHandler(&hdlr, "CRUPD")
+		BatchPatchHooks(beforeApplyPatch, beforePatch, afterPatch).Hook(&hdlr, "CRUPD")
 
 	jsonPatches := []models.JSONIDPatch{
 		{
@@ -704,7 +704,7 @@ func (suite *TestBaseMapperPatchSuite) TestCreateMany_WhenHavingController_CallR
 	cargo := hookhandler.Cargo{}
 
 	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
-	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).HookHandler(&CarHandlerJBT{}, "CRUPD")
+	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).Hook(&CarHandlerJBT{}, "CRUPD")
 
 	jsonPatches := []models.JSONIDPatch{
 		{

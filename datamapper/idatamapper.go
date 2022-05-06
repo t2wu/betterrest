@@ -2,6 +2,7 @@ package datamapper
 
 import (
 	"github.com/jinzhu/gorm"
+	"github.com/t2wu/betterrest/datamapper/hfetcher"
 	"github.com/t2wu/betterrest/hookhandler"
 	"github.com/t2wu/betterrest/libs/datatypes"
 	"github.com/t2wu/betterrest/libs/urlparam"
@@ -11,7 +12,7 @@ import (
 
 type MapperRet struct {
 	Ms      []models.IModel // if for cardinality 1, only contains one element
-	Fetcher *HandlerFetcher
+	Fetcher *hfetcher.HandlerFetcher
 }
 
 // IDataMapper has all the crud interfaces

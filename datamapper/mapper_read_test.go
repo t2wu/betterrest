@@ -128,7 +128,7 @@ func (suite *TestBaseMapperReadSuite) TestReadOne_WhenHavingController_NotCallOl
 
 	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
 	hdlr := CarControllerWithoutCallbacks{}
-	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).HookHandler(&hdlr, "CRUPD")
+	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).Hook(&hdlr, "CRUPD")
 
 	modelID := datatypes.NewUUID()
 	options := make(map[urlparam.Param]interface{})
@@ -166,7 +166,7 @@ func (suite *TestBaseMapperReadSuite) TestReadOne_WhenHavingController_CallRelev
 	cargo := hookhandler.Cargo{}
 
 	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
-	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).HookHandler(&CarHandlerJBT{}, "CRUPD")
+	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).Hook(&CarHandlerJBT{}, "CRUPD")
 
 	mapper := SharedOwnershipMapper()
 	var retVal *MapperRet
@@ -346,7 +346,7 @@ func (suite *TestBaseMapperReadSuite) TestReadMany_WhenHavingController_NotCallO
 
 	// Both old and new are given
 	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).
-		BatchCRUPDHooks(before, after).BatchReadHooks(afterRead).HookHandler(&hdlr, "CRUPD")
+		BatchCRUPDHooks(before, after).BatchReadHooks(afterRead).Hook(&hdlr, "CRUPD")
 
 	mapper := SharedOwnershipMapper()
 	_, _, _, retErr := mapper.ReadMany(suite.db, suite.who, suite.typeString, options, &cargo)
@@ -383,7 +383,7 @@ func (suite *TestBaseMapperReadSuite) TestReadMany_WhenHavingController_CallRele
 	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
 
 	// Both old and new are given
-	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).HookHandler(&CarHandlerJBT{}, "CRUPD")
+	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).Hook(&CarHandlerJBT{}, "CRUPD")
 
 	var retVal *MapperRet
 	mapper := SharedOwnershipMapper()

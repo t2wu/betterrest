@@ -7,9 +7,14 @@ import (
 	"github.com/t2wu/betterrest/hookhandler"
 )
 
+type HandlerTypeAndArgs struct {
+	HandlerType reflect.Type
+	Args        []interface{}
+}
+
 func NewHandlerMap() *HandlerMap {
 	return &HandlerMap{
-		controllerMap: make(map[string]map[string][]reflect.Type),
+		controllerMap: make(map[string]map[string][]HandlerTypeAndArgs),
 	}
 }
 
@@ -17,8 +22,9 @@ type HandlerMap struct {
 	// HTTP method (CRUPD) -> Hook (BAT) -> Controllers
 	// Method: CRUPD
 	// Hook: JBAT (J for before json patch is applied, only valid for patch)
-	controllerMap                     map[string]map[string][]reflect.Type
-	hasAtLeastOneControllerRegistered bool
+	controllerMap                              map[string]map[string][]HandlerTypeAndArgs
+	hasAtLeastOneControllerWithHooksRegistered bool
+	hasAtLeastOneControllerAttemptRegistered   bool
 }
 
 // RegisterHandler
@@ -31,54 +37,62 @@ type HandlerMap struct {
 // CR, B --> Initialized at create before or read before
 // UP, A --> Initialized at Update after or patch after
 // D, A --> Initialied at delete after
-func (c *HandlerMap) RegisterHandler(hdlr hookhandler.IHookhandler, restMethods string) {
+func (h *HandlerMap) RegisterHandler(hdlr hookhandler.IHookhandler, restMethods string, args ...interface{}) {
+	// func (h *HandlerMap) RegisterHandler(hdlr hookhandler.IHookhandler, restMethods string, args ...interface{}) {
+	h.hasAtLeastOneControllerAttemptRegistered = true
 	typ := reflect.TypeOf(hdlr).Elem()
+	handlerTypeAndArg := HandlerTypeAndArgs{
+		HandlerType: typ,
+		Args:        args,
+	}
 	if strings.Contains(restMethods, "C") {
-		if firstHook := c.getFirstHookType(hookhandler.RESTOpCreate, hdlr); firstHook != "" {
-			c.putControllerWithMethodAndHookInMap("C", firstHook, typ)
+		if firstHook := h.getFirstHookType(hookhandler.RESTOpCreate, handlerTypeAndArg.HandlerType); firstHook != "" {
+			h.putControllerWithMethodAndHookInMap("C", firstHook, handlerTypeAndArg)
 		}
 	}
 	if strings.Contains(restMethods, "R") {
-		if firstHook := c.getFirstHookType(hookhandler.RESTOpRead, hdlr); firstHook != "" {
-			c.putControllerWithMethodAndHookInMap("R", firstHook, typ)
+		if firstHook := h.getFirstHookType(hookhandler.RESTOpRead, handlerTypeAndArg.HandlerType); firstHook != "" {
+			h.putControllerWithMethodAndHookInMap("R", firstHook, handlerTypeAndArg)
 		}
 	}
 	if strings.Contains(restMethods, "U") {
-		if firstHook := c.getFirstHookType(hookhandler.RESTOpUpdate, hdlr); firstHook != "" {
-			c.putControllerWithMethodAndHookInMap("U", firstHook, typ)
+		if firstHook := h.getFirstHookType(hookhandler.RESTOpUpdate, handlerTypeAndArg.HandlerType); firstHook != "" {
+			h.putControllerWithMethodAndHookInMap("U", firstHook, handlerTypeAndArg)
 		}
 	}
 	if strings.Contains(restMethods, "P") {
-		if firstHook := c.getFirstHookType(hookhandler.RESTOpPatch, hdlr); firstHook != "" {
-			c.putControllerWithMethodAndHookInMap("P", firstHook, typ)
+		if firstHook := h.getFirstHookType(hookhandler.RESTOpPatch, handlerTypeAndArg.HandlerType); firstHook != "" {
+			h.putControllerWithMethodAndHookInMap("P", firstHook, handlerTypeAndArg)
 		}
 	}
 	if strings.Contains(restMethods, "D") {
-		if firstHook := c.getFirstHookType(hookhandler.RESTOpDelete, hdlr); firstHook != "" {
-			c.putControllerWithMethodAndHookInMap("D", firstHook, typ)
+		if firstHook := h.getFirstHookType(hookhandler.RESTOpDelete, handlerTypeAndArg.HandlerType); firstHook != "" {
+			h.putControllerWithMethodAndHookInMap("D", firstHook, handlerTypeAndArg)
 		}
 	}
 }
 
-// InstantiateHandlersWithFirstHookAt instantiate new hookhandler if in this method and in this hook
+// GetHandlerTypeAndArgWithFirstHookAt obtains relevant handler and args if in this method and in this hook
 // we should instantiate a new hookhandler.
 // The first available hook type of R is B
 // The first available hook type for P is J
-func (c *HandlerMap) InstantiateHandlersWithFirstHookAt(method string, firstHook string) []hookhandler.IHookhandler {
-	arr := make([]hookhandler.IHookhandler, 0)
-	for _, item := range c.controllerMap[method][firstHook] {
-		arr = append(arr, reflect.New(item).Interface().(hookhandler.IHookhandler))
-	}
-
-	return arr
+func (h *HandlerMap) GetHandlerTypeAndArgWithFirstHookAt(method string, firstHook string) []HandlerTypeAndArgs {
+	arr := make([]HandlerTypeAndArgs, 0)
+	return append(arr, h.controllerMap[method][firstHook]...)
 }
 
-func (c *HandlerMap) HasRegisteredAnyHandler() bool {
-	return c.hasAtLeastOneControllerRegistered
+func (h *HandlerMap) HasRegisteredAnyHandlerWithHooks() bool {
+	return h.hasAtLeastOneControllerWithHooksRegistered
+}
+
+func (h *HandlerMap) HasAttemptRegisteringAnyHandler() bool {
+	return h.hasAtLeastOneControllerAttemptRegistered
 }
 
 // --- private ---
-func (c *HandlerMap) getFirstHookType(op hookhandler.RESTOp, hdlr hookhandler.IHookhandler) string {
+// func (h *HandlerMap) getFirstHookType(op hookhandler.RESTOp, hdlr hookhandler.IHookhandler) string {
+func (h *HandlerMap) getFirstHookType(op hookhandler.RESTOp, handlerType reflect.Type) string {
+	hdlr := reflect.New(handlerType).Interface()
 	if op == hookhandler.RESTOpPatch {
 		if _, ok := hdlr.(hookhandler.IBeforeApply); ok {
 			return "J"
@@ -107,15 +121,15 @@ func (c *HandlerMap) getFirstHookType(op hookhandler.RESTOp, hdlr hookhandler.IH
 	return ""
 }
 
-func (c *HandlerMap) putControllerWithMethodAndHookInMap(method, firstHook string, typ reflect.Type) {
-	if _, ok := c.controllerMap[method]; !ok {
-		c.controllerMap[method] = make(map[string][]reflect.Type)
+func (h *HandlerMap) putControllerWithMethodAndHookInMap(method, firstHook string, handlerTypeAndArgs HandlerTypeAndArgs) {
+	if _, ok := h.controllerMap[method]; !ok {
+		h.controllerMap[method] = make(map[string][]HandlerTypeAndArgs)
 	}
 
-	if _, ok := c.controllerMap[method][firstHook]; !ok {
-		c.controllerMap[method][firstHook] = make([]reflect.Type, 0)
+	if _, ok := h.controllerMap[method][firstHook]; !ok {
+		h.controllerMap[method][firstHook] = make([]HandlerTypeAndArgs, 0)
 	}
 
-	c.controllerMap[method][firstHook] = append(c.controllerMap[method][firstHook], typ)
-	c.hasAtLeastOneControllerRegistered = true
+	h.controllerMap[method][firstHook] = append(h.controllerMap[method][firstHook], handlerTypeAndArgs)
+	h.hasAtLeastOneControllerWithHooksRegistered = true
 }

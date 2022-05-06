@@ -99,7 +99,7 @@ const (
 
 type IHookhandler interface {
 	// Init data for this REST operation
-	Init(data *InitData)
+	Init(data *InitData, args ...interface{})
 }
 
 // IBeforeApply before patching operation occurred. Only called for Patch.
