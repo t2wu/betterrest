@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"reflect"
+	"runtime"
 	"strings"
 
 	"github.com/jinzhu/gorm"
@@ -211,10 +212,8 @@ func (q *Query) Take(modelObj models.IModel) IQuery {
 	}
 
 	db = q.buildQueryOrderOffSetAndLimit(db, modelObj)
+	q.setLogger(db)
 	q.Err = db.Take(modelObj).Error
-	if q.Err != nil {
-		PrintFileAndLine(q.Err)
-	}
 
 	return q
 }
@@ -241,10 +240,8 @@ func (q *Query) First(modelObj models.IModel) IQuery {
 	}
 
 	db = q.buildQueryOrderOffSetAndLimit(db, modelObj)
+	q.setLogger(db)
 	q.Err = db.First(modelObj).Error
-	if q.Err != nil {
-		PrintFileAndLine(q.Err)
-	}
 
 	return q
 }
@@ -317,10 +314,8 @@ loop:
 	}
 
 	db = q.buildQueryOrderOffSetAndLimit(db, modelObj)
+	q.setLogger(db)
 	q.Err = db.Find(modelObjs).Error
-	if q.Err != nil {
-		PrintFileAndLine(q.Err)
-	}
 
 	return q
 }
@@ -535,6 +530,7 @@ func (q *Query) Create(modelObj models.IModel) IQuery {
 		return q
 	}
 
+	q.setLogger(db)
 	if err := db.Create(modelObj).Error; err != nil {
 		PrintFileAndLine(err)
 		q.Err = err
@@ -617,8 +613,8 @@ func (q *Query) Delete(modelObj models.IModel) IQuery {
 		return q
 	}
 
+	q.setLogger(db)
 	if err := db.Delete(modelObj).Error; err != nil {
-		PrintFileAndLine(err)
 		q.Err = err
 		return q
 	}
@@ -648,8 +644,8 @@ func (q *Query) DeleteMany(modelObjs []models.IModel) IQuery {
 
 	m := reflect.New(reflect.TypeOf(modelObjs[0]).Elem()).Interface().(models.IModel)
 	// Batch delete, not documented for Gorm v1 but actually works
+	q.setLogger(db)
 	if q.Err = db.Unscoped().Delete(m, ids).Error; q.Err != nil {
-		PrintFileAndLine(q.Err)
 		return q
 	}
 
@@ -726,10 +722,8 @@ func (q *Query) Update(modelObj models.IModel, p *PredicateRelationBuilder) IQue
 		updateMap[s] = values[i]
 	}
 
+	q.setLogger(db)
 	q.Err = db.Update(updateMap).Error
-	if q.Err != nil {
-		PrintFileAndLine(q.Err)
-	}
 
 	return q
 }
@@ -750,6 +744,17 @@ func (q *Query) Error() error {
 	q.Err = nil
 	return err
 }
+
+func (q *Query) setLogger(db *gorm.DB) {
+	_, filepath, line, ok := runtime.Caller(2)
+	var source string
+	if ok {
+		source = fmt.Sprintf("%s:%d", filepath, line)
+	}
+	db.SetLogger(NewLogger(source))
+}
+
+// ------------------
 
 type TableAndArgs struct {
 	TblName string // The table the predicate relation applies to, at this level (non-nested)
