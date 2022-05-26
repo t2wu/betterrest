@@ -29,7 +29,7 @@ import (
 
 // DataMapper is a basic CRUD manager
 type DataMapper struct {
-	Service service.IService
+	Service service.IServiceV1
 }
 
 // CreateMany creates an instance of this model based on json and store it in db
@@ -56,7 +56,7 @@ func (mapper *DataMapper) CreateMany(db *gorm.DB, who models.UserIDFetchable, ty
 	}
 	initData := hookhandler.InitData{Who: who, TypeString: typeString, Roles: roles, URLParams: options, Info: &info}
 
-	j := batchOpJob{
+	j := batchOpJobV1{
 		serv:         mapper.Service,
 		oldmodelObjs: nil,
 		modelObjs:    modelObjs,
@@ -68,7 +68,7 @@ func (mapper *DataMapper) CreateMany(db *gorm.DB, who models.UserIDFetchable, ty
 		data:    &data,
 		info:    &info,
 	}
-	return batchOpCore(j, mapper.Service.CreateOneCore)
+	return batchOpCoreV1(j, mapper.Service.CreateOneCore)
 }
 
 // CreateOne creates an instance of this model based on json and store it in db
@@ -97,7 +97,7 @@ func (mapper *DataMapper) CreateOne(db *gorm.DB, who models.UserIDFetchable, typ
 	}
 	initData := hookhandler.InitData{Who: who, TypeString: typeString, Roles: []models.UserRole{models.UserRoleAdmin}, URLParams: options, Info: &info}
 
-	j := opJob{
+	j := opJobV1{
 		serv: mapper.Service,
 		// oldModelObj: oldModelObj,
 		modelObj: modelObj,
@@ -109,7 +109,7 @@ func (mapper *DataMapper) CreateOne(db *gorm.DB, who models.UserIDFetchable, typ
 		data:    &data,
 		info:    &info,
 	}
-	return opCore(j, mapper.Service.CreateOneCore)
+	return opCoreV1(j, mapper.Service.CreateOneCore)
 }
 
 func (mapper *DataMapper) ReadMany(db *gorm.DB, who models.UserIDFetchable, typeString string,
@@ -247,7 +247,7 @@ func (mapper *DataMapper) ReadOne(db *gorm.DB, who models.UserIDFetchable, typeS
 	options map[urlparam.Param]interface{}, cargo *hookhandler.Cargo) (*MapperRet, models.UserRole, *webrender.RetError) {
 
 	// anyone permission can read as long as you are linked on db
-	modelObj, role, err := loadAndCheckErrorBeforeModify(mapper.Service, db, who, typeString, nil, id, []models.UserRole{models.UserRoleAny})
+	modelObj, role, err := loadAndCheckErrorBeforeModifyV1(mapper.Service, db, who, typeString, nil, id, []models.UserRole{models.UserRoleAny})
 	if err != nil {
 		return nil, models.UserRoleInvalid, &webrender.RetError{Error: err}
 	}
@@ -309,7 +309,7 @@ func (mapper *DataMapper) ReadOne(db *gorm.DB, who models.UserIDFetchable, typeS
 // UpdateOne updates model based on this json
 func (mapper *DataMapper) UpdateOne(db *gorm.DB, who models.UserIDFetchable, typeString string,
 	modelObj models.IModel, id *datatypes.UUID, options map[urlparam.Param]interface{}, cargo *hookhandler.Cargo) (*MapperRet, *webrender.RetError) {
-	oldModelObj, _, err := loadAndCheckErrorBeforeModify(mapper.Service, db, who, typeString, modelObj, id, []models.UserRole{models.UserRoleAdmin})
+	oldModelObj, _, err := loadAndCheckErrorBeforeModifyV1(mapper.Service, db, who, typeString, modelObj, id, []models.UserRole{models.UserRoleAdmin})
 	if err != nil {
 		return nil, &webrender.RetError{Error: err}
 	}
@@ -333,7 +333,7 @@ func (mapper *DataMapper) UpdateOne(db *gorm.DB, who models.UserIDFetchable, typ
 	}
 	initData := hookhandler.InitData{Who: who, TypeString: typeString, Roles: []models.UserRole{models.UserRoleAdmin}, URLParams: options, Info: &info}
 
-	j := opJob{
+	j := opJobV1{
 		serv:        mapper.Service,
 		oldModelObj: oldModelObj,
 		modelObj:    modelObj,
@@ -345,7 +345,7 @@ func (mapper *DataMapper) UpdateOne(db *gorm.DB, who models.UserIDFetchable, typ
 		data:    &data,
 		info:    &info,
 	}
-	return opCore(j, mapper.Service.UpdateOneCore)
+	return opCoreV1(j, mapper.Service.UpdateOneCore)
 }
 
 // UpdateMany updates multiple models
@@ -363,7 +363,7 @@ func (mapper *DataMapper) UpdateMany(db *gorm.DB, who models.UserIDFetchable, ty
 		ids[i] = id
 	}
 
-	oldModelObjs, _, err := loadManyAndCheckBeforeModify(mapper.Service, db, who, typeString, ids, []models.UserRole{models.UserRoleAdmin})
+	oldModelObjs, _, err := loadManyAndCheckBeforeModifyV1(mapper.Service, db, who, typeString, ids, []models.UserRole{models.UserRoleAdmin})
 	if err != nil {
 		return nil, &webrender.RetError{Error: err}
 	}
@@ -386,7 +386,7 @@ func (mapper *DataMapper) UpdateMany(db *gorm.DB, who models.UserIDFetchable, ty
 
 	oldBefore := registry.ModelRegistry[typeString].BeforeUpdate
 	oldAfter := registry.ModelRegistry[typeString].AfterUpdate
-	j := batchOpJob{
+	j := batchOpJobV1{
 		serv:         mapper.Service,
 		oldmodelObjs: oldModelObjs,
 		modelObjs:    modelObjs,
@@ -398,13 +398,13 @@ func (mapper *DataMapper) UpdateMany(db *gorm.DB, who models.UserIDFetchable, ty
 		data:    &data,
 		info:    &info,
 	}
-	return batchOpCore(j, mapper.Service.UpdateOneCore)
+	return batchOpCoreV1(j, mapper.Service.UpdateOneCore)
 }
 
 // PatchOne updates model based on this json
 func (mapper *DataMapper) PatchOne(db *gorm.DB, who models.UserIDFetchable, typeString string, jsonPatch []byte,
 	id *datatypes.UUID, options map[urlparam.Param]interface{}, cargo *hookhandler.Cargo) (*MapperRet, *webrender.RetError) {
-	oldModelObj, role, err := loadAndCheckErrorBeforeModify(mapper.Service, db, who, typeString, nil, id, []models.UserRole{models.UserRoleAdmin})
+	oldModelObj, role, err := loadAndCheckErrorBeforeModifyV1(mapper.Service, db, who, typeString, nil, id, []models.UserRole{models.UserRoleAdmin})
 	if err != nil {
 		return nil, &webrender.RetError{Error: err}
 	}
@@ -468,7 +468,7 @@ func (mapper *DataMapper) PatchOne(db *gorm.DB, who models.UserIDFetchable, type
 
 	data.Ms = []models.IModel{modelObj} // modify the one already in hookhandler
 
-	j := opJob{
+	j := opJobV1{
 		serv:        mapper.Service,
 		oldModelObj: oldModelObj,
 		modelObj:    modelObj,
@@ -480,7 +480,7 @@ func (mapper *DataMapper) PatchOne(db *gorm.DB, who models.UserIDFetchable, type
 		data:    &data,
 		info:    &info,
 	}
-	return opCore(j, mapper.Service.UpdateOneCore)
+	return opCoreV1(j, mapper.Service.UpdateOneCore)
 }
 
 // PatchMany patches multiple models
@@ -498,7 +498,7 @@ func (mapper *DataMapper) PatchMany(db *gorm.DB, who models.UserIDFetchable, typ
 		ids[i] = jsonIDPatch.ID
 	}
 
-	oldModelObjs, roles, err := loadManyAndCheckBeforeModify(mapper.Service, db, who, typeString, ids, []models.UserRole{models.UserRoleAdmin})
+	oldModelObjs, roles, err := loadManyAndCheckBeforeModifyV1(mapper.Service, db, who, typeString, ids, []models.UserRole{models.UserRoleAdmin})
 	if err != nil {
 		return nil, &webrender.RetError{Error: err}
 	}
@@ -563,7 +563,7 @@ func (mapper *DataMapper) PatchMany(db *gorm.DB, who models.UserIDFetchable, typ
 	// Finally update them
 	oldBefore := registry.ModelRegistry[typeString].BeforePatch
 	oldAfter := registry.ModelRegistry[typeString].AfterPatch
-	j := batchOpJob{
+	j := batchOpJobV1{
 		serv:         mapper.Service,
 		oldmodelObjs: oldModelObjs,
 		modelObjs:    modelObjs,
@@ -575,14 +575,14 @@ func (mapper *DataMapper) PatchMany(db *gorm.DB, who models.UserIDFetchable, typ
 		data:    &data,
 		info:    &info,
 	}
-	return batchOpCore(j, mapper.Service.UpdateOneCore)
+	return batchOpCoreV1(j, mapper.Service.UpdateOneCore)
 }
 
 // DeleteOne delete the model
 // TODO: delete the groups associated with this record?
 func (mapper *DataMapper) DeleteOne(db *gorm.DB, who models.UserIDFetchable, typeString string,
 	id *datatypes.UUID, options map[urlparam.Param]interface{}, cargo *hookhandler.Cargo) (*MapperRet, *webrender.RetError) {
-	modelObj, role, err := loadAndCheckErrorBeforeModify(mapper.Service, db, who, typeString, nil, id, []models.UserRole{models.UserRoleAdmin})
+	modelObj, role, err := loadAndCheckErrorBeforeModifyV1(mapper.Service, db, who, typeString, nil, id, []models.UserRole{models.UserRoleAdmin})
 	if err != nil {
 		return nil, &webrender.RetError{Error: err}
 	}
@@ -617,7 +617,7 @@ func (mapper *DataMapper) DeleteOne(db *gorm.DB, who models.UserIDFetchable, typ
 	}
 	initData := hookhandler.InitData{Who: who, TypeString: typeString, Roles: []models.UserRole{role}, URLParams: options, Info: &info}
 
-	j := opJob{
+	j := opJobV1{
 		serv: mapper.Service,
 		// oldModelObj: oldModelObj,
 		modelObj: modelObj,
@@ -629,7 +629,7 @@ func (mapper *DataMapper) DeleteOne(db *gorm.DB, who models.UserIDFetchable, typ
 		data:    &data,
 		info:    &info,
 	}
-	return opCore(j, mapper.Service.DeleteOneCore)
+	return opCoreV1(j, mapper.Service.DeleteOneCore)
 }
 
 // DeleteMany deletes multiple models
@@ -646,7 +646,7 @@ func (mapper *DataMapper) DeleteMany(db *gorm.DB, who models.UserIDFetchable, ty
 		ids[i] = id
 	}
 
-	modelObjs, roles, err := loadManyAndCheckBeforeModify(mapper.Service, db, who, typeString, ids, []models.UserRole{models.UserRoleAdmin})
+	modelObjs, roles, err := loadManyAndCheckBeforeModifyV1(mapper.Service, db, who, typeString, ids, []models.UserRole{models.UserRoleAdmin})
 	if err != nil {
 		return nil, &webrender.RetError{Error: err}
 	}
@@ -674,7 +674,7 @@ func (mapper *DataMapper) DeleteMany(db *gorm.DB, who models.UserIDFetchable, ty
 	oldBefore := registry.ModelRegistry[typeString].BeforeDelete
 	oldAfter := registry.ModelRegistry[typeString].AfterDelete
 
-	j := batchOpJob{
+	j := batchOpJobV1{
 		serv:      mapper.Service,
 		modelObjs: modelObjs,
 
@@ -685,7 +685,7 @@ func (mapper *DataMapper) DeleteMany(db *gorm.DB, who models.UserIDFetchable, ty
 		data:    &data,
 		info:    &info,
 	}
-	return batchOpCore(j, mapper.Service.DeleteOneCore)
+	return batchOpCoreV1(j, mapper.Service.DeleteOneCore)
 }
 
 // ----------------------------------------------------------------------------------------

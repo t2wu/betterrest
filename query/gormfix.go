@@ -8,7 +8,6 @@ import (
 	"github.com/jinzhu/gorm"
 	"github.com/t2wu/betterrest/libs/datatypes"
 	"github.com/t2wu/betterrest/models"
-	"github.com/t2wu/betterrest/registry"
 )
 
 // Remove strategy
@@ -61,7 +60,7 @@ func markForUpdatingAssoc(db *gorm.DB, v reflect.Value, car cargo) error {
 			switch v.Field(i).Kind() {
 			case reflect.Struct:
 				m := v.Field(i).Addr().Interface().(models.IModel)
-				fieldTableName := registry.GetTableNameFromIModel(m)
+				fieldTableName := models.GetTableNameFromIModel(m)
 				if _, ok := car.toProcess[fieldTableName]; ok {
 					mids := car.toProcess[fieldTableName]
 					mids.ids = append(mids.ids, m.GetID())
@@ -74,7 +73,7 @@ func markForUpdatingAssoc(db *gorm.DB, v reflect.Value, car cargo) error {
 			case reflect.Slice:
 				typ := v.Type().Field(i).Type.Elem()
 				m, _ := reflect.New(typ).Interface().(models.IModel)
-				fieldTableName := registry.GetTableNameFromIModel(m)
+				fieldTableName := models.GetTableNameFromIModel(m)
 				for j := 0; j < v.Field(i).Len(); j++ {
 					if _, ok := car.toProcess[fieldTableName]; ok {
 						mids := car.toProcess[fieldTableName]
@@ -108,7 +107,7 @@ func markForDelete(db *gorm.DB, v reflect.Value, car cargo) error {
 			case reflect.Struct:
 				m := v.Field(i).Addr().Interface().(models.IModel)
 				if m.GetID() != nil { // could be embedded struct that never get initialiezd
-					fieldTableName := registry.GetTableNameFromIModel(m)
+					fieldTableName := models.GetTableNameFromIModel(m)
 					if _, ok := car.toProcess[fieldTableName]; ok {
 						mids := car.toProcess[fieldTableName]
 						mids.ids = append(mids.ids, m.GetID())
@@ -127,7 +126,7 @@ func markForDelete(db *gorm.DB, v reflect.Value, car cargo) error {
 			case reflect.Slice:
 				typ := v.Type().Field(i).Type.Elem()
 				m, _ := reflect.New(typ).Interface().(models.IModel)
-				fieldTableName := registry.GetTableNameFromIModel(m)
+				fieldTableName := models.GetTableNameFromIModel(m)
 				for j := 0; j < v.Field(i).Len(); j++ {
 					if _, ok := car.toProcess[fieldTableName]; ok {
 						mids := car.toProcess[fieldTableName]
@@ -145,10 +144,11 @@ func markForDelete(db *gorm.DB, v reflect.Value, car cargo) error {
 					}
 				}
 			case reflect.Ptr:
+				// Need to dereference and get the struct id before traversing in
 				if !isNil(v.Field(i)) && !isNil(v.Field(i).Elem()) &&
 					v.Field(i).IsValid() && v.Field(i).Elem().IsValid() {
 					imodel := v.Field(i).Interface().(models.IModel)
-					fieldTableName := registry.GetTableNameFromIModel(imodel)
+					fieldTableName := models.GetTableNameFromIModel(imodel)
 					id := v.Field(i).Interface().(models.IModel).GetID()
 
 					if _, ok := car.toProcess[fieldTableName]; ok {
@@ -206,8 +206,8 @@ func removeManyToManyAssociationTableElem(db *gorm.DB, modelObj models.IModel) e
 			linkTableName := strings.Split(tag, ":")[1]
 			typ := v.Type().Field(i).Type.Elem() // Get the type of the element of slice
 			m2, _ := reflect.New(typ).Interface().(models.IModel)
-			fieldTableName := registry.GetTableNameFromIModel(m2)
-			selfTableName := registry.GetTableNameFromIModel(modelObj)
+			fieldTableName := models.GetTableNameFromIModel(m2)
+			selfTableName := models.GetTableNameFromIModel(modelObj)
 
 			fieldVal := v.Field(i)
 			if fieldVal.Len() >= 1 {
@@ -252,7 +252,7 @@ func checkIDsNotFound(db *gorm.DB, nestedIModels []models.IModel) error {
 			}
 		}
 
-		tableName := registry.GetTableNameFromIModel(nestedIModels[0])
+		tableName := models.GetTableNameFromIModel(nestedIModels[0])
 		var count int64
 		err := db.Table(tableName).Where("id IN (?)", ids).Count(&count).Error
 		if err != nil && !gorm.IsRecordNotFoundError(err) {
@@ -354,7 +354,7 @@ func CreatePeggedAssocFields(db *gorm.DB, modelObj models.IModel) (err error) {
 					nestedModel := fieldVal.Index(j).Addr().Interface()
 					nestedIModel, ok := nestedModel.(models.IModel)
 					if ok && nestedIModel.GetID() != nil {
-						tableName := registry.GetTableNameFromIModel(modelObj)
+						tableName := models.GetTableNameFromIModel(modelObj)
 						correspondingColumnName := tableName + "_id"
 						// Where clause is not needed when the embedded is a struct, but if it's a pointer to struct then it's needed
 						if err := db.Model(nestedModel).Where("id = ?", nestedModel.(models.IModel).GetID()).
@@ -372,7 +372,7 @@ func CreatePeggedAssocFields(db *gorm.DB, modelObj models.IModel) (err error) {
 				nestedModel := v.Field(i).Interface()
 				nestedIModel, ok := nestedModel.(models.IModel)
 				if ok && !isNil(nestedIModel) && nestedIModel.GetID() != nil {
-					tableName := registry.GetTableNameFromIModel(modelObj)
+					tableName := models.GetTableNameFromIModel(modelObj)
 					correspondingColumnName := tableName + "_id"
 					// Where clause is not needed when the embedded is a struct, but if it's a pointer to struct then it's needed
 					if err := db.Model(nestedModel).Where("id = ?", nestedModel.(models.IModel).GetID()).Update(correspondingColumnName, modelObj.GetID()).Error; err != nil {
@@ -383,7 +383,7 @@ func CreatePeggedAssocFields(db *gorm.DB, modelObj models.IModel) (err error) {
 				nestedModel := v.Field(i).Addr().Interface()
 				nestedIModel, ok := nestedModel.(models.IModel)
 				if ok && nestedIModel.GetID() != nil {
-					tableName := registry.GetTableNameFromIModel(modelObj)
+					tableName := models.GetTableNameFromIModel(modelObj)
 					correspondingColumnName := tableName + "_id"
 					// Where clause is not needed when the embedded is a struct, but if it's a pointer to struct then it's needed
 					if err := db.Model(nestedModel).Where("id = ?", nestedModel.(models.IModel).GetID()).

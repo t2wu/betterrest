@@ -78,6 +78,10 @@ func AddRESTRoutes(r *gin.Engine) {
 			dm = datamapper.SharedOrganizationMapper()
 			addRoute(r, typestring, reg, dm)
 			break
+		case registry.MapperTypeViaOrgPartition:
+			dm = datamapper.SharedOrgPartition()
+			addRoute(r, typestring, reg, dm)
+			break
 		case registry.MapperTypeLinkTable:
 			dm = datamapper.SharedLinkTableMapper()
 			addRoute(r, typestring, reg, dm)

@@ -23,7 +23,7 @@ func getModelTableNameAndJoinTableNameFromTypeString(typeString string) (string,
 	// join table name from main resource name (org table)
 	if joinTableName == "ownership_model_with_id_base" {
 		resourceModel := reflect.New(registry.ModelRegistry[typeString].Typ).Interface().(models.IModel)
-		resourceTableName := registry.GetTableNameFromIModel(resourceModel)
+		resourceTableName := models.GetTableNameFromIModel(resourceModel)
 		joinTableName = "user_owns_" + resourceTableName
 	}
 

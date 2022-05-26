@@ -4,22 +4,25 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
+	"time"
 
 	"github.com/jinzhu/gorm"
 	"github.com/stoewer/go-strcase"
 	"github.com/t2wu/betterrest/datamapper/gormfixes"
 	"github.com/t2wu/betterrest/db"
 	"github.com/t2wu/betterrest/libs/datatypes"
+	"github.com/t2wu/betterrest/libs/urlparam"
 	"github.com/t2wu/betterrest/models"
 	"github.com/t2wu/betterrest/registry"
 )
 
-// OrganizationService handles all the ownership specific db calls
-type OrganizationService struct {
-	BaseServiceV1
+// OrgPartition handles all the ownership specific db calls
+type OrgPartition struct {
+	BaseServiceV2
 }
 
-func (serv *OrganizationService) HookBeforeCreateOne(db *gorm.DB, who models.UserIDFetchable, typeString string, modelObj models.IModel) (models.IModel, error) {
+func (serv *OrgPartition) HookBeforeCreateOne(db *gorm.DB, who models.UserIDFetchable, typeString string, modelObj models.IModel) (models.IModel, error) {
 	if modelObj.GetID() == nil {
 		modelObj.SetID(datatypes.NewUUID())
 	}
@@ -35,7 +38,7 @@ func (serv *OrganizationService) HookBeforeCreateOne(db *gorm.DB, who models.Use
 	return modelObj, nil
 }
 
-func (serv *OrganizationService) HookBeforeCreateMany(db *gorm.DB, who models.UserIDFetchable, typeString string, modelObjs []models.IModel) ([]models.IModel, error) {
+func (serv *OrgPartition) HookBeforeCreateMany(db *gorm.DB, who models.UserIDFetchable, typeString string, modelObjs []models.IModel) ([]models.IModel, error) {
 	// Check ownership permission
 	for _, modelObj := range modelObjs {
 		// Make sure oid has admin access to this organization
@@ -49,57 +52,117 @@ func (serv *OrganizationService) HookBeforeCreateMany(db *gorm.DB, who models.Us
 	return modelObjs, nil
 }
 
-func (serv *OrganizationService) HookBeforeDeleteOne(db *gorm.DB, who models.UserIDFetchable, typeString string, modelObj models.IModel) (models.IModel, error) {
+func (serv *OrgPartition) HookBeforeDeleteOne(db *gorm.DB, who models.UserIDFetchable, typeString string, modelObj models.IModel) (models.IModel, error) {
 	return modelObj, nil
 }
 
-func (serv *OrganizationService) HookBeforeDeleteMany(db *gorm.DB, who models.UserIDFetchable, typeString string, modelObjs []models.IModel) ([]models.IModel, error) {
+func (serv *OrgPartition) HookBeforeDeleteMany(db *gorm.DB, who models.UserIDFetchable, typeString string, modelObjs []models.IModel) ([]models.IModel, error) {
 	return modelObjs, nil
 }
 
 // getOneWithIDCore get one model object based on its type and its id string
 // since this is organizationMapper, need to make sure it's the same organization
-func (serv *OrganizationService) ReadOneCore(db *gorm.DB, who models.UserIDFetchable, typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error) {
+func (serv *OrgPartition) ReadOneCore(db *gorm.DB, who models.UserIDFetchable, typeString string, id *datatypes.UUID, options map[urlparam.Param]interface{}) (models.IModel, models.UserRole, error) {
 	modelObj := registry.NewFromTypeString(typeString)
 
-	db = db.Set("gorm:auto_preload", true)
-
-	// var ok bool
-	// var modelObjHavingOrganization models.IHasOrganizationLink
-	// // (Maybe organization should be defined in the library)
-	// // And it's organizational type has a user which includes
-	// if modelObjHavingOrganization, ok = registry.NewFromTypeString(typeString).(models.IHasOrganizationLink); !ok {
-	// 	return nil, models.UserRoleGuest, fmt.Errorf("Model %s does not comform to IHasOrganizationLink", typeString)
-	// }
+	db2 := db
 
 	// Graphically:
 	// Model -- Org -- Join Table -- User
-	// orgTableName := models.GetOrganizationTableName(modelObjHavingOrganization)
-	// orgTable := reflect.New(modelObjHavingOrganization.OrganizationType()).Interface()
 	orgTableName := registry.OrgModelNameFromOrgResourceTypeString(typeString)
-	// orgTableName := models.GetOrganizationalTableNameFromModelTypeString(typeString)
 
 	joinTableName := orgJoinTableName(typeString)
-	// orgTable, _ := reflect.New(models.GetOrganizationTypeFromTypeString(typeString)).Interface().(models.IModel)
-	// joinTableName := models.GetJoinTableName(orgTable)
-
 	orgIDFieldName := *models.GetFieldNameFromModelByTagKey(registry.NewFromTypeString(typeString), "org")
 	orgFieldName := strcase.SnakeCase(orgIDFieldName)
-	// orgFieldName := strcase.SnakeCase(modelObjHavingOrganization.GetOrganizationIDFieldName())
-
 	rtable := models.GetTableNameFromIModel(modelObj)
 
 	// e.g. INNER JOIN \"organization\" ON \"dock\".\"OrganizationID\" = \"organization\".id
-	firstJoin := fmt.Sprintf("INNER JOIN \"%s\" ON \"%s\".\"%s\" = \"%s\".id AND \"%s\".\"id\" = ?", orgTableName, rtable, orgFieldName, orgTableName, rtable)
-	// e.g. INNER JOIN \"user_owns_organization\" ON \"organization\".id = \"user_owns_organization\".model_id
-	secondJoin := fmt.Sprintf("INNER JOIN \"%s\" ON \"%s\".id = \"%s\".model_id", joinTableName, orgTableName, joinTableName)
-	thirdJoin := fmt.Sprintf("INNER JOIN \"user\" ON \"user\".id = \"%s\".user_id AND \"%s\".user_id = ?", joinTableName, joinTableName)
+	firstJoin := fmt.Sprintf(`INNER JOIN "%s" ON "%s"."%s" = "%s".id AND "%s"."id" = ?`, orgTableName, rtable, orgFieldName, orgTableName, rtable)
+	// e.g. INNER JOIN \"user_owns_organization\" ON \"organization\".id = \"user_owns_organization\".model_id AND "user_owns_organization".user_id = ?
+	secondJoin := fmt.Sprintf(`INNER JOIN "%s" ON "%s".id = "%s".model_id AND "%s".user_id = ?`, joinTableName, orgTableName, joinTableName, joinTableName)
 
-	err := db.Table(rtable).Joins(firstJoin, id.String()).Joins(secondJoin).Joins(thirdJoin, who.GetUserID().String()).Find(modelObj).Error
+	// For Org partition date is required
+	_, _, cstart, cstop, _, _, _, _ := urlparam.GetOptions(options)
+	if cstart == nil || cstop == nil {
+		return nil, models.UserRoleInvalid, fmt.Errorf("GET /%s needs cstart and cstop parameters", strings.ToLower(typeString))
+	}
+	db = db.Where(rtable+".created_at BETWEEN ? AND ?", time.Unix(int64(*cstart), 0), time.Unix(int64(*cstop), 0))
+	err := db.Table(rtable).Joins(firstJoin, id.String()).Joins(secondJoin, who.GetUserID().String()).Take(modelObj).Error
 	if err != nil {
-		return nil, 0, err
+		return nil, models.UserRoleInvalid, err
 	}
 
+	// Now need to find query for all subtables within this table...with date all the way down
+
+	// Now we have to traverse this, get all the pegged fields, and get date as well
+	err = RecursivelyQueryAllPeggedModels(db2, []models.IModel{modelObj}, time.Unix(int64(*cstart), 0), time.Unix(int64(*cstop), 0))
+	if err != nil {
+		return nil, models.UserRoleInvalid, err
+	}
+
+	role, err := serv.getOrgRole(db2, who, typeString, modelObj, joinTableName)
+
+	// Partition table has to be all partition within
+	// Let's not worry about many-to-many table here with partitioned table, they needs to be all "pegged", all the way down
+
+	return modelObj, role, err
+}
+
+// func (serv *OrgPartition) recursivelyQueryAllPeggedModels(db *gorm.DB, modelObj models.IModel, begin time.Time, end time.Time) error {
+// 	// result := models.PeggedIDSearch{
+// 	// 	Peg:      make(map[string]models.ModelAndIds),
+// 	// 	PegAssoc: make(map[string]models.ModelAndIds),
+// 	// }
+// 	// models.FindAllBetterRestPeggOrPegAssocIDs(modelObj, &result)
+
+// 	rtable := models.GetTableNameFromIModel(modelObj)
+// 	fieldNameAndTypeArr := models.GetPeggedFieldNumAndType(modelObj)
+// 	for _, data := range fieldNameAndTypeArr {
+
+// 		innerTableName := models.GetTableNameFromType(data.ObjType)
+// 		db3 := db.Where(innerTableName+".created_at BETWEEN ? AND ?", begin, end)
+
+// 		if data.IsSlice {
+// 			slice := reflect.New(reflect.SliceOf(data.ObjType)).Interface()
+// 			if err := db3.Where(fmt.Sprintf("%s_id = ?", rtable), modelObj.GetID()).Find(slice).Error; err != nil {
+// 				return err
+// 			}
+
+// 			models.SetSliceAtFieldNum(modelObj, data.FieldNum, slice)
+// 			// Loop the slice, But then I would need to query recursively (not very efficient!! =o=) // TODO
+// 		} else {
+// 			m := reflect.New(data.ObjType).Interface()
+// 			if err := db3.Where(fmt.Sprintf("%s_id = ?", rtable), modelObj.GetID()).Take(m).Error; err != nil {
+// 				return err
+// 			}
+
+// 			if data.IsStruct {
+// 				models.SetStructAtFieldNum(modelObj, data.FieldNum, m)
+// 			} else if data.IsPtr {
+// 				models.SetStructPtrAtFieldNum(modelObj, data.FieldNum, m)
+// 			}
+
+// 			// tagVal := v.Type().Field(i).Tag.Get("betterrest")
+// 			// gotag.TagValueHasPrefix(tagVal, "peg")
+// 			// need to check if it's pegged field, if it is, may need to traverse further
+// 			tagVal := reflect.TypeOf(modelObj).Field(data.FieldNum).Tag.Get("betterrest")
+// 			if gotag.TagValueHasPrefix(tagVal, "peg") {
+// 				nextObj := reflect.ValueOf(modelObj).Field(data.FieldNum)
+// 				if data.IsPtr {
+// 					nextObj = nextObj.Elem()
+// 				}
+// 				err := serv.recursivelyQueryAllPeggedModels(db, nextObj.Interface().(models.IModel), begin, end)
+// 				if err != nil {
+// 					return err
+// 				}
+// 			}
+// 		}
+// 	}
+// 	return nil
+// }
+
+// If gorm like xorm could select from multiple models we would not need this
+func (serv *OrgPartition) getOrgRole(db *gorm.DB, who models.UserIDFetchable, typeString string, modelObj models.IModel, joinTableName string) (models.UserRole, error) {
 	joinTable := registry.NewOrgOwnershipModelFromOrgResourceTypeString(typeString)
 	role := models.UserRoleGuest // just some default
 
@@ -109,22 +172,17 @@ func (serv *OrganizationService) ReadOneCore(db *gorm.DB, who models.UserIDFetch
 	// Get the roles for the organizations this user has access to
 	if err2 := db.Table(joinTableName).Select("model_id, role").Where("user_id = ? AND model_id = ?", who.GetUserID().String(),
 		orgID).Scan(joinTable).Error; err2 != nil {
-		return nil, 0, err2
+		return role, err2
 	}
 
 	if m, ok := joinTable.(models.IOwnership); ok {
 		role = m.GetRole()
 	}
 
-	err = gormfixes.LoadManyToManyBecauseGormFailsWithID(db, modelObj)
-	if err != nil {
-		return nil, 0, err
-	}
-
-	return modelObj, role, err
+	return role, nil
 }
 
-func (serv *OrganizationService) GetManyCore(db *gorm.DB, who models.UserIDFetchable, typeString string, ids []*datatypes.UUID) ([]models.IModel, []models.UserRole, error) {
+func (serv *OrgPartition) GetManyCore(db *gorm.DB, who models.UserIDFetchable, typeString string, ids []*datatypes.UUID) ([]models.IModel, []models.UserRole, error) {
 	// var ok bool
 	// var modelObjHavingOrganization models.IHasOrganizationLink
 	// if modelObjHavingOrganization, ok = registry.NewFromTypeString(typeString).(models.IHasOrganizationLink); !ok {
@@ -188,7 +246,7 @@ func (serv *OrganizationService) GetManyCore(db *gorm.DB, who models.UserIDFetch
 }
 
 // GetAllQueryContructCore construct query core
-func (serv *OrganizationService) GetAllQueryContructCore(db *gorm.DB, who models.UserIDFetchable, typeString string) (*gorm.DB, error) {
+func (serv *OrgPartition) GetAllQueryContructCore(db *gorm.DB, who models.UserIDFetchable, typeString string) (*gorm.DB, error) {
 	// Graphically:
 	// Model -- Org -- Join Table -- User
 	// (Maybe organization should be defined in the library)
@@ -228,7 +286,7 @@ func (serv *OrganizationService) GetAllQueryContructCore(db *gorm.DB, who models
 }
 
 // GetAllRolesCore gets all roles according to the criteria
-func (serv *OrganizationService) GetAllRolesCore(dbChained *gorm.DB, dbClean *gorm.DB, who models.UserIDFetchable, typeString string, modelObjs []models.IModel) ([]models.UserRole, error) {
+func (serv *OrgPartition) GetAllRolesCore(dbChained *gorm.DB, dbClean *gorm.DB, who models.UserIDFetchable, typeString string, modelObjs []models.IModel) ([]models.UserRole, error) {
 	// modelObjHavingOrganization, _ := registry.NewFromTypeString(typeString).(models.IHasOrganizationLink)
 	// orgTable := reflect.New(modelObjHavingOrganization.OrganizationType()).Interface()
 	// orgTable := reflect.New(models.GetOrganizationTypeFromTypeString(typeString)).Interface().(models.IModel)
@@ -266,48 +324,10 @@ func (serv *OrganizationService) GetAllRolesCore(dbChained *gorm.DB, dbClean *go
 	return roles, nil
 }
 
-// ---------------------------------------
-// The model object should have link to the ownership object which has a linking table to the user
-func userHasRolesAccessToModelOrg(db *gorm.DB, who models.UserIDFetchable, typeString string, modelObj models.IModel, roles []models.UserRole) (bool, error) {
-	organizationTableName := registry.OrgModelNameFromOrgResourceTypeString(typeString)
-	organizationJoinTableName := orgJoinTableName(typeString)
-
-	organizationID := models.GetFieldValueFromModelByTagKeyBetterRestAndValueKey(modelObj, "org").(*datatypes.UUID)
-
-	firstJoin := fmt.Sprintf("INNER JOIN \"%s\" ON \"%s\".id = \"%s\".model_id AND \"%s\".role IN (?)", organizationJoinTableName, organizationTableName, organizationJoinTableName,
-		organizationJoinTableName)
-	secondJoin := fmt.Sprintf("INNER JOIN \"user\" ON \"user\".id = \"%s\".user_id AND \"%s\".user_id = ?", organizationJoinTableName, organizationJoinTableName)
-	whereStmt := fmt.Sprintf("\"%s\".model_id = ?", organizationJoinTableName)
-	db = db.Table(organizationTableName).Joins(firstJoin, roles).Joins(secondJoin, who.GetUserID().String()).Where(whereStmt, organizationID)
-
-	organizations, err := registry.NewSliceFromDBByType(registry.OrgModelTypeFromOrgResourceTypeString(typeString), db.Find)
-	if err != nil {
-		return false, err
-	}
-
-	if len(organizations) != 1 {
-		return false, fmt.Errorf("wrong organization link ID")
-	}
-
-	// Check that organizations is not an empty array, and one of the organization has an ID that
-	// is specified in
-	org := organizations[0]
-	if organizationID == nil {
-		return false, errors.New("missing organization link ID")
-
-	}
-
-	if org.GetID().String() == organizationID.String() {
-		return true, nil
-	}
-
-	return false, nil
-}
-
 // UpdateOneCore one, permission should already be checked
 // called for patch operation as well (after patch has already applied)
 // Fuck, repeat the following code for now (you can't call the overriding method from the non-overriding one)
-func (serv *OrganizationService) UpdateOneCore(db *gorm.DB, who models.UserIDFetchable, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObj models.IModel) (modelObj2 models.IModel, err error) {
+func (serv *OrgPartition) UpdateOneCore(db *gorm.DB, who models.UserIDFetchable, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObj models.IModel) (modelObj2 models.IModel, err error) {
 	if modelNeedsRealDelete(oldModelObj) { // parent model
 		db = db.Unscoped()
 	}
@@ -321,9 +341,13 @@ func (serv *OrganizationService) UpdateOneCore(db *gorm.DB, who models.UserIDFet
 		return nil, err
 	}
 
+	// Kind of hack, but update don't have any parameter anyway
+	// This was for parittioned table where read has to have some date
+	options := make(map[urlparam.Param]interface{}, 0)
+
 	// This loads the IDs
 	// This so we have the preloading.
-	modelObj2, _, err = serv.ReadOneCore(db, who, typeString, id)
+	modelObj2, _, err = serv.ReadOneCore(db, who, typeString, id, options)
 	if err != nil { // Error is "record not found" when not found
 		return nil, err
 	}
@@ -333,19 +357,4 @@ func (serv *OrganizationService) UpdateOneCore(db *gorm.DB, who models.UserIDFet
 	gormfixes.FixManyToMany(modelObj, modelObj2)
 
 	return modelObj2, nil
-}
-
-// ----------------------------------------
-
-func orgJoinTableName(typeString string) string {
-	joinTableName := registry.OrgOwnershipModelNameFromOrgResourceTypeString(typeString)
-
-	// This is the go to class for join. So if they use this it's a different
-	// join table name from main resource name (org table)
-	if joinTableName == "ownership_model_with_id_base" {
-		orgTableName := registry.OrgModelNameFromOrgResourceTypeString(typeString)
-		joinTableName = "user_owns_" + orgTableName
-	}
-
-	return joinTableName
 }

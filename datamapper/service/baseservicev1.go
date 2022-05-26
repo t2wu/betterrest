@@ -11,8 +11,8 @@ import (
 	qry "github.com/t2wu/betterrest/query"
 )
 
-// IService provice basic data fetch for various type of table to user relationships
-type IService interface {
+// IServiceV1 provice basic data fetch for various type of table to user relationships
+type IServiceV1 interface {
 	HookBeforeCreateOne(db *gorm.DB, who models.UserIDFetchable, typeString string, modelObj models.IModel) (models.IModel, error)
 	HookBeforeCreateMany(db *gorm.DB, who models.UserIDFetchable, typeString string, modelObjs []models.IModel) ([]models.IModel, error)
 	HookBeforeDeleteOne(db *gorm.DB, who models.UserIDFetchable, typeString string, modelObj models.IModel) (models.IModel, error)
@@ -29,12 +29,12 @@ type IService interface {
 	GetAllRolesCore(dbChained *gorm.DB, dbClean *gorm.DB, who models.UserIDFetchable, typeString string, modelObjs []models.IModel) ([]models.UserRole, error)
 }
 
-// BaseService is the superclass of all services
-type BaseService struct {
+// BaseServiceV1 is the superclass of all services
+type BaseServiceV1 struct {
 }
 
 // CreateOneCore create the model
-func (serv *BaseService) CreateOneCore(db *gorm.DB, who models.UserIDFetchable, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObj models.IModel) (models.IModel, error) {
+func (serv *BaseServiceV1) CreateOneCore(db *gorm.DB, who models.UserIDFetchable, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObj models.IModel) (models.IModel, error) {
 	// No need to check if primary key is blank.
 	// If it is it'll be created by Gorm's BeforeCreate hook
 	// (defined in base model)
@@ -63,7 +63,7 @@ func (serv *BaseService) CreateOneCore(db *gorm.DB, who models.UserIDFetchable, 
 // UpdateOneCore one, permissin should already be checked
 // called for patch operation as well (after patch has already applied)
 // Fuck, repeat the following code for now (you can't call the overriding method from the non-overriding one)
-func (serv *BaseService) UpdateOneCore(db *gorm.DB, who models.UserIDFetchable, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObj models.IModel) (modelObj2 models.IModel, err error) {
+func (serv *BaseServiceV1) UpdateOneCore(db *gorm.DB, who models.UserIDFetchable, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObj models.IModel) (modelObj2 models.IModel, err error) {
 	if modelNeedsRealDelete(oldModelObj) { // parent model
 		db = db.Unscoped()
 	}
@@ -104,7 +104,7 @@ func (serv *BaseService) UpdateOneCore(db *gorm.DB, who models.UserIDFetchable, 
 	return modelObj2, nil
 }
 
-func (serv *BaseService) DeleteOneCore(db *gorm.DB, who models.UserIDFetchable, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObjs models.IModel) (models.IModel, error) {
+func (serv *BaseServiceV1) DeleteOneCore(db *gorm.DB, who models.UserIDFetchable, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObjs models.IModel) (models.IModel, error) {
 	// Many field is not used, it's just used to conform the interface
 	if err := db.Delete(modelObj).Error; err != nil {
 		return nil, err
@@ -117,6 +117,6 @@ func (serv *BaseService) DeleteOneCore(db *gorm.DB, who models.UserIDFetchable, 
 	return modelObj, nil
 }
 
-func (serv *BaseService) ReadOneCore(db *gorm.DB, who models.UserIDFetchable, typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error) {
+func (serv *BaseServiceV1) ReadOneCore(db *gorm.DB, who models.UserIDFetchable, typeString string, id *datatypes.UUID) (models.IModel, models.UserRole, error) {
 	return nil, models.UserRoleInvalid, fmt.Errorf("ReadOneCore to be overrridden shouldn't be called")
 }

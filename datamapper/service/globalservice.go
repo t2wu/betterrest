@@ -11,7 +11,7 @@ import (
 )
 
 type GlobalService struct {
-	BaseService
+	BaseServiceV1
 }
 
 func (serv *GlobalService) HookBeforeCreateOne(db *gorm.DB, who models.UserIDFetchable, typeString string, modelObj models.IModel) (models.IModel, error) {
@@ -42,7 +42,7 @@ func (service *GlobalService) ReadOneCore(db *gorm.DB, who models.UserIDFetchabl
 
 	db = db.Set("gorm:auto_preload", true)
 
-	// rtable := registry.GetTableNameFromIModel(modelObj)
+	// rtable := models.GetTableNameFromIModel(modelObj)
 
 	// Global object, everyone can find it, simply find it
 	err := db.Find(modelObj).Error

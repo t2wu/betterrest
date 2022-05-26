@@ -23,7 +23,7 @@ func SetOrganizationMapper(mapper IDataMapper) {
 // SharedOrganizationMapper creats a singleton of Crud object
 func SharedOrganizationMapper() IDataMapper {
 	onceOrganizationMapper.Do(func() {
-		organizationMapper = &DataMapper{Service: &service.OrganizationService{BaseService: service.BaseService{}}}
+		organizationMapper = &DataMapper{Service: &service.OrganizationService{BaseServiceV1: service.BaseServiceV1{}}}
 	})
 
 	return organizationMapper

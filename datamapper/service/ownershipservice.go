@@ -23,7 +23,7 @@ import (
 
 // OwnershipService handles all the ownership specific db calls
 type OwnershipService struct {
-	BaseService
+	BaseServiceV1
 }
 
 func (serv *OwnershipService) HookBeforeCreateOne(db *gorm.DB, who models.UserIDFetchable, typeString string, modelObj models.IModel) (models.IModel, error) {
@@ -151,7 +151,7 @@ func (serv *OwnershipService) ReadOneCore(db *gorm.DB, who models.UserIDFetchabl
 
 	db = db.Set("gorm:auto_preload", true)
 
-	rtable := registry.GetTableNameFromIModel(modelObj)
+	rtable := models.GetTableNameFromIModel(modelObj)
 
 	/*
 		SELECT * from some_model
@@ -186,7 +186,7 @@ func (serv *OwnershipService) ReadOneCore(db *gorm.DB, who models.UserIDFetchabl
 
 // GetManyCore -
 func (serv *OwnershipService) GetManyCore(db *gorm.DB, who models.UserIDFetchable, typeString string, ids []*datatypes.UUID) ([]models.IModel, []models.UserRole, error) {
-	// If I can load it, I have permission to edit it. So no need to call loadAndCheckErrorBeforeModify
+	// If I can load it, I have permission to edit it. So no need to call loadAndCheckErrorBeforeModifyV1
 	// like when I do for update. Just get the role and check if it's admin
 	rtable, joinTableName, err := getModelTableNameAndJoinTableNameFromTypeString(typeString)
 	if err != nil {

@@ -35,13 +35,13 @@ var (
 
 // UserMapper is a User CRUD manager
 type UserMapper struct {
-	Service service.IService
+	Service service.IServiceV1
 }
 
 // SharedUserMapper creats a singleton of Crud object
 func SharedUserMapper() *UserMapper {
 	onceUser.Do(func() {
-		usercrud = &UserMapper{Service: &service.UserService{BaseService: service.BaseService{}}}
+		usercrud = &UserMapper{Service: &service.UserService{BaseServiceV1: service.BaseServiceV1{}}}
 	})
 
 	return usercrud
@@ -77,7 +77,7 @@ func (mapper *UserMapper) CreateOne(db *gorm.DB, who models.UserIDFetchable, typ
 	}
 	initData := hookhandler.InitData{Who: who, TypeString: typeString, Roles: []models.UserRole{models.UserRoleAdmin}, URLParams: options, Info: &info}
 
-	j := opJob{
+	j := opJobV1{
 		serv: mapper.Service,
 		// oldModelObj: oldModelObj,
 		modelObj: modelObj,
@@ -90,7 +90,7 @@ func (mapper *UserMapper) CreateOne(db *gorm.DB, who models.UserIDFetchable, typ
 		info:    &info,
 	}
 
-	modelObj2, retval := opCore(j, mapper.Service.CreateOneCore)
+	modelObj2, retval := opCoreV1(j, mapper.Service.CreateOneCore)
 	if retval != nil {
 		return modelObj2, retval
 	}
@@ -162,7 +162,7 @@ func (mapper *UserMapper) UpdateOne(db *gorm.DB, who models.UserIDFetchable, typ
 	modelObj models.IModel, id *datatypes.UUID, options map[urlparam.Param]interface{},
 	cargo *hookhandler.Cargo) (*MapperRet, *webrender.RetError) {
 
-	oldModelObj, _, err := loadAndCheckErrorBeforeModify(mapper.Service, db, who, typeString, modelObj, id, []models.UserRole{models.UserRoleAdmin})
+	oldModelObj, _, err := loadAndCheckErrorBeforeModifyV1(mapper.Service, db, who, typeString, modelObj, id, []models.UserRole{models.UserRoleAdmin})
 	if err != nil {
 		return nil, &webrender.RetError{Error: err}
 	}
@@ -185,7 +185,7 @@ func (mapper *UserMapper) UpdateOne(db *gorm.DB, who models.UserIDFetchable, typ
 		afterFuncName = &a
 	}
 
-	j := opJob{
+	j := opJobV1{
 		serv: mapper.Service,
 
 		oldModelObj: oldModelObj,
@@ -198,13 +198,13 @@ func (mapper *UserMapper) UpdateOne(db *gorm.DB, who models.UserIDFetchable, typ
 		data:    &data,
 		info:    &info,
 	}
-	return opCore(j, mapper.Service.UpdateOneCore)
+	return opCoreV1(j, mapper.Service.UpdateOneCore)
 }
 
 // PatchOne updates model based on this json
 func (mapper *UserMapper) PatchOne(db *gorm.DB, who models.UserIDFetchable, typeString string, jsonPatch []byte,
 	id *datatypes.UUID, options map[urlparam.Param]interface{}, cargo *hookhandler.Cargo) (*MapperRet, *webrender.RetError) {
-	oldModelObj, role, err := loadAndCheckErrorBeforeModify(mapper.Service, db, who, typeString, nil, id, []models.UserRole{models.UserRoleAdmin})
+	oldModelObj, role, err := loadAndCheckErrorBeforeModifyV1(mapper.Service, db, who, typeString, nil, id, []models.UserRole{models.UserRoleAdmin})
 	if err != nil {
 		return nil, &webrender.RetError{Error: err}
 	}
@@ -266,7 +266,7 @@ func (mapper *UserMapper) PatchOne(db *gorm.DB, who models.UserIDFetchable, type
 		afterFuncName = &a
 	}
 
-	j := opJob{
+	j := opJobV1{
 		serv: mapper.Service,
 
 		oldModelObj: oldModelObj,
@@ -279,13 +279,13 @@ func (mapper *UserMapper) PatchOne(db *gorm.DB, who models.UserIDFetchable, type
 		data:    &data,
 		info:    &info,
 	}
-	return opCore(j, mapper.Service.UpdateOneCore)
+	return opCoreV1(j, mapper.Service.UpdateOneCore)
 }
 
 // DeleteOne deletes the user with the ID
 func (mapper *UserMapper) DeleteOne(db *gorm.DB, who models.UserIDFetchable, typeString string, id *datatypes.UUID,
 	options map[urlparam.Param]interface{}, cargo *hookhandler.Cargo) (*MapperRet, *webrender.RetError) {
-	modelObj, role, err := loadAndCheckErrorBeforeModify(mapper.Service, db, who, typeString, nil, id, []models.UserRole{models.UserRoleAdmin})
+	modelObj, role, err := loadAndCheckErrorBeforeModifyV1(mapper.Service, db, who, typeString, nil, id, []models.UserRole{models.UserRoleAdmin})
 	if err != nil {
 		return nil, &webrender.RetError{Error: err}
 	}
@@ -320,7 +320,7 @@ func (mapper *UserMapper) DeleteOne(db *gorm.DB, who models.UserIDFetchable, typ
 		afterFuncName = &a
 	}
 
-	j := opJob{
+	j := opJobV1{
 		serv: mapper.Service,
 
 		// oldModelObj: oldModelObj,
@@ -334,7 +334,7 @@ func (mapper *UserMapper) DeleteOne(db *gorm.DB, who models.UserIDFetchable, typ
 		info:    &info,
 	}
 
-	return opCore(j, mapper.Service.DeleteOneCore)
+	return opCoreV1(j, mapper.Service.DeleteOneCore)
 }
 
 // CreateMany :-

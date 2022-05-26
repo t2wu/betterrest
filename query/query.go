@@ -11,7 +11,6 @@ import (
 	"github.com/jinzhu/gorm"
 	"github.com/t2wu/betterrest/libs/datatypes"
 	"github.com/t2wu/betterrest/models"
-	"github.com/t2wu/betterrest/registry"
 )
 
 // -----------------------------
@@ -131,8 +130,8 @@ func (q *Query) InnerJoin(modelObj models.IModel, foreignObj models.IModel, args
 	var ok bool
 	var b *PredicateRelationBuilder
 
-	typeName := registry.GetModelTypeNameFromIModel(foreignObj)
-	tbl := registry.GetTableNameFromIModel(foreignObj)
+	typeName := models.GetModelTypeNameFromIModel(foreignObj)
+	tbl := models.GetTableNameFromIModel(foreignObj)
 	esc := &Escape{Value: fmt.Sprintf("\"%s\".id", tbl)}
 
 	// Prepare for PredicateRelationBuilder which will be use to generate inner join statement
@@ -393,7 +392,7 @@ func (q *Query) buildQueryCore(db *gorm.DB, modelObj models.IModel) (*gorm.DB, e
 					return db, err
 				}
 
-				tblName := registry.GetTableNameFromIModel(mb.modelObj)
+				tblName := models.GetTableNameFromIModel(mb.modelObj)
 				db = db.Joins(fmt.Sprintf("INNER JOIN \"%s\" ON %s", tblName, s), vals...)
 			}
 		}
@@ -437,7 +436,7 @@ func (q *Query) buildQueryCoreInnerJoin(db *gorm.DB, mb *ModelAndBuilder) (*gorm
 				if err != nil {
 					return db, err
 				}
-				tblName := registry.GetTableNameFromIModel(innerModel)
+				tblName := models.GetTableNameFromIModel(innerModel)
 				// get the outer table name
 				outerTableName, err := GetOuterTableName(mb.modelObj, designatedField)
 				if err != nil {
@@ -454,16 +453,16 @@ func (q *Query) buildQueryCoreInnerJoin(db *gorm.DB, mb *ModelAndBuilder) (*gorm
 
 			upperTableName := ""
 			if len(toks) == 1 {
-				upperTableName = registry.GetTableNameFromIModel(mb.modelObj)
+				upperTableName = models.GetTableNameFromIModel(mb.modelObj)
 			} else {
 				designatorForUpperModel := strings.Join(toks[:len(toks)-1], ".")
-				upperTableName, err = registry.GetModelTableNameInModelIfValid(mb.modelObj, designatorForUpperModel)
+				upperTableName, err = models.GetModelTableNameInModelIfValid(mb.modelObj, designatorForUpperModel)
 				if err != nil {
 					return db, err
 				}
 			}
 
-			currTableName, err := registry.GetModelTableNameInModelIfValid(mb.modelObj, designator)
+			currTableName, err := models.GetModelTableNameInModelIfValid(mb.modelObj, designator)
 			if err != nil {
 				return db, err
 			}
@@ -496,7 +495,7 @@ func (q *Query) buildQueryCoreInnerJoin(db *gorm.DB, mb *ModelAndBuilder) (*gorm
 
 func (q *Query) buildQueryOrderOffSetAndLimit(db *gorm.DB, modelObj models.IModel) *gorm.DB {
 	order := ""
-	tableName := registry.GetTableNameFromIModel(modelObj)
+	tableName := models.GetTableNameFromIModel(modelObj)
 	if q.orderField != nil && q.order != nil {
 		col, err := models.FieldNameToColumn(modelObj, *q.orderField)
 		if err != nil {
@@ -796,9 +795,9 @@ func GetOuterTableName(modelObj models.IModel, fieldNameDesignator string) (stri
 		if err != nil {
 			return "", err
 		}
-		outerTableName = registry.GetTableNameFromType(typ2)
+		outerTableName = models.GetTableNameFromType(typ2)
 	} else {
-		outerTableName = registry.GetTableNameFromIModel(modelObj)
+		outerTableName = models.GetTableNameFromIModel(modelObj)
 	}
 	return outerTableName, nil
 }

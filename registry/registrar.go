@@ -8,7 +8,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
-	"github.com/stoewer/go-strcase"
 	"github.com/t2wu/betterrest/hookhandler"
 	"github.com/t2wu/betterrest/libs/utils/jsontrans"
 	"github.com/t2wu/betterrest/libs/webrender"
@@ -76,6 +75,8 @@ func (r *Registrar) ModelWithOption(modelObj models.IModel, options RegOptions) 
 	reg.Mapper = options.Mapper
 
 	switch options.Mapper {
+	case MapperTypeViaOrgPartition:
+		fallthrough
 	case MapperTypeViaOrganization:
 		// We want the model type. So we get that by getting name first
 		// since the foreign key field name is always nameID
@@ -105,12 +106,12 @@ func (r *Registrar) ModelWithOption(modelObj models.IModel, options RegOptions) 
 			panic(fmt.Sprintf("%s missing betterrest:\"ownership\" tag", typeString))
 		}
 		m := reflect.New(typ).Interface().(models.IModel)
-		s := GetTableNameFromIModel(m)
+		s := models.GetTableNameFromIModel(m)
 		reg.OwnershipTableName = &s
 		reg.OwnershipType = typ
 	}
 
-	// Check if there is any struct or element of models.IModel which has no betterrest:"peg" or "peg-associate"
+	// Check if there is any struct or element of models.IModel which has no betterrest:"peg" or "pegassoc"
 	// field. There should be a designation for every struct unless it's ownership or org table
 	// Traverse through the tree
 
@@ -145,56 +146,11 @@ func (r *Registrar) CustomCreate(modelObj models.IModel, f func(db *gorm.DB) (*g
 	return r
 }
 
-// GetTableNameFromIModel gets table name from an models.IModel
-func GetTableNameFromIModel(model models.IModel) string {
-	var tableName string
-	if m, ok := model.(models.IHasTableName); ok {
-		tableName = m.TableName()
-	} else {
-		tableName = reflect.TypeOf(model).String()
-		// If it is something like "models.XXX", we only want the stuff ater "."
-		if strings.Contains(tableName, ".") {
-			tableName = strings.Split(tableName, ".")[1]
-		}
-
-		tableName = strcase.SnakeCase(tableName)
-	}
-
-	// If it's a pointer, get rid of "*"
-	tableName = strings.TrimPrefix(tableName, "*")
-
-	return tableName
-}
-
-// GetTableNameFromTypeString get table name from typeString
-func GetTableNameFromTypeString(typeString string) string {
-	model := NewFromTypeString(typeString)
-	return GetTableNameFromIModel(model)
-}
-
-// GetTableNameFromType get table name from the model reflect.type
-func GetTableNameFromType(typ reflect.Type) string {
-	model := reflect.New(typ).Interface().(models.IModel)
-	return GetTableNameFromIModel(model)
-}
-
-func GetModelTypeNameFromIModel(model models.IModel) string {
-	return reflect.TypeOf(model).Elem().Name()
-}
-
-func GetModelTableNameInModelIfValid(modelObj models.IModel, field string) (string, error) {
-	typ, err := models.GetModelFieldTypeInModelIfValid(modelObj, field)
-	if err != nil {
-		return "", err
-	}
-	return GetTableNameFromType(typ), nil
-}
-
 // -------------------------
 // OrgModelTypeFromOrgResourceTypeString given org resource typeString
 // returns the reflect type of the organization
 func OrgModelTypeFromOrgResourceTypeString(typeString string) reflect.Type {
-	if ModelRegistry[typeString].Mapper != MapperTypeViaOrganization {
+	if ModelRegistry[typeString].Mapper != MapperTypeViaOrganization && ModelRegistry[typeString].Mapper != MapperTypeViaOrgPartition {
 		// Programming error
 		panic(fmt.Sprintf("TypeString %s does not represents a resource under organization", typeString))
 	}
@@ -209,7 +165,7 @@ func OrgModelTypeFromOrgResourceTypeString(typeString string) reflect.Type {
 // NewOrgModelFromOrgResourceTypeString gets Organization object
 // If you're a resource under hooked up by Organization
 func NewOrgModelFromOrgResourceTypeString(typeString string) models.IModel {
-	if ModelRegistry[typeString].Mapper != MapperTypeViaOrganization {
+	if ModelRegistry[typeString].Mapper != MapperTypeViaOrganization && ModelRegistry[typeString].Mapper != MapperTypeViaOrgPartition {
 		// Programming error
 		panic(fmt.Sprintf("TypeString %s does not represents a resource under organization", typeString))
 	}
@@ -221,7 +177,7 @@ func NewOrgModelFromOrgResourceTypeString(typeString string) models.IModel {
 // NewOrgOwnershipModelFromOrgResourceTypeString gets the joining table from the resource's
 // organization model to the user
 func NewOrgOwnershipModelFromOrgResourceTypeString(typeString string) models.IModel {
-	if ModelRegistry[typeString].Mapper != MapperTypeViaOrganization {
+	if ModelRegistry[typeString].Mapper != MapperTypeViaOrganization && ModelRegistry[typeString].Mapper != MapperTypeViaOrgPartition {
 		// Programming error
 		panic(fmt.Sprintf("TypeString %s does not represents a resource under organization", typeString))
 	}
@@ -252,14 +208,14 @@ func NewOwnershipModelFromOwnershipResourceTypeString(typeString string) models.
 // returns organization table name
 func OrgModelNameFromOrgResourceTypeString(typeString string) string {
 	m := NewOrgModelFromOrgResourceTypeString(typeString)
-	return GetTableNameFromIModel(m)
+	return models.GetTableNameFromIModel(m)
 }
 
 // OrgOwnershipModelNameFromOrgResourceTypeString given org resource typeString,
 // returns name of organization table's linking table (ownership table) to user
 func OrgOwnershipModelNameFromOrgResourceTypeString(typeString string) string {
 	m := NewOrgOwnershipModelFromOrgResourceTypeString(typeString)
-	return GetTableNameFromIModel(m)
+	return models.GetTableNameFromIModel(m)
 }
 
 // OwnershipTableNameFromOwnershipResourceTypeString given ownership resource typeStirng
@@ -273,7 +229,7 @@ func OwnershipTableNameFromOwnershipResourceTypeString(typeString string) string
 
 	if tableName == "ownership_model_with_id_base" {
 		m := reflect.New(ModelRegistry[typeString].Typ).Interface().(models.IModel)
-		tableName = "user_owns_" + GetTableNameFromIModel(m)
+		tableName = "user_owns_" + models.GetTableNameFromIModel(m)
 	}
 
 	return tableName

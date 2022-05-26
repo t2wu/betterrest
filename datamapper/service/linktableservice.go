@@ -14,7 +14,7 @@ import (
 )
 
 type LinkTableService struct {
-	BaseService
+	BaseServiceV1
 }
 
 func (serv *LinkTableService) HookBeforeCreateOne(db *gorm.DB, who models.UserIDFetchable, typeString string, modelObj models.IModel) (models.IModel, error) {
@@ -85,7 +85,7 @@ func (service *LinkTableService) ReadOneCore(db *gorm.DB, who models.UserIDFetch
 		return nil, models.UserRoleInvalid, fmt.Errorf("%s not an IOwnership type", typeString)
 	}
 
-	rtable := registry.GetTableNameFromIModel(modelObj)
+	rtable := models.GetTableNameFromIModel(modelObj)
 
 	// Subquery: find all models where user_id has ME in it, then find
 	// record where model_id from subquery and id matches the one we query for

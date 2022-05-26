@@ -108,8 +108,8 @@ func callOldSingle(
 // How about AOP?
 // https://github.com/gogap/aop
 
-type batchOpJob struct {
-	serv service.IService
+type batchOpJobV1 struct {
+	serv service.IServiceV1
 	// db           *gorm.DB
 	// who          models.UserIDFetchable
 	// typeString   string
@@ -128,7 +128,7 @@ type batchOpJob struct {
 	info    *hookhandler.EndPointInfo
 }
 
-func batchOpCore(job batchOpJob,
+func batchOpCoreV1(job batchOpJobV1,
 	taskFunc func(db *gorm.DB, who models.UserIDFetchable, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObj models.IModel) (models.IModel, error),
 ) (*MapperRet, *webrender.RetError) {
 	modelObjs, oldmodelObjs, oldBefore, oldAfter := job.modelObjs, job.oldmodelObjs, job.oldBefore, job.oldAfter
@@ -192,8 +192,8 @@ func batchOpCore(job batchOpJob,
 	}, nil
 }
 
-type opJob struct {
-	serv service.IService
+type opJobV1 struct {
+	serv service.IServiceV1
 	// db          *gorm.DB
 	// who         models.UserIDFetchable
 	// typeString  string
@@ -213,8 +213,175 @@ type opJob struct {
 	info    *hookhandler.EndPointInfo
 }
 
-func opCore(
-	job opJob,
+func opCoreV1(
+	job opJobV1,
+	taskFun func(db *gorm.DB, who models.UserIDFetchable, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObj models.IModel) (models.IModel, error),
+) (*MapperRet, *webrender.RetError) {
+	oldModelObj, modelObj, beforeFuncName, afterFuncName := job.oldModelObj, job.modelObj, job.beforeFuncName, job.afterFuncName
+	fetcher, data, info := job.fetcher, job.data, job.info
+
+	if data.Cargo == nil {
+		return nil, &webrender.RetError{Error: fmt.Errorf("cargo shouldn't be nil")}
+	}
+
+	// Deprecated
+	if !fetcher.HasAttemptRegisteringHandler() { // deprecated, only try to call when no hookhandler exists
+		if m, ok := data.Ms[0].(models.IBeforeCUPD); ok {
+			if err := callOldSingle(data, info, m.BeforeCUPDDB, beforeFuncName); err != nil {
+				return nil, &webrender.RetError{Error: err}
+			}
+		}
+	}
+	// End deprecated
+
+	// fetch all handlers with before hooks
+	for _, hdlr := range fetcher.FetchHandlersForOpAndHook(info.Op, "B") {
+		if renderer := hdlr.(hookhandler.IBefore).Before(data, info); renderer != nil {
+			return nil, renderer
+		}
+	}
+
+	// Now do the task
+	id := modelObj.GetID()
+	modelObjReloaded, err := taskFun(data.DB, data.Who, data.TypeString, modelObj, id, oldModelObj)
+	if err != nil {
+		return nil, &webrender.RetError{Error: err}
+	}
+
+	data.Ms[0] = modelObjReloaded
+
+	// Deprecated
+	if !fetcher.HasAttemptRegisteringHandler() { // deprecated, only try to call when no controlelr exists
+		if m, ok := data.Ms[0].(models.IAfterCRUPD); ok {
+			if err := callOldSingle(data, info, m.AfterCRUPDDB, afterFuncName); err != nil {
+				return nil, &webrender.RetError{Error: err}
+			}
+		}
+	}
+	// End deprecated
+
+	// fetch all handlers with after hooks
+	for _, hdlr := range fetcher.FetchHandlersForOpAndHook(info.Op, "A") {
+		if renderer := hdlr.(hookhandler.IAfter).After(data, info); renderer != nil {
+			return nil, renderer
+		}
+	}
+
+	return &MapperRet{
+		Ms:      []models.IModel{modelObjReloaded},
+		Fetcher: fetcher,
+	}, nil
+}
+
+// -------------------------------------------------------------------------------------------
+
+type batchOpJobV2 struct {
+	serv service.IServiceV2
+	// db           *gorm.DB
+	// who          models.UserIDFetchable
+	// typeString   string
+	oldmodelObjs []models.IModel // use for update (need to load and override for pegged fields)
+	modelObjs    []models.IModel // current field value from the user if update, or from the loaded field if delete
+	// cargo        *hookhandler.Cargo
+
+	// crupdOp      models.CRUPDOp
+	// options      map[urlparam.Param]interface{}
+
+	oldBefore func(bhpData models.BatchHookPointData) error
+	oldAfter  func(bhpData models.BatchHookPointData) error
+
+	fetcher *hfetcher.HandlerFetcher
+	data    *hookhandler.Data
+	info    *hookhandler.EndPointInfo
+}
+
+func batchOpCoreV2(job batchOpJobV2,
+	taskFunc func(db *gorm.DB, who models.UserIDFetchable, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObj models.IModel) (models.IModel, error),
+) (*MapperRet, *webrender.RetError) {
+	modelObjs, oldmodelObjs, oldBefore, oldAfter := job.modelObjs, job.oldmodelObjs, job.oldBefore, job.oldAfter
+	fetcher, data, info := job.fetcher, job.data, job.info
+
+	ms := make([]models.IModel, len(modelObjs))
+
+	if data.Cargo == nil {
+		return nil, &webrender.RetError{Error: fmt.Errorf("cargo shouldn't be nil")}
+	}
+
+	// deprecated, only try to call when no controlelr exists
+	if !fetcher.HasAttemptRegisteringHandler() {
+		if err := callOldBatch(data, info, registry.ModelRegistry[data.TypeString].BeforeCUPD, oldBefore); err != nil {
+			return nil, &webrender.RetError{Error: err}
+		}
+	}
+
+	// fetch all handlers with before hooks
+	for _, hdlr := range fetcher.FetchHandlersForOpAndHook(info.Op, "B") { // FetchHandlersForOpAndHook is stateful, cannot be repeated called
+		if renderer := hdlr.(hookhandler.IBefore).Before(data, info); renderer != nil {
+			return nil, renderer
+		}
+	}
+
+	// TODO: Could update all at once, then load all at once again
+	for i, modelObj := range modelObjs {
+		id := modelObj.GetID()
+
+		// m, err := updateOneCore(serv, db, oid, scope, typeString, modelObj, id)
+		var m models.IModel
+		var err error
+		if oldmodelObjs == nil {
+			m, err = taskFunc(data.DB, data.Who, data.TypeString, modelObj, id, nil)
+		} else {
+			m, err = taskFunc(data.DB, data.Who, data.TypeString, modelObj, id, oldmodelObjs[i])
+		}
+		if err != nil { // Error is "record not found" when not found
+			return nil, &webrender.RetError{Error: err}
+		}
+
+		ms[i] = m
+	}
+
+	if !fetcher.HasAttemptRegisteringHandler() { // deprecated, only try to call when no controlelr exists
+		if err := callOldBatch(data, info, registry.ModelRegistry[data.TypeString].AfterCRUPD, oldAfter); err != nil {
+			return nil, &webrender.RetError{Error: err}
+		}
+	}
+
+	// fetch all handlers with after hooks
+	for _, hdlr := range fetcher.FetchHandlersForOpAndHook(info.Op, "A") {
+		if renderer := hdlr.(hookhandler.IAfter).After(data, info); renderer != nil {
+			return nil, renderer
+		}
+	}
+
+	return &MapperRet{
+		Ms:      ms,
+		Fetcher: fetcher,
+	}, nil
+}
+
+type opJobV2 struct {
+	serv service.IServiceV2
+	// db          *gorm.DB
+	// who         models.UserIDFetchable
+	// typeString  string
+	// crupdOp     models.CRUPDOp
+	oldModelObj models.IModel // use for update (need to load and override for pegged fields)
+	modelObj    models.IModel // current field value from the user if update, or from the loaded field if delete
+	// cargo       *hookhandler.Cargo // This only is used because we may have an even earlier hookpoint for PatchApply
+	// options     map[urlparam.Param]interface{}
+
+	// before and after are strings, because once we load it from the DB the hooks
+	// should be the new one. (at least for after)
+	beforeFuncName *string
+	afterFuncName  *string
+
+	fetcher *hfetcher.HandlerFetcher
+	data    *hookhandler.Data
+	info    *hookhandler.EndPointInfo
+}
+
+func opCoreV2(
+	job opJobV2,
 	taskFun func(db *gorm.DB, who models.UserIDFetchable, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObj models.IModel) (models.IModel, error),
 ) (*MapperRet, *webrender.RetError) {
 	oldModelObj, modelObj, beforeFuncName, afterFuncName := job.oldModelObj, job.modelObj, job.beforeFuncName, job.afterFuncName

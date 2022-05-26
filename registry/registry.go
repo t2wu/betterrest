@@ -36,6 +36,9 @@ const (
 	// MapperTypeViaOrganization is for type where an organization owns something
 	MapperTypeViaOrganization
 
+	// MapperTypeViaOrgPartition is for type where an organization owns something and it's in partitioned table
+	MapperTypeViaOrgPartition
+
 	// MapperTypeGlobal is for type where data is public to all
 	MapperTypeGlobal
 
@@ -121,6 +124,12 @@ type Reg struct {
 // NewFromTypeString instantiate a new models.IModel object from type registry
 func NewFromTypeString(typeString string) models.IModel {
 	return reflect.New(ModelRegistry[typeString].Typ).Interface().(models.IModel)
+}
+
+// GetTableNameFromTypeString get table name from typeString
+func GetTableNameFromTypeString(typeString string) string {
+	model := NewFromTypeString(typeString)
+	return models.GetTableNameFromIModel(model)
 }
 
 // NewSliceStructFromTypeString :

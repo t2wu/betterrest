@@ -7,6 +7,7 @@ import (
 
 	"github.com/t2wu/betterrest/db"
 	"github.com/t2wu/betterrest/libs/datatypes"
+	"github.com/t2wu/betterrest/models"
 )
 
 // BetterRESTTable store the information on all other models
@@ -31,7 +32,7 @@ func CreateBetterRESTTable() {
 		id := datatypes.NewUUID()
 		createdAt := time.Now()
 		updatedAt := time.Now()
-		tableName := GetTableNameFromType(reg.Typ)
+		tableName := models.GetTableNameFromType(reg.Typ)
 
 		if reg.TypVersion == "" {
 			reg.TypVersion = "1.0.0"

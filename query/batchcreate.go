@@ -4,7 +4,6 @@ import (
 	"reflect"
 
 	"github.com/t2wu/betterrest/models"
-	"github.com/t2wu/betterrest/registry"
 )
 
 type BatchCreateData struct {
@@ -19,7 +18,7 @@ func gatherModelToCreate(v reflect.Value, data *BatchCreateData) error {
 			case reflect.Struct:
 				m := v.Field(i).Addr().Interface().(models.IModel)
 				if m.GetID() != nil { // could be embedded struct that never get initialiezd
-					fieldTableName := registry.GetTableNameFromIModel(m)
+					fieldTableName := models.GetTableNameFromIModel(m)
 					if _, ok := data.toProcess[fieldTableName]; ok {
 						ms := data.toProcess[fieldTableName]
 						ms = append(ms, m)
@@ -38,7 +37,7 @@ func gatherModelToCreate(v reflect.Value, data *BatchCreateData) error {
 			case reflect.Slice:
 				typ := v.Type().Field(i).Type.Elem()
 				m, _ := reflect.New(typ).Interface().(models.IModel)
-				fieldTableName := registry.GetTableNameFromIModel(m)
+				fieldTableName := models.GetTableNameFromIModel(m)
 				for j := 0; j < v.Field(i).Len(); j++ {
 					imodel := v.Field(i).Index(j).Addr().Interface().(models.IModel)
 					if _, ok := data.toProcess[fieldTableName]; ok {
@@ -58,7 +57,7 @@ func gatherModelToCreate(v reflect.Value, data *BatchCreateData) error {
 				if !isNil(v.Field(i)) && !isNil(v.Field(i).Elem()) &&
 					v.Field(i).IsValid() && v.Field(i).Elem().IsValid() {
 					imodel := v.Field(i).Interface().(models.IModel)
-					fieldTableName := registry.GetTableNameFromIModel(imodel)
+					fieldTableName := models.GetTableNameFromIModel(imodel)
 
 					if _, ok := data.toProcess[fieldTableName]; ok {
 						ms := data.toProcess[fieldTableName]

@@ -48,7 +48,61 @@ func constructInnerFieldParamQueries(db *gorm.DB, typeString string, options map
 	return db, nil
 }
 
-func loadAndCheckErrorBeforeModify(serv service.IService, db *gorm.DB, who models.UserIDFetchable, typeString string, modelObj models.IModel, id *datatypes.UUID, permittedRoles []models.UserRole) (models.IModel, models.UserRole, error) {
+func verifyModelIDCorrectnessForOne(modelObj models.IModel, id *datatypes.UUID) error {
+	if id == nil || id.UUID.String() == "" {
+		// in case it's an empty string
+		return service.ErrIDEmpty
+	}
+
+	// Check if ID from URL and ID in object are the same (meaningful when it's not batch edit)
+	// modelObj is nil if it's a patch operation. In that case just here to load and check permission.
+	// it's also nil when it's a get one op
+	if modelObj != nil && modelObj.GetID().String() != id.String() {
+		return service.ErrIDNotMatch
+	}
+
+	return nil
+}
+
+func loadAndCheckErrorBeforeModifyV2(serv service.IServiceV2, db *gorm.DB, who models.UserIDFetchable, typeString string, modelObj models.IModel, id *datatypes.UUID, permittedRoles []models.UserRole, options map[urlparam.Param]interface{}) (models.IModel, models.UserRole, error) {
+	if id == nil || id.UUID.String() == "" {
+		// in case it's an empty string
+		return nil, models.UserRoleInvalid, service.ErrIDEmpty
+	}
+
+	// Check if ID from URL and ID in object are the same (meaningful when it's not batch edit)
+	// modelObj is nil if it's a patch operation. In that case just here to load and check permission.
+	// it's also nil when it's a get one op
+	if modelObj != nil && modelObj.GetID().String() != id.String() {
+		return nil, models.UserRoleInvalid, service.ErrIDNotMatch
+	}
+
+	// TODO: Is there a more efficient way?
+	// For ownership: role is the role of the model to the user
+	// for models under organization, the role is the role of the organization to the user
+	modelObj2, role, err := serv.ReadOneCore(db, who, typeString, id, options)
+	if err != nil { // Error is "record not found" when not found
+		return nil, models.UserRoleInvalid, err
+	}
+
+	permitted := false
+	for _, permittedRole := range permittedRoles {
+		if permittedRole == models.UserRoleAny {
+			permitted = true
+			break
+		} else if role == permittedRole {
+			permitted = true
+			break
+		}
+	}
+	if !permitted {
+		return nil, models.UserRoleInvalid, service.ErrPermission
+	}
+
+	return modelObj2, role, nil
+}
+
+func loadAndCheckErrorBeforeModifyV1(serv service.IServiceV1, db *gorm.DB, who models.UserIDFetchable, typeString string, modelObj models.IModel, id *datatypes.UUID, permittedRoles []models.UserRole) (models.IModel, models.UserRole, error) {
 	if id == nil || id.UUID.String() == "" {
 		// in case it's an empty string
 		return nil, models.UserRoleInvalid, service.ErrIDEmpty
@@ -87,7 +141,41 @@ func loadAndCheckErrorBeforeModify(serv service.IService, db *gorm.DB, who model
 }
 
 // db should already be set up for all the joins needed, if any
-func loadManyAndCheckBeforeModify(serv service.IService, db *gorm.DB, who models.UserIDFetchable, typeString string,
+func loadManyAndCheckBeforeModifyV1(serv service.IServiceV1, db *gorm.DB, who models.UserIDFetchable, typeString string,
+	ids []*datatypes.UUID, permittedRoles []models.UserRole) ([]models.IModel, []models.UserRole, error) {
+	modelObjs, roles, err := serv.GetManyCore(db, who, typeString, ids)
+	if err != nil {
+		log.Println("calling getManyWithIDsCore err:", err)
+		return nil, nil, err
+	}
+
+	for _, role := range roles {
+		if role != models.UserRoleAdmin {
+			return nil, nil, service.ErrPermission
+		}
+	}
+
+	for _, role := range roles {
+		permitted := false
+		for _, permittedRole := range permittedRoles {
+			if permittedRole == models.UserRoleAny {
+				permitted = true
+				break
+			} else if role == permittedRole {
+				permitted = true
+				break
+			}
+		}
+		if !permitted {
+			return nil, nil, service.ErrPermission
+		}
+	}
+
+	return modelObjs, roles, nil
+}
+
+// db should already be set up for all the joins needed, if any
+func loadManyAndCheckBeforeModifyV2(serv service.IServiceV2, db *gorm.DB, who models.UserIDFetchable, typeString string,
 	ids []*datatypes.UUID, permittedRoles []models.UserRole) ([]models.IModel, []models.UserRole, error) {
 	modelObjs, roles, err := serv.GetManyCore(db, who, typeString, ids)
 	if err != nil {

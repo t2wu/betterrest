@@ -13,7 +13,7 @@ import (
 )
 
 type UserService struct {
-	BaseService
+	BaseServiceV1
 }
 
 func (serv *UserService) HookBeforeCreateOne(db *gorm.DB, who models.UserIDFetchable, typeString string, modelObj models.IModel) (models.IModel, error) {
