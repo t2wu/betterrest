@@ -3,6 +3,7 @@ package models
 import (
 	"reflect"
 
+	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/t2wu/betterrest/libs/datatypes"
 	"github.com/t2wu/betterrest/libs/gotag"
 )
@@ -125,8 +126,9 @@ type ModelAndIDs struct {
 	ModelObj IModel // this is just one or a new model we can look up
 
 	// IDs is the parent ID who we want to query
-	IDs       []interface{} // to send to Gorm need to be interface not *datatypes.UUID
-	ModelObjs []IModel      // this is a storage when we've queried it
+	// IDs       []interface{} // to send to Gorm need to be interface not *datatypes.UUID
+	IDs       mapset.Set[string] // parent id
+	ModelObjs []IModel           // this is a storage when we've queried it
 }
 
 type FieldAsKey struct {
@@ -205,7 +207,8 @@ func findAllBetterRestPeggOrPegAssocIDsCore(v reflect.Value, result *PeggedIDSea
 			}
 
 			makeSpaceInPeggedIDSearch(result, key, tableName, m)
-			result.ToProcess[tableName][key].IDs = append(result.ToProcess[tableName][key].IDs, id) // store parent ID!
+			result.ToProcess[tableName][key].IDs.Add(id.String()) // parent id
+			// result.ToProcess[tableName][key].IDs = append(result.ToProcess[tableName][key].IDs, id) // store parent ID!
 		case reflect.Slice:
 			typ := v.Type().Field(i).Type.Elem()
 			m, _ := reflect.New(typ).Interface().(IModel)
@@ -218,7 +221,9 @@ func findAllBetterRestPeggOrPegAssocIDsCore(v reflect.Value, result *PeggedIDSea
 			}
 
 			makeSpaceInPeggedIDSearch(result, key, tableName, m)
-			result.ToProcess[tableName][key].IDs = append(result.ToProcess[tableName][key].IDs, id) // store parent id!
+
+			result.ToProcess[tableName][key].IDs.Add(id.String()) // parent id
+			// result.ToProcess[tableName][key].IDs = append(result.ToProcess[tableName][key].IDs, id) // store parent id!
 		case reflect.Ptr:
 			// is IsZero the same? if !v.Field(i).IsZero() {
 			// Need to dereference and get the struct id before traversing in
@@ -233,7 +238,9 @@ func findAllBetterRestPeggOrPegAssocIDsCore(v reflect.Value, result *PeggedIDSea
 					Rel:       rel,
 				}
 				makeSpaceInPeggedIDSearch(result, key, tableName, imodel)
-				result.ToProcess[tableName][key].IDs = append(result.ToProcess[tableName][key].IDs, id) // stores parent ID!
+
+				result.ToProcess[tableName][key].IDs.Add(id.String()) // parent id
+				// result.ToProcess[tableName][key].IDs = append(result.ToProcess[tableName][key].IDs, id) // stores parent ID!
 			}
 		}
 	}
@@ -246,8 +253,8 @@ func makeSpaceInPeggedIDSearch(result *PeggedIDSearch, key FieldAsKey, fieldTabl
 	}
 
 	if _, ok := result.ToProcess[fieldTableName][key]; !ok {
-		arr := make([]interface{}, 0)
-		v := ModelAndIDs{ModelObj: modelObj, IDs: arr}
+		set := mapset.NewSet[string]()
+		v := ModelAndIDs{ModelObj: modelObj, IDs: set}
 		result.ToProcess[fieldTableName][key] = &v // does it make sense for modelObj to be stored here?
 	}
 }
