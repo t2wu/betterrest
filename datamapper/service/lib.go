@@ -39,7 +39,7 @@ func RecursivelyQueryAllPeggedModels(db *gorm.DB, modelObjs []models.IModel, beg
 
 			tableName := models.GetTableNameFromIModel(modelAndIDs.ModelObj)
 			db3 := db.Where(tableName+".created_at BETWEEN ? AND ?", begin, end)
-			if err := db3.Where(fmt.Sprintf("%s_id IN (?)", parentTableName), modelAndIDs.IDs).
+			if err := db3.Where(fmt.Sprintf("%s_id IN (?)", parentTableName), modelAndIDs.IDs.ToSlice()).
 				Find(sliceI).Error; err != nil {
 				return err
 			}

@@ -132,7 +132,6 @@ func (mapper *OrgPartition) CreateOne(db *gorm.DB, who models.UserIDFetchable, t
 
 func (mapper *OrgPartition) ReadMany(db *gorm.DB, who models.UserIDFetchable, typeString string,
 	options map[urlparam.Param]interface{}, cargo *hookhandler.Cargo) (*MapperRet, []models.UserRole, *int, *webrender.RetError) {
-	log.Println("............................read many......")
 	dbClean := db
 	db = db.Set("gorm:auto_preload", false)
 	db2 := db
@@ -207,7 +206,6 @@ func (mapper *OrgPartition) ReadMany(db *gorm.DB, who models.UserIDFetchable, ty
 	}
 
 	// Now need to recursively walks through outmodes and query by dates
-	log.Println("----------------------->")
 	service.RecursivelyQueryAllPeggedModels(db2, outmodels, time.Unix(int64(*cstart), 0), time.Unix(int64(*cstop), 0))
 
 	roles, err := mapper.Service.GetAllRolesCore(db, dbClean, who, typeString, outmodels)
@@ -269,7 +267,6 @@ func (mapper *OrgPartition) ReadMany(db *gorm.DB, who models.UserIDFetchable, ty
 // ReadOne get one model object based on its type and its id string
 func (mapper *OrgPartition) ReadOne(db *gorm.DB, who models.UserIDFetchable, typeString string, id *datatypes.UUID,
 	options map[urlparam.Param]interface{}, cargo *hookhandler.Cargo) (*MapperRet, models.UserRole, *webrender.RetError) {
-	log.Println("............................read one......")
 
 	db = db.Set("gorm:auto_preload", false)
 
