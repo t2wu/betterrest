@@ -155,7 +155,7 @@ func (serv *OrganizationService) GetManyCore(db *gorm.DB, who models.UserIDFetch
 
 	db2 := db.Table(rtable).Joins(firstJoin, ids).Joins(secondJoin).Joins(thirdJoin, who.GetUserID()) // .Find(modelObj).Error
 
-	modelObjs, err := registry.NewSliceFromDBByTypeString(typeString, db2.Set("gorm:auto_preload", true).Find)
+	modelObjs, err := registry.NewSliceFromDBByTypeString(typeString, db2.Set("gorm:auto_preload", false).Find)
 	if err != nil {
 		return nil, nil, err
 	}

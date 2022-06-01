@@ -178,6 +178,7 @@ func (mapper *OrgPartition) ReadMany(db *gorm.DB, who models.UserIDFetchable, ty
 			if err := q.Count(registry.NewFromTypeString(typeString), no).Error(); err != nil {
 				return nil, nil, nil, &webrender.RetError{Error: err}
 			}
+			db = db.Set("gorm:auto_preload", false)
 
 			// Fetch it back, so the builder stuff is in there
 			// And resort back to Gorm.
@@ -193,10 +194,12 @@ func (mapper *OrgPartition) ReadMany(db *gorm.DB, who models.UserIDFetchable, ty
 	}
 
 	if builder != nil {
+		// this one set it to  preload false!
 		db, err = qry.Q(db, builder).BuildQuery(registry.NewFromTypeString(typeString))
 		if err != nil {
 			return nil, nil, nil, &webrender.RetError{Error: err}
 		}
+		db = db.Set("gorm:auto_preload", false)
 	}
 
 	// Actual query in the following line
