@@ -3,6 +3,7 @@ package service
 import (
 	"fmt"
 	"reflect"
+	"strings"
 	"time"
 
 	"github.com/jinzhu/gorm"
@@ -46,7 +47,17 @@ func RecursivelyQueryAllPeggedModels(db *gorm.DB, modelObjs []models.IModel, beg
 
 			for i := 0; i < sliceElem.Len(); i++ {
 				fieldName := strcase.UpperCamelCase(parentTableName) + "ID"
-				parentID := sliceElem.Index(i).Elem().FieldByName(fieldName).Interface().(*datatypes.UUID)
+				// log.Println("fieldName:", fieldName)
+				var parentID *datatypes.UUID
+				// FieldByName sometimes upper camel case is hard to find if having a streak of upper case
+				l := sliceElem.Index(i).Elem()
+				for j := 0; j < l.NumField(); j++ {
+					if strings.ToLower(l.Type().Field(j).Name) == strings.ToLower(fieldName) {
+						parentID = l.Field(j).Interface().(*datatypes.UUID)
+					}
+				}
+
+				// parentID := sliceElem.Index(i).Elem().FieldByName(fieldName).Interface().(*datatypes.UUID)
 				// Match the parent ID
 				for j, modelObj := range modelObjs {
 					if modelObj.GetID().String() == parentID.String() { // same id
