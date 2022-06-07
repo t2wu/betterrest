@@ -71,8 +71,9 @@ func (suite *TestBaseMapperDeleteSuite) TestDeleteOne_WhenGiven_GotCar() {
 	mapper := SharedOwnershipMapper()
 
 	var retVal *MapperRet
+	info := hookhandler.EndPointInfo{}
 	retErr := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retErr *webrender.RetError) {
-		if retVal, retErr = mapper.DeleteOne(tx, suite.who, suite.typeString, modelObj.GetID(),
+		if retVal, retErr = mapper.DeleteOne(tx, suite.who, suite.typeString, modelObj.GetID(), &info,
 			options, &cargo); retErr != nil {
 			return retErr
 		}
@@ -118,7 +119,11 @@ func (suite *TestBaseMapperDeleteSuite) TestDeleteOne_WhenNoController_CallRelev
 	var tx2 *gorm.DB
 	retErr := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retErr *webrender.RetError) {
 		tx2 = tx
-		if retVal, retErr = mapper.DeleteOne(tx2, suite.who, suite.typeString, modelObj.GetID(),
+		info := hookhandler.EndPointInfo{
+			Op:          hookhandler.RESTOpDelete,
+			Cardinality: hookhandler.APICardinalityOne,
+		}
+		if retVal, retErr = mapper.DeleteOne(tx2, suite.who, suite.typeString, modelObj.GetID(), &info,
 			options, &cargo); retErr != nil {
 			return retErr
 		}
@@ -188,7 +193,11 @@ func (suite *TestBaseMapperDeleteSuite) TestDeleteOne_WhenHavingController_NotCa
 	var tx2 *gorm.DB
 	retErr := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retErr *webrender.RetError) {
 		tx2 = tx
-		if retVal, retErr = mapper.DeleteOne(tx2, suite.who, suite.typeString, modelObj.GetID(),
+		info := hookhandler.EndPointInfo{
+			Op:          hookhandler.RESTOpDelete,
+			Cardinality: hookhandler.APICardinalityOne,
+		}
+		if retVal, retErr = mapper.DeleteOne(tx2, suite.who, suite.typeString, modelObj.GetID(), &info,
 			options, &cargo); retErr != nil {
 			return retErr
 		}
@@ -235,9 +244,10 @@ func (suite *TestBaseMapperDeleteSuite) TestDeleteOne_WhenHavingController_CallR
 
 	var tx2 *gorm.DB
 	var retVal *MapperRet
+	info := hookhandler.EndPointInfo{Op: hookhandler.RESTOpDelete, Cardinality: hookhandler.APICardinalityOne}
 	retErr := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retErr *webrender.RetError) {
 		tx2 = tx
-		if retVal, retErr = mapper.DeleteOne(tx2, suite.who, suite.typeString, modelObj.GetID(),
+		if retVal, retErr = mapper.DeleteOne(tx2, suite.who, suite.typeString, modelObj.GetID(), &info,
 			options, &cargo); retErr != nil {
 			return retErr
 		}
@@ -250,7 +260,6 @@ func (suite *TestBaseMapperDeleteSuite) TestDeleteOne_WhenHavingController_CallR
 	role := models.UserRoleAdmin
 	data := hookhandler.Data{Ms: []models.IModel{&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID}, Name: carName}},
 		DB: tx2, Who: suite.who, TypeString: suite.typeString, Roles: []models.UserRole{role}, Cargo: &cargo}
-	info := hookhandler.EndPointInfo{Op: hookhandler.RESTOpDelete, Cardinality: hookhandler.APICardinalityOne}
 
 	ctrls := retVal.Fetcher.GetAllInstantiatedHanders()
 	if !assert.Len(suite.T(), ctrls, 1) {
@@ -322,7 +331,11 @@ func (suite *TestBaseMapperDeleteSuite) TestDeleteMany_WhenGiven_GotCars() {
 	var retVal *MapperRet
 	retErr := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retErr *webrender.RetError) {
 		mapper := SharedOwnershipMapper()
-		retVal, retErr = mapper.DeleteMany(tx, suite.who, suite.typeString, modelObjs, options, &cargo)
+		info := hookhandler.EndPointInfo{
+			Op:          hookhandler.RESTOpDelete,
+			Cardinality: hookhandler.APICardinalityMany,
+		}
+		retVal, retErr = mapper.DeleteMany(tx, suite.who, suite.typeString, modelObjs, &info, options, &cargo)
 		return retErr
 	}, "lifecycle.DeleteMany")
 	if !assert.Nil(suite.T(), retErr) {
@@ -405,7 +418,11 @@ func (suite *TestBaseMapperDeleteSuite) TestDeleteMany_WhenNoController_CallRele
 	retErr := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retErr *webrender.RetError) {
 		tx2 = tx
 		mapper := SharedOwnershipMapper()
-		_, retErr = mapper.DeleteMany(tx2, suite.who, suite.typeString, modelObjs, options, &cargo)
+		info := hookhandler.EndPointInfo{
+			Op:          hookhandler.RESTOpDelete,
+			Cardinality: hookhandler.APICardinalityMany,
+		}
+		_, retErr = mapper.DeleteMany(tx2, suite.who, suite.typeString, modelObjs, &info, options, &cargo)
 		return retErr
 	}, "lifecycle.DeleteMany")
 	if !assert.Nil(suite.T(), retErr) {
@@ -509,7 +526,8 @@ func (suite *TestBaseMapperDeleteSuite) TestDeleteMany_WhenHavingController_NotC
 	retErr := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retErr *webrender.RetError) {
 		tx2 = tx
 		mapper := SharedOwnershipMapper()
-		_, retErr = mapper.DeleteMany(tx2, suite.who, suite.typeString, modelObjs, options, &cargo)
+		info := hookhandler.EndPointInfo{}
+		_, retErr = mapper.DeleteMany(tx2, suite.who, suite.typeString, modelObjs, &info, options, &cargo)
 		return retErr
 	}, "lifecycle.DeleteMany")
 	if !assert.Nil(suite.T(), retErr) {
@@ -567,10 +585,11 @@ func (suite *TestBaseMapperDeleteSuite) TestDeleteMany_WhenHavingController_Call
 
 	var tx2 *gorm.DB
 	var retVal *MapperRet
+	info := hookhandler.EndPointInfo{Op: hookhandler.RESTOpDelete, Cardinality: hookhandler.APICardinalityMany}
 	retErr := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retErr *webrender.RetError) {
 		tx2 = tx
 		mapper := SharedOwnershipMapper()
-		retVal, retErr = mapper.DeleteMany(tx2, suite.who, suite.typeString, modelObjs, options, &cargo)
+		retVal, retErr = mapper.DeleteMany(tx2, suite.who, suite.typeString, modelObjs, &info, options, &cargo)
 		return retErr
 	}, "lifecycle.DeleteMany")
 	if !assert.Nil(suite.T(), retErr) {
@@ -584,7 +603,6 @@ func (suite *TestBaseMapperDeleteSuite) TestDeleteMany_WhenHavingController_Call
 		&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID2}, Name: carName2},
 		&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID3}, Name: carName3},
 	}, DB: tx2, Who: suite.who, TypeString: suite.typeString, Roles: roles, Cargo: &cargo}
-	info := hookhandler.EndPointInfo{Op: hookhandler.RESTOpDelete, Cardinality: hookhandler.APICardinalityMany}
 
 	ctrls := retVal.Fetcher.GetAllInstantiatedHanders()
 	if !assert.Len(suite.T(), ctrls, 1) {

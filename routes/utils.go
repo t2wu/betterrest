@@ -96,6 +96,7 @@ func GuardMiddleWare(typeString string) func(c *gin.Context) {
 		data := hookhandler.Data{Ms: nil, DB: nil, Who: who,
 			TypeString: typeString, Roles: nil, URLParams: options, Cargo: nil}
 		info := hookhandler.EndPointInfo{
+			URL:         c.Request.URL.String(),
 			Op:          hookhandler.HTTPMethodToRESTOp(r.Method),
 			Cardinality: hookhandler.APICardinalityOne,
 		}

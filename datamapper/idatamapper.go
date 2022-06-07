@@ -17,46 +17,46 @@ type MapperRet struct {
 
 // IDataMapper has all the crud interfaces
 type IDataMapper interface {
-	CreateMany(db *gorm.DB, who models.UserIDFetchable, typeString string, modelObj []models.IModel,
+	CreateMany(db *gorm.DB, who models.UserIDFetchable, typeString string, modelObj []models.IModel, info *hookhandler.EndPointInfo,
 		options map[urlparam.Param]interface{}, cargo *hookhandler.Cargo) (*MapperRet, *webrender.RetError)
 
 	CreateOne(db *gorm.DB, who models.UserIDFetchable, typeString string, modelObj models.IModel,
-		options map[urlparam.Param]interface{}, cargo *hookhandler.Cargo) (*MapperRet, *webrender.RetError)
+		info *hookhandler.EndPointInfo, options map[urlparam.Param]interface{}, cargo *hookhandler.Cargo) (*MapperRet, *webrender.RetError)
 
 	ReadMany(db *gorm.DB, who models.UserIDFetchable,
-		typeString string, options map[urlparam.Param]interface{},
+		typeString string, info *hookhandler.EndPointInfo, options map[urlparam.Param]interface{},
 		cargo *hookhandler.Cargo) (*MapperRet, []models.UserRole, *int, *webrender.RetError)
 
 	ReadOne(db *gorm.DB, who models.UserIDFetchable,
-		typeString string, id *datatypes.UUID, options map[urlparam.Param]interface{},
+		typeString string, id *datatypes.UUID, info *hookhandler.EndPointInfo, options map[urlparam.Param]interface{},
 		cargo *hookhandler.Cargo) (*MapperRet, models.UserRole, *webrender.RetError)
 
 	UpdateMany(db *gorm.DB, who models.UserIDFetchable,
-		typeString string, modelObjs []models.IModel,
+		typeString string, modelObjs []models.IModel, info *hookhandler.EndPointInfo,
 		options map[urlparam.Param]interface{},
 		cargo *hookhandler.Cargo) (*MapperRet, *webrender.RetError)
 
 	UpdateOne(db *gorm.DB, who models.UserIDFetchable,
-		typeString string, modelobj models.IModel, id *datatypes.UUID,
+		typeString string, modelobj models.IModel, id *datatypes.UUID, info *hookhandler.EndPointInfo,
 		options map[urlparam.Param]interface{},
 		cargo *hookhandler.Cargo) (*MapperRet, *webrender.RetError)
 
 	PatchMany(db *gorm.DB, who models.UserIDFetchable,
-		typeString string, jsonIDPatches []models.JSONIDPatch,
+		typeString string, jsonIDPatches []models.JSONIDPatch, info *hookhandler.EndPointInfo,
 		options map[urlparam.Param]interface{},
 		cargo *hookhandler.Cargo) (*MapperRet, *webrender.RetError)
 
 	PatchOne(db *gorm.DB, who models.UserIDFetchable,
-		typeString string, jsonPatch []byte, id *datatypes.UUID,
+		typeString string, jsonPatch []byte, id *datatypes.UUID, info *hookhandler.EndPointInfo,
 		options map[urlparam.Param]interface{},
 		cargo *hookhandler.Cargo) (*MapperRet, *webrender.RetError)
 
 	DeleteMany(db *gorm.DB, who models.UserIDFetchable,
-		typeString string, modelObjs []models.IModel,
+		typeString string, modelObjs []models.IModel, info *hookhandler.EndPointInfo,
 		options map[urlparam.Param]interface{},
 		cargo *hookhandler.Cargo) (*MapperRet, *webrender.RetError)
 
 	DeleteOne(db *gorm.DB, who models.UserIDFetchable,
-		typeString string, id *datatypes.UUID, options map[urlparam.Param]interface{},
+		typeString string, id *datatypes.UUID, info *hookhandler.EndPointInfo, options map[urlparam.Param]interface{},
 		cargo *hookhandler.Cargo) (*MapperRet, *webrender.RetError)
 }

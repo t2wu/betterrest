@@ -425,22 +425,32 @@ func CreateHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin
 		}
 
 		if *isBatch {
-			data, info, renderer := lifecycle.CreateMany(mapper, who, typeString, modelObjs, options, &TransIDLogger{})
+			info := hookhandler.EndPointInfo{
+				URL:         c.Request.URL.String(),
+				Op:          hookhandler.RESTOpCreate,
+				Cardinality: hookhandler.APICardinalityMany,
+			}
+			data, renderer := lifecycle.CreateMany(mapper, who, typeString, modelObjs, &info, options, &TransIDLogger{})
 			if renderer != nil {
 				render.Render(w, c.Request, renderer)
 				return
 			}
 
 			// Render
-			batchRenderHelper(c, typeString, data, info, nil)
+			batchRenderHelper(c, typeString, data, &info, nil)
 		} else {
-			data, info, renderer := lifecycle.CreateOne(mapper, who, typeString, modelObjs[0], options, &TransIDLogger{})
+			info := hookhandler.EndPointInfo{
+				URL:         c.Request.URL.String(),
+				Op:          hookhandler.RESTOpCreate,
+				Cardinality: hookhandler.APICardinalityOne,
+			}
+			data, renderer := lifecycle.CreateOne(mapper, who, typeString, modelObjs[0], &info, options, &TransIDLogger{})
 			if renderer != nil {
 				render.Render(w, c.Request, renderer)
 				return
 			}
 
-			singleRenderHelper(c, typeString, data, info)
+			singleRenderHelper(c, typeString, data, &info)
 		}
 	}
 }
@@ -456,14 +466,19 @@ func ReadManyHandler(typeString string, mapper datamapper.IDataMapper) func(c *g
 
 		who := WhoFromContext(r)
 		options := OptionFromContext(r)
+		info := hookhandler.EndPointInfo{
+			URL:         c.Request.URL.String(),
+			Op:          hookhandler.RESTOpRead,
+			Cardinality: hookhandler.APICardinalityMany,
+		}
 
-		data, info, no, renderer := lifecycle.ReadMany(mapper, who, typeString, options, &TransIDLogger{})
+		data, no, renderer := lifecycle.ReadMany(mapper, who, typeString, &info, options, &TransIDLogger{})
 		if renderer != nil {
 			render.Render(w, r, renderer)
 			return
 		}
 
-		batchRenderHelper(c, typeString, data, info, no)
+		batchRenderHelper(c, typeString, data, &info, no)
 	}
 }
 
@@ -483,13 +498,18 @@ func ReadOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *gi
 			log.Println(fmt.Sprintf("[BetterREST]: %s %s (1), transact: n/a", c.Request.Method, c.Request.URL.String()))
 		}
 
-		data, info, renderer := lifecycle.ReadOne(mapper, WhoFromContext(r), typeString, id, OptionFromContext(r), &TransIDLogger{})
+		info := hookhandler.EndPointInfo{
+			URL:         c.Request.URL.String(),
+			Op:          hookhandler.RESTOpRead,
+			Cardinality: hookhandler.APICardinalityOne,
+		}
+		data, renderer := lifecycle.ReadOne(mapper, WhoFromContext(r), typeString, id, &info, OptionFromContext(r), &TransIDLogger{})
 		if renderer != nil {
 			render.Render(w, c.Request, renderer)
 			return
 		}
 
-		singleRenderHelper(c, typeString, data, info)
+		singleRenderHelper(c, typeString, data, &info)
 	}
 }
 
@@ -499,7 +519,12 @@ func UpdateManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 		w, r := c.Writer, c.Request
 
 		who := WhoFromContext(r)
-		options := OptionFromContext(r)
+
+		info := hookhandler.EndPointInfo{
+			URL:         c.Request.URL.String(),
+			Op:          hookhandler.RESTOpUpdate,
+			Cardinality: hookhandler.APICardinalityMany,
+		}
 
 		modelObjs, httperr := ModelsFromJSONBody(r, typeString, who)
 		if httperr != nil {
@@ -508,13 +533,13 @@ func UpdateManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 			return
 		}
 
-		data, info, renderer := lifecycle.UpdateMany(mapper, who, typeString, modelObjs, options, &TransIDLogger{})
+		data, renderer := lifecycle.UpdateMany(mapper, who, typeString, modelObjs, &info, OptionFromContext(r), &TransIDLogger{})
 		if renderer != nil {
 			render.Render(w, r, renderer)
 			return
 		}
 
-		batchRenderHelper(c, typeString, data, info, nil)
+		batchRenderHelper(c, typeString, data, &info, nil)
 	}
 }
 
@@ -543,13 +568,19 @@ func UpdateOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 			return
 		}
 
-		data, info, renderer := lifecycle.UpdateOne(mapper, who, typeString, modelObj, id, OptionFromContext(r), &TransIDLogger{})
+		info := hookhandler.EndPointInfo{
+			URL:         c.Request.URL.String(),
+			Op:          hookhandler.RESTOpUpdate,
+			Cardinality: hookhandler.APICardinalityOne,
+		}
+
+		data, renderer := lifecycle.UpdateOne(mapper, who, typeString, modelObj, id, &info, OptionFromContext(r), &TransIDLogger{})
 		if renderer != nil {
 			render.Render(w, r, renderer)
 			return
 		}
 
-		singleRenderHelper(c, typeString, data, info)
+		singleRenderHelper(c, typeString, data, &info)
 	}
 }
 
@@ -565,12 +596,19 @@ func PatchManyHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 			return
 		}
 
-		data, info, renderer := lifecycle.PatchMany(mapper, WhoFromContext(r), typeString, jsonIDPatches, OptionFromContext(r), &TransIDLogger{})
+		info := hookhandler.EndPointInfo{
+			URL:         c.Request.URL.String(),
+			Op:          hookhandler.RESTOpPatch,
+			Cardinality: hookhandler.APICardinalityMany,
+		}
+
+		data, renderer := lifecycle.PatchMany(mapper, WhoFromContext(r), typeString, jsonIDPatches, &info,
+			OptionFromContext(r), &TransIDLogger{})
 		if renderer != nil {
 			render.Render(w, r, renderer)
 			return
 		}
-		batchRenderHelper(c, typeString, data, info, nil)
+		batchRenderHelper(c, typeString, data, &info, nil)
 	}
 }
 
@@ -592,13 +630,20 @@ func PatchOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *g
 			return
 		}
 
-		data, info, renderer := lifecycle.PatchOne(mapper, WhoFromContext(r), typeString, jsonPatch, id, OptionFromContext(r), &TransIDLogger{})
+		info := hookhandler.EndPointInfo{
+			URL:         c.Request.URL.String(),
+			Op:          hookhandler.RESTOpPatch,
+			Cardinality: hookhandler.APICardinalityOne,
+		}
+
+		data, renderer := lifecycle.PatchOne(mapper, WhoFromContext(r), typeString, jsonPatch, id,
+			&info, OptionFromContext(r), &TransIDLogger{})
 		if renderer != nil {
 			render.Render(w, r, renderer)
 			return
 		}
 
-		singleRenderHelper(c, typeString, data, info)
+		singleRenderHelper(c, typeString, data, &info)
 	}
 }
 
@@ -615,12 +660,18 @@ func DeleteManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 			return
 		}
 
-		data, info, renderer := lifecycle.DeleteMany(mapper, who, typeString, modelObjs, OptionFromContext(r), &TransIDLogger{})
+		info := hookhandler.EndPointInfo{
+			URL:         c.Request.URL.String(),
+			Op:          hookhandler.RESTOpDelete,
+			Cardinality: hookhandler.APICardinalityMany,
+		}
+
+		data, renderer := lifecycle.DeleteMany(mapper, who, typeString, modelObjs, &info, OptionFromContext(r), &TransIDLogger{})
 		if renderer != nil {
 			render.Render(w, r, renderer)
 			return
 		}
-		batchRenderHelper(c, typeString, data, info, nil)
+		batchRenderHelper(c, typeString, data, &info, nil)
 	}
 }
 
@@ -635,11 +686,18 @@ func DeleteOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 			return
 		}
 
-		data, info, renderer := lifecycle.DeleteOne(mapper, WhoFromContext(r), typeString, id, OptionFromContext(r), &TransIDLogger{})
+		info := hookhandler.EndPointInfo{
+			URL:         c.Request.URL.String(),
+			Op:          hookhandler.RESTOpDelete,
+			Cardinality: hookhandler.APICardinalityOne,
+		}
+
+		data, renderer := lifecycle.DeleteOne(mapper, WhoFromContext(r), typeString, id, &info,
+			OptionFromContext(r), &TransIDLogger{})
 		if renderer != nil {
 			render.Render(w, r, renderer)
 			return
 		}
-		singleRenderHelper(c, typeString, data, info)
+		singleRenderHelper(c, typeString, data, &info)
 	}
 }

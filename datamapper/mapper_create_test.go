@@ -370,8 +370,12 @@ func (suite *TestBaseMapperCreateSuite) TestCreateOne_WhenGiven_GotCar() {
 	mapper := SharedOwnershipMapper()
 
 	var retVal *MapperRet
+	info := hookhandler.EndPointInfo{
+		Op:          hookhandler.RESTOpCreate,
+		Cardinality: hookhandler.APICardinalityOne,
+	}
 	retErr := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retErr *webrender.RetError) {
-		if retVal, retErr = mapper.CreateOne(tx, suite.who, suite.typeString, modelObj, options, &cargo); retErr != nil {
+		if retVal, retErr = mapper.CreateOne(tx, suite.who, suite.typeString, modelObj, &info, options, &cargo); retErr != nil {
 			return retErr
 		}
 		return nil
@@ -412,7 +416,11 @@ func (suite *TestBaseMapperCreateSuite) TestCreateOne_WhenNoController_CallRelev
 	var tx2 *gorm.DB
 	retErr := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retErr *webrender.RetError) {
 		tx2 = tx
-		if retVal, retErr = mapper.CreateOne(tx, suite.who, suite.typeString, modelObj, options, &cargo); retErr != nil {
+		info := hookhandler.EndPointInfo{
+			Op:          hookhandler.RESTOpCreate,
+			Cardinality: hookhandler.APICardinalityOne,
+		}
+		if retVal, retErr = mapper.CreateOne(tx, suite.who, suite.typeString, modelObj, &info, options, &cargo); retErr != nil {
 			return retErr
 		}
 		return nil
@@ -472,7 +480,11 @@ func (suite *TestBaseMapperCreateSuite) TestCreateOne_WhenHavingController_NotCa
 
 	var retVal *MapperRet
 	retErr := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retErr *webrender.RetError) {
-		if retVal, retErr = mapper.CreateOne(tx, suite.who, suite.typeString, modelObj, options, &cargo); retErr != nil {
+		info := hookhandler.EndPointInfo{
+			Op:          hookhandler.RESTOpCreate,
+			Cardinality: hookhandler.APICardinalityOne,
+		}
+		if retVal, retErr = mapper.CreateOne(tx, suite.who, suite.typeString, modelObj, &info, options, &cargo); retErr != nil {
 			return retErr
 		}
 		return nil
@@ -525,9 +537,10 @@ func (suite *TestBaseMapperCreateSuite) TestCreateOne_WhenHavingController_CallR
 	// var modelObj2 models.IModel
 	var tx2 *gorm.DB
 	var retVal *MapperRet
+	info := hookhandler.EndPointInfo{Op: hookhandler.RESTOpCreate, Cardinality: hookhandler.APICardinalityOne}
 	retErr := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retErr *webrender.RetError) {
 		tx2 = tx
-		if retVal, retErr = mapper.CreateOne(tx, suite.who, suite.typeString, modelObj, options, &cargo); retErr != nil {
+		if retVal, retErr = mapper.CreateOne(tx, suite.who, suite.typeString, modelObj, &info, options, &cargo); retErr != nil {
 			return retErr
 		}
 		return nil
@@ -538,7 +551,6 @@ func (suite *TestBaseMapperCreateSuite) TestCreateOne_WhenHavingController_CallR
 
 	role := models.UserRoleAdmin
 	data := hookhandler.Data{Ms: []models.IModel{&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID}, Name: carName}}, DB: tx2, Who: suite.who, TypeString: suite.typeString, Roles: []models.UserRole{role}, Cargo: &cargo}
-	info := hookhandler.EndPointInfo{Op: hookhandler.RESTOpCreate, Cardinality: hookhandler.APICardinalityOne}
 
 	ctrls := retVal.Fetcher.GetAllInstantiatedHanders()
 	if !assert.Len(suite.T(), ctrls, 1) {
@@ -608,9 +620,10 @@ func (suite *TestBaseMapperCreateSuite) TestCreateMany_WhenGiven_GotCars() {
 	registry.For(suite.typeString).ModelWithOption(&Car{}, opt)
 
 	var retVal *MapperRet
+	info := hookhandler.EndPointInfo{Op: hookhandler.RESTOpCreate, Cardinality: hookhandler.APICardinalityMany}
 	retErr := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retErr *webrender.RetError) {
 		mapper := SharedOwnershipMapper()
-		retVal, retErr = mapper.CreateMany(tx, suite.who, suite.typeString, modelObjs, options, &cargo)
+		retVal, retErr = mapper.CreateMany(tx, suite.who, suite.typeString, modelObjs, &info, options, &cargo)
 		return retErr
 	}, "lifecycle.CreateMany")
 	if !assert.Nil(suite.T(), retErr) {
@@ -687,10 +700,11 @@ func (suite *TestBaseMapperCreateSuite) TestCreateMany_WhenNoController_CallRele
 		BatchCRUPDHooks(before, after).BatchCreateHooks(beforeCreate, afterCreate)
 
 	var tx2 *gorm.DB
+	info := hookhandler.EndPointInfo{Op: hookhandler.RESTOpCreate, Cardinality: hookhandler.APICardinalityMany}
 	retErr := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retErr *webrender.RetError) {
 		tx2 = tx
 		mapper := SharedOwnershipMapper()
-		_, retErr = mapper.CreateMany(tx2, suite.who, suite.typeString, modelObjs, options, &cargo)
+		_, retErr = mapper.CreateMany(tx2, suite.who, suite.typeString, modelObjs, &info, options, &cargo)
 		return retErr
 	}, "lifecycle.CreateOne")
 	if !assert.Nil(suite.T(), retErr) {
@@ -796,9 +810,10 @@ func (suite *TestBaseMapperCreateSuite) TestCreateMany_WhenHavingController_NotC
 	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).
 		BatchCRUPDHooks(before, after).BatchCreateHooks(beforeCreate, afterCreate).Hook(&CarControllerWithoutCallbacks{}, "CRUPD")
 
+	info := hookhandler.EndPointInfo{Op: hookhandler.RESTOpCreate, Cardinality: hookhandler.APICardinalityMany}
 	retErr := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retErr *webrender.RetError) {
 		mapper := SharedOwnershipMapper()
-		_, retErr = mapper.CreateMany(tx, suite.who, suite.typeString, modelObjs, options, &cargo)
+		_, retErr = mapper.CreateMany(tx, suite.who, suite.typeString, modelObjs, &info, options, &cargo)
 		return retErr
 	}, "lifecycle.CreateOne")
 	if !assert.Nil(suite.T(), retErr) {
@@ -853,10 +868,11 @@ func (suite *TestBaseMapperCreateSuite) TestCreateMany_WhenHavingController_Call
 
 	var tx2 *gorm.DB
 	var retVal *MapperRet
+	info := hookhandler.EndPointInfo{Op: hookhandler.RESTOpCreate, Cardinality: hookhandler.APICardinalityMany}
 	retErr := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retErr *webrender.RetError) {
 		mapper := SharedOwnershipMapper()
 		tx2 = tx
-		retVal, retErr = mapper.CreateMany(tx2, suite.who, suite.typeString, modelObjs, options, &cargo)
+		retVal, retErr = mapper.CreateMany(tx2, suite.who, suite.typeString, modelObjs, &info, options, &cargo)
 		return retErr
 	}, "lifecycle.CreateOne")
 	if !assert.Nil(suite.T(), retErr) {
@@ -869,7 +885,6 @@ func (suite *TestBaseMapperCreateSuite) TestCreateMany_WhenHavingController_Call
 		&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID2}, Name: carName2},
 		&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID3}, Name: carName3},
 	}, DB: tx2, Who: suite.who, TypeString: suite.typeString, Roles: roles, Cargo: &cargo}
-	info := hookhandler.EndPointInfo{Op: hookhandler.RESTOpCreate, Cardinality: hookhandler.APICardinalityMany}
 
 	ctrls := retVal.Fetcher.GetAllInstantiatedHanders()
 	if !assert.Len(suite.T(), ctrls, 1) { //testthis

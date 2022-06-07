@@ -52,6 +52,7 @@ type Data struct {
 
 // Endpoint information
 type EndPointInfo struct {
+	URL         string
 	Op          RESTOp
 	Cardinality APICardinality
 }
@@ -129,5 +130,5 @@ type IAfterTransact interface {
 // If return false, use the default JSON output
 // For batch renderer, register a Render(r UserRole, who models.UserIDFetchable, modelObjs []IModel) bool
 type IHasRenderer interface {
-	Render(c *gin.Context, data *Data, op *EndPointInfo) bool
+	Render(c *gin.Context, data *Data, info *EndPointInfo) bool
 }
