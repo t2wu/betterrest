@@ -2,8 +2,10 @@ package datamapper
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -130,6 +132,11 @@ func (mapper *OrgPartition) ReadMany(db *gorm.DB, who models.UserIDFetchable, ty
 	db2 := db
 
 	offset, limit, cstart, cstop, order, latestn, latestnons, totalcount := urlparam.GetOptions(options)
+	if cstart == nil || cstop == nil {
+		err := fmt.Errorf("GET /%s needs cstart and cstop parameters", strings.ToLower(typeString))
+		return nil, nil, nil, webrender.NewRetValWithRendererError(err, webrender.NewErrQueryParameter(err))
+	}
+
 	rtable := registry.GetTableNameFromTypeString(typeString)
 
 	if cstart != nil && cstop != nil {
@@ -261,6 +268,12 @@ func (mapper *OrgPartition) ReadOne(db *gorm.DB, who models.UserIDFetchable, typ
 	options map[urlparam.Param]interface{}, cargo *hookhandler.Cargo) (*MapperRet, models.UserRole, *webrender.RetError) {
 
 	db = db.Set("gorm:auto_preload", false)
+
+	_, _, cstart, cstop, _, _, _, _ := urlparam.GetOptions(options)
+	if cstart == nil || cstop == nil {
+		err := fmt.Errorf("GET /%s needs cstart and cstop parameters", strings.ToLower(typeString))
+		return nil, models.UserRoleAny, webrender.NewRetValWithRendererError(err, webrender.NewErrQueryParameter(err))
+	}
 
 	if id == nil || id.UUID.String() == "" {
 		// in case it's an empty string
