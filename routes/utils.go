@@ -18,13 +18,21 @@ import (
 func transformJSONToModel(data map[string]interface{}, f *jsontrans.JSONFields) error {
 	fi := *f
 	for k, v := range *f {
+		// For our own JSON string type there could be cases where it's an array
+		// but I want to store in as the JSON data type in the Postgres column
+		// in that case jsontrans.JSONFields should be jsontrans.FieldPass
+		if t, ok := fi[k].(jsontrans.Field); ok && t == jsontrans.FieldPass {
+			continue
+		}
+
 		if datv, ok := data[k].([]interface{}); ok { // is slice after this
 			for i := range datv { // loop the slice
 
 				newdat := datv[i].(map[string]interface{})
-				newF := fi[k].(jsontrans.JSONFields)
-				if err := transformJSONToModel(newdat, &newF); err != nil {
-					return err
+				if newF, ok := fi[k].(jsontrans.JSONFields); ok {
+					if err := transformJSONToModel(newdat, &newF); err != nil {
+						return err
+					}
 				}
 			}
 		} else if newF, ok := v.(jsontrans.JSONFields); ok && newF != nil && data[k] != nil { // other object
