@@ -200,7 +200,7 @@ type UserIDFetchable interface {
 	GetUserID() *datatypes.UUID
 }
 
-// HookPointData is the data send to single model hookpoints
+// HookPointData is the data send to single model hookpoints (deprecated)
 type HookPointData struct {
 	// DB handle (not available for AfterTransact)
 	DB *gorm.DB
@@ -217,7 +217,7 @@ type HookPointData struct {
 	URLParams map[urlparam.Param]interface{}
 }
 
-// BatchHookPointData is the data send to batch model hookpoints
+// BatchHookPointData is the data send to batch model hookpoints  (deprecated)
 type BatchHookPointData struct {
 	// Ms is the slice of IModels
 	Ms []IModel

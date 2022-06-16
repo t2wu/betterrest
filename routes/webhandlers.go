@@ -157,10 +157,10 @@ func hasTotalCountFromQueryString(values *url.Values) bool {
 	return false
 }
 
-func modelObjsToJSON(typeString string, modelObjs []models.IModel, roles []models.UserRole, who models.UserIDFetchable) (string, error) {
+func modelObjsToJSON(modelObjs []models.IModel, roles []models.UserRole, who models.UserIDFetchable) (string, error) {
 	arr := make([]string, len(modelObjs))
 	for i, v := range modelObjs {
-		if j, err := tools.ToJSON(typeString, v, roles[i], who); err != nil {
+		if j, err := tools.ToJSON(v, roles[i], who); err != nil {
 			return "", err
 		} else {
 			arr[i] = string(j)
@@ -171,16 +171,16 @@ func modelObjsToJSON(typeString string, modelObjs []models.IModel, roles []model
 	return content, nil
 }
 
-func RenderModelSlice(c *gin.Context, total *int, data *hookhandler.Data, info *hookhandler.EndPointInfo) {
+func RenderModelSlice(c *gin.Context, total *int, data *hookhandler.Data, ep *hookhandler.EndPointInfo) {
 	// Any custom rendering?
-	if method := registry.ModelRegistry[data.TypeString].RendererMethod; method != nil {
-		if method(c, data, info) { // custom render if true
+	if method := registry.ModelRegistry[ep.TypeString].RendererMethod; method != nil {
+		if method(c, data, ep) { // custom render if true
 			return
 		}
 	}
 
 	// no custom rendering
-	jsonString, err := modelObjsToJSON(data.TypeString, data.Ms, data.Roles, data.Who)
+	jsonString, err := modelObjsToJSON(data.Ms, data.Roles, ep.Who)
 	if err != nil {
 		log.Println("Error in RenderModelSlice:", err)
 		render.Render(c.Writer, c.Request, webrender.NewErrGenJSON(err))
@@ -211,20 +211,20 @@ func RenderModelSlice(c *gin.Context, total *int, data *hookhandler.Data, info *
 	// c.JSON(http.StatusOK, content)
 }
 
-func RenderModel(c *gin.Context, total *int, data *hookhandler.Data, info *hookhandler.EndPointInfo) {
+func RenderModel(c *gin.Context, total *int, data *hookhandler.Data, ep *hookhandler.EndPointInfo) {
 	// Any custom rendering?
-	if method := registry.ModelRegistry[data.TypeString].RendererMethod; method != nil {
-		if method(c, data, info) { // custom render if true
+	if method := registry.ModelRegistry[ep.TypeString].RendererMethod; method != nil {
+		if method(c, data, ep) { // custom render if true
 			return
 		}
 	}
 
-	RenderJSONForModel(c, data.Ms[0], data)
+	RenderJSONForModel(c, data.Ms[0], data, ep)
 }
 
-func RenderJSONForModel(c *gin.Context, modelObj models.IModel, data *hookhandler.Data) {
+func RenderJSONForModel(c *gin.Context, modelObj models.IModel, data *hookhandler.Data, ep *hookhandler.EndPointInfo) {
 	// render.JSON(w, r, modelObj) // cannot use this since no picking the field we need
-	jsonBytes, err := tools.ToJSON(data.TypeString, modelObj, data.Roles[0], data.Who)
+	jsonBytes, err := tools.ToJSON(modelObj, data.Roles[0], ep.Who)
 	if err != nil {
 		log.Println("Error in RenderModel:", err)
 		render.Render(c.Writer, c.Request, webrender.NewErrGenJSON(err))
@@ -246,7 +246,7 @@ func RenderModelSliceOri(c *gin.Context, modelObjs []models.IModel, total *int, 
 		}
 	}
 
-	jsonString, err := modelObjsToJSON(bhpdata.TypeString, modelObjs, bhpdata.Roles, bhpdata.Who)
+	jsonString, err := modelObjsToJSON(modelObjs, bhpdata.Roles, bhpdata.Who)
 	if err != nil {
 		log.Println("Error in RenderModelSlice:", err)
 		render.Render(c.Writer, c.Request, webrender.NewErrGenJSON(err))
@@ -279,7 +279,7 @@ func RenderModelOri(c *gin.Context, modelObj models.IModel, hpdata *models.HookP
 
 func RenderJSONForModelOri(c *gin.Context, modelObj models.IModel, hpdata *models.HookPointData) {
 	// render.JSON(w, r, modelObj) // cannot use this since no picking the field we need
-	jsonBytes, err := tools.ToJSON(hpdata.TypeString, modelObj, *hpdata.Role, hpdata.Who)
+	jsonBytes, err := tools.ToJSON(modelObj, *hpdata.Role, hpdata.Who)
 	if err != nil {
 		log.Println("Error in RenderModel:", err)
 		render.Render(c.Writer, c.Request, webrender.NewErrGenJSON(err))
@@ -344,16 +344,16 @@ func w(handler func(c *gin.Context)) func(c *gin.Context) {
 	}
 }
 
-func batchRenderHelper(c *gin.Context, typeString string, data *hookhandler.Data, info *hookhandler.EndPointInfo, no *int) {
+func batchRenderHelper(c *gin.Context, typeString string, data *hookhandler.Data, ep *hookhandler.EndPointInfo, no *int) {
 	// Does old renderer exists?
 	if renderer := registry.ModelRegistry[typeString].BatchRenderer; renderer != nil {
 		// Re-create it again to remain backward compatible
 		oldBatchCargo := models.BatchHookCargo{Payload: data.Cargo.Payload}
-		bhpData := models.BatchHookPointData{Ms: data.Ms, DB: nil, Who: data.Who,
-			TypeString: data.TypeString, Roles: data.Roles, URLParams: data.URLParams, Cargo: &oldBatchCargo}
+		bhpData := models.BatchHookPointData{Ms: data.Ms, DB: nil, Who: ep.Who,
+			TypeString: ep.TypeString, Roles: data.Roles, URLParams: ep.URLParams, Cargo: &oldBatchCargo}
 
 		var op models.CRUPDOp
-		switch info.Op {
+		switch ep.Op {
 		case hookhandler.RESTOpRead:
 			op = models.CRUPDOpRead
 		case hookhandler.RESTOpCreate:
@@ -371,19 +371,19 @@ func batchRenderHelper(c *gin.Context, typeString string, data *hookhandler.Data
 	}
 
 	// Use the new renderer (renderer doesn't have to exist, but call using the new RenderModelSlice)
-	RenderModelSlice(c, no, data, info)
+	RenderModelSlice(c, no, data, ep)
 }
 
-func singleRenderHelper(c *gin.Context, typeString string, data *hookhandler.Data, info *hookhandler.EndPointInfo) {
+func singleRenderHelper(c *gin.Context, typeString string, data *hookhandler.Data, ep *hookhandler.EndPointInfo) {
 	// Does old renderer exists?
 	if renderer := registry.ModelRegistry[typeString].BatchRenderer; renderer != nil {
 		// Re-create it again to remain backward compatible
 		oldBatchCargo := models.ModelCargo{Payload: data.Cargo.Payload}
-		hpdata := models.HookPointData{DB: nil, Who: data.Who,
-			TypeString: data.TypeString, Role: &data.Roles[0], URLParams: data.URLParams, Cargo: &oldBatchCargo}
+		hpdata := models.HookPointData{DB: nil, Who: ep.Who,
+			TypeString: ep.TypeString, Role: &data.Roles[0], URLParams: ep.URLParams, Cargo: &oldBatchCargo}
 
 		var op models.CRUPDOp
-		switch info.Op {
+		switch ep.Op {
 		case hookhandler.RESTOpRead:
 			op = models.CRUPDOpRead
 		case hookhandler.RESTOpCreate:
@@ -401,7 +401,7 @@ func singleRenderHelper(c *gin.Context, typeString string, data *hookhandler.Dat
 	}
 
 	// Use the new renderer (renderer doesn't have to exist, but call using the new RenderModelSlice)
-	RenderModel(c, nil, data, info)
+	RenderModel(c, nil, data, ep)
 }
 
 // ---------------------------------------------
@@ -415,42 +415,39 @@ func CreateHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin
 	return func(c *gin.Context) {
 		w, r := c.Writer, c.Request
 
-		who := WhoFromContext(r)
-		options := OptionFromContext(r)
+		ep := hookhandler.EndPointInfo{
+			URL:        c.Request.URL.String(),
+			Op:         hookhandler.RESTOpCreate,
+			TypeString: typeString,
+			URLParams:  OptionFromContext(r),
+			Who:        WhoFromContext(r),
+		}
 
-		modelObjs, isBatch, httperr := ModelOrModelsFromJSONBody(r, typeString, who)
+		modelObjs, isBatch, httperr := ModelOrModelsFromJSONBody(r, typeString, ep.Who)
 		if httperr != nil {
 			render.Render(w, r, httperr)
 			return
 		}
 
 		if *isBatch {
-			info := hookhandler.EndPointInfo{
-				URL:         c.Request.URL.String(),
-				Op:          hookhandler.RESTOpCreate,
-				Cardinality: hookhandler.APICardinalityMany,
-			}
-			data, renderer := lifecycle.CreateMany(mapper, who, typeString, modelObjs, &info, options, &TransIDLogger{})
+			ep.Cardinality = hookhandler.APICardinalityMany
+			data, renderer := lifecycle.CreateMany(mapper, modelObjs, &ep, &TransIDLogger{})
 			if renderer != nil {
 				render.Render(w, c.Request, renderer)
 				return
 			}
 
 			// Render
-			batchRenderHelper(c, typeString, data, &info, nil)
+			batchRenderHelper(c, typeString, data, &ep, nil)
 		} else {
-			info := hookhandler.EndPointInfo{
-				URL:         c.Request.URL.String(),
-				Op:          hookhandler.RESTOpCreate,
-				Cardinality: hookhandler.APICardinalityOne,
-			}
-			data, renderer := lifecycle.CreateOne(mapper, who, typeString, modelObjs[0], &info, options, &TransIDLogger{})
+			ep.Cardinality = hookhandler.APICardinalityOne
+			data, renderer := lifecycle.CreateOne(mapper, modelObjs[0], &ep, &TransIDLogger{})
 			if renderer != nil {
 				render.Render(w, c.Request, renderer)
 				return
 			}
 
-			singleRenderHelper(c, typeString, data, &info)
+			singleRenderHelper(c, typeString, data, &ep)
 		}
 	}
 }
@@ -464,21 +461,22 @@ func ReadManyHandler(typeString string, mapper datamapper.IDataMapper) func(c *g
 			log.Printf("[BetterREST]: %s %s (n), transact: n/a", c.Request.Method, c.Request.URL.String())
 		}
 
-		who := WhoFromContext(r)
-		options := OptionFromContext(r)
-		info := hookhandler.EndPointInfo{
+		ep := hookhandler.EndPointInfo{
 			URL:         c.Request.URL.String(),
 			Op:          hookhandler.RESTOpRead,
 			Cardinality: hookhandler.APICardinalityMany,
+			TypeString:  typeString,
+			URLParams:   OptionFromContext(r),
+			Who:         WhoFromContext(r),
 		}
 
-		data, no, renderer := lifecycle.ReadMany(mapper, who, typeString, &info, options, &TransIDLogger{})
+		data, no, renderer := lifecycle.ReadMany(mapper, &ep, &TransIDLogger{})
 		if renderer != nil {
 			render.Render(w, r, renderer)
 			return
 		}
 
-		batchRenderHelper(c, typeString, data, &info, no)
+		batchRenderHelper(c, typeString, data, &ep, no)
 	}
 }
 
@@ -498,18 +496,21 @@ func ReadOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *gi
 			log.Println(fmt.Sprintf("[BetterREST]: %s %s (1), transact: n/a", c.Request.Method, c.Request.URL.String()))
 		}
 
-		info := hookhandler.EndPointInfo{
+		ep := hookhandler.EndPointInfo{
 			URL:         c.Request.URL.String(),
 			Op:          hookhandler.RESTOpRead,
 			Cardinality: hookhandler.APICardinalityOne,
+			TypeString:  typeString,
+			URLParams:   OptionFromContext(r),
+			Who:         WhoFromContext(r),
 		}
-		data, renderer := lifecycle.ReadOne(mapper, WhoFromContext(r), typeString, id, &info, OptionFromContext(r), &TransIDLogger{})
+		data, renderer := lifecycle.ReadOne(mapper, id, &ep, &TransIDLogger{})
 		if renderer != nil {
 			render.Render(w, c.Request, renderer)
 			return
 		}
 
-		singleRenderHelper(c, typeString, data, &info)
+		singleRenderHelper(c, typeString, data, &ep)
 	}
 }
 
@@ -518,28 +519,29 @@ func UpdateManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 	return func(c *gin.Context) {
 		w, r := c.Writer, c.Request
 
-		who := WhoFromContext(r)
-
-		info := hookhandler.EndPointInfo{
+		ep := hookhandler.EndPointInfo{
 			URL:         c.Request.URL.String(),
 			Op:          hookhandler.RESTOpUpdate,
 			Cardinality: hookhandler.APICardinalityMany,
+			TypeString:  typeString,
+			URLParams:   OptionFromContext(r),
+			Who:         WhoFromContext(r),
 		}
 
-		modelObjs, httperr := ModelsFromJSONBody(r, typeString, who)
+		modelObjs, httperr := ModelsFromJSONBody(r, typeString, ep.Who)
 		if httperr != nil {
 			log.Println("Error in ModelsFromJSONBody:", typeString, httperr)
 			render.Render(w, r, httperr)
 			return
 		}
 
-		data, renderer := lifecycle.UpdateMany(mapper, who, typeString, modelObjs, &info, OptionFromContext(r), &TransIDLogger{})
+		data, renderer := lifecycle.UpdateMany(mapper, modelObjs, &ep, &TransIDLogger{})
 		if renderer != nil {
 			render.Render(w, r, renderer)
 			return
 		}
 
-		batchRenderHelper(c, typeString, data, &info, nil)
+		batchRenderHelper(c, typeString, data, &ep, nil)
 	}
 }
 
@@ -554,8 +556,16 @@ func UpdateOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 			return
 		}
 
-		who := WhoFromContext(r)
-		modelObj, httperr := ModelFromJSONBody(r, typeString, who)
+		ep := hookhandler.EndPointInfo{
+			URL:         c.Request.URL.String(),
+			Op:          hookhandler.RESTOpUpdate,
+			Cardinality: hookhandler.APICardinalityOne,
+			TypeString:  typeString,
+			URLParams:   OptionFromContext(r),
+			Who:         WhoFromContext(r),
+		}
+
+		modelObj, httperr := ModelFromJSONBody(r, typeString, ep.Who)
 		if httperr != nil {
 			render.Render(w, r, httperr)
 			return
@@ -568,19 +578,13 @@ func UpdateOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 			return
 		}
 
-		info := hookhandler.EndPointInfo{
-			URL:         c.Request.URL.String(),
-			Op:          hookhandler.RESTOpUpdate,
-			Cardinality: hookhandler.APICardinalityOne,
-		}
-
-		data, renderer := lifecycle.UpdateOne(mapper, who, typeString, modelObj, id, &info, OptionFromContext(r), &TransIDLogger{})
+		data, renderer := lifecycle.UpdateOne(mapper, modelObj, id, &ep, &TransIDLogger{})
 		if renderer != nil {
 			render.Render(w, r, renderer)
 			return
 		}
 
-		singleRenderHelper(c, typeString, data, &info)
+		singleRenderHelper(c, typeString, data, &ep)
 	}
 }
 
@@ -596,19 +600,21 @@ func PatchManyHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 			return
 		}
 
-		info := hookhandler.EndPointInfo{
+		ep := hookhandler.EndPointInfo{
 			URL:         c.Request.URL.String(),
 			Op:          hookhandler.RESTOpPatch,
 			Cardinality: hookhandler.APICardinalityMany,
+			TypeString:  typeString,
+			URLParams:   OptionFromContext(r),
+			Who:         WhoFromContext(r),
 		}
 
-		data, renderer := lifecycle.PatchMany(mapper, WhoFromContext(r), typeString, jsonIDPatches, &info,
-			OptionFromContext(r), &TransIDLogger{})
+		data, renderer := lifecycle.PatchMany(mapper, jsonIDPatches, &ep, &TransIDLogger{})
 		if renderer != nil {
 			render.Render(w, r, renderer)
 			return
 		}
-		batchRenderHelper(c, typeString, data, &info, nil)
+		batchRenderHelper(c, typeString, data, &ep, nil)
 	}
 }
 
@@ -630,20 +636,22 @@ func PatchOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *g
 			return
 		}
 
-		info := hookhandler.EndPointInfo{
+		ep := hookhandler.EndPointInfo{
 			URL:         c.Request.URL.String(),
 			Op:          hookhandler.RESTOpPatch,
 			Cardinality: hookhandler.APICardinalityOne,
+			TypeString:  typeString,
+			URLParams:   OptionFromContext(r),
+			Who:         WhoFromContext(r),
 		}
 
-		data, renderer := lifecycle.PatchOne(mapper, WhoFromContext(r), typeString, jsonPatch, id,
-			&info, OptionFromContext(r), &TransIDLogger{})
+		data, renderer := lifecycle.PatchOne(mapper, jsonPatch, id, &ep, &TransIDLogger{})
 		if renderer != nil {
 			render.Render(w, r, renderer)
 			return
 		}
 
-		singleRenderHelper(c, typeString, data, &info)
+		singleRenderHelper(c, typeString, data, &ep)
 	}
 }
 
@@ -652,26 +660,28 @@ func DeleteManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 	return func(c *gin.Context) {
 		w, r := c.Writer, c.Request
 
-		who := WhoFromContext(r)
-		modelObjs, httperr := ModelsFromJSONBody(r, typeString, who)
+		ep := hookhandler.EndPointInfo{
+			URL:         c.Request.URL.String(),
+			Op:          hookhandler.RESTOpDelete,
+			Cardinality: hookhandler.APICardinalityMany,
+			TypeString:  typeString,
+			URLParams:   OptionFromContext(r),
+			Who:         WhoFromContext(r),
+		}
+
+		modelObjs, httperr := ModelsFromJSONBody(r, typeString, ep.Who)
 		if httperr != nil {
 			log.Println("Error in ModelsFromJSONBody:", typeString, httperr)
 			render.Render(w, r, httperr)
 			return
 		}
 
-		info := hookhandler.EndPointInfo{
-			URL:         c.Request.URL.String(),
-			Op:          hookhandler.RESTOpDelete,
-			Cardinality: hookhandler.APICardinalityMany,
-		}
-
-		data, renderer := lifecycle.DeleteMany(mapper, who, typeString, modelObjs, &info, OptionFromContext(r), &TransIDLogger{})
+		data, renderer := lifecycle.DeleteMany(mapper, modelObjs, &ep, &TransIDLogger{})
 		if renderer != nil {
 			render.Render(w, r, renderer)
 			return
 		}
-		batchRenderHelper(c, typeString, data, &info, nil)
+		batchRenderHelper(c, typeString, data, &ep, nil)
 	}
 }
 
@@ -686,18 +696,20 @@ func DeleteOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 			return
 		}
 
-		info := hookhandler.EndPointInfo{
+		ep := hookhandler.EndPointInfo{
 			URL:         c.Request.URL.String(),
 			Op:          hookhandler.RESTOpDelete,
 			Cardinality: hookhandler.APICardinalityOne,
+			TypeString:  typeString,
+			URLParams:   OptionFromContext(r),
+			Who:         WhoFromContext(r),
 		}
 
-		data, renderer := lifecycle.DeleteOne(mapper, WhoFromContext(r), typeString, id, &info,
-			OptionFromContext(r), &TransIDLogger{})
+		data, renderer := lifecycle.DeleteOne(mapper, id, &ep, &TransIDLogger{})
 		if renderer != nil {
 			render.Render(w, r, renderer)
 			return
 		}
-		singleRenderHelper(c, typeString, data, &info)
+		singleRenderHelper(c, typeString, data, &ep)
 	}
 }

@@ -133,7 +133,7 @@ func (r *Registrar) Hook(hdlr hookhandler.IHookhandler, method string, args ...i
 }
 
 // Guard register guard function
-func (r *Registrar) Guard(guard func(who models.UserIDFetchable, info *hookhandler.EndPointInfo) *webrender.RetError) *Registrar {
+func (r *Registrar) Guard(guard func(ep *hookhandler.EndPointInfo) *webrender.RetError) *Registrar {
 	ModelRegistry[r.currentTypeString].GuardMethod = guard
 	return r
 }

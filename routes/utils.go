@@ -101,16 +101,17 @@ func GuardMiddleWare(typeString string) func(c *gin.Context) {
 		}
 		// End Old, deprecated
 
-		data := hookhandler.Data{Ms: nil, DB: nil, Who: who,
-			TypeString: typeString, Roles: nil, URLParams: options, Cargo: nil}
-		info := hookhandler.EndPointInfo{
+		ep := hookhandler.EndPointInfo{
 			URL:         c.Request.URL.String(),
 			Op:          hookhandler.HTTPMethodToRESTOp(r.Method),
 			Cardinality: hookhandler.APICardinalityOne,
+			TypeString:  typeString,
+			URLParams:   options,
+			Who:         who,
 		}
 
 		if guard := registry.ModelRegistry[typeString].GuardMethod; guard != nil {
-			if retErr := guard(data.Who, &info); retErr != nil {
+			if retErr := guard(&ep); retErr != nil {
 				defer c.Abort() // abort
 
 				if retErr.Renderer == nil {

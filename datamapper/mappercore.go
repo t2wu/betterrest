@@ -16,16 +16,16 @@ import (
 
 func callOldBatch(
 	data *hookhandler.Data,
-	info *hookhandler.EndPointInfo,
+	ep *hookhandler.EndPointInfo,
 	oldGeneric func(bhpData models.BatchHookPointData, op models.CRUPDOp) error, // before or after
 	oldSpecific func(bhpData models.BatchHookPointData) error, // before or after
 ) error {
 	oldBatchCargo := models.BatchHookCargo{Payload: data.Cargo.Payload}
-	bhpData := models.BatchHookPointData{Ms: data.Ms, DB: data.DB, Who: data.Who,
-		TypeString: data.TypeString, Roles: data.Roles, URLParams: data.URLParams, Cargo: &oldBatchCargo}
+	bhpData := models.BatchHookPointData{Ms: data.Ms, DB: data.DB, Who: ep.Who,
+		TypeString: ep.TypeString, Roles: data.Roles, URLParams: ep.URLParams, Cargo: &oldBatchCargo}
 
 	var op models.CRUPDOp
-	switch info.Op {
+	switch ep.Op {
 	case hookhandler.RESTOpRead:
 		op = models.CRUPDOpRead
 	case hookhandler.RESTOpCreate:
@@ -61,16 +61,16 @@ func callOldBatch(
 // should be the new one. (at least for after)
 func callOldSingle(
 	data *hookhandler.Data,
-	info *hookhandler.EndPointInfo,
+	ep *hookhandler.EndPointInfo,
 	oldGeneric func(hpdata models.HookPointData, op models.CRUPDOp) error,
 	oldSpecific *string, // before or after
 ) error {
 	oldSingleCargo := models.ModelCargo{Payload: data.Cargo.Payload}
-	hpdata := models.HookPointData{DB: data.DB, Who: data.Who, TypeString: data.TypeString,
-		URLParams: data.URLParams, Role: &data.Roles[0], Cargo: &oldSingleCargo}
+	hpdata := models.HookPointData{DB: data.DB, Who: ep.Who, TypeString: ep.TypeString,
+		URLParams: ep.URLParams, Role: &data.Roles[0], Cargo: &oldSingleCargo}
 
 	var op models.CRUPDOp
-	switch info.Op {
+	switch ep.Op {
 	case hookhandler.RESTOpRead:
 		op = models.CRUPDOpRead
 	case hookhandler.RESTOpCreate:
@@ -125,14 +125,14 @@ type batchOpJobV1 struct {
 
 	fetcher *hfetcher.HandlerFetcher
 	data    *hookhandler.Data
-	info    *hookhandler.EndPointInfo
+	ep      *hookhandler.EndPointInfo
 }
 
 func batchOpCoreV1(job batchOpJobV1,
 	taskFunc func(db *gorm.DB, who models.UserIDFetchable, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObj models.IModel) (models.IModel, error),
 ) (*MapperRet, *webrender.RetError) {
 	modelObjs, oldmodelObjs, oldBefore, oldAfter := job.modelObjs, job.oldmodelObjs, job.oldBefore, job.oldAfter
-	fetcher, data, info := job.fetcher, job.data, job.info
+	fetcher, data, ep := job.fetcher, job.data, job.ep
 
 	ms := make([]models.IModel, len(modelObjs))
 
@@ -142,14 +142,14 @@ func batchOpCoreV1(job batchOpJobV1,
 
 	// deprecated, only try to call when no controlelr exists
 	if !fetcher.HasAttemptRegisteringHandler() {
-		if err := callOldBatch(data, info, registry.ModelRegistry[data.TypeString].BeforeCUPD, oldBefore); err != nil {
+		if err := callOldBatch(data, ep, registry.ModelRegistry[ep.TypeString].BeforeCUPD, oldBefore); err != nil {
 			return nil, &webrender.RetError{Error: err}
 		}
 	}
 
 	// fetch all handlers with before hooks
-	for _, hdlr := range fetcher.FetchHandlersForOpAndHook(info.Op, "B") { // FetchHandlersForOpAndHook is stateful, cannot be repeated called
-		if renderer := hdlr.(hookhandler.IBefore).Before(data, info); renderer != nil {
+	for _, hdlr := range fetcher.FetchHandlersForOpAndHook(ep.Op, "B") { // FetchHandlersForOpAndHook is stateful, cannot be repeated called
+		if renderer := hdlr.(hookhandler.IBefore).Before(data, ep); renderer != nil {
 			return nil, renderer
 		}
 	}
@@ -162,9 +162,9 @@ func batchOpCoreV1(job batchOpJobV1,
 		var m models.IModel
 		var err error
 		if oldmodelObjs == nil {
-			m, err = taskFunc(data.DB, data.Who, data.TypeString, modelObj, id, nil)
+			m, err = taskFunc(data.DB, ep.Who, ep.TypeString, modelObj, id, nil)
 		} else {
-			m, err = taskFunc(data.DB, data.Who, data.TypeString, modelObj, id, oldmodelObjs[i])
+			m, err = taskFunc(data.DB, ep.Who, ep.TypeString, modelObj, id, oldmodelObjs[i])
 		}
 		if err != nil { // Error is "record not found" when not found
 			return nil, &webrender.RetError{Error: err}
@@ -174,14 +174,14 @@ func batchOpCoreV1(job batchOpJobV1,
 	}
 
 	if !fetcher.HasAttemptRegisteringHandler() { // deprecated, only try to call when no controlelr exists
-		if err := callOldBatch(data, info, registry.ModelRegistry[data.TypeString].AfterCRUPD, oldAfter); err != nil {
+		if err := callOldBatch(data, ep, registry.ModelRegistry[ep.TypeString].AfterCRUPD, oldAfter); err != nil {
 			return nil, &webrender.RetError{Error: err}
 		}
 	}
 
 	// fetch all handlers with after hooks
-	for _, hdlr := range fetcher.FetchHandlersForOpAndHook(info.Op, "A") {
-		if renderer := hdlr.(hookhandler.IAfter).After(data, info); renderer != nil {
+	for _, hdlr := range fetcher.FetchHandlersForOpAndHook(ep.Op, "A") {
+		if renderer := hdlr.(hookhandler.IAfter).After(data, ep); renderer != nil {
 			return nil, renderer
 		}
 	}
@@ -210,7 +210,7 @@ type opJobV1 struct {
 
 	fetcher *hfetcher.HandlerFetcher
 	data    *hookhandler.Data
-	info    *hookhandler.EndPointInfo
+	ep      *hookhandler.EndPointInfo
 }
 
 func opCoreV1(
@@ -218,7 +218,7 @@ func opCoreV1(
 	taskFun func(db *gorm.DB, who models.UserIDFetchable, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObj models.IModel) (models.IModel, error),
 ) (*MapperRet, *webrender.RetError) {
 	oldModelObj, modelObj, beforeFuncName, afterFuncName := job.oldModelObj, job.modelObj, job.beforeFuncName, job.afterFuncName
-	fetcher, data, info := job.fetcher, job.data, job.info
+	fetcher, data, ep := job.fetcher, job.data, job.ep
 
 	if data.Cargo == nil {
 		return nil, &webrender.RetError{Error: fmt.Errorf("cargo shouldn't be nil")}
@@ -227,7 +227,7 @@ func opCoreV1(
 	// Deprecated
 	if !fetcher.HasAttemptRegisteringHandler() { // deprecated, only try to call when no hookhandler exists
 		if m, ok := data.Ms[0].(models.IBeforeCUPD); ok {
-			if err := callOldSingle(data, info, m.BeforeCUPDDB, beforeFuncName); err != nil {
+			if err := callOldSingle(data, ep, m.BeforeCUPDDB, beforeFuncName); err != nil {
 				return nil, &webrender.RetError{Error: err}
 			}
 		}
@@ -235,15 +235,15 @@ func opCoreV1(
 	// End deprecated
 
 	// fetch all handlers with before hooks
-	for _, hdlr := range fetcher.FetchHandlersForOpAndHook(info.Op, "B") {
-		if renderer := hdlr.(hookhandler.IBefore).Before(data, info); renderer != nil {
+	for _, hdlr := range fetcher.FetchHandlersForOpAndHook(ep.Op, "B") {
+		if renderer := hdlr.(hookhandler.IBefore).Before(data, ep); renderer != nil {
 			return nil, renderer
 		}
 	}
 
 	// Now do the task
 	id := modelObj.GetID()
-	modelObjReloaded, err := taskFun(data.DB, data.Who, data.TypeString, modelObj, id, oldModelObj)
+	modelObjReloaded, err := taskFun(data.DB, ep.Who, ep.TypeString, modelObj, id, oldModelObj)
 	if err != nil {
 		return nil, &webrender.RetError{Error: err}
 	}
@@ -253,7 +253,7 @@ func opCoreV1(
 	// Deprecated
 	if !fetcher.HasAttemptRegisteringHandler() { // deprecated, only try to call when no controlelr exists
 		if m, ok := data.Ms[0].(models.IAfterCRUPD); ok {
-			if err := callOldSingle(data, info, m.AfterCRUPDDB, afterFuncName); err != nil {
+			if err := callOldSingle(data, ep, m.AfterCRUPDDB, afterFuncName); err != nil {
 				return nil, &webrender.RetError{Error: err}
 			}
 		}
@@ -261,8 +261,8 @@ func opCoreV1(
 	// End deprecated
 
 	// fetch all handlers with after hooks
-	for _, hdlr := range fetcher.FetchHandlersForOpAndHook(info.Op, "A") {
-		if renderer := hdlr.(hookhandler.IAfter).After(data, info); renderer != nil {
+	for _, hdlr := range fetcher.FetchHandlersForOpAndHook(ep.Op, "A") {
+		if renderer := hdlr.(hookhandler.IAfter).After(data, ep); renderer != nil {
 			return nil, renderer
 		}
 	}
@@ -292,14 +292,14 @@ type batchOpJobV2 struct {
 
 	fetcher *hfetcher.HandlerFetcher
 	data    *hookhandler.Data
-	info    *hookhandler.EndPointInfo
+	ep      *hookhandler.EndPointInfo
 }
 
 func batchOpCoreV2(job batchOpJobV2,
 	taskFunc func(db *gorm.DB, who models.UserIDFetchable, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObj models.IModel) (models.IModel, error),
 ) (*MapperRet, *webrender.RetError) {
 	modelObjs, oldmodelObjs, oldBefore, oldAfter := job.modelObjs, job.oldmodelObjs, job.oldBefore, job.oldAfter
-	fetcher, data, info := job.fetcher, job.data, job.info
+	fetcher, data, ep := job.fetcher, job.data, job.ep
 
 	ms := make([]models.IModel, len(modelObjs))
 
@@ -309,14 +309,14 @@ func batchOpCoreV2(job batchOpJobV2,
 
 	// deprecated, only try to call when no controlelr exists
 	if !fetcher.HasAttemptRegisteringHandler() {
-		if err := callOldBatch(data, info, registry.ModelRegistry[data.TypeString].BeforeCUPD, oldBefore); err != nil {
+		if err := callOldBatch(data, ep, registry.ModelRegistry[ep.TypeString].BeforeCUPD, oldBefore); err != nil {
 			return nil, &webrender.RetError{Error: err}
 		}
 	}
 
 	// fetch all handlers with before hooks
-	for _, hdlr := range fetcher.FetchHandlersForOpAndHook(info.Op, "B") { // FetchHandlersForOpAndHook is stateful, cannot be repeated called
-		if renderer := hdlr.(hookhandler.IBefore).Before(data, info); renderer != nil {
+	for _, hdlr := range fetcher.FetchHandlersForOpAndHook(ep.Op, "B") { // FetchHandlersForOpAndHook is stateful, cannot be repeated called
+		if renderer := hdlr.(hookhandler.IBefore).Before(data, ep); renderer != nil {
 			return nil, renderer
 		}
 	}
@@ -329,9 +329,9 @@ func batchOpCoreV2(job batchOpJobV2,
 		var m models.IModel
 		var err error
 		if oldmodelObjs == nil {
-			m, err = taskFunc(data.DB, data.Who, data.TypeString, modelObj, id, nil)
+			m, err = taskFunc(data.DB, ep.Who, ep.TypeString, modelObj, id, nil)
 		} else {
-			m, err = taskFunc(data.DB, data.Who, data.TypeString, modelObj, id, oldmodelObjs[i])
+			m, err = taskFunc(data.DB, ep.Who, ep.TypeString, modelObj, id, oldmodelObjs[i])
 		}
 		if err != nil { // Error is "record not found" when not found
 			return nil, &webrender.RetError{Error: err}
@@ -341,14 +341,14 @@ func batchOpCoreV2(job batchOpJobV2,
 	}
 
 	if !fetcher.HasAttemptRegisteringHandler() { // deprecated, only try to call when no controlelr exists
-		if err := callOldBatch(data, info, registry.ModelRegistry[data.TypeString].AfterCRUPD, oldAfter); err != nil {
+		if err := callOldBatch(data, ep, registry.ModelRegistry[ep.TypeString].AfterCRUPD, oldAfter); err != nil {
 			return nil, &webrender.RetError{Error: err}
 		}
 	}
 
 	// fetch all handlers with after hooks
-	for _, hdlr := range fetcher.FetchHandlersForOpAndHook(info.Op, "A") {
-		if renderer := hdlr.(hookhandler.IAfter).After(data, info); renderer != nil {
+	for _, hdlr := range fetcher.FetchHandlersForOpAndHook(ep.Op, "A") {
+		if renderer := hdlr.(hookhandler.IAfter).After(data, ep); renderer != nil {
 			return nil, renderer
 		}
 	}
@@ -377,7 +377,7 @@ type opJobV2 struct {
 
 	fetcher *hfetcher.HandlerFetcher
 	data    *hookhandler.Data
-	info    *hookhandler.EndPointInfo
+	ep      *hookhandler.EndPointInfo
 }
 
 func opCoreV2(
@@ -385,7 +385,7 @@ func opCoreV2(
 	taskFun func(db *gorm.DB, who models.UserIDFetchable, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObj models.IModel) (models.IModel, error),
 ) (*MapperRet, *webrender.RetError) {
 	oldModelObj, modelObj, beforeFuncName, afterFuncName := job.oldModelObj, job.modelObj, job.beforeFuncName, job.afterFuncName
-	fetcher, data, info := job.fetcher, job.data, job.info
+	fetcher, data, ep := job.fetcher, job.data, job.ep
 
 	if data.Cargo == nil {
 		return nil, &webrender.RetError{Error: fmt.Errorf("cargo shouldn't be nil")}
@@ -394,7 +394,7 @@ func opCoreV2(
 	// Deprecated
 	if !fetcher.HasAttemptRegisteringHandler() { // deprecated, only try to call when no hookhandler exists
 		if m, ok := data.Ms[0].(models.IBeforeCUPD); ok {
-			if err := callOldSingle(data, info, m.BeforeCUPDDB, beforeFuncName); err != nil {
+			if err := callOldSingle(data, ep, m.BeforeCUPDDB, beforeFuncName); err != nil {
 				return nil, &webrender.RetError{Error: err}
 			}
 		}
@@ -402,15 +402,15 @@ func opCoreV2(
 	// End deprecated
 
 	// fetch all handlers with before hooks
-	for _, hdlr := range fetcher.FetchHandlersForOpAndHook(info.Op, "B") {
-		if renderer := hdlr.(hookhandler.IBefore).Before(data, info); renderer != nil {
+	for _, hdlr := range fetcher.FetchHandlersForOpAndHook(ep.Op, "B") {
+		if renderer := hdlr.(hookhandler.IBefore).Before(data, ep); renderer != nil {
 			return nil, renderer
 		}
 	}
 
 	// Now do the task
 	id := modelObj.GetID()
-	modelObjReloaded, err := taskFun(data.DB, data.Who, data.TypeString, modelObj, id, oldModelObj)
+	modelObjReloaded, err := taskFun(data.DB, ep.Who, ep.TypeString, modelObj, id, oldModelObj)
 	if err != nil {
 		return nil, &webrender.RetError{Error: err}
 	}
@@ -420,7 +420,7 @@ func opCoreV2(
 	// Deprecated
 	if !fetcher.HasAttemptRegisteringHandler() { // deprecated, only try to call when no controlelr exists
 		if m, ok := data.Ms[0].(models.IAfterCRUPD); ok {
-			if err := callOldSingle(data, info, m.AfterCRUPDDB, afterFuncName); err != nil {
+			if err := callOldSingle(data, ep, m.AfterCRUPDDB, afterFuncName); err != nil {
 				return nil, &webrender.RetError{Error: err}
 			}
 		}
@@ -428,8 +428,8 @@ func opCoreV2(
 	// End deprecated
 
 	// fetch all handlers with after hooks
-	for _, hdlr := range fetcher.FetchHandlersForOpAndHook(info.Op, "A") {
-		if renderer := hdlr.(hookhandler.IAfter).After(data, info); renderer != nil {
+	for _, hdlr := range fetcher.FetchHandlersForOpAndHook(ep.Op, "A") {
+		if renderer := hdlr.(hookhandler.IAfter).After(data, ep); renderer != nil {
 			return nil, renderer
 		}
 	}

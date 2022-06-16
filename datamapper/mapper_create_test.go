@@ -281,11 +281,11 @@ type CarHandlerJBT struct {
 }
 
 func (c *CarHandlerJBT) Init(data *hookhandler.InitData, args ...interface{}) {
-	c.who = data.Who
-	c.typeString = data.TypeString
+	c.who = data.Ep.Who
+	c.typeString = data.Ep.TypeString
 	c.roles = data.Roles
-	c.urlParams = data.URLParams
-	c.info = data.Info
+	c.urlParams = data.Ep.URLParams
+	c.info = data.Ep
 }
 
 func (c *CarHandlerJBT) GuardAPIEntry(data *hookhandler.Data, info *hookhandler.EndPointInfo) *webrender.GuardRetVal {
@@ -370,12 +370,15 @@ func (suite *TestBaseMapperCreateSuite) TestCreateOne_WhenGiven_GotCar() {
 	mapper := SharedOwnershipMapper()
 
 	var retVal *MapperRet
-	info := hookhandler.EndPointInfo{
+	ep := hookhandler.EndPointInfo{
 		Op:          hookhandler.RESTOpCreate,
 		Cardinality: hookhandler.APICardinalityOne,
+		TypeString:  suite.typeString,
+		URLParams:   options,
+		Who:         suite.who,
 	}
 	retErr := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retErr *webrender.RetError) {
-		if retVal, retErr = mapper.CreateOne(tx, suite.who, suite.typeString, modelObj, &info, options, &cargo); retErr != nil {
+		if retVal, retErr = mapper.CreateOne(tx, modelObj, &ep, &cargo); retErr != nil {
 			return retErr
 		}
 		return nil
@@ -416,11 +419,14 @@ func (suite *TestBaseMapperCreateSuite) TestCreateOne_WhenNoController_CallRelev
 	var tx2 *gorm.DB
 	retErr := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retErr *webrender.RetError) {
 		tx2 = tx
-		info := hookhandler.EndPointInfo{
+		ep := hookhandler.EndPointInfo{
 			Op:          hookhandler.RESTOpCreate,
 			Cardinality: hookhandler.APICardinalityOne,
+			TypeString:  suite.typeString,
+			URLParams:   options,
+			Who:         suite.who,
 		}
-		if retVal, retErr = mapper.CreateOne(tx, suite.who, suite.typeString, modelObj, &info, options, &cargo); retErr != nil {
+		if retVal, retErr = mapper.CreateOne(tx, modelObj, &ep, &cargo); retErr != nil {
 			return retErr
 		}
 		return nil
@@ -480,11 +486,14 @@ func (suite *TestBaseMapperCreateSuite) TestCreateOne_WhenHavingController_NotCa
 
 	var retVal *MapperRet
 	retErr := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retErr *webrender.RetError) {
-		info := hookhandler.EndPointInfo{
+		ep := hookhandler.EndPointInfo{
 			Op:          hookhandler.RESTOpCreate,
 			Cardinality: hookhandler.APICardinalityOne,
+			TypeString:  suite.typeString,
+			URLParams:   options,
+			Who:         suite.who,
 		}
-		if retVal, retErr = mapper.CreateOne(tx, suite.who, suite.typeString, modelObj, &info, options, &cargo); retErr != nil {
+		if retVal, retErr = mapper.CreateOne(tx, modelObj, &ep, &cargo); retErr != nil {
 			return retErr
 		}
 		return nil
@@ -537,10 +546,16 @@ func (suite *TestBaseMapperCreateSuite) TestCreateOne_WhenHavingController_CallR
 	// var modelObj2 models.IModel
 	var tx2 *gorm.DB
 	var retVal *MapperRet
-	info := hookhandler.EndPointInfo{Op: hookhandler.RESTOpCreate, Cardinality: hookhandler.APICardinalityOne}
+	ep := hookhandler.EndPointInfo{
+		Op:          hookhandler.RESTOpCreate,
+		Cardinality: hookhandler.APICardinalityOne,
+		TypeString:  suite.typeString,
+		URLParams:   options,
+		Who:         suite.who,
+	}
 	retErr := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retErr *webrender.RetError) {
 		tx2 = tx
-		if retVal, retErr = mapper.CreateOne(tx, suite.who, suite.typeString, modelObj, &info, options, &cargo); retErr != nil {
+		if retVal, retErr = mapper.CreateOne(tx, modelObj, &ep, &cargo); retErr != nil {
 			return retErr
 		}
 		return nil
@@ -550,7 +565,8 @@ func (suite *TestBaseMapperCreateSuite) TestCreateOne_WhenHavingController_CallR
 	}
 
 	role := models.UserRoleAdmin
-	data := hookhandler.Data{Ms: []models.IModel{&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID}, Name: carName}}, DB: tx2, Who: suite.who, TypeString: suite.typeString, Roles: []models.UserRole{role}, Cargo: &cargo}
+	data := hookhandler.Data{Ms: []models.IModel{&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID}, Name: carName}}, DB: tx2,
+		Roles: []models.UserRole{role}, Cargo: &cargo}
 
 	ctrls := retVal.Fetcher.GetAllInstantiatedHanders()
 	if !assert.Len(suite.T(), ctrls, 1) {
@@ -567,7 +583,7 @@ func (suite *TestBaseMapperCreateSuite) TestCreateOne_WhenHavingController_CallR
 
 	if assert.True(suite.T(), hdlr.beforeCalled) {
 		assert.Condition(suite.T(), dataComparison(&data, hdlr.beforeData))
-		assert.Equal(suite.T(), info, *hdlr.beforeInfo)
+		assert.Equal(suite.T(), ep, *hdlr.beforeInfo)
 	}
 
 	// After hookhandler has made some modification to data (this is harder to test)
@@ -575,7 +591,7 @@ func (suite *TestBaseMapperCreateSuite) TestCreateOne_WhenHavingController_CallR
 
 	if assert.True(suite.T(), hdlr.afterCalled) {
 		assert.Condition(suite.T(), dataComparison(&data, hdlr.afterData))
-		assert.Equal(suite.T(), info, *hdlr.afterInfo)
+		assert.Equal(suite.T(), ep, *hdlr.afterInfo)
 	}
 }
 
@@ -620,10 +636,16 @@ func (suite *TestBaseMapperCreateSuite) TestCreateMany_WhenGiven_GotCars() {
 	registry.For(suite.typeString).ModelWithOption(&Car{}, opt)
 
 	var retVal *MapperRet
-	info := hookhandler.EndPointInfo{Op: hookhandler.RESTOpCreate, Cardinality: hookhandler.APICardinalityMany}
+	ep := hookhandler.EndPointInfo{
+		Op:          hookhandler.RESTOpCreate,
+		Cardinality: hookhandler.APICardinalityMany,
+		TypeString:  suite.typeString,
+		URLParams:   options,
+		Who:         suite.who,
+	}
 	retErr := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retErr *webrender.RetError) {
 		mapper := SharedOwnershipMapper()
-		retVal, retErr = mapper.CreateMany(tx, suite.who, suite.typeString, modelObjs, &info, options, &cargo)
+		retVal, retErr = mapper.CreateMany(tx, modelObjs, &ep, &cargo)
 		return retErr
 	}, "lifecycle.CreateMany")
 	if !assert.Nil(suite.T(), retErr) {
@@ -700,11 +722,17 @@ func (suite *TestBaseMapperCreateSuite) TestCreateMany_WhenNoController_CallRele
 		BatchCRUPDHooks(before, after).BatchCreateHooks(beforeCreate, afterCreate)
 
 	var tx2 *gorm.DB
-	info := hookhandler.EndPointInfo{Op: hookhandler.RESTOpCreate, Cardinality: hookhandler.APICardinalityMany}
+	ep := hookhandler.EndPointInfo{
+		Op:          hookhandler.RESTOpCreate,
+		Cardinality: hookhandler.APICardinalityMany,
+		TypeString:  suite.typeString,
+		URLParams:   options,
+		Who:         suite.who,
+	}
 	retErr := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retErr *webrender.RetError) {
 		tx2 = tx
 		mapper := SharedOwnershipMapper()
-		_, retErr = mapper.CreateMany(tx2, suite.who, suite.typeString, modelObjs, &info, options, &cargo)
+		_, retErr = mapper.CreateMany(tx2, modelObjs, &ep, &cargo)
 		return retErr
 	}, "lifecycle.CreateOne")
 	if !assert.Nil(suite.T(), retErr) {
@@ -810,10 +838,16 @@ func (suite *TestBaseMapperCreateSuite) TestCreateMany_WhenHavingController_NotC
 	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).
 		BatchCRUPDHooks(before, after).BatchCreateHooks(beforeCreate, afterCreate).Hook(&CarControllerWithoutCallbacks{}, "CRUPD")
 
-	info := hookhandler.EndPointInfo{Op: hookhandler.RESTOpCreate, Cardinality: hookhandler.APICardinalityMany}
+	ep := hookhandler.EndPointInfo{
+		Op:          hookhandler.RESTOpCreate,
+		Cardinality: hookhandler.APICardinalityMany,
+		TypeString:  suite.typeString,
+		URLParams:   options,
+		Who:         suite.who,
+	}
 	retErr := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retErr *webrender.RetError) {
 		mapper := SharedOwnershipMapper()
-		_, retErr = mapper.CreateMany(tx, suite.who, suite.typeString, modelObjs, &info, options, &cargo)
+		_, retErr = mapper.CreateMany(tx, modelObjs, &ep, &cargo)
 		return retErr
 	}, "lifecycle.CreateOne")
 	if !assert.Nil(suite.T(), retErr) {
@@ -868,11 +902,17 @@ func (suite *TestBaseMapperCreateSuite) TestCreateMany_WhenHavingController_Call
 
 	var tx2 *gorm.DB
 	var retVal *MapperRet
-	info := hookhandler.EndPointInfo{Op: hookhandler.RESTOpCreate, Cardinality: hookhandler.APICardinalityMany}
+	ep := hookhandler.EndPointInfo{
+		Op:          hookhandler.RESTOpCreate,
+		Cardinality: hookhandler.APICardinalityMany,
+		TypeString:  suite.typeString,
+		URLParams:   options,
+		Who:         suite.who,
+	}
 	retErr := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retErr *webrender.RetError) {
 		mapper := SharedOwnershipMapper()
 		tx2 = tx
-		retVal, retErr = mapper.CreateMany(tx2, suite.who, suite.typeString, modelObjs, &info, options, &cargo)
+		retVal, retErr = mapper.CreateMany(tx2, modelObjs, &ep, &cargo)
 		return retErr
 	}, "lifecycle.CreateOne")
 	if !assert.Nil(suite.T(), retErr) {
@@ -884,7 +924,7 @@ func (suite *TestBaseMapperCreateSuite) TestCreateMany_WhenHavingController_Call
 		&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID1}, Name: carName1},
 		&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID2}, Name: carName2},
 		&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID3}, Name: carName3},
-	}, DB: tx2, Who: suite.who, TypeString: suite.typeString, Roles: roles, Cargo: &cargo}
+	}, DB: tx2, Roles: roles, Cargo: &cargo}
 
 	ctrls := retVal.Fetcher.GetAllInstantiatedHanders()
 	if !assert.Len(suite.T(), ctrls, 1) { //testthis
@@ -900,13 +940,13 @@ func (suite *TestBaseMapperCreateSuite) TestCreateMany_WhenHavingController_Call
 	assert.False(suite.T(), hdlr.beforeApplyCalled)
 	if assert.True(suite.T(), hdlr.beforeCalled) {
 		assert.Condition(suite.T(), dataComparison(&data, hdlr.beforeData))
-		assert.Equal(suite.T(), info.Op, hdlr.beforeInfo.Op)
-		assert.Equal(suite.T(), info.Cardinality, hdlr.beforeInfo.Cardinality)
+		assert.Equal(suite.T(), ep.Op, hdlr.beforeInfo.Op)
+		assert.Equal(suite.T(), ep.Cardinality, hdlr.beforeInfo.Cardinality)
 	}
 	if assert.True(suite.T(), hdlr.afterCalled) {
 		assert.Condition(suite.T(), dataComparison(&data, hdlr.afterData))
-		assert.Equal(suite.T(), info.Op, hdlr.afterInfo.Op)
-		assert.Equal(suite.T(), info.Cardinality, hdlr.afterInfo.Cardinality)
+		assert.Equal(suite.T(), ep.Op, hdlr.afterInfo.Op)
+		assert.Equal(suite.T(), ep.Cardinality, hdlr.afterInfo.Cardinality)
 	}
 }
 
@@ -917,11 +957,6 @@ func dataComparison(expected *hookhandler.Data, actual *hookhandler.Data) func()
 			return false
 		}
 
-		if expected.Who != actual.Who {
-			log.Println("dataComparison 2")
-			return false
-		}
-
 		if (expected.Cargo.Payload != nil && actual.Cargo.Payload == nil) ||
 			(expected.Cargo.Payload == nil && actual.Cargo.Payload != nil) {
 			log.Println("dataComparison 3")
@@ -972,11 +1007,6 @@ func dataComparison(expected *hookhandler.Data, actual *hookhandler.Data) func()
 			}
 		}
 
-		if expected.TypeString != actual.TypeString {
-			log.Println("dataComparison 7")
-			return false
-		}
-
 		if len(expected.Roles) != len(actual.Roles) {
 			log.Println("dataComparison 8")
 			return false
@@ -985,13 +1015,6 @@ func dataComparison(expected *hookhandler.Data, actual *hookhandler.Data) func()
 		for i := 0; i < len(expected.Roles); i++ {
 			if expected.Roles[i] != actual.Roles[i] {
 				log.Println("dataComparison 9")
-				return false
-			}
-		}
-
-		if len(expected.URLParams) != 0 && len(actual.URLParams) != 0 {
-			if !assert.ObjectsAreEqualValues(expected.URLParams, actual.URLParams) {
-				log.Println("dataComparison 10")
 				return false
 			}
 		}
@@ -1002,11 +1025,6 @@ func dataComparison(expected *hookhandler.Data, actual *hookhandler.Data) func()
 
 func dataComparisonNoDB(expected *hookhandler.Data, actual *hookhandler.Data) func() (success bool) {
 	return func() (success bool) {
-		if expected.Who != actual.Who {
-			log.Println("dataComparison 2")
-			return false
-		}
-
 		if (expected.Cargo.Payload != nil && actual.Cargo.Payload == nil) ||
 			(expected.Cargo.Payload == nil && actual.Cargo.Payload != nil) {
 			log.Println("dataComparison 3")
@@ -1057,10 +1075,10 @@ func dataComparisonNoDB(expected *hookhandler.Data, actual *hookhandler.Data) fu
 			}
 		}
 
-		if expected.TypeString != actual.TypeString {
-			log.Println("dataComparison 7")
-			return false
-		}
+		// if expected.TypeString != actual.TypeString {
+		// 	log.Println("dataComparison 7")
+		// 	return false
+		// }
 
 		if len(expected.Roles) != len(actual.Roles) {
 			log.Println("dataComparison 8")
@@ -1074,12 +1092,12 @@ func dataComparisonNoDB(expected *hookhandler.Data, actual *hookhandler.Data) fu
 			}
 		}
 
-		if len(expected.URLParams) != 0 && len(actual.URLParams) != 0 {
-			if !assert.ObjectsAreEqualValues(expected.URLParams, actual.URLParams) {
-				log.Println("dataComparison 10")
-				return false
-			}
-		}
+		// if len(expected.URLParams) != 0 && len(actual.URLParams) != 0 {
+		// 	if !assert.ObjectsAreEqualValues(expected.URLParams, actual.URLParams) {
+		// 		log.Println("dataComparison 10")
+		// 		return false
+		// 	}
+		// }
 
 		return true
 	}
@@ -1355,11 +1373,10 @@ func deepCopyBHPData(src *models.BatchHookPointData, dst *models.BatchHookPointD
 
 func deepCopyData(src *hookhandler.Data, dst *hookhandler.Data) {
 	dst.DB = src.DB
-	dst.Who = src.Who
-	dst.TypeString = src.TypeString
+	// dst.TypeString = src.TypeString
 	dst.Cargo = &hookhandler.Cargo{Payload: src.Cargo.Payload}
 	dst.Roles = src.Roles
-	dst.URLParams = src.URLParams
+	// dst.URLParams = src.URLParams
 
 	// https://stackoverflow.com/questions/56355212/deep-copying-data-structures-in-golang
 	dst.Ms = make([]models.IModel, len(src.Ms))

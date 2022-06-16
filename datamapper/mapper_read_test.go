@@ -58,11 +58,14 @@ func (suite *TestBaseMapperReadSuite) TestReadOne_WhenGiven_GotCar() {
 	registry.For(suite.typeString).ModelWithOption(&Car{}, opt)
 
 	mapper := SharedOwnershipMapper()
-	info := hookhandler.EndPointInfo{
+	ep := hookhandler.EndPointInfo{
 		Op:          hookhandler.RESTOpRead,
 		Cardinality: hookhandler.APICardinalityOne,
+		TypeString:  suite.typeString,
+		URLParams:   options,
+		Who:         suite.who,
 	}
-	retVal, role, retErr := mapper.ReadOne(suite.db, suite.who, suite.typeString, modelID, &info, options, &cargo)
+	retVal, role, retErr := mapper.ReadOne(suite.db, modelID, &ep, &cargo)
 	if !assert.Nil(suite.T(), retErr) {
 		return
 	}
@@ -96,11 +99,14 @@ func (suite *TestBaseMapperReadSuite) TestReadOne_WhenNoController_CallRelevantO
 	// registry.For(typeString).ModelWithOption(&Car{}, opt)
 
 	mapper := SharedOwnershipMapper()
-	info := hookhandler.EndPointInfo{
+	ep := hookhandler.EndPointInfo{
 		Op:          hookhandler.RESTOpRead,
 		Cardinality: hookhandler.APICardinalityOne,
+		TypeString:  suite.typeString,
+		URLParams:   options,
+		Who:         suite.who,
 	}
-	retVal, _, retErr := mapper.ReadOne(suite.db, suite.who, suite.typeString, modelID, &info, options, &cargo)
+	retVal, _, retErr := mapper.ReadOne(suite.db, modelID, &ep, &cargo)
 	if !assert.Nil(suite.T(), retErr) {
 		return
 	}
@@ -143,11 +149,14 @@ func (suite *TestBaseMapperReadSuite) TestReadOne_WhenHavingController_NotCallOl
 	cargo := hookhandler.Cargo{}
 
 	mapper := SharedOwnershipMapper()
-	info := hookhandler.EndPointInfo{
+	ep := hookhandler.EndPointInfo{
 		Op:          hookhandler.RESTOpRead,
 		Cardinality: hookhandler.APICardinalityOne,
+		TypeString:  suite.typeString,
+		URLParams:   options,
+		Who:         suite.who,
 	}
-	retVal, _, retErr := mapper.ReadOne(suite.db, suite.who, suite.typeString, modelID, &info, options, &cargo)
+	retVal, _, retErr := mapper.ReadOne(suite.db, modelID, &ep, &cargo)
 	if !assert.Nil(suite.T(), retErr) {
 		return
 	}
@@ -182,13 +191,20 @@ func (suite *TestBaseMapperReadSuite) TestReadOne_WhenHavingController_CallRelev
 
 	mapper := SharedOwnershipMapper()
 	var retVal *MapperRet
-	info := hookhandler.EndPointInfo{Op: hookhandler.RESTOpRead, Cardinality: hookhandler.APICardinalityOne}
-	retVal, _, retErr := mapper.ReadOne(suite.db, suite.who, suite.typeString, modelID, &info, options, &cargo)
+	ep := hookhandler.EndPointInfo{
+		Op:          hookhandler.RESTOpRead,
+		Cardinality: hookhandler.APICardinalityOne,
+		TypeString:  suite.typeString,
+		URLParams:   options,
+		Who:         suite.who,
+	}
+	retVal, _, retErr := mapper.ReadOne(suite.db, modelID, &ep, &cargo)
 	if !assert.Nil(suite.T(), retErr) {
 		return
 	}
 
-	data := hookhandler.Data{Ms: []models.IModel{&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID}, Name: carName}}, DB: suite.db, Who: suite.who, TypeString: suite.typeString, Roles: []models.UserRole{role}, Cargo: &cargo}
+	data := hookhandler.Data{Ms: []models.IModel{&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID}, Name: carName}},
+		DB: suite.db, Roles: []models.UserRole{role}, Cargo: &cargo}
 
 	ctrls := retVal.Fetcher.GetAllInstantiatedHanders()
 	if !assert.Len(suite.T(), ctrls, 1) {
@@ -206,7 +222,7 @@ func (suite *TestBaseMapperReadSuite) TestReadOne_WhenHavingController_CallRelev
 	assert.False(suite.T(), hdlr.beforeCalled)
 	if assert.True(suite.T(), hdlr.afterCalled) {
 		assert.Condition(suite.T(), dataComparison(&data, hdlr.afterData))
-		assert.Equal(suite.T(), info, *hdlr.afterInfo)
+		assert.Equal(suite.T(), ep, *hdlr.afterInfo)
 	}
 }
 
@@ -233,11 +249,14 @@ func (suite *TestBaseMapperReadSuite) TestReadMany_WhenGiven_GotCars() {
 	registry.For(suite.typeString).ModelWithOption(&Car{}, opt)
 
 	mapper := SharedOwnershipMapper()
-	info := hookhandler.EndPointInfo{
+	ep := hookhandler.EndPointInfo{
 		Op:          hookhandler.RESTOpRead,
 		Cardinality: hookhandler.APICardinalityMany,
+		TypeString:  suite.typeString,
+		URLParams:   options,
+		Who:         suite.who,
 	}
-	retVal, roles, no, retErr := mapper.ReadMany(suite.db, suite.who, suite.typeString, &info, options, &cargo)
+	retVal, roles, no, retErr := mapper.ReadMany(suite.db, &ep, &cargo)
 	if !assert.Nil(suite.T(), retErr) {
 		return
 	}
@@ -294,11 +313,14 @@ func (suite *TestBaseMapperReadSuite) TestReadMany_WhenNoController_CallRelevant
 		BatchCRUPDHooks(before, after).BatchReadHooks(afterRead)
 
 	mapper := SharedOwnershipMapper()
-	info := hookhandler.EndPointInfo{
+	ep := hookhandler.EndPointInfo{
 		Op:          hookhandler.RESTOpRead,
 		Cardinality: hookhandler.APICardinalityMany,
+		TypeString:  suite.typeString,
+		URLParams:   options,
+		Who:         suite.who,
 	}
-	_, _, _, retErr := mapper.ReadMany(suite.db, suite.who, suite.typeString, &info, options, &cargo)
+	_, _, _, retErr := mapper.ReadMany(suite.db, &ep, &cargo)
 	if !assert.Nil(suite.T(), retErr) {
 		return
 	}
@@ -369,11 +391,14 @@ func (suite *TestBaseMapperReadSuite) TestReadMany_WhenHavingController_NotCallO
 		BatchCRUPDHooks(before, after).BatchReadHooks(afterRead).Hook(&hdlr, "CRUPD")
 
 	mapper := SharedOwnershipMapper()
-	info := hookhandler.EndPointInfo{
+	ep := hookhandler.EndPointInfo{
 		Op:          hookhandler.RESTOpRead,
 		Cardinality: hookhandler.APICardinalityMany,
+		TypeString:  suite.typeString,
+		URLParams:   options,
+		Who:         suite.who,
 	}
-	_, _, _, retErr := mapper.ReadMany(suite.db, suite.who, suite.typeString, &info, options, &cargo)
+	_, _, _, retErr := mapper.ReadMany(suite.db, &ep, &cargo)
 	if !assert.Nil(suite.T(), retErr) {
 		return
 	}
@@ -411,8 +436,14 @@ func (suite *TestBaseMapperReadSuite) TestReadMany_WhenHavingController_CallRele
 
 	var retVal *MapperRet
 	mapper := SharedOwnershipMapper()
-	info := hookhandler.EndPointInfo{Op: hookhandler.RESTOpRead, Cardinality: hookhandler.APICardinalityMany}
-	retVal, _, _, retErr := mapper.ReadMany(suite.db, suite.who, suite.typeString, &info, options, &cargo)
+	ep := hookhandler.EndPointInfo{
+		Op:          hookhandler.RESTOpRead,
+		Cardinality: hookhandler.APICardinalityMany,
+		TypeString:  suite.typeString,
+		URLParams:   options,
+		Who:         suite.who,
+	}
+	retVal, _, _, retErr := mapper.ReadMany(suite.db, &ep, &cargo)
 	if !assert.Nil(suite.T(), retErr) {
 		return
 	}
@@ -423,9 +454,8 @@ func (suite *TestBaseMapperReadSuite) TestReadMany_WhenHavingController_CallRele
 			&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID2}, Name: carName2},
 			&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID3}, Name: carName3},
 		},
-		DB: suite.db, Who: suite.who,
-		TypeString: suite.typeString,
-		Roles:      roles, Cargo: &cargo,
+		DB:    suite.db,
+		Roles: roles, Cargo: &cargo,
 	}
 
 	ctrls := retVal.Fetcher.GetAllInstantiatedHanders()
@@ -441,7 +471,7 @@ func (suite *TestBaseMapperReadSuite) TestReadMany_WhenHavingController_CallRele
 	assert.False(suite.T(), hdlr.beforeCalled)
 	if assert.True(suite.T(), hdlr.afterCalled) {
 		assert.Condition(suite.T(), dataComparison(&data, hdlr.afterData))
-		assert.Equal(suite.T(), info, *hdlr.afterInfo)
+		assert.Equal(suite.T(), ep, *hdlr.afterInfo)
 	}
 }
 

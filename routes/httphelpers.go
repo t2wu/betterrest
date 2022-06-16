@@ -117,7 +117,6 @@ func ModelOrModelsFromJSONBody(r *http.Request, typeString string, who models.Us
 		}
 
 		if v, ok := modelObj.(models.IValidate); ok {
-			who := WhoFromContext(r)
 			http := models.HTTP{Endpoint: r.URL.Path, Op: models.HTTPMethodToCRUDOp(r.Method)}
 			if err := v.Validate(who, http); err != nil {
 				return nil, nil, webrender.NewErrValidation(err)

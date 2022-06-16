@@ -16,15 +16,11 @@ import (
 // New REST and others
 
 type InitData struct {
-	Who models.UserIDFetchable
-	// TypeString
-	TypeString string
 	// Role of this user in relation to this data, only available during read
 	Roles []models.UserRole
-	// URL parameters
-	URLParams map[urlparam.Param]interface{}
+
 	// Info is endpoint information
-	Info *EndPointInfo
+	Ep *EndPointInfo
 }
 
 // Cargo is payload between hookpoints
@@ -38,23 +34,26 @@ type Data struct {
 	Ms []models.IModel
 	// DB is the DB handle
 	DB *gorm.DB
-	// Who is operating this CRUPD right now
-	Who models.UserIDFetchable
-	// TypeString
-	TypeString string
 	// Cargo between Before and After hookpoints (not used in AfterRead since there is before read hookpoint.)
 	Cargo *Cargo
 	// Role of this user in relation to this data, only available during read
 	Roles []models.UserRole
-	// URL parameters
-	URLParams map[urlparam.Param]interface{}
 }
 
 // Endpoint information
 type EndPointInfo struct {
+	// TypeString
+	TypeString string
+
 	URL         string
 	Op          RESTOp
 	Cardinality APICardinality
+
+	// URL parameters
+	URLParams map[urlparam.Param]interface{}
+
+	// Who is operating this CRUPD right now
+	Who models.UserIDFetchable
 }
 
 func HTTPMethodToRESTOp(method string) RESTOp {

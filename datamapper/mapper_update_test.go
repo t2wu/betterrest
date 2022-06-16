@@ -75,13 +75,15 @@ func (suite *TestBaseMapperUpdateSuite) TestUpdateOne_WhenGiven_GotCar() {
 	mapper := SharedOwnershipMapper()
 
 	var retVal *MapperRet
-	info := hookhandler.EndPointInfo{
+	ep := hookhandler.EndPointInfo{
 		Op:          hookhandler.RESTOpUpdate,
 		Cardinality: hookhandler.APICardinalityOne,
+		TypeString:  suite.typeString,
+		URLParams:   options,
+		Who:         suite.who,
 	}
 	retErr := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retErr *webrender.RetError) {
-		if retVal, retErr = mapper.UpdateOne(tx, suite.who, suite.typeString, modelObj, modelObj.GetID(), &info,
-			options, &cargo); retErr != nil {
+		if retVal, retErr = mapper.UpdateOne(tx, modelObj, modelObj.GetID(), &ep, &cargo); retErr != nil {
 			return retErr
 		}
 		return nil
@@ -131,12 +133,14 @@ func (suite *TestBaseMapperUpdateSuite) TestUpdateOne_WhenNoController_CallRelev
 	retErr := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retErr *webrender.RetError) {
 		tx2 = tx
 		mapper := SharedOwnershipMapper()
-		info := hookhandler.EndPointInfo{
+		ep := hookhandler.EndPointInfo{
 			Op:          hookhandler.RESTOpUpdate,
 			Cardinality: hookhandler.APICardinalityOne,
+			TypeString:  suite.typeString,
+			URLParams:   options,
+			Who:         suite.who,
 		}
-		if retVal, retErr = mapper.UpdateOne(tx2, suite.who, suite.typeString, modelObj, modelObj.GetID(), &info,
-			options, &cargo); retErr != nil {
+		if retVal, retErr = mapper.UpdateOne(tx2, modelObj, modelObj.GetID(), &ep, &cargo); retErr != nil {
 			return retErr
 		}
 		return nil
@@ -208,12 +212,14 @@ func (suite *TestBaseMapperUpdateSuite) TestUpdateOne_WhenHavingController_NotCa
 	var tx2 *gorm.DB
 	retErr := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retErr *webrender.RetError) {
 		tx2 = tx
-		info := hookhandler.EndPointInfo{
+		ep := hookhandler.EndPointInfo{
 			Op:          hookhandler.RESTOpUpdate,
 			Cardinality: hookhandler.APICardinalityOne,
+			TypeString:  suite.typeString,
+			URLParams:   options,
+			Who:         suite.who,
 		}
-		if retVal, retErr = mapper.UpdateOne(tx2, suite.who, suite.typeString, modelObj, modelObj.GetID(), &info,
-			options, &cargo); retErr != nil {
+		if retVal, retErr = mapper.UpdateOne(tx2, modelObj, modelObj.GetID(), &ep, &cargo); retErr != nil {
 			return retErr
 		}
 		return nil
@@ -263,11 +269,16 @@ func (suite *TestBaseMapperUpdateSuite) TestUpdateOne_WhenHavingController_CallR
 
 	var tx2 *gorm.DB
 	var retVal *MapperRet
-	info := hookhandler.EndPointInfo{Op: hookhandler.RESTOpUpdate, Cardinality: hookhandler.APICardinalityOne}
+	ep := hookhandler.EndPointInfo{
+		Op:          hookhandler.RESTOpUpdate,
+		Cardinality: hookhandler.APICardinalityOne,
+		TypeString:  suite.typeString,
+		URLParams:   options,
+		Who:         suite.who,
+	}
 	retErr := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retErr *webrender.RetError) {
 		tx2 = tx
-		if retVal, retErr = mapper.UpdateOne(tx2, suite.who, suite.typeString, modelObj, modelObj.GetID(), &info,
-			options, &cargo); retErr != nil {
+		if retVal, retErr = mapper.UpdateOne(tx2, modelObj, modelObj.GetID(), &ep, &cargo); retErr != nil {
 			return retErr
 		}
 		return nil
@@ -278,7 +289,7 @@ func (suite *TestBaseMapperUpdateSuite) TestUpdateOne_WhenHavingController_CallR
 
 	role := models.UserRoleAdmin
 	data := hookhandler.Data{Ms: []models.IModel{&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID}, Name: carName}},
-		DB: tx2, Who: suite.who, TypeString: suite.typeString, Roles: []models.UserRole{role}, Cargo: &cargo}
+		DB: tx2, Roles: []models.UserRole{role}, Cargo: &cargo}
 
 	ctrls := retVal.Fetcher.GetAllInstantiatedHanders()
 	if !assert.Len(suite.T(), ctrls, 1) {
@@ -293,14 +304,13 @@ func (suite *TestBaseMapperUpdateSuite) TestUpdateOne_WhenHavingController_CallR
 	assert.False(suite.T(), hdlr.guardAPIEntryCalled) // Not called when going through mapper (or lifecycle for that matter)
 
 	if assert.True(suite.T(), hdlr.beforeCalled) {
-		assert.Equal(suite.T(), info, *hdlr.beforeInfo)
+		assert.Equal(suite.T(), ep, *hdlr.beforeInfo)
 		assert.Condition(suite.T(), dataComparison(&data, hdlr.beforeData))
 	}
 
 	if assert.True(suite.T(), hdlr.afterCalled) {
 		assert.Condition(suite.T(), dataComparison(&data, hdlr.afterData))
-		assert.Equal(suite.T(), info.Cardinality, hdlr.afterInfo.Cardinality)
-		assert.Equal(suite.T(), info, *hdlr.afterInfo)
+		assert.Equal(suite.T(), ep, *hdlr.afterInfo)
 	}
 }
 
@@ -352,11 +362,14 @@ func (suite *TestBaseMapperUpdateSuite) TestUpdateMany_WhenGiven_GotCars() {
 	var retVal *MapperRet
 	retErr := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retErr *webrender.RetError) {
 		mapper := SharedOwnershipMapper()
-		info := hookhandler.EndPointInfo{
+		ep := hookhandler.EndPointInfo{
 			Op:          hookhandler.RESTOpUpdate,
 			Cardinality: hookhandler.APICardinalityMany,
+			TypeString:  suite.typeString,
+			URLParams:   options,
+			Who:         suite.who,
 		}
-		retVal, retErr = mapper.UpdateMany(tx, suite.who, suite.typeString, modelObjs, &info, options, &cargo)
+		retVal, retErr = mapper.UpdateMany(tx, modelObjs, &ep, &cargo)
 		return retErr
 	}, "lifecycle.UpdateMany")
 	if !assert.Nil(suite.T(), retErr) {
@@ -440,11 +453,14 @@ func (suite *TestBaseMapperUpdateSuite) TestUpdateMany_WhenNoController_CallRele
 	retErr := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retErr *webrender.RetError) {
 		tx2 = tx
 		mapper := SharedOwnershipMapper()
-		info := hookhandler.EndPointInfo{
+		ep := hookhandler.EndPointInfo{
 			Op:          hookhandler.RESTOpUpdate,
 			Cardinality: hookhandler.APICardinalityMany,
+			TypeString:  suite.typeString,
+			URLParams:   options,
+			Who:         suite.who,
 		}
-		_, retErr = mapper.UpdateMany(tx2, suite.who, suite.typeString, modelObjs, &info, options, &cargo)
+		_, retErr = mapper.UpdateMany(tx2, modelObjs, &ep, &cargo)
 		return retErr
 	}, "lifecycle.UpdateMany")
 	if !assert.Nil(suite.T(), retErr) {
@@ -551,11 +567,14 @@ func (suite *TestBaseMapperUpdateSuite) TestCreateMany_WhenHavingController_NotC
 	retErr := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retErr *webrender.RetError) {
 		tx2 = tx
 		mapper := SharedOwnershipMapper()
-		info := hookhandler.EndPointInfo{
+		ep := hookhandler.EndPointInfo{
 			Op:          hookhandler.RESTOpUpdate,
 			Cardinality: hookhandler.APICardinalityMany,
+			TypeString:  suite.typeString,
+			URLParams:   options,
+			Who:         suite.who,
 		}
-		_, retErr = mapper.UpdateMany(tx2, suite.who, suite.typeString, modelObjs, &info, options, &cargo)
+		_, retErr = mapper.UpdateMany(tx2, modelObjs, &ep, &cargo)
 		return retErr
 	}, "lifecycle.UpdateMany")
 	if !assert.Nil(suite.T(), retErr) {
@@ -614,11 +633,17 @@ func (suite *TestBaseMapperUpdateSuite) TestCreateMany_WhenHavingController_Call
 
 	var tx2 *gorm.DB
 	var retVal *MapperRet
-	info := hookhandler.EndPointInfo{Op: hookhandler.RESTOpUpdate, Cardinality: hookhandler.APICardinalityMany}
+	ep := hookhandler.EndPointInfo{
+		Op:          hookhandler.RESTOpUpdate,
+		Cardinality: hookhandler.APICardinalityMany,
+		TypeString:  suite.typeString,
+		URLParams:   options,
+		Who:         suite.who,
+	}
 	retErr := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retErr *webrender.RetError) {
 		tx2 = tx
 		mapper := SharedOwnershipMapper()
-		retVal, retErr = mapper.UpdateMany(tx2, suite.who, suite.typeString, modelObjs, &info, options, &cargo)
+		retVal, retErr = mapper.UpdateMany(tx2, modelObjs, &ep, &cargo)
 		return retErr
 	}, "lifecycle.UpdateMany")
 	if !assert.Nil(suite.T(), retErr) {
@@ -631,7 +656,7 @@ func (suite *TestBaseMapperUpdateSuite) TestCreateMany_WhenHavingController_Call
 		&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID1}, Name: carName1},
 		&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID2}, Name: carName2},
 		&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID3}, Name: carName3},
-	}, DB: tx2, Who: suite.who, TypeString: suite.typeString, Roles: roles, Cargo: &cargo}
+	}, DB: tx2, Roles: roles, Cargo: &cargo}
 
 	ctrls := retVal.Fetcher.GetAllInstantiatedHanders()
 	if !assert.Len(suite.T(), ctrls, 1) {
@@ -647,13 +672,11 @@ func (suite *TestBaseMapperUpdateSuite) TestCreateMany_WhenHavingController_Call
 	assert.False(suite.T(), hdlr.beforeApplyCalled)
 	if assert.True(suite.T(), hdlr.beforeCalled) {
 		assert.Condition(suite.T(), dataComparison(&data, hdlr.beforeData))
-		assert.Equal(suite.T(), info.Op, hdlr.beforeInfo.Op)
-		assert.Equal(suite.T(), info.Cardinality, hdlr.beforeInfo.Cardinality)
+		assert.Equal(suite.T(), ep, *hdlr.beforeInfo)
 	}
 	if assert.True(suite.T(), hdlr.afterCalled) {
 		assert.Condition(suite.T(), dataComparison(&data, hdlr.afterData))
-		assert.Equal(suite.T(), info.Op, hdlr.afterInfo.Op)
-		assert.Equal(suite.T(), info.Cardinality, hdlr.afterInfo.Cardinality)
+		assert.Equal(suite.T(), ep, *hdlr.afterInfo)
 	}
 }
 
