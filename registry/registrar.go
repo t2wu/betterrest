@@ -134,7 +134,7 @@ func (r *Registrar) Hook(hdlr hookhandler.IHookhandler, method string, args ...i
 
 // Guard register guard function
 func (r *Registrar) Guard(guard func(ep *hookhandler.EndPointInfo) *webrender.RetError) *Registrar {
-	ModelRegistry[r.currentTypeString].GuardMethod = guard
+	ModelRegistry[r.currentTypeString].GuardMethods = append(ModelRegistry[r.currentTypeString].GuardMethods, guard)
 	return r
 }
 

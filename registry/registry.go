@@ -75,7 +75,7 @@ type Reg struct {
 	// CreateMethod can be defined with RegCustomCreate()
 	CreateMethod func(db *gorm.DB) (*gorm.DB, error)
 
-	GuardMethod func(ep *hookhandler.EndPointInfo) *webrender.RetError
+	GuardMethods []func(ep *hookhandler.EndPointInfo) *webrender.RetError
 
 	BatchMethods string     // Batch endpoints, "CRUD" for create, batch read, batch update, batch delete
 	IdvMethods   string     //  ID end points, "RUD" for read one, update one, and delete one

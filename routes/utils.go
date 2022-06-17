@@ -110,7 +110,7 @@ func GuardMiddleWare(typeString string) func(c *gin.Context) {
 			Who:         who,
 		}
 
-		if guard := registry.ModelRegistry[typeString].GuardMethod; guard != nil {
+		for _, guard := range registry.ModelRegistry[typeString].GuardMethods {
 			if retErr := guard(&ep); retErr != nil {
 				defer c.Abort() // abort
 
