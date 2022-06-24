@@ -81,6 +81,8 @@ func GuardMiddleWare(typeString string) func(c *gin.Context) {
 		options, err := GetOptionByParsingURL(c.Request)
 		if err != nil {
 			render.Render(w, r, webrender.NewErrQueryParameter(err))
+			c.Abort() // abort
+			return
 		}
 		OptionToContext(c, options)
 
