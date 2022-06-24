@@ -14,6 +14,7 @@ import (
 
 	"github.com/jinzhu/gorm"
 	"github.com/t2wu/betterrest/datamapper"
+	"github.com/t2wu/betterrest/datamapper/hfetcher"
 	"github.com/t2wu/betterrest/hookhandler"
 	"github.com/t2wu/betterrest/libs/settings"
 	"github.com/t2wu/betterrest/libs/urlparam"
@@ -171,11 +172,14 @@ func modelObjsToJSON(modelObjs []models.IModel, roles []models.UserRole, who mod
 	return content, nil
 }
 
-func RenderModelSlice(c *gin.Context, total *int, data *hookhandler.Data, ep *hookhandler.EndPointInfo) {
-	// Any custom rendering?
-	if method := registry.ModelRegistry[ep.TypeString].RendererMethod; method != nil {
-		if method(c, data, ep) { // custom render if true
-			return
+func RenderModelSlice(c *gin.Context, data *hookhandler.Data, ep *hookhandler.EndPointInfo, total *int, hf *hfetcher.HandlerFetcher) {
+	// Custom rendering if any
+	handlers := hf.FetchHandlersForOpAndHook(ep.Op, "R")
+	for _, handler := range handlers {
+		if renderHook, ok := handler.(hookhandler.IRender); ok {
+			if renderHook.Render(c, data, ep, total) {
+				return // maximum of one handler at a time, the hook writer has to make sure they are mutally exclusive
+			}
 		}
 	}
 
@@ -211,11 +215,14 @@ func RenderModelSlice(c *gin.Context, total *int, data *hookhandler.Data, ep *ho
 	// c.JSON(http.StatusOK, content)
 }
 
-func RenderModel(c *gin.Context, total *int, data *hookhandler.Data, ep *hookhandler.EndPointInfo) {
-	// Any custom rendering?
-	if method := registry.ModelRegistry[ep.TypeString].RendererMethod; method != nil {
-		if method(c, data, ep) { // custom render if true
-			return
+func RenderModel(c *gin.Context, data *hookhandler.Data, ep *hookhandler.EndPointInfo, total *int, hf *hfetcher.HandlerFetcher) {
+	// Custom rendering if any
+	handlers := hf.FetchHandlersForOpAndHook(ep.Op, "R")
+	for _, handler := range handlers {
+		if renderHook, ok := handler.(hookhandler.IRender); ok {
+			if renderHook.Render(c, data, ep, total) {
+				return // maximum of one handler at a time, the hook writer has to make sure they are mutally exclusive
+			}
 		}
 	}
 
@@ -344,7 +351,7 @@ func w(handler func(c *gin.Context)) func(c *gin.Context) {
 	}
 }
 
-func batchRenderHelper(c *gin.Context, typeString string, data *hookhandler.Data, ep *hookhandler.EndPointInfo, no *int) {
+func batchRenderHelper(c *gin.Context, typeString string, data *hookhandler.Data, ep *hookhandler.EndPointInfo, no *int, hf *hfetcher.HandlerFetcher) {
 	// Does old renderer exists?
 	if renderer := registry.ModelRegistry[typeString].BatchRenderer; renderer != nil {
 		// Re-create it again to remain backward compatible
@@ -371,10 +378,10 @@ func batchRenderHelper(c *gin.Context, typeString string, data *hookhandler.Data
 	}
 
 	// Use the new renderer (renderer doesn't have to exist, but call using the new RenderModelSlice)
-	RenderModelSlice(c, no, data, ep)
+	RenderModelSlice(c, data, ep, no, hf)
 }
 
-func singleRenderHelper(c *gin.Context, typeString string, data *hookhandler.Data, ep *hookhandler.EndPointInfo) {
+func singleRenderHelper(c *gin.Context, typeString string, data *hookhandler.Data, ep *hookhandler.EndPointInfo, hf *hfetcher.HandlerFetcher) {
 	// Does old renderer exists?
 	if renderer := registry.ModelRegistry[typeString].BatchRenderer; renderer != nil {
 		// Re-create it again to remain backward compatible
@@ -401,7 +408,7 @@ func singleRenderHelper(c *gin.Context, typeString string, data *hookhandler.Dat
 	}
 
 	// Use the new renderer (renderer doesn't have to exist, but call using the new RenderModelSlice)
-	RenderModel(c, nil, data, ep)
+	RenderModel(c, data, ep, nil, hf)
 }
 
 // ---------------------------------------------
@@ -431,23 +438,23 @@ func CreateHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin
 
 		if *isBatch {
 			ep.Cardinality = hookhandler.APICardinalityMany
-			data, renderer := lifecycle.CreateMany(mapper, modelObjs, &ep, &TransIDLogger{})
+			data, handlerFetcher, renderer := lifecycle.CreateMany(mapper, modelObjs, &ep, &TransIDLogger{})
 			if renderer != nil {
 				render.Render(w, c.Request, renderer)
 				return
 			}
 
 			// Render
-			batchRenderHelper(c, typeString, data, &ep, nil)
+			batchRenderHelper(c, typeString, data, &ep, nil, handlerFetcher)
 		} else {
 			ep.Cardinality = hookhandler.APICardinalityOne
-			data, renderer := lifecycle.CreateOne(mapper, modelObjs[0], &ep, &TransIDLogger{})
+			data, handlerFetcher, renderer := lifecycle.CreateOne(mapper, modelObjs[0], &ep, &TransIDLogger{})
 			if renderer != nil {
 				render.Render(w, c.Request, renderer)
 				return
 			}
 
-			singleRenderHelper(c, typeString, data, &ep)
+			singleRenderHelper(c, typeString, data, &ep, handlerFetcher)
 		}
 	}
 }
@@ -470,13 +477,13 @@ func ReadManyHandler(typeString string, mapper datamapper.IDataMapper) func(c *g
 			Who:         WhoFromContext(r),
 		}
 
-		data, no, renderer := lifecycle.ReadMany(mapper, &ep, &TransIDLogger{})
+		data, no, handlerFetcher, renderer := lifecycle.ReadMany(mapper, &ep, &TransIDLogger{})
 		if renderer != nil {
 			render.Render(w, r, renderer)
 			return
 		}
 
-		batchRenderHelper(c, typeString, data, &ep, no)
+		batchRenderHelper(c, typeString, data, &ep, no, handlerFetcher)
 	}
 }
 
@@ -504,13 +511,13 @@ func ReadOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *gi
 			URLParams:   OptionFromContext(r),
 			Who:         WhoFromContext(r),
 		}
-		data, renderer := lifecycle.ReadOne(mapper, id, &ep, &TransIDLogger{})
+		data, handlerFetcher, renderer := lifecycle.ReadOne(mapper, id, &ep, &TransIDLogger{})
 		if renderer != nil {
 			render.Render(w, c.Request, renderer)
 			return
 		}
 
-		singleRenderHelper(c, typeString, data, &ep)
+		singleRenderHelper(c, typeString, data, &ep, handlerFetcher)
 	}
 }
 
@@ -535,13 +542,13 @@ func UpdateManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 			return
 		}
 
-		data, renderer := lifecycle.UpdateMany(mapper, modelObjs, &ep, &TransIDLogger{})
+		data, handlerFetcher, renderer := lifecycle.UpdateMany(mapper, modelObjs, &ep, &TransIDLogger{})
 		if renderer != nil {
 			render.Render(w, r, renderer)
 			return
 		}
 
-		batchRenderHelper(c, typeString, data, &ep, nil)
+		batchRenderHelper(c, typeString, data, &ep, nil, handlerFetcher)
 	}
 }
 
@@ -578,13 +585,13 @@ func UpdateOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 			return
 		}
 
-		data, renderer := lifecycle.UpdateOne(mapper, modelObj, id, &ep, &TransIDLogger{})
+		data, handlerFetcher, renderer := lifecycle.UpdateOne(mapper, modelObj, id, &ep, &TransIDLogger{})
 		if renderer != nil {
 			render.Render(w, r, renderer)
 			return
 		}
 
-		singleRenderHelper(c, typeString, data, &ep)
+		singleRenderHelper(c, typeString, data, &ep, handlerFetcher)
 	}
 }
 
@@ -609,12 +616,12 @@ func PatchManyHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 			Who:         WhoFromContext(r),
 		}
 
-		data, renderer := lifecycle.PatchMany(mapper, jsonIDPatches, &ep, &TransIDLogger{})
+		data, handlerFetcher, renderer := lifecycle.PatchMany(mapper, jsonIDPatches, &ep, &TransIDLogger{})
 		if renderer != nil {
 			render.Render(w, r, renderer)
 			return
 		}
-		batchRenderHelper(c, typeString, data, &ep, nil)
+		batchRenderHelper(c, typeString, data, &ep, nil, handlerFetcher)
 	}
 }
 
@@ -645,13 +652,13 @@ func PatchOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *g
 			Who:         WhoFromContext(r),
 		}
 
-		data, renderer := lifecycle.PatchOne(mapper, jsonPatch, id, &ep, &TransIDLogger{})
+		data, handlerFetcher, renderer := lifecycle.PatchOne(mapper, jsonPatch, id, &ep, &TransIDLogger{})
 		if renderer != nil {
 			render.Render(w, r, renderer)
 			return
 		}
 
-		singleRenderHelper(c, typeString, data, &ep)
+		singleRenderHelper(c, typeString, data, &ep, handlerFetcher)
 	}
 }
 
@@ -676,12 +683,12 @@ func DeleteManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 			return
 		}
 
-		data, renderer := lifecycle.DeleteMany(mapper, modelObjs, &ep, &TransIDLogger{})
+		data, handlerFetcher, renderer := lifecycle.DeleteMany(mapper, modelObjs, &ep, &TransIDLogger{})
 		if renderer != nil {
 			render.Render(w, r, renderer)
 			return
 		}
-		batchRenderHelper(c, typeString, data, &ep, nil)
+		batchRenderHelper(c, typeString, data, &ep, nil, handlerFetcher)
 	}
 }
 
@@ -705,11 +712,11 @@ func DeleteOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 			Who:         WhoFromContext(r),
 		}
 
-		data, renderer := lifecycle.DeleteOne(mapper, id, &ep, &TransIDLogger{})
+		data, handlerFetcher, renderer := lifecycle.DeleteOne(mapper, id, &ep, &TransIDLogger{})
 		if renderer != nil {
 			render.Render(w, r, renderer)
 			return
 		}
-		singleRenderHelper(c, typeString, data, &ep)
+		singleRenderHelper(c, typeString, data, &ep, handlerFetcher)
 	}
 }

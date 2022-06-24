@@ -367,17 +367,17 @@ func (r *Registrar) BatchRenderer(renderer func(c *gin.Context, ms []models.IMod
 
 // End deprecated
 
-// Renderer is called for both cardinalities when registered
-func (r *Registrar) Renderer(renderer func(c *gin.Context, data *hookhandler.Data, info *hookhandler.EndPointInfo) bool) *Registrar {
-	typeString := r.currentTypeString
+// // Renderer is called for both cardinalities when registered
+// func (r *Registrar) Renderer(renderer func(c *gin.Context, data *hookhandler.Data, info *hookhandler.EndPointInfo, total *int) bool) *Registrar {
+// 	typeString := r.currentTypeString
 
-	if _, ok := ModelRegistry[typeString]; !ok {
-		ModelRegistry[typeString] = &Reg{}
-	}
+// 	if _, ok := ModelRegistry[typeString]; !ok {
+// 		ModelRegistry[typeString] = &Reg{}
+// 	}
 
-	ModelRegistry[typeString].RendererMethod = renderer
-	return r
-}
+// 	ModelRegistry[typeString].RendererMethod = renderer
+// 	return r
+// }
 
 // If within the model there is a struct that doesn't implement marshaler (which is considered "atomic"),
 // it needs to be labeled in one of the ownership models

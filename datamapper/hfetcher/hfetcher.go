@@ -35,7 +35,7 @@ type HandlerFetcher struct {
 // FetchHandlersForOpAndHook fetches the releveant hookhandler for this method and hook.
 // If there is any hookhandler whose first hook is this one, instantiate it.
 // If there are already instantiated hookhandler which handles this hook, fetch it as well.
-// hook can be JBAT
+// hook can be JBATR
 func (h *HandlerFetcher) FetchHandlersForOpAndHook(op hookhandler.RESTOp, hook string) []hookhandler.IHookhandler {
 	// Make sure it's only used for one hook
 	if h.op != hookhandler.RESTOpOther && h.op != op {
@@ -82,6 +82,9 @@ func (h *HandlerFetcher) FetchHandlersForOpAndHook(op hookhandler.RESTOp, hook s
 			comformedHandlers = append(comformedHandlers, handler)
 		}
 		if _, ok := handler.(hookhandler.IAfterTransact); ok && hook == "T" {
+			comformedHandlers = append(comformedHandlers, handler)
+		}
+		if _, ok := handler.(hookhandler.IRender); ok && hook == "R" {
 			comformedHandlers = append(comformedHandlers, handler)
 		}
 	}

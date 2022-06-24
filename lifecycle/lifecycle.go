@@ -6,6 +6,7 @@ import (
 	"github.com/go-chi/render"
 	"github.com/jinzhu/gorm"
 	"github.com/t2wu/betterrest/datamapper"
+	"github.com/t2wu/betterrest/datamapper/hfetcher"
 	"github.com/t2wu/betterrest/db"
 	"github.com/t2wu/betterrest/hookhandler"
 	"github.com/t2wu/betterrest/libs/datatypes"
@@ -73,7 +74,7 @@ func callOldOneTransact(data *hookhandler.Data, ep *hookhandler.EndPointInfo) {
 }
 
 func CreateMany(mapper datamapper.IDataMapper, modelObjs []models.IModel,
-	ep *hookhandler.EndPointInfo, logger Logger) (*hookhandler.Data, render.Renderer) {
+	ep *hookhandler.EndPointInfo, logger Logger) (*hookhandler.Data, *hfetcher.HandlerFetcher, render.Renderer) {
 	cargo := hookhandler.Cargo{}
 
 	var retVal *datamapper.MapperRet
@@ -90,9 +91,9 @@ func CreateMany(mapper datamapper.IDataMapper, modelObjs []models.IModel,
 
 	if retErr != nil {
 		if retErr.Renderer == nil {
-			return nil, webrender.NewErrCreate(retErr.Error)
+			return nil, retVal.Fetcher, webrender.NewErrCreate(retErr.Error)
 		}
-		return nil, retErr.Renderer
+		return nil, retVal.Fetcher, retErr.Renderer
 	}
 
 	modelObjs = retVal.Ms
@@ -109,18 +110,18 @@ func CreateMany(mapper datamapper.IDataMapper, modelObjs []models.IModel,
 	if !retVal.Fetcher.HasAttemptRegisteringHandler() {
 		// It's possible that the user has no hookhandler, even if it's new code
 		callOldBatchTransact(&data, ep) // for backward compatibility, for now
-		return &data, nil
+		return &data, retVal.Fetcher, nil
 	}
 
 	for _, hdlr := range retVal.Fetcher.FetchHandlersForOpAndHook(ep.Op, "T") {
 		hdlr.(hookhandler.IAfterTransact).AfterTransact(&data, ep)
 	}
 
-	return &data, nil
+	return &data, retVal.Fetcher, nil
 }
 
 func CreateOne(mapper datamapper.IDataMapper, modelObj models.IModel,
-	ep *hookhandler.EndPointInfo, logger Logger) (*hookhandler.Data, render.Renderer) {
+	ep *hookhandler.EndPointInfo, logger Logger) (*hookhandler.Data, *hfetcher.HandlerFetcher, render.Renderer) {
 	cargo := hookhandler.Cargo{}
 
 	var retVal *datamapper.MapperRet
@@ -137,9 +138,9 @@ func CreateOne(mapper datamapper.IDataMapper, modelObj models.IModel,
 
 	if retErr != nil {
 		if retErr.Renderer == nil {
-			return nil, webrender.NewErrCreate(retErr.Error)
+			return nil, retVal.Fetcher, webrender.NewErrCreate(retErr.Error)
 		}
-		return nil, retErr.Renderer
+		return nil, retVal.Fetcher, retErr.Renderer
 	}
 
 	modelObj = retVal.Ms[0]
@@ -153,18 +154,18 @@ func CreateOne(mapper datamapper.IDataMapper, modelObj models.IModel,
 	if !retVal.Fetcher.HasAttemptRegisteringHandler() {
 		// It's possible that the user has no hookhandler, even if it's new code
 		callOldOneTransact(&data, ep) // for backward compatibility, for now
-		return &data, nil
+		return &data, retVal.Fetcher, nil
 	}
 
 	for _, hdlr := range retVal.Fetcher.FetchHandlersForOpAndHook(ep.Op, "T") {
 		hdlr.(hookhandler.IAfterTransact).AfterTransact(&data, ep)
 	}
 
-	return &data, nil
+	return &data, retVal.Fetcher, nil
 }
 
 // ReadMany
-func ReadMany(mapper datamapper.IDataMapper, ep *hookhandler.EndPointInfo, logger Logger) (*hookhandler.Data, *int, render.Renderer) {
+func ReadMany(mapper datamapper.IDataMapper, ep *hookhandler.EndPointInfo, logger Logger) (*hookhandler.Data, *int, *hfetcher.HandlerFetcher, render.Renderer) {
 	if logger != nil {
 		logger.Log(nil, "GET", strings.ToLower(ep.TypeString), "n")
 	}
@@ -174,9 +175,9 @@ func ReadMany(mapper datamapper.IDataMapper, ep *hookhandler.EndPointInfo, logge
 	retVal, roles, no, retErr := mapper.ReadMany(db.Shared(), ep, &cargo)
 	if retErr != nil {
 		if retErr.Renderer == nil {
-			return nil, no, webrender.NewErrInternalServerError(retErr.Error) // TODO, probably should have a READ error
+			return nil, no, retVal.Fetcher, webrender.NewErrInternalServerError(retErr.Error) // TODO, probably should have a READ error
 		}
-		return nil, no, retErr.Renderer
+		return nil, no, retVal.Fetcher, retErr.Renderer
 	}
 
 	modelObjs := retVal.Ms
@@ -187,18 +188,18 @@ func ReadMany(mapper datamapper.IDataMapper, ep *hookhandler.EndPointInfo, logge
 	if !retVal.Fetcher.HasAttemptRegisteringHandler() {
 		// It's possible that the user has no hookhandler, even if it's new code
 		callOldBatchTransact(&data, ep) // for backward compatibility, for now
-		return &data, no, nil
+		return &data, no, retVal.Fetcher, nil
 	}
 
 	for _, hdlr := range retVal.Fetcher.FetchHandlersForOpAndHook(ep.Op, "T") {
 		hdlr.(hookhandler.IAfterTransact).AfterTransact(&data, ep)
 	}
 
-	return &data, no, nil
+	return &data, no, retVal.Fetcher, nil
 }
 
 func ReadOne(mapper datamapper.IDataMapper, id *datatypes.UUID, ep *hookhandler.EndPointInfo,
-	logger Logger) (*hookhandler.Data, render.Renderer) {
+	logger Logger) (*hookhandler.Data, *hfetcher.HandlerFetcher, render.Renderer) {
 	if logger != nil {
 		logger.Log(nil, "GET", strings.ToLower(ep.TypeString), "1")
 	}
@@ -207,12 +208,12 @@ func ReadOne(mapper datamapper.IDataMapper, id *datatypes.UUID, ep *hookhandler.
 	retVal, role, retErr := mapper.ReadOne(db.Shared(), id, ep, &cargo)
 	if retErr != nil {
 		if retErr.Renderer == nil {
-			return nil, webrender.NewErrInternalServerError(retErr.Error) // TODO, probably should have a READ error
+			return nil, retVal.Fetcher, webrender.NewErrInternalServerError(retErr.Error) // TODO, probably should have a READ error
 		}
 		if gorm.IsRecordNotFoundError(retErr.Error) {
-			return nil, webrender.NewErrNotFound(retErr.Error)
+			return nil, retVal.Fetcher, webrender.NewErrNotFound(retErr.Error)
 		}
-		return nil, retErr.Renderer
+		return nil, retVal.Fetcher, retErr.Renderer
 	}
 
 	modelObj := retVal.Ms[0]
@@ -221,18 +222,18 @@ func ReadOne(mapper datamapper.IDataMapper, id *datatypes.UUID, ep *hookhandler.
 
 	if !retVal.Fetcher.HasAttemptRegisteringHandler() {
 		callOldOneTransact(&data, ep) // for backward compatibility, for now
-		return &data, nil
+		return &data, retVal.Fetcher, nil
 	}
 
 	for _, hdlr := range retVal.Fetcher.FetchHandlersForOpAndHook(ep.Op, "T") {
 		hdlr.(hookhandler.IAfterTransact).AfterTransact(&data, ep)
 	}
 
-	return &data, nil
+	return &data, retVal.Fetcher, nil
 }
 
 func UpdateMany(mapper datamapper.IDataMapper, modelObjs []models.IModel,
-	ep *hookhandler.EndPointInfo, logger Logger) (*hookhandler.Data, render.Renderer) {
+	ep *hookhandler.EndPointInfo, logger Logger) (*hookhandler.Data, *hfetcher.HandlerFetcher, render.Renderer) {
 	cargo := hookhandler.Cargo{}
 	var retVal *datamapper.MapperRet
 	retErr := transact.TransactCustomError(db.Shared(), func(tx *gorm.DB) (retErr *webrender.RetError) {
@@ -248,9 +249,9 @@ func UpdateMany(mapper datamapper.IDataMapper, modelObjs []models.IModel,
 	}, "lifecycle.UpdateMany")
 	if retErr != nil {
 		if retErr.Renderer == nil {
-			return nil, webrender.NewErrUpdate(retErr.Error)
+			return nil, retVal.Fetcher, webrender.NewErrUpdate(retErr.Error)
 		}
-		return nil, retErr.Renderer
+		return nil, retVal.Fetcher, retErr.Renderer
 	}
 
 	modelObjs = retVal.Ms
@@ -264,18 +265,18 @@ func UpdateMany(mapper datamapper.IDataMapper, modelObjs []models.IModel,
 
 	if !retVal.Fetcher.HasAttemptRegisteringHandler() {
 		callOldBatchTransact(&data, ep) // for backward compatibility, for now
-		return &data, nil
+		return &data, retVal.Fetcher, nil
 	}
 
 	for _, hdlr := range retVal.Fetcher.FetchHandlersForOpAndHook(ep.Op, "T") {
 		hdlr.(hookhandler.IAfterTransact).AfterTransact(&data, ep)
 	}
 
-	return &data, nil
+	return &data, retVal.Fetcher, nil
 }
 
 func UpdateOne(mapper datamapper.IDataMapper, modelObj models.IModel, id *datatypes.UUID,
-	ep *hookhandler.EndPointInfo, logger Logger) (*hookhandler.Data, render.Renderer) {
+	ep *hookhandler.EndPointInfo, logger Logger) (*hookhandler.Data, *hfetcher.HandlerFetcher, render.Renderer) {
 	cargo := hookhandler.Cargo{}
 	var retVal *datamapper.MapperRet
 	retErr := transact.TransactCustomError(db.Shared(), func(tx *gorm.DB) (retErr *webrender.RetError) {
@@ -290,9 +291,9 @@ func UpdateOne(mapper datamapper.IDataMapper, modelObj models.IModel, id *dataty
 	}, "lifecycle.UpdateOne")
 	if retErr != nil {
 		if retErr.Renderer == nil {
-			return nil, webrender.NewErrUpdate(retErr.Error)
+			return nil, retVal.Fetcher, webrender.NewErrUpdate(retErr.Error)
 		}
-		return nil, retErr.Renderer
+		return nil, retVal.Fetcher, retErr.Renderer
 	}
 
 	modelObj = retVal.Ms[0]
@@ -302,18 +303,18 @@ func UpdateOne(mapper datamapper.IDataMapper, modelObj models.IModel, id *dataty
 
 	if !retVal.Fetcher.HasAttemptRegisteringHandler() {
 		callOldOneTransact(&data, ep) // for backward compatibility, for now
-		return &data, nil
+		return &data, retVal.Fetcher, nil
 	}
 
 	for _, hdlr := range retVal.Fetcher.FetchHandlersForOpAndHook(ep.Op, "T") {
 		hdlr.(hookhandler.IAfterTransact).AfterTransact(&data, ep)
 	}
 
-	return &data, nil
+	return &data, retVal.Fetcher, nil
 }
 
 func PatchMany(mapper datamapper.IDataMapper, jsonIDPatches []models.JSONIDPatch,
-	ep *hookhandler.EndPointInfo, logger Logger) (*hookhandler.Data, render.Renderer) {
+	ep *hookhandler.EndPointInfo, logger Logger) (*hookhandler.Data, *hfetcher.HandlerFetcher, render.Renderer) {
 	var modelObjs []models.IModel
 	cargo := hookhandler.Cargo{}
 	var retVal *datamapper.MapperRet
@@ -330,9 +331,9 @@ func PatchMany(mapper datamapper.IDataMapper, jsonIDPatches []models.JSONIDPatch
 
 	if retErr != nil {
 		if retErr.Renderer == nil {
-			return nil, webrender.NewErrPatch(retErr.Error)
+			return nil, retVal.Fetcher, webrender.NewErrPatch(retErr.Error)
 		}
-		return nil, retErr.Renderer
+		return nil, retVal.Fetcher, retErr.Renderer
 	}
 
 	modelObjs = retVal.Ms
@@ -346,18 +347,18 @@ func PatchMany(mapper datamapper.IDataMapper, jsonIDPatches []models.JSONIDPatch
 
 	if !retVal.Fetcher.HasAttemptRegisteringHandler() {
 		callOldBatchTransact(&data, ep) // for backward compatibility, for now
-		return &data, nil
+		return &data, retVal.Fetcher, nil
 	}
 
 	for _, hdlr := range retVal.Fetcher.FetchHandlersForOpAndHook(ep.Op, "T") {
 		hdlr.(hookhandler.IAfterTransact).AfterTransact(&data, ep)
 	}
 
-	return &data, nil
+	return &data, retVal.Fetcher, nil
 }
 
 func PatchOne(mapper datamapper.IDataMapper, jsonPatch []byte,
-	id *datatypes.UUID, ep *hookhandler.EndPointInfo, logger Logger) (*hookhandler.Data, render.Renderer) {
+	id *datatypes.UUID, ep *hookhandler.EndPointInfo, logger Logger) (*hookhandler.Data, *hfetcher.HandlerFetcher, render.Renderer) {
 	cargo := hookhandler.Cargo{}
 	var modelObj models.IModel
 	var retVal *datamapper.MapperRet
@@ -375,9 +376,9 @@ func PatchOne(mapper datamapper.IDataMapper, jsonPatch []byte,
 
 	if retErr != nil {
 		if retErr.Renderer == nil {
-			return nil, webrender.NewErrPatch(retErr.Error)
+			return nil, retVal.Fetcher, webrender.NewErrPatch(retErr.Error)
 		}
-		return nil, retErr.Renderer
+		return nil, retVal.Fetcher, retErr.Renderer
 	}
 
 	modelObj = retVal.Ms[0]
@@ -387,18 +388,18 @@ func PatchOne(mapper datamapper.IDataMapper, jsonPatch []byte,
 
 	if !retVal.Fetcher.HasAttemptRegisteringHandler() {
 		callOldOneTransact(&data, ep) // for backward compatibility, for now
-		return &data, nil
+		return &data, retVal.Fetcher, nil
 	}
 
 	for _, hdlr := range retVal.Fetcher.FetchHandlersForOpAndHook(ep.Op, "T") {
 		hdlr.(hookhandler.IAfterTransact).AfterTransact(&data, ep)
 	}
 
-	return &data, nil
+	return &data, retVal.Fetcher, nil
 }
 
 func DeleteMany(mapper datamapper.IDataMapper, modelObjs []models.IModel,
-	ep *hookhandler.EndPointInfo, logger Logger) (*hookhandler.Data, render.Renderer) {
+	ep *hookhandler.EndPointInfo, logger Logger) (*hookhandler.Data, *hfetcher.HandlerFetcher, render.Renderer) {
 	cargo := hookhandler.Cargo{}
 	var retVal *datamapper.MapperRet
 	retErr := transact.TransactCustomError(db.Shared(), func(tx *gorm.DB) (retErr *webrender.RetError) {
@@ -414,9 +415,9 @@ func DeleteMany(mapper datamapper.IDataMapper, modelObjs []models.IModel,
 
 	if retErr != nil {
 		if retErr.Renderer == nil {
-			return nil, webrender.NewErrDelete(retErr.Error)
+			return nil, retVal.Fetcher, webrender.NewErrDelete(retErr.Error)
 		}
-		return nil, retErr.Renderer
+		return nil, retVal.Fetcher, retErr.Renderer
 	}
 
 	modelObjs = retVal.Ms
@@ -430,18 +431,18 @@ func DeleteMany(mapper datamapper.IDataMapper, modelObjs []models.IModel,
 
 	if !retVal.Fetcher.HasAttemptRegisteringHandler() {
 		callOldBatchTransact(&data, ep) // for backward compatibility, for now
-		return &data, nil
+		return &data, retVal.Fetcher, nil
 	}
 
 	for _, hdlr := range retVal.Fetcher.FetchHandlersForOpAndHook(ep.Op, "T") {
 		hdlr.(hookhandler.IAfterTransact).AfterTransact(&data, ep)
 	}
 
-	return &data, nil
+	return &data, retVal.Fetcher, nil
 }
 
 func DeleteOne(mapper datamapper.IDataMapper, id *datatypes.UUID,
-	ep *hookhandler.EndPointInfo, logger Logger) (*hookhandler.Data, render.Renderer) {
+	ep *hookhandler.EndPointInfo, logger Logger) (*hookhandler.Data, *hfetcher.HandlerFetcher, render.Renderer) {
 	cargo := hookhandler.Cargo{}
 	var retVal *datamapper.MapperRet
 	retErr := transact.TransactCustomError(db.Shared(), func(tx *gorm.DB) (retErr *webrender.RetError) {
@@ -454,9 +455,9 @@ func DeleteOne(mapper datamapper.IDataMapper, id *datatypes.UUID,
 	}, "lifecycle.DeleteOne")
 	if retErr != nil {
 		if retErr.Renderer == nil {
-			return nil, webrender.NewErrDelete(retErr.Error)
+			return nil, retVal.Fetcher, webrender.NewErrDelete(retErr.Error)
 		}
-		return nil, retErr.Renderer
+		return nil, retVal.Fetcher, retErr.Renderer
 	}
 
 	modelObj := retVal.Ms[0]
@@ -466,12 +467,12 @@ func DeleteOne(mapper datamapper.IDataMapper, id *datatypes.UUID,
 
 	if !retVal.Fetcher.HasAttemptRegisteringHandler() {
 		callOldOneTransact(&data, ep) // for backward compatibility, for now
-		return &data, nil
+		return &data, retVal.Fetcher, nil
 	}
 
 	for _, hdlr := range retVal.Fetcher.FetchHandlersForOpAndHook(ep.Op, "T") {
 		hdlr.(hookhandler.IAfterTransact).AfterTransact(&data, ep)
 	}
 
-	return &data, nil
+	return &data, retVal.Fetcher, nil
 }

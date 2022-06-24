@@ -112,7 +112,7 @@ type Reg struct {
 	// The calling order is not guaranteed.
 	HandlerMap *handlermap.HandlerMap
 
-	RendererMethod func(c *gin.Context, data *hookhandler.Data, info *hookhandler.EndPointInfo) bool
+	// RendererMethod func(c *gin.Context, data *hookhandler.Data, info *hookhandler.EndPointInfo, total *int) bool
 }
 
 // func (g *Gateway) AfterCreateDB(db *gorm.DB, typeString string) error {

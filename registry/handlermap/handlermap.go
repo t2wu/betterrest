@@ -19,9 +19,10 @@ func NewHandlerMap() *HandlerMap {
 }
 
 type HandlerMap struct {
-	// HTTP method (CRUPD) -> Hook (BAT) -> Controllers
+	// HTTP method (CRUPD) -> Hook (JBATR) -> Controllers
 	// Method: CRUPD
-	// Hook: JBAT (J for before json patch is applied, only valid for patch)
+	// Hook: JBATR (J for before json patch is applied, only valid for patch)
+	// R is Render
 	controllerMap                              map[string]map[string][]HandlerTypeAndArgs
 	hasAtLeastOneControllerWithHooksRegistered bool
 	hasAtLeastOneControllerAttemptRegistered   bool
@@ -102,12 +103,16 @@ func (h *HandlerMap) getFirstHookType(op hookhandler.RESTOp, handlerType reflect
 			return "A"
 		} else if _, ok := hdlr.(hookhandler.IAfterTransact); ok {
 			return "T"
+		} else if _, ok := hdlr.(hookhandler.IRender); ok {
+			return "R"
 		}
 	} else if op == hookhandler.RESTOpRead {
 		if _, ok := hdlr.(hookhandler.IAfter); ok {
 			return "A"
 		} else if _, ok := hdlr.(hookhandler.IAfterTransact); ok {
 			return "T"
+		} else if _, ok := hdlr.(hookhandler.IRender); ok {
+			return "R"
 		}
 	}
 	// Others, without valid before apply hook
@@ -117,6 +122,8 @@ func (h *HandlerMap) getFirstHookType(op hookhandler.RESTOp, handlerType reflect
 		return "A"
 	} else if _, ok := hdlr.(hookhandler.IAfterTransact); ok {
 		return "T"
+	} else if _, ok := hdlr.(hookhandler.IRender); ok {
+		return "R"
 	}
 	return ""
 }

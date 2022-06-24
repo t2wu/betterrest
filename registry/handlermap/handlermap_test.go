@@ -10,6 +10,8 @@ import (
 	"github.com/t2wu/betterrest/libs/webrender"
 )
 
+// IRender has not yet been tested
+
 type Handler1NoHook struct {
 }
 

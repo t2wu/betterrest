@@ -124,10 +124,9 @@ type IAfterTransact interface {
 	AfterTransact(data *Data, info *EndPointInfo)
 }
 
-// IHasRenderer is for formatting IModel with a custom function
+// IRender is for formatting IModel with a custom function
 // basically do your own custom output
 // If return false, use the default JSON output
-// For batch renderer, register a Render(r UserRole, who models.UserIDFetchable, modelObjs []IModel) bool
-type IHasRenderer interface {
-	Render(c *gin.Context, data *Data, info *EndPointInfo) bool
+type IRender interface {
+	Render(c *gin.Context, data *Data, ep *EndPointInfo, total *int) bool
 }
