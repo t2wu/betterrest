@@ -91,9 +91,9 @@ func CreateMany(mapper datamapper.IDataMapper, modelObjs []models.IModel,
 
 	if retErr != nil {
 		if retErr.Renderer == nil {
-			return nil, retVal.Fetcher, webrender.NewErrCreate(retErr.Error)
+			return nil, nil, webrender.NewErrCreate(retErr.Error)
 		}
-		return nil, retVal.Fetcher, retErr.Renderer
+		return nil, nil, retErr.Renderer
 	}
 
 	modelObjs = retVal.Ms
@@ -138,9 +138,9 @@ func CreateOne(mapper datamapper.IDataMapper, modelObj models.IModel,
 
 	if retErr != nil {
 		if retErr.Renderer == nil {
-			return nil, retVal.Fetcher, webrender.NewErrCreate(retErr.Error)
+			return nil, nil, webrender.NewErrCreate(retErr.Error)
 		}
-		return nil, retVal.Fetcher, retErr.Renderer
+		return nil, nil, retErr.Renderer
 	}
 
 	modelObj = retVal.Ms[0]
@@ -175,9 +175,9 @@ func ReadMany(mapper datamapper.IDataMapper, ep *hookhandler.EndPointInfo, logge
 	retVal, roles, no, retErr := mapper.ReadMany(db.Shared(), ep, &cargo)
 	if retErr != nil {
 		if retErr.Renderer == nil {
-			return nil, no, retVal.Fetcher, webrender.NewErrInternalServerError(retErr.Error) // TODO, probably should have a READ error
+			return nil, no, nil, webrender.NewErrInternalServerError(retErr.Error) // TODO, probably should have a READ error
 		}
-		return nil, no, retVal.Fetcher, retErr.Renderer
+		return nil, no, nil, retErr.Renderer
 	}
 
 	modelObjs := retVal.Ms
@@ -208,12 +208,12 @@ func ReadOne(mapper datamapper.IDataMapper, id *datatypes.UUID, ep *hookhandler.
 	retVal, role, retErr := mapper.ReadOne(db.Shared(), id, ep, &cargo)
 	if retErr != nil {
 		if retErr.Renderer == nil {
-			return nil, retVal.Fetcher, webrender.NewErrInternalServerError(retErr.Error) // TODO, probably should have a READ error
+			return nil, nil, webrender.NewErrInternalServerError(retErr.Error) // TODO, probably should have a READ error
 		}
 		if gorm.IsRecordNotFoundError(retErr.Error) {
-			return nil, retVal.Fetcher, webrender.NewErrNotFound(retErr.Error)
+			return nil, nil, webrender.NewErrNotFound(retErr.Error)
 		}
-		return nil, retVal.Fetcher, retErr.Renderer
+		return nil, nil, retErr.Renderer
 	}
 
 	modelObj := retVal.Ms[0]
@@ -249,9 +249,9 @@ func UpdateMany(mapper datamapper.IDataMapper, modelObjs []models.IModel,
 	}, "lifecycle.UpdateMany")
 	if retErr != nil {
 		if retErr.Renderer == nil {
-			return nil, retVal.Fetcher, webrender.NewErrUpdate(retErr.Error)
+			return nil, nil, webrender.NewErrUpdate(retErr.Error)
 		}
-		return nil, retVal.Fetcher, retErr.Renderer
+		return nil, nil, retErr.Renderer
 	}
 
 	modelObjs = retVal.Ms
@@ -291,9 +291,9 @@ func UpdateOne(mapper datamapper.IDataMapper, modelObj models.IModel, id *dataty
 	}, "lifecycle.UpdateOne")
 	if retErr != nil {
 		if retErr.Renderer == nil {
-			return nil, retVal.Fetcher, webrender.NewErrUpdate(retErr.Error)
+			return nil, nil, webrender.NewErrUpdate(retErr.Error)
 		}
-		return nil, retVal.Fetcher, retErr.Renderer
+		return nil, nil, retErr.Renderer
 	}
 
 	modelObj = retVal.Ms[0]
@@ -331,9 +331,9 @@ func PatchMany(mapper datamapper.IDataMapper, jsonIDPatches []models.JSONIDPatch
 
 	if retErr != nil {
 		if retErr.Renderer == nil {
-			return nil, retVal.Fetcher, webrender.NewErrPatch(retErr.Error)
+			return nil, nil, webrender.NewErrPatch(retErr.Error)
 		}
-		return nil, retVal.Fetcher, retErr.Renderer
+		return nil, nil, retErr.Renderer
 	}
 
 	modelObjs = retVal.Ms
@@ -376,9 +376,9 @@ func PatchOne(mapper datamapper.IDataMapper, jsonPatch []byte,
 
 	if retErr != nil {
 		if retErr.Renderer == nil {
-			return nil, retVal.Fetcher, webrender.NewErrPatch(retErr.Error)
+			return nil, nil, webrender.NewErrPatch(retErr.Error)
 		}
-		return nil, retVal.Fetcher, retErr.Renderer
+		return nil, nil, retErr.Renderer
 	}
 
 	modelObj = retVal.Ms[0]
@@ -415,9 +415,9 @@ func DeleteMany(mapper datamapper.IDataMapper, modelObjs []models.IModel,
 
 	if retErr != nil {
 		if retErr.Renderer == nil {
-			return nil, retVal.Fetcher, webrender.NewErrDelete(retErr.Error)
+			return nil, nil, webrender.NewErrDelete(retErr.Error)
 		}
-		return nil, retVal.Fetcher, retErr.Renderer
+		return nil, nil, retErr.Renderer
 	}
 
 	modelObjs = retVal.Ms
@@ -455,9 +455,9 @@ func DeleteOne(mapper datamapper.IDataMapper, id *datatypes.UUID,
 	}, "lifecycle.DeleteOne")
 	if retErr != nil {
 		if retErr.Renderer == nil {
-			return nil, retVal.Fetcher, webrender.NewErrDelete(retErr.Error)
+			return nil, nil, webrender.NewErrDelete(retErr.Error)
 		}
-		return nil, retVal.Fetcher, retErr.Renderer
+		return nil, nil, retErr.Renderer
 	}
 
 	modelObj := retVal.Ms[0]
