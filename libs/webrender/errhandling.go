@@ -3,10 +3,9 @@ package webrender
 import (
 	"fmt"
 	"net/http"
-	"regexp"
 
 	"github.com/go-chi/render"
-	"github.com/go-sql-driver/mysql"
+	"github.com/lib/pq"
 )
 
 // https://stackoverflow.com/questions/37863374/whats-the-difference-between-responsewriter-write-and-io-writestring
@@ -432,13 +431,16 @@ func (e *ErrResponse) Render(w http.ResponseWriter, r *http.Request) error {
 // I don't want it to say
 // "error": "Error 1062: Duplicate entry '\\x12\\xF6\\x8B\\xF6b\\xBCF\\x90\\xBC\\xED\\xA0\\xACa\\x066\\x92' for key 'PRIMARY'"
 func ErrorToSensibleString(err error) string {
-	me, ok := err.(*mysql.MySQLError)
-	if ok {
-		if me.Number == 1062 {
-			re := regexp.MustCompile("Duplicate entry '(.*?)'")
-			entry := re.FindStringSubmatch(me.Message)[1]
-			return fmt.Sprintf("duplicated entry '%s'", entry)
-		}
+	// me, ok := err.(*mysql.MySQLError)
+	// if ok {
+	// 	if me.Number == 1062 {
+	// 		re := regexp.MustCompile("Duplicate entry '(.*?)'")
+	// 		entry := re.FindStringSubmatch(me.Message)[1]
+	// 		return fmt.Sprintf("duplicated entry '%s'", entry)
+	// 	}
+	// }
+	if err, ok := err.(*pq.Error); ok {
+		return err.Message + err.Code.Name()
 	}
 
 	if err != nil {
