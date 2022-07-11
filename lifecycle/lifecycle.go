@@ -7,7 +7,6 @@ import (
 	"github.com/jinzhu/gorm"
 	"github.com/t2wu/betterrest/datamapper"
 	"github.com/t2wu/betterrest/datamapper/hfetcher"
-	"github.com/t2wu/betterrest/db"
 	"github.com/t2wu/betterrest/hookhandler"
 	"github.com/t2wu/betterrest/libs/datatypes"
 	"github.com/t2wu/betterrest/libs/utils/transact"
@@ -73,12 +72,12 @@ func callOldOneTransact(data *hookhandler.Data, ep *hookhandler.EndPointInfo) {
 	data.Cargo.Payload = hpdata.Cargo.Payload
 }
 
-func CreateMany(mapper datamapper.IDataMapper, modelObjs []models.IModel,
+func CreateMany(db *gorm.DB, mapper datamapper.IDataMapper, modelObjs []models.IModel,
 	ep *hookhandler.EndPointInfo, logger Logger) (*hookhandler.Data, *hfetcher.HandlerFetcher, render.Renderer) {
 	cargo := hookhandler.Cargo{}
 
 	var retVal *datamapper.MapperRet
-	retErr := transact.TransactCustomError(db.Shared(), func(tx *gorm.DB) (retErr *webrender.RetError) {
+	retErr := transact.TransactCustomError(db, func(tx *gorm.DB) (retErr *webrender.RetError) {
 		if logger != nil {
 			logger.Log(tx, "POST", strings.ToLower(ep.TypeString), "n")
 		}
@@ -120,12 +119,12 @@ func CreateMany(mapper datamapper.IDataMapper, modelObjs []models.IModel,
 	return &data, retVal.Fetcher, nil
 }
 
-func CreateOne(mapper datamapper.IDataMapper, modelObj models.IModel,
+func CreateOne(db *gorm.DB, mapper datamapper.IDataMapper, modelObj models.IModel,
 	ep *hookhandler.EndPointInfo, logger Logger) (*hookhandler.Data, *hfetcher.HandlerFetcher, render.Renderer) {
 	cargo := hookhandler.Cargo{}
 
 	var retVal *datamapper.MapperRet
-	retErr := transact.TransactCustomError(db.Shared(), func(tx *gorm.DB) (retErr *webrender.RetError) {
+	retErr := transact.TransactCustomError(db, func(tx *gorm.DB) (retErr *webrender.RetError) {
 		if logger != nil {
 			logger.Log(tx, "POST", strings.ToLower(ep.TypeString), "1")
 		}
@@ -165,14 +164,14 @@ func CreateOne(mapper datamapper.IDataMapper, modelObj models.IModel,
 }
 
 // ReadMany
-func ReadMany(mapper datamapper.IDataMapper, ep *hookhandler.EndPointInfo, logger Logger) (*hookhandler.Data, *int, *hfetcher.HandlerFetcher, render.Renderer) {
+func ReadMany(db *gorm.DB, mapper datamapper.IDataMapper, ep *hookhandler.EndPointInfo, logger Logger) (*hookhandler.Data, *int, *hfetcher.HandlerFetcher, render.Renderer) {
 	if logger != nil {
 		logger.Log(nil, "GET", strings.ToLower(ep.TypeString), "n")
 	}
 
 	cargo := hookhandler.Cargo{}
 	var retVal *datamapper.MapperRet
-	retVal, roles, no, retErr := mapper.ReadMany(db.Shared(), ep, &cargo)
+	retVal, roles, no, retErr := mapper.ReadMany(db, ep, &cargo)
 	if retErr != nil {
 		if retErr.Renderer == nil {
 			return nil, no, nil, webrender.NewErrInternalServerError(retErr.Error) // TODO, probably should have a READ error
@@ -198,14 +197,14 @@ func ReadMany(mapper datamapper.IDataMapper, ep *hookhandler.EndPointInfo, logge
 	return &data, no, retVal.Fetcher, nil
 }
 
-func ReadOne(mapper datamapper.IDataMapper, id *datatypes.UUID, ep *hookhandler.EndPointInfo,
+func ReadOne(db *gorm.DB, mapper datamapper.IDataMapper, id *datatypes.UUID, ep *hookhandler.EndPointInfo,
 	logger Logger) (*hookhandler.Data, *hfetcher.HandlerFetcher, render.Renderer) {
 	if logger != nil {
 		logger.Log(nil, "GET", strings.ToLower(ep.TypeString), "1")
 	}
 
 	cargo := hookhandler.Cargo{}
-	retVal, role, retErr := mapper.ReadOne(db.Shared(), id, ep, &cargo)
+	retVal, role, retErr := mapper.ReadOne(db, id, ep, &cargo)
 	if retErr != nil {
 		if retErr.Renderer == nil {
 			return nil, nil, webrender.NewErrInternalServerError(retErr.Error) // TODO, probably should have a READ error
@@ -232,11 +231,11 @@ func ReadOne(mapper datamapper.IDataMapper, id *datatypes.UUID, ep *hookhandler.
 	return &data, retVal.Fetcher, nil
 }
 
-func UpdateMany(mapper datamapper.IDataMapper, modelObjs []models.IModel,
+func UpdateMany(db *gorm.DB, mapper datamapper.IDataMapper, modelObjs []models.IModel,
 	ep *hookhandler.EndPointInfo, logger Logger) (*hookhandler.Data, *hfetcher.HandlerFetcher, render.Renderer) {
 	cargo := hookhandler.Cargo{}
 	var retVal *datamapper.MapperRet
-	retErr := transact.TransactCustomError(db.Shared(), func(tx *gorm.DB) (retErr *webrender.RetError) {
+	retErr := transact.TransactCustomError(db, func(tx *gorm.DB) (retErr *webrender.RetError) {
 		if logger != nil {
 			logger.Log(tx, "PUT", strings.ToLower(ep.TypeString), "n")
 		}
@@ -275,11 +274,11 @@ func UpdateMany(mapper datamapper.IDataMapper, modelObjs []models.IModel,
 	return &data, retVal.Fetcher, nil
 }
 
-func UpdateOne(mapper datamapper.IDataMapper, modelObj models.IModel, id *datatypes.UUID,
+func UpdateOne(db *gorm.DB, mapper datamapper.IDataMapper, modelObj models.IModel, id *datatypes.UUID,
 	ep *hookhandler.EndPointInfo, logger Logger) (*hookhandler.Data, *hfetcher.HandlerFetcher, render.Renderer) {
 	cargo := hookhandler.Cargo{}
 	var retVal *datamapper.MapperRet
-	retErr := transact.TransactCustomError(db.Shared(), func(tx *gorm.DB) (retErr *webrender.RetError) {
+	retErr := transact.TransactCustomError(db, func(tx *gorm.DB) (retErr *webrender.RetError) {
 		if logger != nil {
 			logger.Log(tx, "PUT", strings.ToLower(ep.TypeString), "1")
 		}
@@ -313,12 +312,12 @@ func UpdateOne(mapper datamapper.IDataMapper, modelObj models.IModel, id *dataty
 	return &data, retVal.Fetcher, nil
 }
 
-func PatchMany(mapper datamapper.IDataMapper, jsonIDPatches []models.JSONIDPatch,
+func PatchMany(db *gorm.DB, mapper datamapper.IDataMapper, jsonIDPatches []models.JSONIDPatch,
 	ep *hookhandler.EndPointInfo, logger Logger) (*hookhandler.Data, *hfetcher.HandlerFetcher, render.Renderer) {
 	var modelObjs []models.IModel
 	cargo := hookhandler.Cargo{}
 	var retVal *datamapper.MapperRet
-	retErr := transact.TransactCustomError(db.Shared(), func(tx *gorm.DB) (retErr *webrender.RetError) {
+	retErr := transact.TransactCustomError(db, func(tx *gorm.DB) (retErr *webrender.RetError) {
 		if logger != nil {
 			logger.Log(tx, "PATCH", strings.ToLower(ep.TypeString), "n")
 		}
@@ -357,12 +356,12 @@ func PatchMany(mapper datamapper.IDataMapper, jsonIDPatches []models.JSONIDPatch
 	return &data, retVal.Fetcher, nil
 }
 
-func PatchOne(mapper datamapper.IDataMapper, jsonPatch []byte,
+func PatchOne(db *gorm.DB, mapper datamapper.IDataMapper, jsonPatch []byte,
 	id *datatypes.UUID, ep *hookhandler.EndPointInfo, logger Logger) (*hookhandler.Data, *hfetcher.HandlerFetcher, render.Renderer) {
 	cargo := hookhandler.Cargo{}
 	var modelObj models.IModel
 	var retVal *datamapper.MapperRet
-	retErr := transact.TransactCustomError(db.Shared(), func(tx *gorm.DB) (retErr *webrender.RetError) {
+	retErr := transact.TransactCustomError(db, func(tx *gorm.DB) (retErr *webrender.RetError) {
 		if logger != nil {
 			logger.Log(tx, "PATCH", strings.ToLower(ep.TypeString), "1")
 		}
@@ -398,11 +397,11 @@ func PatchOne(mapper datamapper.IDataMapper, jsonPatch []byte,
 	return &data, retVal.Fetcher, nil
 }
 
-func DeleteMany(mapper datamapper.IDataMapper, modelObjs []models.IModel,
+func DeleteMany(db *gorm.DB, mapper datamapper.IDataMapper, modelObjs []models.IModel,
 	ep *hookhandler.EndPointInfo, logger Logger) (*hookhandler.Data, *hfetcher.HandlerFetcher, render.Renderer) {
 	cargo := hookhandler.Cargo{}
 	var retVal *datamapper.MapperRet
-	retErr := transact.TransactCustomError(db.Shared(), func(tx *gorm.DB) (retErr *webrender.RetError) {
+	retErr := transact.TransactCustomError(db, func(tx *gorm.DB) (retErr *webrender.RetError) {
 		if logger != nil {
 			logger.Log(tx, "DELETE", strings.ToLower(ep.TypeString), "n")
 		}
@@ -441,11 +440,11 @@ func DeleteMany(mapper datamapper.IDataMapper, modelObjs []models.IModel,
 	return &data, retVal.Fetcher, nil
 }
 
-func DeleteOne(mapper datamapper.IDataMapper, id *datatypes.UUID,
+func DeleteOne(db *gorm.DB, mapper datamapper.IDataMapper, id *datatypes.UUID,
 	ep *hookhandler.EndPointInfo, logger Logger) (*hookhandler.Data, *hfetcher.HandlerFetcher, render.Renderer) {
 	cargo := hookhandler.Cargo{}
 	var retVal *datamapper.MapperRet
-	retErr := transact.TransactCustomError(db.Shared(), func(tx *gorm.DB) (retErr *webrender.RetError) {
+	retErr := transact.TransactCustomError(db, func(tx *gorm.DB) (retErr *webrender.RetError) {
 		logger.Log(tx, "DELETE", strings.ToLower(ep.TypeString), "1")
 
 		if retVal, retErr = mapper.DeleteOne(tx, id, ep, &cargo); retErr != nil {

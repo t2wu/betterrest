@@ -15,6 +15,7 @@ import (
 	"github.com/jinzhu/gorm"
 	"github.com/t2wu/betterrest/datamapper"
 	"github.com/t2wu/betterrest/datamapper/hfetcher"
+	"github.com/t2wu/betterrest/db"
 	"github.com/t2wu/betterrest/hookhandler"
 	"github.com/t2wu/betterrest/libs/settings"
 	"github.com/t2wu/betterrest/libs/urlparam"
@@ -438,7 +439,7 @@ func CreateHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin
 
 		if *isBatch {
 			ep.Cardinality = hookhandler.APICardinalityMany
-			data, handlerFetcher, renderer := lifecycle.CreateMany(mapper, modelObjs, &ep, &TransIDLogger{})
+			data, handlerFetcher, renderer := lifecycle.CreateMany(db.Shared(), mapper, modelObjs, &ep, &TransIDLogger{})
 			if renderer != nil {
 				render.Render(w, c.Request, renderer)
 				return
@@ -448,7 +449,7 @@ func CreateHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin
 			batchRenderHelper(c, typeString, data, &ep, nil, handlerFetcher)
 		} else {
 			ep.Cardinality = hookhandler.APICardinalityOne
-			data, handlerFetcher, renderer := lifecycle.CreateOne(mapper, modelObjs[0], &ep, &TransIDLogger{})
+			data, handlerFetcher, renderer := lifecycle.CreateOne(db.Shared(), mapper, modelObjs[0], &ep, &TransIDLogger{})
 			if renderer != nil {
 				render.Render(w, c.Request, renderer)
 				return
@@ -477,7 +478,7 @@ func ReadManyHandler(typeString string, mapper datamapper.IDataMapper) func(c *g
 			Who:         WhoFromContext(r),
 		}
 
-		data, no, handlerFetcher, renderer := lifecycle.ReadMany(mapper, &ep, &TransIDLogger{})
+		data, no, handlerFetcher, renderer := lifecycle.ReadMany(db.Shared(), mapper, &ep, &TransIDLogger{})
 		if renderer != nil {
 			render.Render(w, r, renderer)
 			return
@@ -511,7 +512,7 @@ func ReadOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *gi
 			URLParams:   OptionFromContext(r),
 			Who:         WhoFromContext(r),
 		}
-		data, handlerFetcher, renderer := lifecycle.ReadOne(mapper, id, &ep, &TransIDLogger{})
+		data, handlerFetcher, renderer := lifecycle.ReadOne(db.Shared(), mapper, id, &ep, &TransIDLogger{})
 		if renderer != nil {
 			render.Render(w, c.Request, renderer)
 			return
@@ -542,7 +543,7 @@ func UpdateManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 			return
 		}
 
-		data, handlerFetcher, renderer := lifecycle.UpdateMany(mapper, modelObjs, &ep, &TransIDLogger{})
+		data, handlerFetcher, renderer := lifecycle.UpdateMany(db.Shared(), mapper, modelObjs, &ep, &TransIDLogger{})
 		if renderer != nil {
 			render.Render(w, r, renderer)
 			return
@@ -585,7 +586,7 @@ func UpdateOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 			return
 		}
 
-		data, handlerFetcher, renderer := lifecycle.UpdateOne(mapper, modelObj, id, &ep, &TransIDLogger{})
+		data, handlerFetcher, renderer := lifecycle.UpdateOne(db.Shared(), mapper, modelObj, id, &ep, &TransIDLogger{})
 		if renderer != nil {
 			render.Render(w, r, renderer)
 			return
@@ -616,7 +617,7 @@ func PatchManyHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 			Who:         WhoFromContext(r),
 		}
 
-		data, handlerFetcher, renderer := lifecycle.PatchMany(mapper, jsonIDPatches, &ep, &TransIDLogger{})
+		data, handlerFetcher, renderer := lifecycle.PatchMany(db.Shared(), mapper, jsonIDPatches, &ep, &TransIDLogger{})
 		if renderer != nil {
 			render.Render(w, r, renderer)
 			return
@@ -652,7 +653,7 @@ func PatchOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *g
 			Who:         WhoFromContext(r),
 		}
 
-		data, handlerFetcher, renderer := lifecycle.PatchOne(mapper, jsonPatch, id, &ep, &TransIDLogger{})
+		data, handlerFetcher, renderer := lifecycle.PatchOne(db.Shared(), mapper, jsonPatch, id, &ep, &TransIDLogger{})
 		if renderer != nil {
 			render.Render(w, r, renderer)
 			return
@@ -683,7 +684,7 @@ func DeleteManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 			return
 		}
 
-		data, handlerFetcher, renderer := lifecycle.DeleteMany(mapper, modelObjs, &ep, &TransIDLogger{})
+		data, handlerFetcher, renderer := lifecycle.DeleteMany(db.Shared(), mapper, modelObjs, &ep, &TransIDLogger{})
 		if renderer != nil {
 			render.Render(w, r, renderer)
 			return
@@ -712,7 +713,7 @@ func DeleteOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 			Who:         WhoFromContext(r),
 		}
 
-		data, handlerFetcher, renderer := lifecycle.DeleteOne(mapper, id, &ep, &TransIDLogger{})
+		data, handlerFetcher, renderer := lifecycle.DeleteOne(db.Shared(), mapper, id, &ep, &TransIDLogger{})
 		if renderer != nil {
 			render.Render(w, r, renderer)
 			return
