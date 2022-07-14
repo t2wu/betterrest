@@ -7,7 +7,8 @@ import (
 	"github.com/jinzhu/gorm"
 	"github.com/t2wu/betterrest/datamapper/hfetcher"
 	"github.com/t2wu/betterrest/datamapper/service"
-	"github.com/t2wu/betterrest/hookhandler"
+	"github.com/t2wu/betterrest/hook"
+	"github.com/t2wu/betterrest/hook/rest"
 	"github.com/t2wu/betterrest/libs/datatypes"
 	"github.com/t2wu/betterrest/libs/webrender"
 	"github.com/t2wu/betterrest/models"
@@ -15,8 +16,8 @@ import (
 )
 
 func callOldBatch(
-	data *hookhandler.Data,
-	ep *hookhandler.EndPointInfo,
+	data *hook.Data,
+	ep *hook.EndPoint,
 	oldGeneric func(bhpData models.BatchHookPointData, op models.CRUPDOp) error, // before or after
 	oldSpecific func(bhpData models.BatchHookPointData) error, // before or after
 ) error {
@@ -26,15 +27,15 @@ func callOldBatch(
 
 	var op models.CRUPDOp
 	switch ep.Op {
-	case hookhandler.RESTOpRead:
+	case rest.OpRead:
 		op = models.CRUPDOpRead
-	case hookhandler.RESTOpCreate:
+	case rest.OpCreate:
 		op = models.CRUPDOpCreate
-	case hookhandler.RESTOpUpdate:
+	case rest.OpUpdate:
 		op = models.CRUPDOpUpdate
-	case hookhandler.RESTOpPatch:
+	case rest.OpPatch:
 		op = models.CRUPDOpPatch
-	case hookhandler.RESTOpDelete:
+	case rest.OpDelete:
 		op = models.CRUPDOpDelete
 	}
 
@@ -60,8 +61,8 @@ func callOldBatch(
 // old specific (before and after) is in string, because once we load it from the DB the hooks
 // should be the new one. (at least for after)
 func callOldSingle(
-	data *hookhandler.Data,
-	ep *hookhandler.EndPointInfo,
+	data *hook.Data,
+	ep *hook.EndPoint,
 	oldGeneric func(hpdata models.HookPointData, op models.CRUPDOp) error,
 	oldSpecific *string, // before or after
 ) error {
@@ -71,15 +72,15 @@ func callOldSingle(
 
 	var op models.CRUPDOp
 	switch ep.Op {
-	case hookhandler.RESTOpRead:
+	case rest.OpRead:
 		op = models.CRUPDOpRead
-	case hookhandler.RESTOpCreate:
+	case rest.OpCreate:
 		op = models.CRUPDOpCreate
-	case hookhandler.RESTOpUpdate:
+	case rest.OpUpdate:
 		op = models.CRUPDOpUpdate
-	case hookhandler.RESTOpPatch:
+	case rest.OpPatch:
 		op = models.CRUPDOpPatch
-	case hookhandler.RESTOpDelete:
+	case rest.OpDelete:
 		op = models.CRUPDOpDelete
 	}
 
@@ -115,7 +116,7 @@ type batchOpJobV1 struct {
 	// typeString   string
 	oldmodelObjs []models.IModel // use for update (need to load and override for pegged fields)
 	modelObjs    []models.IModel // current field value from the user if update, or from the loaded field if delete
-	// cargo        *hookhandler.Cargo
+	// cargo        *hook.Cargo
 
 	// crupdOp      models.CRUPDOp
 	// options      map[urlparam.Param]interface{}
@@ -124,8 +125,8 @@ type batchOpJobV1 struct {
 	oldAfter  func(bhpData models.BatchHookPointData) error
 
 	fetcher *hfetcher.HandlerFetcher
-	data    *hookhandler.Data
-	ep      *hookhandler.EndPointInfo
+	data    *hook.Data
+	ep      *hook.EndPoint
 }
 
 func batchOpCoreV1(job batchOpJobV1,
@@ -149,7 +150,7 @@ func batchOpCoreV1(job batchOpJobV1,
 
 	// fetch all handlers with before hooks
 	for _, hdlr := range fetcher.FetchHandlersForOpAndHook(ep.Op, "B") { // FetchHandlersForOpAndHook is stateful, cannot be repeated called
-		if renderer := hdlr.(hookhandler.IBefore).Before(data, ep); renderer != nil {
+		if renderer := hdlr.(hook.IBefore).Before(data, ep); renderer != nil {
 			return nil, renderer
 		}
 	}
@@ -181,7 +182,7 @@ func batchOpCoreV1(job batchOpJobV1,
 
 	// fetch all handlers with after hooks
 	for _, hdlr := range fetcher.FetchHandlersForOpAndHook(ep.Op, "A") {
-		if renderer := hdlr.(hookhandler.IAfter).After(data, ep); renderer != nil {
+		if renderer := hdlr.(hook.IAfter).After(data, ep); renderer != nil {
 			return nil, renderer
 		}
 	}
@@ -200,7 +201,7 @@ type opJobV1 struct {
 	// crupdOp     models.CRUPDOp
 	oldModelObj models.IModel // use for update (need to load and override for pegged fields)
 	modelObj    models.IModel // current field value from the user if update, or from the loaded field if delete
-	// cargo       *hookhandler.Cargo // This only is used because we may have an even earlier hookpoint for PatchApply
+	// cargo       *hook.Cargo // This only is used because we may have an even earlier hookpoint for PatchApply
 	// options     map[urlparam.Param]interface{}
 
 	// before and after are strings, because once we load it from the DB the hooks
@@ -209,8 +210,8 @@ type opJobV1 struct {
 	afterFuncName  *string
 
 	fetcher *hfetcher.HandlerFetcher
-	data    *hookhandler.Data
-	ep      *hookhandler.EndPointInfo
+	data    *hook.Data
+	ep      *hook.EndPoint
 }
 
 func opCoreV1(
@@ -225,7 +226,7 @@ func opCoreV1(
 	}
 
 	// Deprecated
-	if !fetcher.HasAttemptRegisteringHandler() { // deprecated, only try to call when no hookhandler exists
+	if !fetcher.HasAttemptRegisteringHandler() { // deprecated, only try to call when no hook exists
 		if m, ok := data.Ms[0].(models.IBeforeCUPD); ok {
 			if err := callOldSingle(data, ep, m.BeforeCUPDDB, beforeFuncName); err != nil {
 				return nil, &webrender.RetError{Error: err}
@@ -236,7 +237,7 @@ func opCoreV1(
 
 	// fetch all handlers with before hooks
 	for _, hdlr := range fetcher.FetchHandlersForOpAndHook(ep.Op, "B") {
-		if renderer := hdlr.(hookhandler.IBefore).Before(data, ep); renderer != nil {
+		if renderer := hdlr.(hook.IBefore).Before(data, ep); renderer != nil {
 			return nil, renderer
 		}
 	}
@@ -262,7 +263,7 @@ func opCoreV1(
 
 	// fetch all handlers with after hooks
 	for _, hdlr := range fetcher.FetchHandlersForOpAndHook(ep.Op, "A") {
-		if renderer := hdlr.(hookhandler.IAfter).After(data, ep); renderer != nil {
+		if renderer := hdlr.(hook.IAfter).After(data, ep); renderer != nil {
 			return nil, renderer
 		}
 	}
@@ -282,7 +283,7 @@ type batchOpJobV2 struct {
 	// typeString   string
 	oldmodelObjs []models.IModel // use for update (need to load and override for pegged fields)
 	modelObjs    []models.IModel // current field value from the user if update, or from the loaded field if delete
-	// cargo        *hookhandler.Cargo
+	// cargo        *hook.Cargo
 
 	// crupdOp      models.CRUPDOp
 	// options      map[urlparam.Param]interface{}
@@ -291,8 +292,8 @@ type batchOpJobV2 struct {
 	oldAfter  func(bhpData models.BatchHookPointData) error
 
 	fetcher *hfetcher.HandlerFetcher
-	data    *hookhandler.Data
-	ep      *hookhandler.EndPointInfo
+	data    *hook.Data
+	ep      *hook.EndPoint
 }
 
 func batchOpCoreV2(job batchOpJobV2,
@@ -316,7 +317,7 @@ func batchOpCoreV2(job batchOpJobV2,
 
 	// fetch all handlers with before hooks
 	for _, hdlr := range fetcher.FetchHandlersForOpAndHook(ep.Op, "B") { // FetchHandlersForOpAndHook is stateful, cannot be repeated called
-		if renderer := hdlr.(hookhandler.IBefore).Before(data, ep); renderer != nil {
+		if renderer := hdlr.(hook.IBefore).Before(data, ep); renderer != nil {
 			return nil, renderer
 		}
 	}
@@ -348,7 +349,7 @@ func batchOpCoreV2(job batchOpJobV2,
 
 	// fetch all handlers with after hooks
 	for _, hdlr := range fetcher.FetchHandlersForOpAndHook(ep.Op, "A") {
-		if renderer := hdlr.(hookhandler.IAfter).After(data, ep); renderer != nil {
+		if renderer := hdlr.(hook.IAfter).After(data, ep); renderer != nil {
 			return nil, renderer
 		}
 	}
@@ -367,7 +368,7 @@ type opJobV2 struct {
 	// crupdOp     models.CRUPDOp
 	oldModelObj models.IModel // use for update (need to load and override for pegged fields)
 	modelObj    models.IModel // current field value from the user if update, or from the loaded field if delete
-	// cargo       *hookhandler.Cargo // This only is used because we may have an even earlier hookpoint for PatchApply
+	// cargo       *hook.Cargo // This only is used because we may have an even earlier hookpoint for PatchApply
 	// options     map[urlparam.Param]interface{}
 
 	// before and after are strings, because once we load it from the DB the hooks
@@ -376,8 +377,8 @@ type opJobV2 struct {
 	afterFuncName  *string
 
 	fetcher *hfetcher.HandlerFetcher
-	data    *hookhandler.Data
-	ep      *hookhandler.EndPointInfo
+	data    *hook.Data
+	ep      *hook.EndPoint
 }
 
 func opCoreV2(
@@ -392,7 +393,7 @@ func opCoreV2(
 	}
 
 	// Deprecated
-	if !fetcher.HasAttemptRegisteringHandler() { // deprecated, only try to call when no hookhandler exists
+	if !fetcher.HasAttemptRegisteringHandler() { // deprecated, only try to call when no hook exists
 		if m, ok := data.Ms[0].(models.IBeforeCUPD); ok {
 			if err := callOldSingle(data, ep, m.BeforeCUPDDB, beforeFuncName); err != nil {
 				return nil, &webrender.RetError{Error: err}
@@ -403,7 +404,7 @@ func opCoreV2(
 
 	// fetch all handlers with before hooks
 	for _, hdlr := range fetcher.FetchHandlersForOpAndHook(ep.Op, "B") {
-		if renderer := hdlr.(hookhandler.IBefore).Before(data, ep); renderer != nil {
+		if renderer := hdlr.(hook.IBefore).Before(data, ep); renderer != nil {
 			return nil, renderer
 		}
 	}
@@ -429,7 +430,7 @@ func opCoreV2(
 
 	// fetch all handlers with after hooks
 	for _, hdlr := range fetcher.FetchHandlersForOpAndHook(ep.Op, "A") {
-		if renderer := hdlr.(hookhandler.IAfter).After(data, ep); renderer != nil {
+		if renderer := hdlr.(hook.IAfter).After(data, ep); renderer != nil {
 			return nil, renderer
 		}
 	}

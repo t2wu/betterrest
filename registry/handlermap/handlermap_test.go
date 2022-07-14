@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/t2wu/betterrest/hookhandler"
+	"github.com/t2wu/betterrest/hook"
 	"github.com/t2wu/betterrest/libs/webrender"
 )
 
@@ -15,79 +15,79 @@ import (
 type Handler1NoHook struct {
 }
 
-func (c *Handler1NoHook) Init(data *hookhandler.InitData, args ...interface{}) {
+func (c *Handler1NoHook) Init(data *hook.InitData, args ...interface{}) {
 }
 
 type Handler1FirstHookBeforeApply struct {
 }
 
-func (c *Handler1FirstHookBeforeApply) Init(data *hookhandler.InitData, args ...interface{}) {
+func (c *Handler1FirstHookBeforeApply) Init(data *hook.InitData, args ...interface{}) {
 }
-func (c *Handler1FirstHookBeforeApply) BeforeApply(data *hookhandler.Data, info *hookhandler.EndPointInfo) *webrender.RetError {
+func (c *Handler1FirstHookBeforeApply) BeforeApply(data *hook.Data, info *hook.EndPoint) *webrender.RetError {
 	return nil
 }
-func (c *Handler1FirstHookBeforeApply) Before(data *hookhandler.Data, info *hookhandler.EndPointInfo) *webrender.RetError {
+func (c *Handler1FirstHookBeforeApply) Before(data *hook.Data, info *hook.EndPoint) *webrender.RetError {
 	return nil
 }
-func (c *Handler1FirstHookBeforeApply) After(data *hookhandler.Data, info *hookhandler.EndPointInfo) *webrender.RetError {
+func (c *Handler1FirstHookBeforeApply) After(data *hook.Data, info *hook.EndPoint) *webrender.RetError {
 	return nil
 }
-func (c *Handler1FirstHookBeforeApply) AfterTransact(data *hookhandler.Data, info *hookhandler.EndPointInfo) {
+func (c *Handler1FirstHookBeforeApply) AfterTransact(data *hook.Data, info *hook.EndPoint) {
 }
 
 type Handler1FirstHookBefore struct {
 }
 
-func (c *Handler1FirstHookBefore) Init(data *hookhandler.InitData, args ...interface{}) {
+func (c *Handler1FirstHookBefore) Init(data *hook.InitData, args ...interface{}) {
 }
-func (c *Handler1FirstHookBefore) Before(data *hookhandler.Data, info *hookhandler.EndPointInfo) *webrender.RetError {
+func (c *Handler1FirstHookBefore) Before(data *hook.Data, info *hook.EndPoint) *webrender.RetError {
 	return nil
 }
-func (c *Handler1FirstHookBefore) After(data *hookhandler.Data, info *hookhandler.EndPointInfo) *webrender.RetError {
+func (c *Handler1FirstHookBefore) After(data *hook.Data, info *hook.EndPoint) *webrender.RetError {
 	return nil
 }
-func (c *Handler1FirstHookBefore) AfterTransact(data *hookhandler.Data, info *hookhandler.EndPointInfo) {
+func (c *Handler1FirstHookBefore) AfterTransact(data *hook.Data, info *hook.EndPoint) {
 }
 
 type Handler1FirstHookAfter struct {
 }
 
-func (c *Handler1FirstHookAfter) Init(data *hookhandler.InitData, args ...interface{}) {
+func (c *Handler1FirstHookAfter) Init(data *hook.InitData, args ...interface{}) {
 }
-func (c *Handler1FirstHookAfter) After(data *hookhandler.Data, info *hookhandler.EndPointInfo) *webrender.RetError {
+func (c *Handler1FirstHookAfter) After(data *hook.Data, info *hook.EndPoint) *webrender.RetError {
 	return nil
 }
-func (c *Handler1FirstHookAfter) AfterTransact(data *hookhandler.Data, info *hookhandler.EndPointInfo) {
+func (c *Handler1FirstHookAfter) AfterTransact(data *hook.Data, info *hook.EndPoint) {
 }
 
 type Handler1FirstHookTransact struct {
 }
 
-func (c *Handler1FirstHookTransact) Init(data *hookhandler.InitData, args ...interface{}) {
+func (c *Handler1FirstHookTransact) Init(data *hook.InitData, args ...interface{}) {
 }
-func (c *Handler1FirstHookTransact) AfterTransact(data *hookhandler.Data, info *hookhandler.EndPointInfo) {
+func (c *Handler1FirstHookTransact) AfterTransact(data *hook.Data, info *hook.EndPoint) {
 }
 
 type Handler2FirstHookBefore struct {
 }
 
-func (c *Handler2FirstHookBefore) Init(data *hookhandler.InitData, args ...interface{}) {
+func (c *Handler2FirstHookBefore) Init(data *hook.InitData, args ...interface{}) {
 }
-func (c *Handler2FirstHookBefore) Before(data *hookhandler.Data, info *hookhandler.EndPointInfo) *webrender.RetError {
+func (c *Handler2FirstHookBefore) Before(data *hook.Data, info *hook.EndPoint) *webrender.RetError {
 	return nil
 }
-func (c *Handler2FirstHookBefore) After(data *hookhandler.Data, info *hookhandler.EndPointInfo) *webrender.RetError {
+func (c *Handler2FirstHookBefore) After(data *hook.Data, info *hook.EndPoint) *webrender.RetError {
 	return nil
 }
-func (c *Handler2FirstHookBefore) AfterTransact(data *hookhandler.Data, info *hookhandler.EndPointInfo) {
+func (c *Handler2FirstHookBefore) AfterTransact(data *hook.Data, info *hook.EndPoint) {
 }
 
 type Handler2FirstHookAfterTransact struct {
 }
 
-func (c *Handler2FirstHookAfterTransact) Init(data *hookhandler.InitData, args ...interface{}) {
+func (c *Handler2FirstHookAfterTransact) Init(data *hook.InitData, args ...interface{}) {
 }
-func (c *Handler2FirstHookAfterTransact) AfterTransact(data *hookhandler.Data, info *hookhandler.EndPointInfo) {
+func (c *Handler2FirstHookAfterTransact) AfterTransact(data *hook.Data, info *hook.EndPoint) {
 }
 
 func getType(obj interface{}) string {

@@ -16,7 +16,8 @@ import (
 	"github.com/t2wu/betterrest/datamapper"
 	"github.com/t2wu/betterrest/datamapper/hfetcher"
 	"github.com/t2wu/betterrest/db"
-	"github.com/t2wu/betterrest/hookhandler"
+	"github.com/t2wu/betterrest/hook"
+	"github.com/t2wu/betterrest/hook/rest"
 	"github.com/t2wu/betterrest/libs/settings"
 	"github.com/t2wu/betterrest/libs/urlparam"
 	"github.com/t2wu/betterrest/libs/webrender"
@@ -173,11 +174,11 @@ func modelObjsToJSON(modelObjs []models.IModel, roles []models.UserRole, who mod
 	return content, nil
 }
 
-func RenderModelSlice(c *gin.Context, data *hookhandler.Data, ep *hookhandler.EndPointInfo, total *int, hf *hfetcher.HandlerFetcher) {
+func RenderModelSlice(c *gin.Context, data *hook.Data, ep *hook.EndPoint, total *int, hf *hfetcher.HandlerFetcher) {
 	// Custom rendering if any
 	handlers := hf.FetchHandlersForOpAndHook(ep.Op, "R")
 	for _, handler := range handlers {
-		if renderHook, ok := handler.(hookhandler.IRender); ok {
+		if renderHook, ok := handler.(hook.IRender); ok {
 			if renderHook.Render(c, data, ep, total) {
 				return // maximum of one handler at a time, the hook writer has to make sure they are mutally exclusive
 			}
@@ -216,11 +217,11 @@ func RenderModelSlice(c *gin.Context, data *hookhandler.Data, ep *hookhandler.En
 	// c.JSON(http.StatusOK, content)
 }
 
-func RenderModel(c *gin.Context, data *hookhandler.Data, ep *hookhandler.EndPointInfo, total *int, hf *hfetcher.HandlerFetcher) {
+func RenderModel(c *gin.Context, data *hook.Data, ep *hook.EndPoint, total *int, hf *hfetcher.HandlerFetcher) {
 	// Custom rendering if any
 	handlers := hf.FetchHandlersForOpAndHook(ep.Op, "R")
 	for _, handler := range handlers {
-		if renderHook, ok := handler.(hookhandler.IRender); ok {
+		if renderHook, ok := handler.(hook.IRender); ok {
 			if renderHook.Render(c, data, ep, total) {
 				return // maximum of one handler at a time, the hook writer has to make sure they are mutally exclusive
 			}
@@ -230,7 +231,7 @@ func RenderModel(c *gin.Context, data *hookhandler.Data, ep *hookhandler.EndPoin
 	RenderJSONForModel(c, data.Ms[0], data, ep)
 }
 
-func RenderJSONForModel(c *gin.Context, modelObj models.IModel, data *hookhandler.Data, ep *hookhandler.EndPointInfo) {
+func RenderJSONForModel(c *gin.Context, modelObj models.IModel, data *hook.Data, ep *hook.EndPoint) {
 	// render.JSON(w, r, modelObj) // cannot use this since no picking the field we need
 	jsonBytes, err := tools.ToJSON(modelObj, data.Roles[0], ep.Who)
 	if err != nil {
@@ -352,7 +353,7 @@ func w(handler func(c *gin.Context)) func(c *gin.Context) {
 	}
 }
 
-func batchRenderHelper(c *gin.Context, typeString string, data *hookhandler.Data, ep *hookhandler.EndPointInfo, no *int, hf *hfetcher.HandlerFetcher) {
+func batchRenderHelper(c *gin.Context, typeString string, data *hook.Data, ep *hook.EndPoint, no *int, hf *hfetcher.HandlerFetcher) {
 	// Does old renderer exists?
 	if renderer := registry.ModelRegistry[typeString].BatchRenderer; renderer != nil {
 		// Re-create it again to remain backward compatible
@@ -362,15 +363,15 @@ func batchRenderHelper(c *gin.Context, typeString string, data *hookhandler.Data
 
 		var op models.CRUPDOp
 		switch ep.Op {
-		case hookhandler.RESTOpRead:
+		case rest.OpRead:
 			op = models.CRUPDOpRead
-		case hookhandler.RESTOpCreate:
+		case rest.OpCreate:
 			op = models.CRUPDOpCreate
-		case hookhandler.RESTOpUpdate:
+		case rest.OpUpdate:
 			op = models.CRUPDOpUpdate
-		case hookhandler.RESTOpPatch:
+		case rest.OpPatch:
 			op = models.CRUPDOpPatch
-		case hookhandler.RESTOpDelete:
+		case rest.OpDelete:
 			op = models.CRUPDOpDelete
 		}
 
@@ -382,7 +383,7 @@ func batchRenderHelper(c *gin.Context, typeString string, data *hookhandler.Data
 	RenderModelSlice(c, data, ep, no, hf)
 }
 
-func singleRenderHelper(c *gin.Context, typeString string, data *hookhandler.Data, ep *hookhandler.EndPointInfo, hf *hfetcher.HandlerFetcher) {
+func singleRenderHelper(c *gin.Context, typeString string, data *hook.Data, ep *hook.EndPoint, hf *hfetcher.HandlerFetcher) {
 	// Does old renderer exists?
 	if renderer := registry.ModelRegistry[typeString].BatchRenderer; renderer != nil {
 		// Re-create it again to remain backward compatible
@@ -392,15 +393,15 @@ func singleRenderHelper(c *gin.Context, typeString string, data *hookhandler.Dat
 
 		var op models.CRUPDOp
 		switch ep.Op {
-		case hookhandler.RESTOpRead:
+		case rest.OpRead:
 			op = models.CRUPDOpRead
-		case hookhandler.RESTOpCreate:
+		case rest.OpCreate:
 			op = models.CRUPDOpCreate
-		case hookhandler.RESTOpUpdate:
+		case rest.OpUpdate:
 			op = models.CRUPDOpUpdate
-		case hookhandler.RESTOpPatch:
+		case rest.OpPatch:
 			op = models.CRUPDOpPatch
-		case hookhandler.RESTOpDelete:
+		case rest.OpDelete:
 			op = models.CRUPDOpDelete
 		}
 
@@ -423,9 +424,9 @@ func CreateHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin
 	return func(c *gin.Context) {
 		w, r := c.Writer, c.Request
 
-		ep := hookhandler.EndPointInfo{
+		ep := hook.EndPoint{
 			URL:        c.Request.URL.String(),
-			Op:         hookhandler.RESTOpCreate,
+			Op:         rest.OpCreate,
 			TypeString: typeString,
 			URLParams:  OptionFromContext(r),
 			Who:        WhoFromContext(r),
@@ -438,7 +439,7 @@ func CreateHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin
 		}
 
 		if *isBatch {
-			ep.Cardinality = hookhandler.APICardinalityMany
+			ep.Cardinality = rest.CardinalityMany
 			data, handlerFetcher, renderer := lifecycle.CreateMany(db.Shared(), mapper, modelObjs, &ep, &TransIDLogger{})
 			if renderer != nil {
 				render.Render(w, c.Request, renderer)
@@ -448,7 +449,7 @@ func CreateHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin
 			// Render
 			batchRenderHelper(c, typeString, data, &ep, nil, handlerFetcher)
 		} else {
-			ep.Cardinality = hookhandler.APICardinalityOne
+			ep.Cardinality = rest.CardinalityOne
 			data, handlerFetcher, renderer := lifecycle.CreateOne(db.Shared(), mapper, modelObjs[0], &ep, &TransIDLogger{})
 			if renderer != nil {
 				render.Render(w, c.Request, renderer)
@@ -469,10 +470,10 @@ func ReadManyHandler(typeString string, mapper datamapper.IDataMapper) func(c *g
 			log.Printf("[BetterREST]: %s %s (n), transact: n/a", c.Request.Method, c.Request.URL.String())
 		}
 
-		ep := hookhandler.EndPointInfo{
+		ep := hook.EndPoint{
 			URL:         c.Request.URL.String(),
-			Op:          hookhandler.RESTOpRead,
-			Cardinality: hookhandler.APICardinalityMany,
+			Op:          rest.OpRead,
+			Cardinality: rest.CardinalityMany,
 			TypeString:  typeString,
 			URLParams:   OptionFromContext(r),
 			Who:         WhoFromContext(r),
@@ -504,10 +505,10 @@ func ReadOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *gi
 			log.Println(fmt.Sprintf("[BetterREST]: %s %s (1), transact: n/a", c.Request.Method, c.Request.URL.String()))
 		}
 
-		ep := hookhandler.EndPointInfo{
+		ep := hook.EndPoint{
 			URL:         c.Request.URL.String(),
-			Op:          hookhandler.RESTOpRead,
-			Cardinality: hookhandler.APICardinalityOne,
+			Op:          rest.OpRead,
+			Cardinality: rest.CardinalityOne,
 			TypeString:  typeString,
 			URLParams:   OptionFromContext(r),
 			Who:         WhoFromContext(r),
@@ -527,10 +528,10 @@ func UpdateManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 	return func(c *gin.Context) {
 		w, r := c.Writer, c.Request
 
-		ep := hookhandler.EndPointInfo{
+		ep := hook.EndPoint{
 			URL:         c.Request.URL.String(),
-			Op:          hookhandler.RESTOpUpdate,
-			Cardinality: hookhandler.APICardinalityMany,
+			Op:          rest.OpUpdate,
+			Cardinality: rest.CardinalityMany,
 			TypeString:  typeString,
 			URLParams:   OptionFromContext(r),
 			Who:         WhoFromContext(r),
@@ -564,10 +565,10 @@ func UpdateOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 			return
 		}
 
-		ep := hookhandler.EndPointInfo{
+		ep := hook.EndPoint{
 			URL:         c.Request.URL.String(),
-			Op:          hookhandler.RESTOpUpdate,
-			Cardinality: hookhandler.APICardinalityOne,
+			Op:          rest.OpUpdate,
+			Cardinality: rest.CardinalityOne,
 			TypeString:  typeString,
 			URLParams:   OptionFromContext(r),
 			Who:         WhoFromContext(r),
@@ -608,10 +609,10 @@ func PatchManyHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 			return
 		}
 
-		ep := hookhandler.EndPointInfo{
+		ep := hook.EndPoint{
 			URL:         c.Request.URL.String(),
-			Op:          hookhandler.RESTOpPatch,
-			Cardinality: hookhandler.APICardinalityMany,
+			Op:          rest.OpPatch,
+			Cardinality: rest.CardinalityMany,
 			TypeString:  typeString,
 			URLParams:   OptionFromContext(r),
 			Who:         WhoFromContext(r),
@@ -644,10 +645,10 @@ func PatchOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *g
 			return
 		}
 
-		ep := hookhandler.EndPointInfo{
+		ep := hook.EndPoint{
 			URL:         c.Request.URL.String(),
-			Op:          hookhandler.RESTOpPatch,
-			Cardinality: hookhandler.APICardinalityOne,
+			Op:          rest.OpPatch,
+			Cardinality: rest.CardinalityOne,
 			TypeString:  typeString,
 			URLParams:   OptionFromContext(r),
 			Who:         WhoFromContext(r),
@@ -668,10 +669,10 @@ func DeleteManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 	return func(c *gin.Context) {
 		w, r := c.Writer, c.Request
 
-		ep := hookhandler.EndPointInfo{
+		ep := hook.EndPoint{
 			URL:         c.Request.URL.String(),
-			Op:          hookhandler.RESTOpDelete,
-			Cardinality: hookhandler.APICardinalityMany,
+			Op:          rest.OpDelete,
+			Cardinality: rest.CardinalityMany,
 			TypeString:  typeString,
 			URLParams:   OptionFromContext(r),
 			Who:         WhoFromContext(r),
@@ -704,10 +705,10 @@ func DeleteOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 			return
 		}
 
-		ep := hookhandler.EndPointInfo{
+		ep := hook.EndPoint{
 			URL:         c.Request.URL.String(),
-			Op:          hookhandler.RESTOpDelete,
-			Cardinality: hookhandler.APICardinalityOne,
+			Op:          rest.OpDelete,
+			Cardinality: rest.CardinalityOne,
 			TypeString:  typeString,
 			URLParams:   OptionFromContext(r),
 			Who:         WhoFromContext(r),

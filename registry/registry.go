@@ -5,7 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
-	"github.com/t2wu/betterrest/hookhandler"
+	"github.com/t2wu/betterrest/hook"
 	"github.com/t2wu/betterrest/libs/webrender"
 	"github.com/t2wu/betterrest/models"
 	"github.com/t2wu/betterrest/registry/handlermap"
@@ -75,7 +75,7 @@ type Reg struct {
 	// CreateMethod can be defined with RegCustomCreate()
 	CreateMethod func(db *gorm.DB) (*gorm.DB, error)
 
-	GuardMethods []func(ep *hookhandler.EndPointInfo) *webrender.RetError
+	GuardMethods []func(ep *hook.EndPoint) *webrender.RetError
 
 	BatchMethods string     // Batch endpoints, "CRUD" for create, batch read, batch update, batch delete
 	IdvMethods   string     //  ID end points, "RUD" for read one, update one, and delete one
@@ -106,13 +106,13 @@ type Reg struct {
 	// End deprecated
 
 	// HandlerMap is the new method where we keep handlers
-	// You can register any number of hookhandler to handle the rest process.
-	// When each conncection is intantiated, the hookhandler remain in memory until the REST op is returned
-	// If there are two hookhandler which handles the same method and the same hook, they will both be called.
+	// You can register any number of hook to handle the rest process.
+	// When each conncection is intantiated, the hook remain in memory until the REST op is returned
+	// If there are two hook which handles the same method and the same hook, they will both be called.
 	// The calling order is not guaranteed.
 	HandlerMap *handlermap.HandlerMap
 
-	// RendererMethod func(c *gin.Context, data *hookhandler.Data, info *hookhandler.EndPointInfo, total *int) bool
+	// RendererMethod func(c *gin.Context, data *hook.Data, info *hook.EndPoint, total *int) bool
 }
 
 // func (g *Gateway) AfterCreateDB(db *gorm.DB, typeString string) error {

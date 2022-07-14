@@ -8,7 +8,8 @@ import (
 	"github.com/jinzhu/gorm"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
-	"github.com/t2wu/betterrest/hookhandler"
+	"github.com/t2wu/betterrest/hook"
+	"github.com/t2wu/betterrest/hook/rest"
 	"github.com/t2wu/betterrest/libs/datatypes"
 	"github.com/t2wu/betterrest/libs/urlparam"
 	"github.com/t2wu/betterrest/models"
@@ -52,15 +53,15 @@ func (suite *TestBaseMapperReadSuite) TestReadOne_WhenGiven_GotCar() {
 
 	modelID := carID
 	options := make(map[urlparam.Param]interface{})
-	cargo := hookhandler.Cargo{}
+	cargo := hook.Cargo{}
 
 	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
 	registry.For(suite.typeString).ModelWithOption(&Car{}, opt)
 
 	mapper := SharedOwnershipMapper()
-	ep := hookhandler.EndPointInfo{
-		Op:          hookhandler.RESTOpRead,
-		Cardinality: hookhandler.APICardinalityOne,
+	ep := hook.EndPoint{
+		Op:          rest.OpRead,
+		Cardinality: rest.CardinalityOne,
 		TypeString:  suite.typeString,
 		URLParams:   options,
 		Who:         suite.who,
@@ -91,7 +92,7 @@ func (suite *TestBaseMapperReadSuite) TestReadOne_WhenNoController_CallRelevantO
 
 	modelID := datatypes.NewUUID()
 	options := make(map[urlparam.Param]interface{})
-	cargo := hookhandler.Cargo{}
+	cargo := hook.Cargo{}
 
 	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
 	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt)
@@ -99,9 +100,9 @@ func (suite *TestBaseMapperReadSuite) TestReadOne_WhenNoController_CallRelevantO
 	// registry.For(typeString).ModelWithOption(&Car{}, opt)
 
 	mapper := SharedOwnershipMapper()
-	ep := hookhandler.EndPointInfo{
-		Op:          hookhandler.RESTOpRead,
-		Cardinality: hookhandler.APICardinalityOne,
+	ep := hook.EndPoint{
+		Op:          rest.OpRead,
+		Cardinality: rest.CardinalityOne,
 		TypeString:  suite.typeString,
 		URLParams:   options,
 		Who:         suite.who,
@@ -146,12 +147,12 @@ func (suite *TestBaseMapperReadSuite) TestReadOne_WhenHavingController_NotCallOl
 
 	modelID := datatypes.NewUUID()
 	options := make(map[urlparam.Param]interface{})
-	cargo := hookhandler.Cargo{}
+	cargo := hook.Cargo{}
 
 	mapper := SharedOwnershipMapper()
-	ep := hookhandler.EndPointInfo{
-		Op:          hookhandler.RESTOpRead,
-		Cardinality: hookhandler.APICardinalityOne,
+	ep := hook.EndPoint{
+		Op:          rest.OpRead,
+		Cardinality: rest.CardinalityOne,
 		TypeString:  suite.typeString,
 		URLParams:   options,
 		Who:         suite.who,
@@ -162,7 +163,7 @@ func (suite *TestBaseMapperReadSuite) TestReadOne_WhenHavingController_NotCallOl
 	}
 
 	if _, ok := retVal.Ms[0].(*CarWithCallbacks); assert.True(suite.T(), ok) {
-		// None of the model callback should be called when there is hookhandler
+		// None of the model callback should be called when there is hook
 		assert.False(suite.T(), guardAPIEntryCalled) // not called when going through mapper
 		assert.False(suite.T(), beforeCUPDDBCalled)
 		assert.False(suite.T(), beforeReadDBCalled)
@@ -184,16 +185,16 @@ func (suite *TestBaseMapperReadSuite) TestReadOne_WhenHavingController_CallRelev
 
 	modelID := datatypes.NewUUID()
 	options := make(map[urlparam.Param]interface{})
-	cargo := hookhandler.Cargo{}
+	cargo := hook.Cargo{}
 
 	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
 	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).Hook(&CarHandlerJBT{}, "CRUPD")
 
 	mapper := SharedOwnershipMapper()
 	var retVal *MapperRet
-	ep := hookhandler.EndPointInfo{
-		Op:          hookhandler.RESTOpRead,
-		Cardinality: hookhandler.APICardinalityOne,
+	ep := hook.EndPoint{
+		Op:          rest.OpRead,
+		Cardinality: rest.CardinalityOne,
 		TypeString:  suite.typeString,
 		URLParams:   options,
 		Who:         suite.who,
@@ -203,7 +204,7 @@ func (suite *TestBaseMapperReadSuite) TestReadOne_WhenHavingController_CallRelev
 		return
 	}
 
-	data := hookhandler.Data{Ms: []models.IModel{&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID}, Name: carName}},
+	data := hook.Data{Ms: []models.IModel{&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID}, Name: carName}},
 		DB: suite.db, Roles: []models.UserRole{role}, Cargo: &cargo}
 
 	ctrls := retVal.Fetcher.GetAllInstantiatedHanders()
@@ -243,15 +244,15 @@ func (suite *TestBaseMapperReadSuite) TestReadMany_WhenGiven_GotCars() {
 		WillReturnRows(sqlmock.NewRows([]string{"role"}).AddRow(models.UserRoleAdmin).AddRow(models.UserRoleGuest).AddRow(models.UserRoleAdmin))
 
 	options := make(map[urlparam.Param]interface{})
-	cargo := hookhandler.Cargo{}
+	cargo := hook.Cargo{}
 
 	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
 	registry.For(suite.typeString).ModelWithOption(&Car{}, opt)
 
 	mapper := SharedOwnershipMapper()
-	ep := hookhandler.EndPointInfo{
-		Op:          hookhandler.RESTOpRead,
-		Cardinality: hookhandler.APICardinalityMany,
+	ep := hook.EndPoint{
+		Op:          rest.OpRead,
+		Cardinality: rest.CardinalityMany,
 		TypeString:  suite.typeString,
 		URLParams:   options,
 		Who:         suite.who,
@@ -292,7 +293,7 @@ func (suite *TestBaseMapperReadSuite) TestReadMany_WhenNoController_CallRelevant
 		WillReturnRows(sqlmock.NewRows([]string{"role"}).AddRow(roles[0]).AddRow(roles[1]).AddRow(roles[2]))
 
 	options := make(map[urlparam.Param]interface{})
-	cargo := hookhandler.Cargo{}
+	cargo := hook.Cargo{}
 
 	var beforeCalled bool
 	var beforeData models.BatchHookPointData
@@ -313,9 +314,9 @@ func (suite *TestBaseMapperReadSuite) TestReadMany_WhenNoController_CallRelevant
 		BatchCRUPDHooks(before, after).BatchReadHooks(afterRead)
 
 	mapper := SharedOwnershipMapper()
-	ep := hookhandler.EndPointInfo{
-		Op:          hookhandler.RESTOpRead,
-		Cardinality: hookhandler.APICardinalityMany,
+	ep := hook.EndPoint{
+		Op:          rest.OpRead,
+		Cardinality: rest.CardinalityMany,
 		TypeString:  suite.typeString,
 		URLParams:   options,
 		Who:         suite.who,
@@ -366,7 +367,7 @@ func (suite *TestBaseMapperReadSuite) TestReadMany_WhenHavingController_NotCallO
 		WillReturnRows(sqlmock.NewRows([]string{"role"}).AddRow(roles[0]).AddRow(roles[1]).AddRow(roles[2]))
 
 	options := make(map[urlparam.Param]interface{})
-	cargo := hookhandler.Cargo{}
+	cargo := hook.Cargo{}
 
 	var beforeCalled bool
 	var beforeData models.BatchHookPointData
@@ -391,9 +392,9 @@ func (suite *TestBaseMapperReadSuite) TestReadMany_WhenHavingController_NotCallO
 		BatchCRUPDHooks(before, after).BatchReadHooks(afterRead).Hook(&hdlr, "CRUPD")
 
 	mapper := SharedOwnershipMapper()
-	ep := hookhandler.EndPointInfo{
-		Op:          hookhandler.RESTOpRead,
-		Cardinality: hookhandler.APICardinalityMany,
+	ep := hook.EndPoint{
+		Op:          rest.OpRead,
+		Cardinality: rest.CardinalityMany,
 		TypeString:  suite.typeString,
 		URLParams:   options,
 		Who:         suite.who,
@@ -427,7 +428,7 @@ func (suite *TestBaseMapperReadSuite) TestReadMany_WhenHavingController_CallRele
 		WillReturnRows(sqlmock.NewRows([]string{"role"}).AddRow(roles[0]).AddRow(roles[1]).AddRow(roles[2]))
 
 	options := make(map[urlparam.Param]interface{})
-	cargo := hookhandler.Cargo{}
+	cargo := hook.Cargo{}
 
 	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
 
@@ -436,9 +437,9 @@ func (suite *TestBaseMapperReadSuite) TestReadMany_WhenHavingController_CallRele
 
 	var retVal *MapperRet
 	mapper := SharedOwnershipMapper()
-	ep := hookhandler.EndPointInfo{
-		Op:          hookhandler.RESTOpRead,
-		Cardinality: hookhandler.APICardinalityMany,
+	ep := hook.EndPoint{
+		Op:          rest.OpRead,
+		Cardinality: rest.CardinalityMany,
 		TypeString:  suite.typeString,
 		URLParams:   options,
 		Who:         suite.who,
@@ -448,7 +449,7 @@ func (suite *TestBaseMapperReadSuite) TestReadMany_WhenHavingController_CallRele
 		return
 	}
 
-	data := hookhandler.Data{
+	data := hook.Data{
 		Ms: []models.IModel{
 			&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID1}, Name: carName1},
 			&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID2}, Name: carName2},

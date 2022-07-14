@@ -4,87 +4,88 @@ import (
 	"reflect"
 	"runtime/debug"
 
-	"github.com/t2wu/betterrest/hookhandler"
+	"github.com/t2wu/betterrest/hook"
+	"github.com/t2wu/betterrest/hook/rest"
 	"github.com/t2wu/betterrest/registry/handlermap"
 )
 
 // NewHandlerFetcher maintains a list of instantiated handlers, if not, instantiate it.
-// Where as NewHandlerMap only handles hookhandler creation
+// Where as NewHandlerMap only handles hook creation
 // It doesn't care whether it's CRUPD, because the for each CRUPD a different HandlerFetcher is responsible.
-func NewHandlerFetcher(handlerMap *handlermap.HandlerMap, initData *hookhandler.InitData) *HandlerFetcher {
+func NewHandlerFetcher(handlerMap *handlermap.HandlerMap, initData *hook.InitData) *HandlerFetcher {
 	if handlerMap == nil {
 		debug.PrintStack()
-		panic("hookhandler fetcher has to have a controlmap")
+		panic("hook fetcher has to have a controlmap")
 	}
 
 	return &HandlerFetcher{
-		handlers:   make([]hookhandler.IHookhandler, 0),
+		handlers:   make([]hook.IHook, 0),
 		handlerMap: handlerMap,
-		op:         hookhandler.RESTOpOther,
+		op:         rest.OpOther,
 		initData:   initData,
 	}
 }
 
 type HandlerFetcher struct {
-	handlers   []hookhandler.IHookhandler
+	handlers   []hook.IHook
 	handlerMap *handlermap.HandlerMap
-	op         hookhandler.RESTOp
-	initData   *hookhandler.InitData
+	op         rest.Op
+	initData   *hook.InitData
 }
 
-// FetchHandlersForOpAndHook fetches the releveant hookhandler for this method and hook.
-// If there is any hookhandler whose first hook is this one, instantiate it.
-// If there are already instantiated hookhandler which handles this hook, fetch it as well.
-// hook can be JBATR
-func (h *HandlerFetcher) FetchHandlersForOpAndHook(op hookhandler.RESTOp, hook string) []hookhandler.IHookhandler {
-	// Make sure it's only used for one hook
-	if h.op != hookhandler.RESTOpOther && h.op != op {
+// FetchHandlersForOpAndHook fetches the releveant hook for this method and hookstr.
+// If there is any hook whose first hookstr is this one, instantiate it.
+// If there are already instantiated hook which handles this hookstr, fetch it as well.
+// hookstr can be JBATR
+func (h *HandlerFetcher) FetchHandlersForOpAndHook(op rest.Op, hookstr string) []hook.IHook {
+	// Make sure it's only used for one hookstr
+	if h.op != rest.OpOther && h.op != op {
 		panic("HandlerFetcher should only handles one method")
 	}
 
-	if h.op == hookhandler.RESTOpOther {
+	if h.op == rest.OpOther {
 		h.op = op
 	}
 
 	var method string
 	switch op {
-	case hookhandler.RESTOpCreate:
+	case rest.OpCreate:
 		method = "C"
-	case hookhandler.RESTOpRead:
+	case rest.OpRead:
 		method = "R"
-	case hookhandler.RESTOpUpdate:
+	case rest.OpUpdate:
 		method = "U"
-	case hookhandler.RESTOpPatch:
+	case rest.OpPatch:
 		method = "P"
-	case hookhandler.RESTOpDelete:
+	case rest.OpDelete:
 		method = "D"
 	}
 
 	// Fetch new handlers and instantiate them if any
-	newHandlerTypeAndArgIfAny := h.handlerMap.GetHandlerTypeAndArgWithFirstHookAt(method, hook)
+	newHandlerTypeAndArgIfAny := h.handlerMap.GetHandlerTypeAndArgWithFirstHookAt(method, hookstr)
 	for _, newHandlerTypeAndArg := range newHandlerTypeAndArgIfAny {
-		newHandler := reflect.New(newHandlerTypeAndArg.HandlerType).Interface().(hookhandler.IHookhandler)
+		newHandler := reflect.New(newHandlerTypeAndArg.HandlerType).Interface().(hook.IHook)
 		newHandler.Init(h.initData, newHandlerTypeAndArg.Args...) // dependency injection with h.args
 		h.handlers = append(h.handlers, newHandler)               // add to all handlers
 	}
 
 	// Check for all handlers with this interface and return it
-	comformedHandlers := make([]hookhandler.IHookhandler, 0)
+	comformedHandlers := make([]hook.IHook, 0)
 	// Any old handlers which handles this hookpoint?
 	for _, handler := range h.handlers {
-		if _, ok := handler.(hookhandler.IBeforeApply); ok && hook == "J" {
+		if _, ok := handler.(hook.IBeforeApply); ok && hookstr == "J" {
 			comformedHandlers = append(comformedHandlers, handler)
 		}
-		if _, ok := handler.(hookhandler.IBefore); ok && hook == "B" {
+		if _, ok := handler.(hook.IBefore); ok && hookstr == "B" {
 			comformedHandlers = append(comformedHandlers, handler)
 		}
-		if _, ok := handler.(hookhandler.IAfter); ok && hook == "A" {
+		if _, ok := handler.(hook.IAfter); ok && hookstr == "A" {
 			comformedHandlers = append(comformedHandlers, handler)
 		}
-		if _, ok := handler.(hookhandler.IAfterTransact); ok && hook == "T" {
+		if _, ok := handler.(hook.IAfterTransact); ok && hookstr == "T" {
 			comformedHandlers = append(comformedHandlers, handler)
 		}
-		if _, ok := handler.(hookhandler.IRender); ok && hook == "R" {
+		if _, ok := handler.(hook.IRender); ok && hookstr == "R" {
 			comformedHandlers = append(comformedHandlers, handler)
 		}
 	}
@@ -100,6 +101,6 @@ func (h *HandlerFetcher) HasAttemptRegisteringHandler() bool {
 	return h.handlerMap.HasAttemptRegisteringAnyHandler()
 }
 
-func (h *HandlerFetcher) GetAllInstantiatedHanders() []hookhandler.IHookhandler {
+func (h *HandlerFetcher) GetAllInstantiatedHanders() []hook.IHook {
 	return h.handlers
 }

@@ -6,7 +6,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-chi/render"
-	"github.com/t2wu/betterrest/hookhandler"
+	"github.com/t2wu/betterrest/hook"
+	"github.com/t2wu/betterrest/hook/rest"
 	"github.com/t2wu/betterrest/libs/urlparam"
 	"github.com/t2wu/betterrest/libs/utils/jsontrans"
 	"github.com/t2wu/betterrest/libs/webrender"
@@ -103,10 +104,10 @@ func GuardMiddleWare(typeString string) func(c *gin.Context) {
 		}
 		// End Old, deprecated
 
-		ep := hookhandler.EndPointInfo{
+		ep := hook.EndPoint{
 			URL:         c.Request.URL.String(),
-			Op:          hookhandler.HTTPMethodToRESTOp(r.Method),
-			Cardinality: hookhandler.APICardinalityOne,
+			Op:          rest.HTTPMethodToRESTOp(r.Method),
+			Cardinality: rest.CardinalityOne,
 			TypeString:  typeString,
 			URLParams:   options,
 			Who:         who,

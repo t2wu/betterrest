@@ -7,7 +7,8 @@ import (
 	"github.com/jinzhu/gorm"
 	"github.com/t2wu/betterrest/datamapper"
 	"github.com/t2wu/betterrest/datamapper/hfetcher"
-	"github.com/t2wu/betterrest/hookhandler"
+	"github.com/t2wu/betterrest/hook"
+	"github.com/t2wu/betterrest/hook/rest"
 	"github.com/t2wu/betterrest/libs/datatypes"
 	"github.com/t2wu/betterrest/libs/utils/transact"
 	"github.com/t2wu/betterrest/libs/webrender"
@@ -19,22 +20,22 @@ type Logger interface {
 	Log(tx *gorm.DB, method, url, cardinality string)
 }
 
-func callOldBatchTransact(data *hookhandler.Data, ep *hookhandler.EndPointInfo) {
+func callOldBatchTransact(data *hook.Data, ep *hook.EndPoint) {
 	oldBatchCargo := models.BatchHookCargo{Payload: data.Cargo.Payload}
 	bhpData := models.BatchHookPointData{Ms: data.Ms, DB: nil, Who: ep.Who,
 		TypeString: ep.TypeString, Roles: data.Roles, URLParams: ep.URLParams, Cargo: &oldBatchCargo}
 
 	var op models.CRUPDOp
 	switch ep.Op {
-	case hookhandler.RESTOpRead:
+	case rest.OpRead:
 		op = models.CRUPDOpRead
-	case hookhandler.RESTOpCreate:
+	case rest.OpCreate:
 		op = models.CRUPDOpCreate
-	case hookhandler.RESTOpUpdate:
+	case rest.OpUpdate:
 		op = models.CRUPDOpUpdate
-	case hookhandler.RESTOpPatch:
+	case rest.OpPatch:
 		op = models.CRUPDOpPatch
-	case hookhandler.RESTOpDelete:
+	case rest.OpDelete:
 		op = models.CRUPDOpDelete
 	}
 
@@ -46,22 +47,22 @@ func callOldBatchTransact(data *hookhandler.Data, ep *hookhandler.EndPointInfo) 
 	data.Cargo.Payload = oldBatchCargo.Payload
 }
 
-func callOldOneTransact(data *hookhandler.Data, ep *hookhandler.EndPointInfo) {
+func callOldOneTransact(data *hook.Data, ep *hook.EndPoint) {
 	oldSingleCargo := models.ModelCargo{Payload: data.Cargo.Payload}
 	hpdata := models.HookPointData{DB: nil, Who: ep.Who, TypeString: ep.TypeString,
 		URLParams: ep.URLParams, Role: &data.Roles[0], Cargo: &oldSingleCargo}
 
 	var op models.CRUPDOp
 	switch ep.Op {
-	case hookhandler.RESTOpRead:
+	case rest.OpRead:
 		op = models.CRUPDOpRead
-	case hookhandler.RESTOpCreate:
+	case rest.OpCreate:
 		op = models.CRUPDOpCreate
-	case hookhandler.RESTOpUpdate:
+	case rest.OpUpdate:
 		op = models.CRUPDOpUpdate
-	case hookhandler.RESTOpPatch:
+	case rest.OpPatch:
 		op = models.CRUPDOpPatch
-	case hookhandler.RESTOpDelete:
+	case rest.OpDelete:
 		op = models.CRUPDOpDelete
 	}
 
@@ -73,8 +74,8 @@ func callOldOneTransact(data *hookhandler.Data, ep *hookhandler.EndPointInfo) {
 }
 
 func CreateMany(db *gorm.DB, mapper datamapper.IDataMapper, modelObjs []models.IModel,
-	ep *hookhandler.EndPointInfo, logger Logger) (*hookhandler.Data, *hfetcher.HandlerFetcher, render.Renderer) {
-	cargo := hookhandler.Cargo{}
+	ep *hook.EndPoint, logger Logger) (*hook.Data, *hfetcher.HandlerFetcher, render.Renderer) {
+	cargo := hook.Cargo{}
 
 	var retVal *datamapper.MapperRet
 	retErr := transact.TransactCustomError(db, func(tx *gorm.DB) (retErr *webrender.RetError) {
@@ -103,25 +104,25 @@ func CreateMany(db *gorm.DB, mapper datamapper.IDataMapper, modelObjs []models.I
 		roles[i] = models.UserRoleAdmin
 	}
 
-	data := hookhandler.Data{Ms: modelObjs, DB: nil, Roles: roles, Cargo: &cargo}
+	data := hook.Data{Ms: modelObjs, DB: nil, Roles: roles, Cargo: &cargo}
 
 	// Handes transaction
 	if !retVal.Fetcher.HasAttemptRegisteringHandler() {
-		// It's possible that the user has no hookhandler, even if it's new code
+		// It's possible that the user has no hook, even if it's new code
 		callOldBatchTransact(&data, ep) // for backward compatibility, for now
 		return &data, retVal.Fetcher, nil
 	}
 
 	for _, hdlr := range retVal.Fetcher.FetchHandlersForOpAndHook(ep.Op, "T") {
-		hdlr.(hookhandler.IAfterTransact).AfterTransact(&data, ep)
+		hdlr.(hook.IAfterTransact).AfterTransact(&data, ep)
 	}
 
 	return &data, retVal.Fetcher, nil
 }
 
 func CreateOne(db *gorm.DB, mapper datamapper.IDataMapper, modelObj models.IModel,
-	ep *hookhandler.EndPointInfo, logger Logger) (*hookhandler.Data, *hfetcher.HandlerFetcher, render.Renderer) {
-	cargo := hookhandler.Cargo{}
+	ep *hook.EndPoint, logger Logger) (*hook.Data, *hfetcher.HandlerFetcher, render.Renderer) {
+	cargo := hook.Cargo{}
 
 	var retVal *datamapper.MapperRet
 	retErr := transact.TransactCustomError(db, func(tx *gorm.DB) (retErr *webrender.RetError) {
@@ -147,29 +148,29 @@ func CreateOne(db *gorm.DB, mapper datamapper.IDataMapper, modelObj models.IMode
 	roles := []models.UserRole{models.UserRoleAdmin} // just one item
 	ms := []models.IModel{modelObj}
 
-	data := hookhandler.Data{Ms: ms, DB: nil, Roles: roles, Cargo: &cargo}
+	data := hook.Data{Ms: ms, DB: nil, Roles: roles, Cargo: &cargo}
 
 	// Handes transaction
 	if !retVal.Fetcher.HasAttemptRegisteringHandler() {
-		// It's possible that the user has no hookhandler, even if it's new code
+		// It's possible that the user has no hook, even if it's new code
 		callOldOneTransact(&data, ep) // for backward compatibility, for now
 		return &data, retVal.Fetcher, nil
 	}
 
 	for _, hdlr := range retVal.Fetcher.FetchHandlersForOpAndHook(ep.Op, "T") {
-		hdlr.(hookhandler.IAfterTransact).AfterTransact(&data, ep)
+		hdlr.(hook.IAfterTransact).AfterTransact(&data, ep)
 	}
 
 	return &data, retVal.Fetcher, nil
 }
 
 // ReadMany
-func ReadMany(db *gorm.DB, mapper datamapper.IDataMapper, ep *hookhandler.EndPointInfo, logger Logger) (*hookhandler.Data, *int, *hfetcher.HandlerFetcher, render.Renderer) {
+func ReadMany(db *gorm.DB, mapper datamapper.IDataMapper, ep *hook.EndPoint, logger Logger) (*hook.Data, *int, *hfetcher.HandlerFetcher, render.Renderer) {
 	if logger != nil {
 		logger.Log(nil, "GET", strings.ToLower(ep.TypeString), "n")
 	}
 
-	cargo := hookhandler.Cargo{}
+	cargo := hook.Cargo{}
 	var retVal *datamapper.MapperRet
 	retVal, roles, no, retErr := mapper.ReadMany(db, ep, &cargo)
 	if retErr != nil {
@@ -181,29 +182,29 @@ func ReadMany(db *gorm.DB, mapper datamapper.IDataMapper, ep *hookhandler.EndPoi
 
 	modelObjs := retVal.Ms
 
-	data := hookhandler.Data{Ms: modelObjs, DB: nil, Roles: roles, Cargo: &cargo}
+	data := hook.Data{Ms: modelObjs, DB: nil, Roles: roles, Cargo: &cargo}
 
 	// Handes transaction
 	if !retVal.Fetcher.HasAttemptRegisteringHandler() {
-		// It's possible that the user has no hookhandler, even if it's new code
+		// It's possible that the user has no hook, even if it's new code
 		callOldBatchTransact(&data, ep) // for backward compatibility, for now
 		return &data, no, retVal.Fetcher, nil
 	}
 
 	for _, hdlr := range retVal.Fetcher.FetchHandlersForOpAndHook(ep.Op, "T") {
-		hdlr.(hookhandler.IAfterTransact).AfterTransact(&data, ep)
+		hdlr.(hook.IAfterTransact).AfterTransact(&data, ep)
 	}
 
 	return &data, no, retVal.Fetcher, nil
 }
 
-func ReadOne(db *gorm.DB, mapper datamapper.IDataMapper, id *datatypes.UUID, ep *hookhandler.EndPointInfo,
-	logger Logger) (*hookhandler.Data, *hfetcher.HandlerFetcher, render.Renderer) {
+func ReadOne(db *gorm.DB, mapper datamapper.IDataMapper, id *datatypes.UUID, ep *hook.EndPoint,
+	logger Logger) (*hook.Data, *hfetcher.HandlerFetcher, render.Renderer) {
 	if logger != nil {
 		logger.Log(nil, "GET", strings.ToLower(ep.TypeString), "1")
 	}
 
-	cargo := hookhandler.Cargo{}
+	cargo := hook.Cargo{}
 	retVal, role, retErr := mapper.ReadOne(db, id, ep, &cargo)
 	if retErr != nil {
 		if retErr.Renderer == nil {
@@ -217,7 +218,7 @@ func ReadOne(db *gorm.DB, mapper datamapper.IDataMapper, id *datatypes.UUID, ep 
 
 	modelObj := retVal.Ms[0]
 
-	data := hookhandler.Data{Ms: []models.IModel{modelObj}, DB: nil, Roles: []models.UserRole{role}, Cargo: &cargo}
+	data := hook.Data{Ms: []models.IModel{modelObj}, DB: nil, Roles: []models.UserRole{role}, Cargo: &cargo}
 
 	if !retVal.Fetcher.HasAttemptRegisteringHandler() {
 		callOldOneTransact(&data, ep) // for backward compatibility, for now
@@ -225,15 +226,15 @@ func ReadOne(db *gorm.DB, mapper datamapper.IDataMapper, id *datatypes.UUID, ep 
 	}
 
 	for _, hdlr := range retVal.Fetcher.FetchHandlersForOpAndHook(ep.Op, "T") {
-		hdlr.(hookhandler.IAfterTransact).AfterTransact(&data, ep)
+		hdlr.(hook.IAfterTransact).AfterTransact(&data, ep)
 	}
 
 	return &data, retVal.Fetcher, nil
 }
 
 func UpdateMany(db *gorm.DB, mapper datamapper.IDataMapper, modelObjs []models.IModel,
-	ep *hookhandler.EndPointInfo, logger Logger) (*hookhandler.Data, *hfetcher.HandlerFetcher, render.Renderer) {
-	cargo := hookhandler.Cargo{}
+	ep *hook.EndPoint, logger Logger) (*hook.Data, *hfetcher.HandlerFetcher, render.Renderer) {
+	cargo := hook.Cargo{}
 	var retVal *datamapper.MapperRet
 	retErr := transact.TransactCustomError(db, func(tx *gorm.DB) (retErr *webrender.RetError) {
 		if logger != nil {
@@ -260,7 +261,7 @@ func UpdateMany(db *gorm.DB, mapper datamapper.IDataMapper, modelObjs []models.I
 		roles[i] = models.UserRoleAdmin
 	}
 
-	data := hookhandler.Data{Ms: modelObjs, DB: nil, Roles: roles, Cargo: &cargo}
+	data := hook.Data{Ms: modelObjs, DB: nil, Roles: roles, Cargo: &cargo}
 
 	if !retVal.Fetcher.HasAttemptRegisteringHandler() {
 		callOldBatchTransact(&data, ep) // for backward compatibility, for now
@@ -268,15 +269,15 @@ func UpdateMany(db *gorm.DB, mapper datamapper.IDataMapper, modelObjs []models.I
 	}
 
 	for _, hdlr := range retVal.Fetcher.FetchHandlersForOpAndHook(ep.Op, "T") {
-		hdlr.(hookhandler.IAfterTransact).AfterTransact(&data, ep)
+		hdlr.(hook.IAfterTransact).AfterTransact(&data, ep)
 	}
 
 	return &data, retVal.Fetcher, nil
 }
 
 func UpdateOne(db *gorm.DB, mapper datamapper.IDataMapper, modelObj models.IModel, id *datatypes.UUID,
-	ep *hookhandler.EndPointInfo, logger Logger) (*hookhandler.Data, *hfetcher.HandlerFetcher, render.Renderer) {
-	cargo := hookhandler.Cargo{}
+	ep *hook.EndPoint, logger Logger) (*hook.Data, *hfetcher.HandlerFetcher, render.Renderer) {
+	cargo := hook.Cargo{}
 	var retVal *datamapper.MapperRet
 	retErr := transact.TransactCustomError(db, func(tx *gorm.DB) (retErr *webrender.RetError) {
 		if logger != nil {
@@ -298,7 +299,7 @@ func UpdateOne(db *gorm.DB, mapper datamapper.IDataMapper, modelObj models.IMode
 	modelObj = retVal.Ms[0]
 
 	role := models.UserRoleAdmin
-	data := hookhandler.Data{Ms: []models.IModel{modelObj}, DB: nil, Roles: []models.UserRole{role}, Cargo: &cargo}
+	data := hook.Data{Ms: []models.IModel{modelObj}, DB: nil, Roles: []models.UserRole{role}, Cargo: &cargo}
 
 	if !retVal.Fetcher.HasAttemptRegisteringHandler() {
 		callOldOneTransact(&data, ep) // for backward compatibility, for now
@@ -306,16 +307,16 @@ func UpdateOne(db *gorm.DB, mapper datamapper.IDataMapper, modelObj models.IMode
 	}
 
 	for _, hdlr := range retVal.Fetcher.FetchHandlersForOpAndHook(ep.Op, "T") {
-		hdlr.(hookhandler.IAfterTransact).AfterTransact(&data, ep)
+		hdlr.(hook.IAfterTransact).AfterTransact(&data, ep)
 	}
 
 	return &data, retVal.Fetcher, nil
 }
 
 func PatchMany(db *gorm.DB, mapper datamapper.IDataMapper, jsonIDPatches []models.JSONIDPatch,
-	ep *hookhandler.EndPointInfo, logger Logger) (*hookhandler.Data, *hfetcher.HandlerFetcher, render.Renderer) {
+	ep *hook.EndPoint, logger Logger) (*hook.Data, *hfetcher.HandlerFetcher, render.Renderer) {
 	var modelObjs []models.IModel
-	cargo := hookhandler.Cargo{}
+	cargo := hook.Cargo{}
 	var retVal *datamapper.MapperRet
 	retErr := transact.TransactCustomError(db, func(tx *gorm.DB) (retErr *webrender.RetError) {
 		if logger != nil {
@@ -342,7 +343,7 @@ func PatchMany(db *gorm.DB, mapper datamapper.IDataMapper, jsonIDPatches []model
 		roles[i] = models.UserRoleAdmin
 	}
 
-	data := hookhandler.Data{Ms: modelObjs, DB: nil, Roles: roles, Cargo: &cargo}
+	data := hook.Data{Ms: modelObjs, DB: nil, Roles: roles, Cargo: &cargo}
 
 	if !retVal.Fetcher.HasAttemptRegisteringHandler() {
 		callOldBatchTransact(&data, ep) // for backward compatibility, for now
@@ -350,15 +351,15 @@ func PatchMany(db *gorm.DB, mapper datamapper.IDataMapper, jsonIDPatches []model
 	}
 
 	for _, hdlr := range retVal.Fetcher.FetchHandlersForOpAndHook(ep.Op, "T") {
-		hdlr.(hookhandler.IAfterTransact).AfterTransact(&data, ep)
+		hdlr.(hook.IAfterTransact).AfterTransact(&data, ep)
 	}
 
 	return &data, retVal.Fetcher, nil
 }
 
 func PatchOne(db *gorm.DB, mapper datamapper.IDataMapper, jsonPatch []byte,
-	id *datatypes.UUID, ep *hookhandler.EndPointInfo, logger Logger) (*hookhandler.Data, *hfetcher.HandlerFetcher, render.Renderer) {
-	cargo := hookhandler.Cargo{}
+	id *datatypes.UUID, ep *hook.EndPoint, logger Logger) (*hook.Data, *hfetcher.HandlerFetcher, render.Renderer) {
+	cargo := hook.Cargo{}
 	var modelObj models.IModel
 	var retVal *datamapper.MapperRet
 	retErr := transact.TransactCustomError(db, func(tx *gorm.DB) (retErr *webrender.RetError) {
@@ -383,7 +384,7 @@ func PatchOne(db *gorm.DB, mapper datamapper.IDataMapper, jsonPatch []byte,
 	modelObj = retVal.Ms[0]
 
 	role := models.UserRoleAdmin
-	data := hookhandler.Data{Ms: []models.IModel{modelObj}, DB: nil, Roles: []models.UserRole{role}, Cargo: &cargo}
+	data := hook.Data{Ms: []models.IModel{modelObj}, DB: nil, Roles: []models.UserRole{role}, Cargo: &cargo}
 
 	if !retVal.Fetcher.HasAttemptRegisteringHandler() {
 		callOldOneTransact(&data, ep) // for backward compatibility, for now
@@ -391,15 +392,15 @@ func PatchOne(db *gorm.DB, mapper datamapper.IDataMapper, jsonPatch []byte,
 	}
 
 	for _, hdlr := range retVal.Fetcher.FetchHandlersForOpAndHook(ep.Op, "T") {
-		hdlr.(hookhandler.IAfterTransact).AfterTransact(&data, ep)
+		hdlr.(hook.IAfterTransact).AfterTransact(&data, ep)
 	}
 
 	return &data, retVal.Fetcher, nil
 }
 
 func DeleteMany(db *gorm.DB, mapper datamapper.IDataMapper, modelObjs []models.IModel,
-	ep *hookhandler.EndPointInfo, logger Logger) (*hookhandler.Data, *hfetcher.HandlerFetcher, render.Renderer) {
-	cargo := hookhandler.Cargo{}
+	ep *hook.EndPoint, logger Logger) (*hook.Data, *hfetcher.HandlerFetcher, render.Renderer) {
+	cargo := hook.Cargo{}
 	var retVal *datamapper.MapperRet
 	retErr := transact.TransactCustomError(db, func(tx *gorm.DB) (retErr *webrender.RetError) {
 		if logger != nil {
@@ -426,7 +427,7 @@ func DeleteMany(db *gorm.DB, mapper datamapper.IDataMapper, modelObjs []models.I
 		roles[i] = models.UserRoleAdmin
 	}
 
-	data := hookhandler.Data{Ms: modelObjs, DB: nil, Roles: roles, Cargo: &cargo}
+	data := hook.Data{Ms: modelObjs, DB: nil, Roles: roles, Cargo: &cargo}
 
 	if !retVal.Fetcher.HasAttemptRegisteringHandler() {
 		callOldBatchTransact(&data, ep) // for backward compatibility, for now
@@ -434,15 +435,15 @@ func DeleteMany(db *gorm.DB, mapper datamapper.IDataMapper, modelObjs []models.I
 	}
 
 	for _, hdlr := range retVal.Fetcher.FetchHandlersForOpAndHook(ep.Op, "T") {
-		hdlr.(hookhandler.IAfterTransact).AfterTransact(&data, ep)
+		hdlr.(hook.IAfterTransact).AfterTransact(&data, ep)
 	}
 
 	return &data, retVal.Fetcher, nil
 }
 
 func DeleteOne(db *gorm.DB, mapper datamapper.IDataMapper, id *datatypes.UUID,
-	ep *hookhandler.EndPointInfo, logger Logger) (*hookhandler.Data, *hfetcher.HandlerFetcher, render.Renderer) {
-	cargo := hookhandler.Cargo{}
+	ep *hook.EndPoint, logger Logger) (*hook.Data, *hfetcher.HandlerFetcher, render.Renderer) {
+	cargo := hook.Cargo{}
 	var retVal *datamapper.MapperRet
 	retErr := transact.TransactCustomError(db, func(tx *gorm.DB) (retErr *webrender.RetError) {
 		logger.Log(tx, "DELETE", strings.ToLower(ep.TypeString), "1")
@@ -462,7 +463,7 @@ func DeleteOne(db *gorm.DB, mapper datamapper.IDataMapper, id *datatypes.UUID,
 	modelObj := retVal.Ms[0]
 
 	role := models.UserRoleAdmin
-	data := hookhandler.Data{Ms: []models.IModel{modelObj}, DB: nil, Roles: []models.UserRole{role}, Cargo: &cargo}
+	data := hook.Data{Ms: []models.IModel{modelObj}, DB: nil, Roles: []models.UserRole{role}, Cargo: &cargo}
 
 	if !retVal.Fetcher.HasAttemptRegisteringHandler() {
 		callOldOneTransact(&data, ep) // for backward compatibility, for now
@@ -470,7 +471,7 @@ func DeleteOne(db *gorm.DB, mapper datamapper.IDataMapper, id *datatypes.UUID,
 	}
 
 	for _, hdlr := range retVal.Fetcher.FetchHandlersForOpAndHook(ep.Op, "T") {
-		hdlr.(hookhandler.IAfterTransact).AfterTransact(&data, ep)
+		hdlr.(hook.IAfterTransact).AfterTransact(&data, ep)
 	}
 
 	return &data, retVal.Fetcher, nil

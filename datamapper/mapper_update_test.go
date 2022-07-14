@@ -8,7 +8,8 @@ import (
 	"github.com/jinzhu/gorm"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
-	"github.com/t2wu/betterrest/hookhandler"
+	"github.com/t2wu/betterrest/hook"
+	"github.com/t2wu/betterrest/hook/rest"
 	"github.com/t2wu/betterrest/libs/datatypes"
 	"github.com/t2wu/betterrest/libs/urlparam"
 	"github.com/t2wu/betterrest/libs/utils/transact"
@@ -67,7 +68,7 @@ func (suite *TestBaseMapperUpdateSuite) TestUpdateOne_WhenGiven_GotCar() {
 	suite.mock.ExpectCommit()
 
 	options := make(map[urlparam.Param]interface{})
-	cargo := hookhandler.Cargo{}
+	cargo := hook.Cargo{}
 
 	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
 	registry.For(suite.typeString).ModelWithOption(&Car{}, opt)
@@ -75,9 +76,9 @@ func (suite *TestBaseMapperUpdateSuite) TestUpdateOne_WhenGiven_GotCar() {
 	mapper := SharedOwnershipMapper()
 
 	var retVal *MapperRet
-	ep := hookhandler.EndPointInfo{
-		Op:          hookhandler.RESTOpUpdate,
-		Cardinality: hookhandler.APICardinalityOne,
+	ep := hook.EndPoint{
+		Op:          rest.OpUpdate,
+		Cardinality: rest.CardinalityOne,
 		TypeString:  suite.typeString,
 		URLParams:   options,
 		Who:         suite.who,
@@ -123,7 +124,7 @@ func (suite *TestBaseMapperUpdateSuite) TestUpdateOne_WhenNoController_CallRelev
 	suite.mock.ExpectCommit()
 
 	options := make(map[urlparam.Param]interface{})
-	cargo := hookhandler.Cargo{}
+	cargo := hook.Cargo{}
 
 	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
 	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt)
@@ -133,9 +134,9 @@ func (suite *TestBaseMapperUpdateSuite) TestUpdateOne_WhenNoController_CallRelev
 	retErr := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retErr *webrender.RetError) {
 		tx2 = tx
 		mapper := SharedOwnershipMapper()
-		ep := hookhandler.EndPointInfo{
-			Op:          hookhandler.RESTOpUpdate,
-			Cardinality: hookhandler.APICardinalityOne,
+		ep := hook.EndPoint{
+			Op:          rest.OpUpdate,
+			Cardinality: rest.CardinalityOne,
 			TypeString:  suite.typeString,
 			URLParams:   options,
 			Who:         suite.who,
@@ -154,7 +155,7 @@ func (suite *TestBaseMapperUpdateSuite) TestUpdateOne_WhenNoController_CallRelev
 		Cargo: &models.ModelCargo{Payload: cargo.Payload}, Role: &role, URLParams: options}
 
 	// No, update is not easy to test because I load the obj from the db first, and it's not the
-	// same as the car object I have now (all the more reason hookhandler make more sense)
+	// same as the car object I have now (all the more reason hook make more sense)
 
 	if _, ok := retVal.Ms[0].(*CarWithCallbacks); assert.True(suite.T(), ok) {
 		assert.False(suite.T(), guardAPIEntryCalled) // not called when going through mapper
@@ -201,7 +202,7 @@ func (suite *TestBaseMapperUpdateSuite) TestUpdateOne_WhenHavingController_NotCa
 	suite.mock.ExpectCommit()
 
 	options := make(map[urlparam.Param]interface{})
-	cargo := hookhandler.Cargo{}
+	cargo := hook.Cargo{}
 
 	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
 	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).Hook(&CarControllerWithoutCallbacks{}, "CRUPD")
@@ -212,9 +213,9 @@ func (suite *TestBaseMapperUpdateSuite) TestUpdateOne_WhenHavingController_NotCa
 	var tx2 *gorm.DB
 	retErr := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retErr *webrender.RetError) {
 		tx2 = tx
-		ep := hookhandler.EndPointInfo{
-			Op:          hookhandler.RESTOpUpdate,
-			Cardinality: hookhandler.APICardinalityOne,
+		ep := hook.EndPoint{
+			Op:          rest.OpUpdate,
+			Cardinality: rest.CardinalityOne,
 			TypeString:  suite.typeString,
 			URLParams:   options,
 			Who:         suite.who,
@@ -260,7 +261,7 @@ func (suite *TestBaseMapperUpdateSuite) TestUpdateOne_WhenHavingController_CallR
 	suite.mock.ExpectCommit()
 
 	options := make(map[urlparam.Param]interface{})
-	cargo := hookhandler.Cargo{}
+	cargo := hook.Cargo{}
 
 	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
 	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).Hook(&CarHandlerJBT{}, "CRUPD")
@@ -269,9 +270,9 @@ func (suite *TestBaseMapperUpdateSuite) TestUpdateOne_WhenHavingController_CallR
 
 	var tx2 *gorm.DB
 	var retVal *MapperRet
-	ep := hookhandler.EndPointInfo{
-		Op:          hookhandler.RESTOpUpdate,
-		Cardinality: hookhandler.APICardinalityOne,
+	ep := hook.EndPoint{
+		Op:          rest.OpUpdate,
+		Cardinality: rest.CardinalityOne,
 		TypeString:  suite.typeString,
 		URLParams:   options,
 		Who:         suite.who,
@@ -288,7 +289,7 @@ func (suite *TestBaseMapperUpdateSuite) TestUpdateOne_WhenHavingController_CallR
 	}
 
 	role := models.UserRoleAdmin
-	data := hookhandler.Data{Ms: []models.IModel{&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID}, Name: carName}},
+	data := hook.Data{Ms: []models.IModel{&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID}, Name: carName}},
 		DB: tx2, Roles: []models.UserRole{role}, Cargo: &cargo}
 
 	ctrls := retVal.Fetcher.GetAllInstantiatedHanders()
@@ -354,7 +355,7 @@ func (suite *TestBaseMapperUpdateSuite) TestUpdateMany_WhenGiven_GotCars() {
 	suite.mock.ExpectCommit()
 
 	options := make(map[urlparam.Param]interface{})
-	cargo := hookhandler.Cargo{}
+	cargo := hook.Cargo{}
 
 	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
 	registry.For(suite.typeString).ModelWithOption(&Car{}, opt)
@@ -362,9 +363,9 @@ func (suite *TestBaseMapperUpdateSuite) TestUpdateMany_WhenGiven_GotCars() {
 	var retVal *MapperRet
 	retErr := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retErr *webrender.RetError) {
 		mapper := SharedOwnershipMapper()
-		ep := hookhandler.EndPointInfo{
-			Op:          hookhandler.RESTOpUpdate,
-			Cardinality: hookhandler.APICardinalityMany,
+		ep := hook.EndPoint{
+			Op:          rest.OpUpdate,
+			Cardinality: rest.CardinalityMany,
 			TypeString:  suite.typeString,
 			URLParams:   options,
 			Who:         suite.who,
@@ -443,7 +444,7 @@ func (suite *TestBaseMapperUpdateSuite) TestUpdateMany_WhenNoController_CallRele
 	afterUpdate := createBatchSingleMethodHookPoint(&afterUpdateCalled, &afterUpdateData)
 
 	options := make(map[urlparam.Param]interface{})
-	cargo := hookhandler.Cargo{}
+	cargo := hook.Cargo{}
 
 	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
 	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).BatchCRUPDHooks(before, after).
@@ -453,9 +454,9 @@ func (suite *TestBaseMapperUpdateSuite) TestUpdateMany_WhenNoController_CallRele
 	retErr := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retErr *webrender.RetError) {
 		tx2 = tx
 		mapper := SharedOwnershipMapper()
-		ep := hookhandler.EndPointInfo{
-			Op:          hookhandler.RESTOpUpdate,
-			Cardinality: hookhandler.APICardinalityMany,
+		ep := hook.EndPoint{
+			Op:          rest.OpUpdate,
+			Cardinality: rest.CardinalityMany,
 			TypeString:  suite.typeString,
 			URLParams:   options,
 			Who:         suite.who,
@@ -556,7 +557,7 @@ func (suite *TestBaseMapperUpdateSuite) TestCreateMany_WhenHavingController_NotC
 	afterUpdate := createBatchSingleMethodHookPoint(&afterUpdateCalled, &afterUpdateData)
 
 	options := make(map[urlparam.Param]interface{})
-	cargo := hookhandler.Cargo{}
+	cargo := hook.Cargo{}
 
 	hdlr := CarControllerWithoutCallbacks{}
 	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
@@ -567,9 +568,9 @@ func (suite *TestBaseMapperUpdateSuite) TestCreateMany_WhenHavingController_NotC
 	retErr := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retErr *webrender.RetError) {
 		tx2 = tx
 		mapper := SharedOwnershipMapper()
-		ep := hookhandler.EndPointInfo{
-			Op:          hookhandler.RESTOpUpdate,
-			Cardinality: hookhandler.APICardinalityMany,
+		ep := hook.EndPoint{
+			Op:          rest.OpUpdate,
+			Cardinality: rest.CardinalityMany,
 			TypeString:  suite.typeString,
 			URLParams:   options,
 			Who:         suite.who,
@@ -626,16 +627,16 @@ func (suite *TestBaseMapperUpdateSuite) TestCreateMany_WhenHavingController_Call
 	suite.mock.ExpectCommit()
 
 	options := make(map[urlparam.Param]interface{})
-	cargo := hookhandler.Cargo{}
+	cargo := hook.Cargo{}
 
 	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
 	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).Hook(&CarHandlerJBT{}, "CRUPD")
 
 	var tx2 *gorm.DB
 	var retVal *MapperRet
-	ep := hookhandler.EndPointInfo{
-		Op:          hookhandler.RESTOpUpdate,
-		Cardinality: hookhandler.APICardinalityMany,
+	ep := hook.EndPoint{
+		Op:          rest.OpUpdate,
+		Cardinality: rest.CardinalityMany,
 		TypeString:  suite.typeString,
 		URLParams:   options,
 		Who:         suite.who,
@@ -652,7 +653,7 @@ func (suite *TestBaseMapperUpdateSuite) TestCreateMany_WhenHavingController_Call
 
 	// Expected
 	roles := []models.UserRole{models.UserRoleAdmin, models.UserRoleAdmin, models.UserRoleAdmin}
-	data := hookhandler.Data{Ms: []models.IModel{
+	data := hook.Data{Ms: []models.IModel{
 		&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID1}, Name: carName1},
 		&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID2}, Name: carName2},
 		&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID3}, Name: carName3},

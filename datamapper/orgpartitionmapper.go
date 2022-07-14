@@ -14,7 +14,7 @@ import (
 	"github.com/t2wu/betterrest/datamapper/gormfixes"
 	"github.com/t2wu/betterrest/datamapper/hfetcher"
 	"github.com/t2wu/betterrest/datamapper/service"
-	"github.com/t2wu/betterrest/hookhandler"
+	"github.com/t2wu/betterrest/hook"
 	"github.com/t2wu/betterrest/libs/datatypes"
 	"github.com/t2wu/betterrest/libs/urlparam"
 	"github.com/t2wu/betterrest/libs/webrender"
@@ -52,8 +52,8 @@ type OrgPartition struct {
 }
 
 // CreateMany creates an instance of this model based on json and store it in db
-func (mapper *OrgPartition) CreateMany(db *gorm.DB, modelObjs []models.IModel, ep *hookhandler.EndPointInfo,
-	cargo *hookhandler.Cargo) (*MapperRet, *webrender.RetError) {
+func (mapper *OrgPartition) CreateMany(db *gorm.DB, modelObjs []models.IModel, ep *hook.EndPoint,
+	cargo *hook.Cargo) (*MapperRet, *webrender.RetError) {
 
 	modelObjs, err := mapper.Service.HookBeforeCreateMany(db, ep.Who, ep.TypeString, modelObjs)
 	if err != nil {
@@ -68,8 +68,8 @@ func (mapper *OrgPartition) CreateMany(db *gorm.DB, modelObjs []models.IModel, e
 	oldBefore := registry.ModelRegistry[ep.TypeString].BeforeCreate
 	oldAfter := registry.ModelRegistry[ep.TypeString].AfterCreate
 
-	data := hookhandler.Data{Ms: modelObjs, DB: db, Roles: roles, Cargo: cargo}
-	initData := hookhandler.InitData{Roles: roles, Ep: ep}
+	data := hook.Data{Ms: modelObjs, DB: db, Roles: roles, Cargo: cargo}
+	initData := hook.InitData{Roles: roles, Ep: ep}
 
 	j := batchOpJobV2{
 		serv:         mapper.Service,
@@ -88,7 +88,7 @@ func (mapper *OrgPartition) CreateMany(db *gorm.DB, modelObjs []models.IModel, e
 
 // CreateOne creates an instance of this model based on json and store it in db
 func (mapper *OrgPartition) CreateOne(db *gorm.DB, modelObj models.IModel,
-	ep *hookhandler.EndPointInfo, cargo *hookhandler.Cargo) (*MapperRet, *webrender.RetError) {
+	ep *hook.EndPoint, cargo *hook.Cargo) (*MapperRet, *webrender.RetError) {
 	modelObj, err := mapper.Service.HookBeforeCreateOne(db, ep.Who, ep.TypeString, modelObj)
 	if err != nil {
 		return nil, &webrender.RetError{Error: err}
@@ -104,8 +104,8 @@ func (mapper *OrgPartition) CreateOne(db *gorm.DB, modelObj models.IModel,
 		afterFuncName = &a
 	}
 
-	data := hookhandler.Data{Ms: []models.IModel{modelObj}, DB: db, Roles: []models.UserRole{models.UserRoleAdmin}, Cargo: cargo}
-	initData := hookhandler.InitData{Roles: []models.UserRole{models.UserRoleAdmin}, Ep: ep}
+	data := hook.Data{Ms: []models.IModel{modelObj}, DB: db, Roles: []models.UserRole{models.UserRoleAdmin}, Cargo: cargo}
+	initData := hook.InitData{Roles: []models.UserRole{models.UserRoleAdmin}, Ep: ep}
 
 	j := opJobV2{
 		serv: mapper.Service,
@@ -122,8 +122,8 @@ func (mapper *OrgPartition) CreateOne(db *gorm.DB, modelObj models.IModel,
 	return opCoreV2(j, mapper.Service.CreateOneCore)
 }
 
-func (mapper *OrgPartition) ReadMany(db *gorm.DB, ep *hookhandler.EndPointInfo,
-	cargo *hookhandler.Cargo) (*MapperRet, []models.UserRole, *int, *webrender.RetError) {
+func (mapper *OrgPartition) ReadMany(db *gorm.DB, ep *hook.EndPoint,
+	cargo *hook.Cargo) (*MapperRet, []models.UserRole, *int, *webrender.RetError) {
 	dbClean := db
 	db = db.Set("gorm:auto_preload", false)
 	db2 := db
@@ -227,8 +227,8 @@ func (mapper *OrgPartition) ReadMany(db *gorm.DB, ep *hookhandler.EndPointInfo,
 	}
 
 	// use dbClean cuz it's not chained
-	data := hookhandler.Data{Ms: outmodels, DB: dbClean, Roles: roles, Cargo: cargo}
-	initData := hookhandler.InitData{Roles: roles, Ep: ep}
+	data := hook.Data{Ms: outmodels, DB: dbClean, Roles: roles, Cargo: cargo}
+	initData := hook.InitData{Roles: roles, Ep: ep}
 
 	fetcher := hfetcher.NewHandlerFetcher(registry.ModelRegistry[ep.TypeString].HandlerMap, &initData)
 
@@ -246,7 +246,7 @@ func (mapper *OrgPartition) ReadMany(db *gorm.DB, ep *hookhandler.EndPointInfo,
 	// New after hooks
 	// fetch all handlers with before hooks
 	for _, hdlr := range fetcher.FetchHandlersForOpAndHook(ep.Op, "A") {
-		if retErr := hdlr.(hookhandler.IAfter).After(&data, ep); retErr != nil {
+		if retErr := hdlr.(hook.IAfter).After(&data, ep); retErr != nil {
 			return nil, nil, nil, retErr
 		}
 	}
@@ -260,7 +260,7 @@ func (mapper *OrgPartition) ReadMany(db *gorm.DB, ep *hookhandler.EndPointInfo,
 }
 
 // ReadOne get one model object based on its type and its id string
-func (mapper *OrgPartition) ReadOne(db *gorm.DB, id *datatypes.UUID, ep *hookhandler.EndPointInfo, cargo *hookhandler.Cargo) (*MapperRet, models.UserRole, *webrender.RetError) {
+func (mapper *OrgPartition) ReadOne(db *gorm.DB, id *datatypes.UUID, ep *hook.EndPoint, cargo *hook.Cargo) (*MapperRet, models.UserRole, *webrender.RetError) {
 
 	db = db.Set("gorm:auto_preload", false)
 
@@ -282,7 +282,7 @@ func (mapper *OrgPartition) ReadOne(db *gorm.DB, id *datatypes.UUID, ep *hookhan
 		return nil, models.UserRoleInvalid, &webrender.RetError{Error: err}
 	}
 
-	initData := hookhandler.InitData{Roles: []models.UserRole{role}, Ep: ep}
+	initData := hook.InitData{Roles: []models.UserRole{role}, Ep: ep}
 	fetcher := hfetcher.NewHandlerFetcher(registry.ModelRegistry[ep.TypeString].HandlerMap, &initData)
 
 	// Deprecated
@@ -314,11 +314,11 @@ func (mapper *OrgPartition) ReadOne(db *gorm.DB, id *datatypes.UUID, ep *hookhan
 	}
 	// End deprecated
 
-	data := hookhandler.Data{Ms: []models.IModel{modelObj}, DB: db, Roles: []models.UserRole{role}, Cargo: cargo}
+	data := hook.Data{Ms: []models.IModel{modelObj}, DB: db, Roles: []models.UserRole{role}, Cargo: cargo}
 
 	// fetch all handlers with before hooks
 	for _, hdlr := range fetcher.FetchHandlersForOpAndHook(ep.Op, "A") {
-		if retErr := hdlr.(hookhandler.IAfter).After(&data, ep); retErr != nil {
+		if retErr := hdlr.(hook.IAfter).After(&data, ep); retErr != nil {
 			return nil, role, retErr
 		}
 	}
@@ -333,7 +333,7 @@ func (mapper *OrgPartition) ReadOne(db *gorm.DB, id *datatypes.UUID, ep *hookhan
 
 // UpdateOne updates model based on this json
 func (mapper *OrgPartition) UpdateOne(db *gorm.DB, modelObj models.IModel, id *datatypes.UUID,
-	ep *hookhandler.EndPointInfo, cargo *hookhandler.Cargo) (*MapperRet, *webrender.RetError) {
+	ep *hook.EndPoint, cargo *hook.Cargo) (*MapperRet, *webrender.RetError) {
 	oldModelObj, _, err := loadAndCheckErrorBeforeModifyV2(mapper.Service, db, ep.Who, ep.TypeString, modelObj, id,
 		[]models.UserRole{models.UserRoleAdmin}, ep.URLParams)
 	if err != nil {
@@ -351,8 +351,8 @@ func (mapper *OrgPartition) UpdateOne(db *gorm.DB, modelObj models.IModel, id *d
 		afterFuncName = &a
 	}
 
-	data := hookhandler.Data{Ms: []models.IModel{modelObj}, DB: db, Roles: []models.UserRole{models.UserRoleAdmin}, Cargo: cargo}
-	initData := hookhandler.InitData{Roles: []models.UserRole{models.UserRoleAdmin}, Ep: ep}
+	data := hook.Data{Ms: []models.IModel{modelObj}, DB: db, Roles: []models.UserRole{models.UserRoleAdmin}, Cargo: cargo}
+	initData := hook.InitData{Roles: []models.UserRole{models.UserRoleAdmin}, Ep: ep}
 
 	j := opJobV2{
 		serv:        mapper.Service,
@@ -371,7 +371,7 @@ func (mapper *OrgPartition) UpdateOne(db *gorm.DB, modelObj models.IModel, id *d
 
 // UpdateMany updates multiple models
 func (mapper *OrgPartition) UpdateMany(db *gorm.DB, modelObjs []models.IModel,
-	ep *hookhandler.EndPointInfo, cargo *hookhandler.Cargo) (*MapperRet, *webrender.RetError) {
+	ep *hook.EndPoint, cargo *hook.Cargo) (*MapperRet, *webrender.RetError) {
 	// load old model data
 	ids := make([]*datatypes.UUID, len(modelObjs))
 	for i, modelObj := range modelObjs {
@@ -391,8 +391,8 @@ func (mapper *OrgPartition) UpdateMany(db *gorm.DB, modelObjs []models.IModel,
 	// load and check is not in the same order as modelobj
 	oldModelObjs, roles = mapper.sortOldModelAndRolesByIds(oldModelObjs, roles, ids)
 
-	data := hookhandler.Data{Ms: modelObjs, DB: db, Roles: roles, Cargo: cargo}
-	initData := hookhandler.InitData{Roles: roles, Ep: ep}
+	data := hook.Data{Ms: modelObjs, DB: db, Roles: roles, Cargo: cargo}
+	initData := hook.InitData{Roles: roles, Ep: ep}
 
 	oldBefore := registry.ModelRegistry[ep.TypeString].BeforeUpdate
 	oldAfter := registry.ModelRegistry[ep.TypeString].AfterUpdate
@@ -413,14 +413,14 @@ func (mapper *OrgPartition) UpdateMany(db *gorm.DB, modelObjs []models.IModel,
 
 // PatchOne updates model based on this json
 func (mapper *OrgPartition) PatchOne(db *gorm.DB, jsonPatch []byte,
-	id *datatypes.UUID, ep *hookhandler.EndPointInfo, cargo *hookhandler.Cargo) (*MapperRet, *webrender.RetError) {
+	id *datatypes.UUID, ep *hook.EndPoint, cargo *hook.Cargo) (*MapperRet, *webrender.RetError) {
 	oldModelObj, role, err := loadAndCheckErrorBeforeModifyV2(mapper.Service, db, ep.Who, ep.TypeString, nil, id,
 		[]models.UserRole{models.UserRoleAdmin}, ep.URLParams)
 	if err != nil {
 		return nil, &webrender.RetError{Error: err}
 	}
 
-	initData := hookhandler.InitData{Roles: []models.UserRole{role}, Ep: ep}
+	initData := hook.InitData{Roles: []models.UserRole{role}, Ep: ep}
 	fetcher := hfetcher.NewHandlerFetcher(registry.ModelRegistry[ep.TypeString].HandlerMap, &initData)
 
 	// Begin deprecated
@@ -436,10 +436,10 @@ func (mapper *OrgPartition) PatchOne(db *gorm.DB, jsonPatch []byte,
 	}
 	// End deprecated
 
-	data := hookhandler.Data{Ms: []models.IModel{oldModelObj}, DB: db, Roles: []models.UserRole{role}, Cargo: cargo}
+	data := hook.Data{Ms: []models.IModel{oldModelObj}, DB: db, Roles: []models.UserRole{role}, Cargo: cargo}
 
 	for _, hdlr := range fetcher.FetchHandlersForOpAndHook(ep.Op, "J") {
-		if retErr := hdlr.(hookhandler.IBeforeApply).BeforeApply(&data, ep); retErr != nil {
+		if retErr := hdlr.(hook.IBeforeApply).BeforeApply(&data, ep); retErr != nil {
 			return nil, retErr
 		}
 	}
@@ -472,7 +472,7 @@ func (mapper *OrgPartition) PatchOne(db *gorm.DB, jsonPatch []byte,
 		afterFuncName = &a
 	}
 
-	data.Ms = []models.IModel{modelObj} // modify the one already in hookhandler
+	data.Ms = []models.IModel{modelObj} // modify the one already in hook
 
 	j := opJobV2{
 		serv:        mapper.Service,
@@ -491,7 +491,7 @@ func (mapper *OrgPartition) PatchOne(db *gorm.DB, jsonPatch []byte,
 
 // PatchMany patches multiple models
 func (mapper *OrgPartition) PatchMany(db *gorm.DB, jsonIDPatches []models.JSONIDPatch,
-	ep *hookhandler.EndPointInfo, cargo *hookhandler.Cargo) (*MapperRet, *webrender.RetError) {
+	ep *hook.EndPoint, cargo *hook.Cargo) (*MapperRet, *webrender.RetError) {
 	// Load data, patch it, then send it to the hookpoint
 	// Load IDs
 	ids := make([]*datatypes.UUID, len(jsonIDPatches))
@@ -516,7 +516,7 @@ func (mapper *OrgPartition) PatchMany(db *gorm.DB, jsonIDPatches []models.JSONID
 	// 	roles[i] = models.UserRoleAdmin // has to be admin to patch
 	// }
 
-	initData := hookhandler.InitData{Roles: roles, Ep: ep}
+	initData := hook.InitData{Roles: roles, Ep: ep}
 
 	// Begin Deprecated
 	fetcher := hfetcher.NewHandlerFetcher(registry.ModelRegistry[ep.TypeString].HandlerMap, &initData)
@@ -538,11 +538,11 @@ func (mapper *OrgPartition) PatchMany(db *gorm.DB, jsonIDPatches []models.JSONID
 	// End Deprecated
 
 	// here we put the oldModelObjs, not patched yet
-	data := hookhandler.Data{Ms: oldModelObjs, DB: db, Roles: roles, Cargo: cargo}
+	data := hook.Data{Ms: oldModelObjs, DB: db, Roles: roles, Cargo: cargo}
 
 	// fetch all handlers with before hooks
 	for _, hdlr := range fetcher.FetchHandlersForOpAndHook(ep.Op, "J") {
-		if retErr := hdlr.(hookhandler.IBeforeApply).BeforeApply(&data, ep); retErr != nil {
+		if retErr := hdlr.(hook.IBeforeApply).BeforeApply(&data, ep); retErr != nil {
 			return nil, retErr
 		}
 	}
@@ -557,7 +557,7 @@ func (mapper *OrgPartition) PatchMany(db *gorm.DB, jsonIDPatches []models.JSONID
 		}
 	}
 
-	// here we put the new model objs (this should modify the one already in hookhandler)
+	// here we put the new model objs (this should modify the one already in hook)
 	data.Ms = modelObjs
 
 	// Finally update them
@@ -580,8 +580,8 @@ func (mapper *OrgPartition) PatchMany(db *gorm.DB, jsonIDPatches []models.JSONID
 
 // DeleteOne delete the model
 // TODO: delete the groups associated with this record?
-func (mapper *OrgPartition) DeleteOne(db *gorm.DB, id *datatypes.UUID, ep *hookhandler.EndPointInfo,
-	cargo *hookhandler.Cargo) (*MapperRet, *webrender.RetError) {
+func (mapper *OrgPartition) DeleteOne(db *gorm.DB, id *datatypes.UUID, ep *hook.EndPoint,
+	cargo *hook.Cargo) (*MapperRet, *webrender.RetError) {
 	modelObj, role, err := loadAndCheckErrorBeforeModifyV2(mapper.Service, db, ep.Who, ep.TypeString, nil, id, []models.UserRole{models.UserRoleAdmin}, ep.URLParams)
 	if err != nil {
 		return nil, &webrender.RetError{Error: err}
@@ -609,8 +609,8 @@ func (mapper *OrgPartition) DeleteOne(db *gorm.DB, id *datatypes.UUID, ep *hookh
 		afterFuncName = &a
 	}
 
-	data := hookhandler.Data{Ms: []models.IModel{modelObj}, DB: db, Roles: []models.UserRole{role}, Cargo: cargo}
-	initData := hookhandler.InitData{Roles: []models.UserRole{role}, Ep: ep}
+	data := hook.Data{Ms: []models.IModel{modelObj}, DB: db, Roles: []models.UserRole{role}, Cargo: cargo}
+	initData := hook.InitData{Roles: []models.UserRole{role}, Ep: ep}
 
 	j := opJobV2{
 		serv: mapper.Service,
@@ -629,7 +629,7 @@ func (mapper *OrgPartition) DeleteOne(db *gorm.DB, id *datatypes.UUID, ep *hookh
 
 // DeleteMany deletes multiple models
 func (mapper *OrgPartition) DeleteMany(db *gorm.DB, modelObjs []models.IModel,
-	ep *hookhandler.EndPointInfo, cargo *hookhandler.Cargo) (*MapperRet, *webrender.RetError) {
+	ep *hook.EndPoint, cargo *hook.Cargo) (*MapperRet, *webrender.RetError) {
 	// load old model data
 	ids := make([]*datatypes.UUID, len(modelObjs))
 	for i, modelObj := range modelObjs {
@@ -658,8 +658,8 @@ func (mapper *OrgPartition) DeleteMany(db *gorm.DB, modelObjs []models.IModel,
 		return nil, &webrender.RetError{Error: err}
 	}
 
-	data := hookhandler.Data{Ms: modelObjs, DB: db, Roles: roles, Cargo: cargo}
-	initData := hookhandler.InitData{Roles: roles, Ep: ep}
+	data := hook.Data{Ms: modelObjs, DB: db, Roles: roles, Cargo: cargo}
+	initData := hook.InitData{Roles: roles, Ep: ep}
 
 	oldBefore := registry.ModelRegistry[ep.TypeString].BeforeDelete
 	oldAfter := registry.ModelRegistry[ep.TypeString].AfterDelete

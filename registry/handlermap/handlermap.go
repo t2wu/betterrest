@@ -4,7 +4,8 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/t2wu/betterrest/hookhandler"
+	"github.com/t2wu/betterrest/hook"
+	"github.com/t2wu/betterrest/hook/rest"
 )
 
 type HandlerTypeAndArgs struct {
@@ -38,8 +39,8 @@ type HandlerMap struct {
 // CR, B --> Initialized at create before or read before
 // UP, A --> Initialized at Update after or patch after
 // D, A --> Initialied at delete after
-func (h *HandlerMap) RegisterHandler(hdlr hookhandler.IHookhandler, restMethods string, args ...interface{}) {
-	// func (h *HandlerMap) RegisterHandler(hdlr hookhandler.IHookhandler, restMethods string, args ...interface{}) {
+func (h *HandlerMap) RegisterHandler(hdlr hook.IHook, restMethods string, args ...interface{}) {
+	// func (h *HandlerMap) RegisterHandler(hdlr hook.IHook, restMethods string, args ...interface{}) {
 	h.hasAtLeastOneControllerAttemptRegistered = true
 	typ := reflect.TypeOf(hdlr).Elem()
 	handlerTypeAndArg := HandlerTypeAndArgs{
@@ -47,34 +48,34 @@ func (h *HandlerMap) RegisterHandler(hdlr hookhandler.IHookhandler, restMethods 
 		Args:        args,
 	}
 	if strings.Contains(restMethods, "C") {
-		if firstHook := h.getFirstHookType(hookhandler.RESTOpCreate, handlerTypeAndArg.HandlerType); firstHook != "" {
+		if firstHook := h.getFirstHookType(rest.OpCreate, handlerTypeAndArg.HandlerType); firstHook != "" {
 			h.putControllerWithMethodAndHookInMap("C", firstHook, handlerTypeAndArg)
 		}
 	}
 	if strings.Contains(restMethods, "R") {
-		if firstHook := h.getFirstHookType(hookhandler.RESTOpRead, handlerTypeAndArg.HandlerType); firstHook != "" {
+		if firstHook := h.getFirstHookType(rest.OpRead, handlerTypeAndArg.HandlerType); firstHook != "" {
 			h.putControllerWithMethodAndHookInMap("R", firstHook, handlerTypeAndArg)
 		}
 	}
 	if strings.Contains(restMethods, "U") {
-		if firstHook := h.getFirstHookType(hookhandler.RESTOpUpdate, handlerTypeAndArg.HandlerType); firstHook != "" {
+		if firstHook := h.getFirstHookType(rest.OpUpdate, handlerTypeAndArg.HandlerType); firstHook != "" {
 			h.putControllerWithMethodAndHookInMap("U", firstHook, handlerTypeAndArg)
 		}
 	}
 	if strings.Contains(restMethods, "P") {
-		if firstHook := h.getFirstHookType(hookhandler.RESTOpPatch, handlerTypeAndArg.HandlerType); firstHook != "" {
+		if firstHook := h.getFirstHookType(rest.OpPatch, handlerTypeAndArg.HandlerType); firstHook != "" {
 			h.putControllerWithMethodAndHookInMap("P", firstHook, handlerTypeAndArg)
 		}
 	}
 	if strings.Contains(restMethods, "D") {
-		if firstHook := h.getFirstHookType(hookhandler.RESTOpDelete, handlerTypeAndArg.HandlerType); firstHook != "" {
+		if firstHook := h.getFirstHookType(rest.OpDelete, handlerTypeAndArg.HandlerType); firstHook != "" {
 			h.putControllerWithMethodAndHookInMap("D", firstHook, handlerTypeAndArg)
 		}
 	}
 }
 
 // GetHandlerTypeAndArgWithFirstHookAt obtains relevant handler and args if in this method and in this hook
-// we should instantiate a new hookhandler.
+// we should instantiate a new hook.
 // The first available hook type of R is B
 // The first available hook type for P is J
 func (h *HandlerMap) GetHandlerTypeAndArgWithFirstHookAt(method string, firstHook string) []HandlerTypeAndArgs {
@@ -91,38 +92,38 @@ func (h *HandlerMap) HasAttemptRegisteringAnyHandler() bool {
 }
 
 // --- private ---
-// func (h *HandlerMap) getFirstHookType(op hookhandler.RESTOp, hdlr hookhandler.IHookhandler) string {
-func (h *HandlerMap) getFirstHookType(op hookhandler.RESTOp, handlerType reflect.Type) string {
+// func (h *HandlerMap) getFirstHookType(op rest.Op, hdlr hook.IHook) string {
+func (h *HandlerMap) getFirstHookType(op rest.Op, handlerType reflect.Type) string {
 	hdlr := reflect.New(handlerType).Interface()
-	if op == hookhandler.RESTOpPatch {
-		if _, ok := hdlr.(hookhandler.IBeforeApply); ok {
+	if op == rest.OpPatch {
+		if _, ok := hdlr.(hook.IBeforeApply); ok {
 			return "J"
-		} else if _, ok := hdlr.(hookhandler.IBefore); ok {
+		} else if _, ok := hdlr.(hook.IBefore); ok {
 			return "B"
-		} else if _, ok := hdlr.(hookhandler.IAfter); ok {
+		} else if _, ok := hdlr.(hook.IAfter); ok {
 			return "A"
-		} else if _, ok := hdlr.(hookhandler.IAfterTransact); ok {
+		} else if _, ok := hdlr.(hook.IAfterTransact); ok {
 			return "T"
-		} else if _, ok := hdlr.(hookhandler.IRender); ok {
+		} else if _, ok := hdlr.(hook.IRender); ok {
 			return "R"
 		}
-	} else if op == hookhandler.RESTOpRead {
-		if _, ok := hdlr.(hookhandler.IAfter); ok {
+	} else if op == rest.OpRead {
+		if _, ok := hdlr.(hook.IAfter); ok {
 			return "A"
-		} else if _, ok := hdlr.(hookhandler.IAfterTransact); ok {
+		} else if _, ok := hdlr.(hook.IAfterTransact); ok {
 			return "T"
-		} else if _, ok := hdlr.(hookhandler.IRender); ok {
+		} else if _, ok := hdlr.(hook.IRender); ok {
 			return "R"
 		}
 	}
 	// Others, without valid before apply hook
-	if _, ok := hdlr.(hookhandler.IBefore); ok {
+	if _, ok := hdlr.(hook.IBefore); ok {
 		return "B"
-	} else if _, ok := hdlr.(hookhandler.IAfter); ok {
+	} else if _, ok := hdlr.(hook.IAfter); ok {
 		return "A"
-	} else if _, ok := hdlr.(hookhandler.IAfterTransact); ok {
+	} else if _, ok := hdlr.(hook.IAfterTransact); ok {
 		return "T"
-	} else if _, ok := hdlr.(hookhandler.IRender); ok {
+	} else if _, ok := hdlr.(hook.IRender); ok {
 		return "R"
 	}
 	return ""

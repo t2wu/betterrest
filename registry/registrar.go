@@ -8,7 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
-	"github.com/t2wu/betterrest/hookhandler"
+	"github.com/t2wu/betterrest/hook"
 	"github.com/t2wu/betterrest/libs/utils/jsontrans"
 	"github.com/t2wu/betterrest/libs/webrender"
 	"github.com/t2wu/betterrest/models"
@@ -122,8 +122,8 @@ func (r *Registrar) ModelWithOption(modelObj models.IModel, options RegOptions) 
 }
 
 // Hook adds the handler (contains one or more hooks) to be instantiate when a REST op occurs.
-// If any hookhandler exists, old model-based hookpoints and batch hookpoints are not called
-func (r *Registrar) Hook(hdlr hookhandler.IHookhandler, method string, args ...interface{}) *Registrar {
+// If any hook exists, old model-based hookpoints and batch hookpoints are not called
+func (r *Registrar) Hook(hdlr hook.IHook, method string, args ...interface{}) *Registrar {
 	if ModelRegistry[r.currentTypeString].HandlerMap == nil {
 		ModelRegistry[r.currentTypeString].HandlerMap = handlermap.NewHandlerMap()
 	}
@@ -133,7 +133,7 @@ func (r *Registrar) Hook(hdlr hookhandler.IHookhandler, method string, args ...i
 }
 
 // Guard register guard function
-func (r *Registrar) Guard(guard func(ep *hookhandler.EndPointInfo) *webrender.RetError) *Registrar {
+func (r *Registrar) Guard(guard func(ep *hook.EndPoint) *webrender.RetError) *Registrar {
 	ModelRegistry[r.currentTypeString].GuardMethods = append(ModelRegistry[r.currentTypeString].GuardMethods, guard)
 	return r
 }
@@ -368,7 +368,7 @@ func (r *Registrar) BatchRenderer(renderer func(c *gin.Context, ms []models.IMod
 // End deprecated
 
 // // Renderer is called for both cardinalities when registered
-// func (r *Registrar) Renderer(renderer func(c *gin.Context, data *hookhandler.Data, info *hookhandler.EndPointInfo, total *int) bool) *Registrar {
+// func (r *Registrar) Renderer(renderer func(c *gin.Context, data *hook.Data, info *hook.EndPoint, total *int) bool) *Registrar {
 // 	typeString := r.currentTypeString
 
 // 	if _, ok := ModelRegistry[typeString]; !ok {

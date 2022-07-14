@@ -4,7 +4,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/t2wu/betterrest/hookhandler"
+	"github.com/t2wu/betterrest/hook"
+	"github.com/t2wu/betterrest/hook/rest"
 	"github.com/t2wu/betterrest/libs/webrender"
 	"github.com/t2wu/betterrest/registry/handlermap"
 )
@@ -12,18 +13,18 @@ import (
 type HandlerJBAT struct {
 }
 
-func (h *HandlerJBAT) Init(data *hookhandler.InitData, args ...interface{}) {
+func (h *HandlerJBAT) Init(data *hook.InitData, args ...interface{}) {
 }
-func (h *HandlerJBAT) BeforeApply(data *hookhandler.Data, info *hookhandler.EndPointInfo) *webrender.RetError {
+func (h *HandlerJBAT) BeforeApply(data *hook.Data, info *hook.EndPoint) *webrender.RetError {
 	return nil
 }
-func (h *HandlerJBAT) Before(data *hookhandler.Data, info *hookhandler.EndPointInfo) *webrender.RetError {
+func (h *HandlerJBAT) Before(data *hook.Data, info *hook.EndPoint) *webrender.RetError {
 	return nil
 }
-func (h *HandlerJBAT) After(data *hookhandler.Data, info *hookhandler.EndPointInfo) *webrender.RetError {
+func (h *HandlerJBAT) After(data *hook.Data, info *hook.EndPoint) *webrender.RetError {
 	return nil
 }
-func (h *HandlerJBAT) AfterTransact(data *hookhandler.Data, info *hookhandler.EndPointInfo) {
+func (h *HandlerJBAT) AfterTransact(data *hook.Data, info *hook.EndPoint) {
 }
 
 type HandlerBAT struct {
@@ -32,20 +33,20 @@ type HandlerBAT struct {
 	initCalled bool
 }
 
-func (h *HandlerBAT) Init(data *hookhandler.InitData, args ...interface{}) {
+func (h *HandlerBAT) Init(data *hook.InitData, args ...interface{}) {
 	h.initCalled = true
 }
-func (h *HandlerBAT) Before(data *hookhandler.Data, info *hookhandler.EndPointInfo) *webrender.RetError {
+func (h *HandlerBAT) Before(data *hook.Data, info *hook.EndPoint) *webrender.RetError {
 	h.name = "beforeRun"
 	return nil
 }
-func (h *HandlerBAT) After(data *hookhandler.Data, info *hookhandler.EndPointInfo) *webrender.RetError {
+func (h *HandlerBAT) After(data *hook.Data, info *hook.EndPoint) *webrender.RetError {
 	if h.name == "beforeRun" {
 		h.checked = true
 	}
 	return nil
 }
-func (h *HandlerBAT) AfterTransact(data *hookhandler.Data, info *hookhandler.EndPointInfo) {
+func (h *HandlerBAT) AfterTransact(data *hook.Data, info *hook.EndPoint) {
 }
 
 type HandlerBA struct {
@@ -53,13 +54,13 @@ type HandlerBA struct {
 	checked bool
 }
 
-func (h *HandlerBA) Init(data *hookhandler.InitData, args ...interface{}) {
+func (h *HandlerBA) Init(data *hook.InitData, args ...interface{}) {
 }
-func (h *HandlerBA) Before(data *hookhandler.Data, info *hookhandler.EndPointInfo) *webrender.RetError {
+func (h *HandlerBA) Before(data *hook.Data, info *hook.EndPoint) *webrender.RetError {
 	h.name = "beforeRun"
 	return nil
 }
-func (h *HandlerBA) After(data *hookhandler.Data, info *hookhandler.EndPointInfo) *webrender.RetError {
+func (h *HandlerBA) After(data *hook.Data, info *hook.EndPoint) *webrender.RetError {
 	if h.name == "beforeRun" {
 		h.checked = true
 	}
@@ -72,14 +73,14 @@ type HandlerAT struct {
 	initCalled bool
 }
 
-func (h *HandlerAT) Init(data *hookhandler.InitData, args ...interface{}) {
+func (h *HandlerAT) Init(data *hook.InitData, args ...interface{}) {
 	h.initCalled = true
 }
-func (h *HandlerAT) After(data *hookhandler.Data, info *hookhandler.EndPointInfo) *webrender.RetError {
+func (h *HandlerAT) After(data *hook.Data, info *hook.EndPoint) *webrender.RetError {
 	h.name = "afterRun"
 	return nil
 }
-func (h *HandlerAT) AfterTransact(data *hookhandler.Data, info *hookhandler.EndPointInfo) {
+func (h *HandlerAT) AfterTransact(data *hook.Data, info *hook.EndPoint) {
 	if h.name == "afterRun" {
 		h.checked = true
 	}
@@ -88,19 +89,19 @@ func (h *HandlerAT) AfterTransact(data *hookhandler.Data, info *hookhandler.EndP
 type HandlerT struct {
 }
 
-func (h *HandlerT) Init(data *hookhandler.InitData, args ...interface{}) {
+func (h *HandlerT) Init(data *hook.InitData, args ...interface{}) {
 }
-func (h *HandlerT) AfterTransact(data *hookhandler.Data, info *hookhandler.EndPointInfo) {
+func (h *HandlerT) AfterTransact(data *hook.Data, info *hook.EndPoint) {
 }
 
-func createInitData() *hookhandler.InitData {
-	return &hookhandler.InitData{}
+func createInitData() *hook.InitData {
+	return &hook.InitData{}
 }
 
 type HandlerNone struct {
 }
 
-func (h *HandlerNone) Init(data *hookhandler.InitData, args ...interface{}) {
+func (h *HandlerNone) Init(data *hook.InitData, args ...interface{}) {
 }
 
 func TestHandlerFetcher_FetchHandler_ShouldGetOnesForRegistered(t *testing.T) {
@@ -110,7 +111,7 @@ func TestHandlerFetcher_FetchHandler_ShouldGetOnesForRegistered(t *testing.T) {
 	initData := createInitData()
 
 	f := NewHandlerFetcher(cm, initData)
-	handlers := f.FetchHandlersForOpAndHook(hookhandler.RESTOpCreate, "B")
+	handlers := f.FetchHandlersForOpAndHook(rest.OpCreate, "B")
 	if assert.Len(t, handlers, 1) {
 		_, ok := handlers[0].(*HandlerBAT)
 		assert.True(t, ok)
@@ -124,23 +125,23 @@ func TestHandlerFetcher_TheSameControllerIsRunInAnotherHook(t *testing.T) {
 	initData := createInitData()
 
 	f := NewHandlerFetcher(cm, initData)
-	handlers := f.FetchHandlersForOpAndHook(hookhandler.RESTOpCreate, "B")
+	handlers := f.FetchHandlersForOpAndHook(rest.OpCreate, "B")
 	if !assert.Len(t, handlers, 1) {
 		return
 	}
 
 	for _, hdlr := range handlers {
-		hdlr := hdlr.(hookhandler.IBefore)
+		hdlr := hdlr.(hook.IBefore)
 		hdlr.Before(nil, nil)
 	}
 
-	handlers = f.FetchHandlersForOpAndHook(hookhandler.RESTOpCreate, "A")
+	handlers = f.FetchHandlersForOpAndHook(rest.OpCreate, "A")
 	if !assert.Len(t, handlers, 2) {
 		return
 	}
 
 	for _, hdlr := range handlers {
-		hdlr := hdlr.(hookhandler.IAfter)
+		hdlr := hdlr.(hook.IAfter)
 		hdlr.After(nil, nil)
 	}
 
@@ -149,13 +150,13 @@ func TestHandlerFetcher_TheSameControllerIsRunInAnotherHook(t *testing.T) {
 		assert.True(t, hdlr.checked)
 	}
 
-	handlers = f.FetchHandlersForOpAndHook(hookhandler.RESTOpCreate, "T")
+	handlers = f.FetchHandlersForOpAndHook(rest.OpCreate, "T")
 	if !assert.Len(t, handlers, 1) {
 		return
 	}
 
 	for _, hdlr := range handlers {
-		hdlr := hdlr.(hookhandler.IAfterTransact)
+		hdlr := hdlr.(hook.IAfterTransact)
 		hdlr.AfterTransact(nil, nil)
 	}
 
@@ -173,26 +174,26 @@ func TestHandlerFetcher_RunControllers_CheckHandledInstances(t *testing.T) {
 	cm.RegisterHandler(&HandlerBA{}, "RUPD")   // This handles RUPD all at once
 	initData := createInitData()
 
-	f := NewHandlerFetcher(cm, initData)                                   // this only handles either C, R, U, P, or D at one time though, agnostic.
-	handlers := f.FetchHandlersForOpAndHook(hookhandler.RESTOpCreate, "B") // make it handle create
+	f := NewHandlerFetcher(cm, initData)                        // this only handles either C, R, U, P, or D at one time though, agnostic.
+	handlers := f.FetchHandlersForOpAndHook(rest.OpCreate, "B") // make it handle create
 	if !assert.Len(t, handlers, 1) {
 		return
 	}
 
 	f2 := NewHandlerFetcher(cm, initData)
-	handlers = f2.FetchHandlersForOpAndHook(hookhandler.RESTOpUpdate, "B") // make it handles update
-	if !assert.Len(t, handlers, 2) {                                       // two hooks cuz update is
+	handlers = f2.FetchHandlersForOpAndHook(rest.OpUpdate, "B") // make it handles update
+	if !assert.Len(t, handlers, 2) {                            // two hooks cuz update is
 		return
 	}
 
 	assert.Len(t, f2.GetAllInstantiatedHanders(), 2) // two is instantiated because there are two handles U
 
-	handlers = f.FetchHandlersForOpAndHook(hookhandler.RESTOpCreate, "A")
+	handlers = f.FetchHandlersForOpAndHook(rest.OpCreate, "A")
 	if !assert.Len(t, handlers, 1) {
 		return
 	}
 
-	handlers = f2.FetchHandlersForOpAndHook(hookhandler.RESTOpUpdate, "A")
+	handlers = f2.FetchHandlersForOpAndHook(rest.OpUpdate, "A")
 	if !assert.Len(t, handlers, 2) {
 		return
 	}
@@ -233,7 +234,7 @@ func TestHandlerFetcher_ShouldCallInit(t *testing.T) {
 	initData := createInitData()
 
 	f := NewHandlerFetcher(cm, initData)
-	handlers := f.FetchHandlersForOpAndHook(hookhandler.RESTOpCreate, "B")
+	handlers := f.FetchHandlersForOpAndHook(rest.OpCreate, "B")
 	if assert.Len(t, handlers, 1) {
 		assert.True(t, handlers[0].(*HandlerBAT).initCalled)
 	}
