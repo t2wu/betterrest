@@ -143,17 +143,19 @@ func loadAndCheckErrorBeforeModifyV1(serv service.IServiceV1, db *gorm.DB, who m
 // db should already be set up for all the joins needed, if any
 func loadManyAndCheckBeforeModifyV1(serv service.IServiceV1, db *gorm.DB, who models.UserIDFetchable, typeString string,
 	ids []*datatypes.UUID, permittedRoles []models.UserRole) ([]models.IModel, []models.UserRole, error) {
+	// log.Println("loadManyAndCheckBeforeModifyV1 run")
 	modelObjs, roles, err := serv.GetManyCore(db, who, typeString, ids)
 	if err != nil {
 		log.Println("calling getManyWithIDsCore err:", err)
 		return nil, nil, err
 	}
 
-	for _, role := range roles {
-		if role != models.UserRoleAdmin {
-			return nil, nil, service.ErrPermission
-		}
-	}
+	// for _, role := range roles {
+	// 	log.Printf("role: %v\n", role)
+	// 	if role != models.UserRoleAdmin {
+	// 		return nil, nil, service.ErrPermission
+	// 	}
+	// }
 
 	for _, role := range roles {
 		permitted := false
@@ -177,17 +179,18 @@ func loadManyAndCheckBeforeModifyV1(serv service.IServiceV1, db *gorm.DB, who mo
 // db should already be set up for all the joins needed, if any
 func loadManyAndCheckBeforeModifyV2(serv service.IServiceV2, db *gorm.DB, who models.UserIDFetchable, typeString string,
 	ids []*datatypes.UUID, permittedRoles []models.UserRole) ([]models.IModel, []models.UserRole, error) {
+	// log.Println("loadManyAndCheckBeforeModifyV2 run")
 	modelObjs, roles, err := serv.GetManyCore(db, who, typeString, ids)
 	if err != nil {
 		log.Println("calling getManyWithIDsCore err:", err)
 		return nil, nil, err
 	}
 
-	for _, role := range roles {
-		if role != models.UserRoleAdmin {
-			return nil, nil, service.ErrPermission
-		}
-	}
+	// for _, role := range roles {
+	// 	if role != models.UserRoleAdmin {
+	// 		return nil, nil, service.ErrPermission
+	// 	}
+	// }
 
 	for _, role := range roles {
 		permitted := false

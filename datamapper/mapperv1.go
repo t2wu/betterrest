@@ -85,7 +85,7 @@ func (mapper *DataMapper) CreateOne(db *gorm.DB, modelObj models.IModel,
 		afterFuncName = &a
 	}
 
-	data := hookhandler.Data{Ms: []models.IModel{modelObj}, DB: db, Roles: []models.UserRole{models.UserRoleAdmin}, Cargo: cargo}
+	data := hookhandler.Data{Ms: []models.IModel{modelObj}, DB: db, Roles: []models.UserRole{models.UserRoleAdmin, models.UserRolePublic}, Cargo: cargo}
 	initData := hookhandler.InitData{Roles: []models.UserRole{models.UserRoleAdmin}, Ep: ep}
 
 	j := opJobV1{
@@ -289,7 +289,7 @@ func (mapper *DataMapper) ReadOne(db *gorm.DB, id *datatypes.UUID, ep *hookhandl
 // UpdateOne updates model based on this json
 func (mapper *DataMapper) UpdateOne(db *gorm.DB, modelObj models.IModel, id *datatypes.UUID,
 	ep *hookhandler.EndPointInfo, cargo *hookhandler.Cargo) (*MapperRet, *webrender.RetError) {
-	oldModelObj, _, err := loadAndCheckErrorBeforeModifyV1(mapper.Service, db, ep.Who, ep.TypeString, modelObj, id, []models.UserRole{models.UserRoleAdmin})
+	oldModelObj, _, err := loadAndCheckErrorBeforeModifyV1(mapper.Service, db, ep.Who, ep.TypeString, modelObj, id, []models.UserRole{models.UserRoleAdmin, models.UserRolePublic})
 	if err != nil {
 		return nil, &webrender.RetError{Error: err}
 	}
@@ -305,7 +305,7 @@ func (mapper *DataMapper) UpdateOne(db *gorm.DB, modelObj models.IModel, id *dat
 		afterFuncName = &a
 	}
 
-	data := hookhandler.Data{Ms: []models.IModel{modelObj}, DB: db, Roles: []models.UserRole{models.UserRoleAdmin}, Cargo: cargo}
+	data := hookhandler.Data{Ms: []models.IModel{modelObj}, DB: db, Roles: []models.UserRole{models.UserRoleAdmin, models.UserRolePublic}, Cargo: cargo}
 	initData := hookhandler.InitData{Roles: []models.UserRole{models.UserRoleAdmin}, Ep: ep}
 
 	j := opJobV1{
@@ -337,18 +337,13 @@ func (mapper *DataMapper) UpdateMany(db *gorm.DB, modelObjs []models.IModel, ep 
 		ids[i] = id
 	}
 
-	oldModelObjs, _, err := loadManyAndCheckBeforeModifyV1(mapper.Service, db, ep.Who, ep.TypeString, ids, []models.UserRole{models.UserRoleAdmin})
+	oldModelObjs, roles, err := loadManyAndCheckBeforeModifyV1(mapper.Service, db, ep.Who, ep.TypeString, ids, []models.UserRole{models.UserRoleAdmin, models.UserRolePublic})
 	if err != nil {
 		return nil, &webrender.RetError{Error: err}
 	}
 
 	// load and check is not in the same order as modelobj
-	oldModelObjs = mapper.sortOldModelByIds(oldModelObjs, ids)
-
-	roles := make([]models.UserRole, len(modelObjs))
-	for i := 0; i < len(roles); i++ {
-		roles[i] = models.UserRoleAdmin
-	}
+	oldModelObjs, roles = mapper.sortOldModelAndRolesByIds(oldModelObjs, roles, ids)
 
 	data := hookhandler.Data{Ms: modelObjs, DB: db, Roles: roles, Cargo: cargo}
 	initData := hookhandler.InitData{Roles: roles, Ep: ep}
@@ -467,7 +462,7 @@ func (mapper *DataMapper) PatchMany(db *gorm.DB, jsonIDPatches []models.JSONIDPa
 	}
 
 	// load and check is not in the same order as modelobj
-	oldModelObjs = mapper.sortOldModelByIds(oldModelObjs, ids)
+	oldModelObjs, roles = mapper.sortOldModelAndRolesByIds(oldModelObjs, roles, ids)
 
 	// roles := make([]models.UserRole, len(jsonIDPatches))
 	// for i := range roles {
@@ -599,10 +594,12 @@ func (mapper *DataMapper) DeleteMany(db *gorm.DB, modelObjs []models.IModel,
 		ids[i] = id
 	}
 
-	modelObjs, roles, err := loadManyAndCheckBeforeModifyV1(mapper.Service, db, ep.Who, ep.TypeString, ids, []models.UserRole{models.UserRoleAdmin})
+	log.Println("load and check before modify v1 1")
+	modelObjs, roles, err := loadManyAndCheckBeforeModifyV1(mapper.Service, db, ep.Who, ep.TypeString, ids, []models.UserRole{models.UserRoleAdmin, models.UserRolePublic})
 	if err != nil {
 		return nil, &webrender.RetError{Error: err}
 	}
+	log.Println("load and check before modify v1 2")
 
 	// Unscoped() for REAL delete!
 	// Foreign key constraint works only on real delete
@@ -638,18 +635,21 @@ func (mapper *DataMapper) DeleteMany(db *gorm.DB, modelObjs []models.IModel,
 
 // ----------------------------------------------------------------------------------------
 
-func (mapper *DataMapper) sortOldModelByIds(oldModelObjs []models.IModel, ids []*datatypes.UUID) []models.IModel {
-	// build dictionary of old model objs
-	mapping := make(map[string]models.IModel)
-	for _, oldModelObj := range oldModelObjs {
-		mapping[oldModelObj.GetID().String()] = oldModelObj
+func (mapper *DataMapper) sortOldModelAndRolesByIds(oldModelObjs []models.IModel, roles []models.UserRole, ids []*datatypes.UUID) ([]models.IModel, []models.UserRole) {
+	mapping := make(map[string]int) // stores index
+	for i, oldModelObj := range oldModelObjs {
+		mapping[oldModelObj.GetID().String()] = i
 	}
 
 	oldModelObjSorted := make([]models.IModel, 0)
+	rolesSorted := make([]models.UserRole, 0)
 	for _, id := range ids {
-		oldModelObjSorted = append(oldModelObjSorted, mapping[id.String()])
+		idx := mapping[id.String()]
+		oldModelObjSorted = append(oldModelObjSorted, oldModelObjs[idx])
+		rolesSorted = append(rolesSorted, roles[idx])
 	}
-	return oldModelObjSorted
+
+	return oldModelObjSorted, rolesSorted
 }
 
 func constructOrderFieldQueries(db *gorm.DB, tableName string, order *string) *gorm.DB {

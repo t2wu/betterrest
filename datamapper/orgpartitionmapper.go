@@ -383,18 +383,13 @@ func (mapper *OrgPartition) UpdateMany(db *gorm.DB, modelObjs []models.IModel,
 		ids[i] = id
 	}
 
-	oldModelObjs, _, err := loadManyAndCheckBeforeModifyV2(mapper.Service, db, ep.Who, ep.TypeString, ids, []models.UserRole{models.UserRoleAdmin})
+	oldModelObjs, roles, err := loadManyAndCheckBeforeModifyV2(mapper.Service, db, ep.Who, ep.TypeString, ids, []models.UserRole{models.UserRoleAdmin})
 	if err != nil {
 		return nil, &webrender.RetError{Error: err}
 	}
 
 	// load and check is not in the same order as modelobj
-	oldModelObjs = mapper.sortOldModelByIds(oldModelObjs, ids)
-
-	roles := make([]models.UserRole, len(modelObjs))
-	for i := 0; i < len(roles); i++ {
-		roles[i] = models.UserRoleAdmin
-	}
+	oldModelObjs, roles = mapper.sortOldModelAndRolesByIds(oldModelObjs, roles, ids)
 
 	data := hookhandler.Data{Ms: modelObjs, DB: db, Roles: roles, Cargo: cargo}
 	initData := hookhandler.InitData{Roles: roles, Ep: ep}
@@ -514,7 +509,7 @@ func (mapper *OrgPartition) PatchMany(db *gorm.DB, jsonIDPatches []models.JSONID
 	}
 
 	// load and check is not in the same order as modelobj
-	oldModelObjs = mapper.sortOldModelByIds(oldModelObjs, ids)
+	oldModelObjs, roles = mapper.sortOldModelAndRolesByIds(oldModelObjs, roles, ids)
 
 	// roles := make([]models.UserRole, len(jsonIDPatches))
 	// for i := range roles {
@@ -684,17 +679,19 @@ func (mapper *OrgPartition) DeleteMany(db *gorm.DB, modelObjs []models.IModel,
 }
 
 // ----------------------------------------------------------------------------------------
-
-func (mapper *OrgPartition) sortOldModelByIds(oldModelObjs []models.IModel, ids []*datatypes.UUID) []models.IModel {
-	// build dictionary of old model objs
-	mapping := make(map[string]models.IModel)
-	for _, oldModelObj := range oldModelObjs {
-		mapping[oldModelObj.GetID().String()] = oldModelObj
+func (mapper *OrgPartition) sortOldModelAndRolesByIds(oldModelObjs []models.IModel, roles []models.UserRole, ids []*datatypes.UUID) ([]models.IModel, []models.UserRole) {
+	mapping := make(map[string]int) // stores index
+	for i, oldModelObj := range oldModelObjs {
+		mapping[oldModelObj.GetID().String()] = i
 	}
 
 	oldModelObjSorted := make([]models.IModel, 0)
+	rolesSorted := make([]models.UserRole, 0)
 	for _, id := range ids {
-		oldModelObjSorted = append(oldModelObjSorted, mapping[id.String()])
+		idx := mapping[id.String()]
+		oldModelObjSorted = append(oldModelObjSorted, oldModelObjs[idx])
+		rolesSorted = append(rolesSorted, roles[idx])
 	}
-	return oldModelObjSorted
+
+	return oldModelObjSorted, rolesSorted
 }

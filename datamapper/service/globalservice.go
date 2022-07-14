@@ -50,7 +50,7 @@ func (service *GlobalService) ReadOneCore(db *gorm.DB, who models.UserIDFetchabl
 		return nil, 0, err
 	}
 
-	role := models.UserRolePublic // just some default
+	role := models.UserRolePublic
 
 	err = gormfixes.LoadManyToManyBecauseGormFailsWithID(db, modelObj)
 	if err != nil {
@@ -78,6 +78,11 @@ func (service *GlobalService) GetManyCore(db *gorm.DB, who models.UserIDFetchabl
 		return nil, nil, ErrBatchUpdateOrPatchOneNotFound
 	}
 
+	roles := make([]models.UserRole, len(modelObjs))
+	for i := 0; i < len(modelObjs); i++ {
+		roles[i] = models.UserRolePublic
+	}
+
 	for _, modelObj := range modelObjs {
 		err = gormfixes.LoadManyToManyBecauseGormFailsWithID(db, modelObj)
 		if err != nil {
@@ -85,7 +90,7 @@ func (service *GlobalService) GetManyCore(db *gorm.DB, who models.UserIDFetchabl
 		}
 	}
 
-	return modelObjs, nil, nil
+	return modelObjs, roles, nil
 }
 
 // GetAllQueryContructCore construct the meat of the query
