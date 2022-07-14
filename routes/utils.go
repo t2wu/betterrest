@@ -99,7 +99,7 @@ func GuardMiddleWare(typeString string) func(c *gin.Context) {
 					return
 				}
 			}
-			return // continues
+			// return // check for new guard anyway
 		}
 		// End Old, deprecated
 
