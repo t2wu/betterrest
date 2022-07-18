@@ -7,14 +7,15 @@ import (
 	"github.com/jinzhu/gorm"
 	"github.com/t2wu/betterrest/hook"
 	"github.com/t2wu/betterrest/libs/webrender"
-	"github.com/t2wu/betterrest/models"
+	"github.com/t2wu/betterrest/mdlutil"
 	"github.com/t2wu/betterrest/registry/handlermap"
+	"github.com/t2wu/qry/mdl"
 )
 
 // ModelRegistry is model registry
 var ModelRegistry = make(map[string]*Reg)
 
-// OwnershipTyp is the model of ownership table, the table that has many to many links users with other models
+// OwnershipTyp is the model of ownership table, the table that has many to many links users with other mdl
 // var OwnershipTyp reflect.Type
 
 // OwnerTyp is the model of the Owner table
@@ -42,7 +43,7 @@ const (
 	// MapperTypeGlobal is for type where data is public to all
 	MapperTypeGlobal
 
-	// MapperTypeLinkTable is for table linking user and regular models
+	// MapperTypeLinkTable is for table linking user and regular mdl
 	MapperTypeLinkTable
 )
 
@@ -59,14 +60,14 @@ type Reg struct {
 	TypVersion string // TypVersion is the Version of this model
 	// CreateObj is by default the one passed in when calling RegModel*
 	// It could be overriden with RegCustomCreate()
-	CreateObj models.IModel
+	CreateObj mdl.IModel
 
 	// If type is link to user type, store type of ownership table (the one
 	// that links to user)
 	OwnershipType      reflect.Type
 	OwnershipTableName *string
 	// If custom ownership table is registered, store here
-	OwnershipModelObjPtr models.IModel
+	OwnershipModelObjPtr mdl.IModel
 
 	// OrgTypeString reflect.Type // If type has link to organization type, store organization type
 
@@ -82,27 +83,27 @@ type Reg struct {
 	Mapper       MapperType // Custmized mapper, default to datamapper.SharedOwnershipMapper
 
 	// Begin deprecated
-	BeforeCUPD func(bhpData models.BatchHookPointData, op models.CRUPDOp) error // no R since model doens't exist yet
-	AfterCRUPD func(bhpData models.BatchHookPointData, op models.CRUPDOp) error
+	BeforeCUPD func(bhpData mdlutil.BatchHookPointData, op mdlutil.CRUPDOp) error // no R since model doens't exist yet
+	AfterCRUPD func(bhpData mdlutil.BatchHookPointData, op mdlutil.CRUPDOp) error
 
-	AfterTransact func(bhpData models.BatchHookPointData, op models.CRUPDOp)
+	AfterTransact func(bhpData mdlutil.BatchHookPointData, op mdlutil.CRUPDOp)
 
-	AfterRead func(bhpData models.BatchHookPointData) error
+	AfterRead func(bhpData mdlutil.BatchHookPointData) error
 
-	BeforeCreate func(bhpData models.BatchHookPointData) error
-	AfterCreate  func(bhpData models.BatchHookPointData) error
+	BeforeCreate func(bhpData mdlutil.BatchHookPointData) error
+	AfterCreate  func(bhpData mdlutil.BatchHookPointData) error
 
-	BeforeUpdate func(bhpData models.BatchHookPointData) error
-	AfterUpdate  func(bhpData models.BatchHookPointData) error
+	BeforeUpdate func(bhpData mdlutil.BatchHookPointData) error
+	AfterUpdate  func(bhpData mdlutil.BatchHookPointData) error
 
-	BeforePatchApply func(bhpData models.BatchHookPointData) error // This comes before patch is applied. Before "BeforePatch"
-	BeforePatch      func(bhpData models.BatchHookPointData) error
-	AfterPatch       func(bhpData models.BatchHookPointData) error
+	BeforePatchApply func(bhpData mdlutil.BatchHookPointData) error // This comes before patch is applied. Before "BeforePatch"
+	BeforePatch      func(bhpData mdlutil.BatchHookPointData) error
+	AfterPatch       func(bhpData mdlutil.BatchHookPointData) error
 
-	BeforeDelete func(bhpData models.BatchHookPointData) error
-	AfterDelete  func(bhpData models.BatchHookPointData) error
+	BeforeDelete func(bhpData mdlutil.BatchHookPointData) error
+	AfterDelete  func(bhpData mdlutil.BatchHookPointData) error
 
-	BatchRenderer func(c *gin.Context, ms []models.IModel, bhpdata *models.BatchHookPointData, op models.CRUPDOp) bool
+	BatchRenderer func(c *gin.Context, ms []mdl.IModel, bhpdata *mdlutil.BatchHookPointData, op mdlutil.CRUPDOp) bool
 	// End deprecated
 
 	// HandlerMap is the new method where we keep handlers
@@ -121,15 +122,15 @@ type Reg struct {
  * New*() functions
  */
 
-// NewFromTypeString instantiate a new models.IModel object from type registry
-func NewFromTypeString(typeString string) models.IModel {
-	return reflect.New(ModelRegistry[typeString].Typ).Interface().(models.IModel)
+// NewFromTypeString instantiate a new mdl.IModel object from type registry
+func NewFromTypeString(typeString string) mdl.IModel {
+	return reflect.New(ModelRegistry[typeString].Typ).Interface().(mdl.IModel)
 }
 
 // GetTableNameFromTypeString get table name from typeString
 func GetTableNameFromTypeString(typeString string) string {
 	model := NewFromTypeString(typeString)
-	return models.GetTableNameFromIModel(model)
+	return mdl.GetTableNameFromIModel(model)
 }
 
 // NewSliceStructFromTypeString :
@@ -137,44 +138,44 @@ func GetTableNameFromTypeString(typeString string) string {
 // obj := make(map[string][]Room)
 // obj["content"] = make([]Room, 0, 0)
 // https://stackoverflow.com/questions/50233285/create-a-map-in-go-using-reflection
-// func NewSliceStructFromTypeString(typeString string) map[string][]models.IModel {
-func NewSliceStructFromTypeString(typeString string) []models.IModel {
+// func NewSliceStructFromTypeString(typeString string) map[string][]mdl.IModel {
+func NewSliceStructFromTypeString(typeString string) []mdl.IModel {
 	modelType := ModelRegistry[typeString].Typ
 	mapType := reflect.MapOf(reflect.TypeOf(""), reflect.SliceOf(modelType)) // string -> model
 	obj := reflect.MakeMap(mapType)
 	obj.SetMapIndex(reflect.ValueOf("content"), reflect.New(reflect.SliceOf(modelType)).Elem())
 
 	// this is reflect.Value, and I cannot map it to map[string]interface{}, no Obj.Map()
-	// panic: interface conversion: interface {} is map[string][]Device, not map[string][]models.IModel
-	// return obj.Interface().(map[string][]models.IModel)
+	// panic: interface conversion: interface {} is map[string][]Device, not map[string][]mdl.IModel
+	// return obj.Interface().(map[string][]mdl.IModel)
 
 	// v.SetMapIndex(reflect.ValueOf(mKey), elemV)
-	modelObjs := make([]models.IModel, obj.MapIndex(reflect.ValueOf("content")).Len(),
+	modelObjs := make([]mdl.IModel, obj.MapIndex(reflect.ValueOf("content")).Len(),
 		obj.MapIndex(reflect.ValueOf("content")).Len())
 
 	arr := obj.MapIndex(reflect.ValueOf("content"))
 	for i := 0; i < arr.Len(); i++ {
-		modelObjs[i] = arr.Index(i).Interface().(models.IModel)
+		modelObjs[i] = arr.Index(i).Interface().(mdl.IModel)
 	}
 
 	// But...cannot unmarshal once returned
-	// json: cannot unmarshal object into Go value of type []models.IModel
+	// json: cannot unmarshal object into Go value of type []mdl.IModel
 	return modelObjs
 }
 
-// NewSliceFromDBByTypeString queries the database for an array of models based on typeString
+// NewSliceFromDBByTypeString queries the database for an array of mdl based on typeString
 // func(dest interface{}) *gorm.DB
-func NewSliceFromDBByTypeString(typeString string, f func(interface{}, ...interface{}) *gorm.DB) ([]models.IModel, error) {
+func NewSliceFromDBByTypeString(typeString string, f func(interface{}, ...interface{}) *gorm.DB) ([]mdl.IModel, error) {
 
-	// func NewSliceFromDB(typeString string, f func(dest interface{}) *gorm.DB) ([]models.IModel, []models.Role, error) {
+	// func NewSliceFromDB(typeString string, f func(dest interface{}) *gorm.DB) ([]mdl.IModel, []mdl.Role, error) {
 	modelType := ModelRegistry[typeString].Typ
 	return NewSliceFromDBByType(modelType, f)
 }
 
-// NewSliceFromDBByType queries the database for an array of models based on modelType
+// NewSliceFromDBByType queries the database for an array of mdl based on modelType
 // func(dest interface{}) *gorm.DB
-func NewSliceFromDBByType(modelType reflect.Type, f func(interface{}, ...interface{}) *gorm.DB) ([]models.IModel, error) {
-	// func NewSliceFromDB(typeString string, f func(dest interface{}) *gorm.DB) ([]models.IModel, []models.Role, error) {
+func NewSliceFromDBByType(modelType reflect.Type, f func(interface{}, ...interface{}) *gorm.DB) ([]mdl.IModel, error) {
+	// func NewSliceFromDB(typeString string, f func(dest interface{}) *gorm.DB) ([]mdl.IModel, []mdl.Role, error) {
 	modelObjs := reflect.New(reflect.SliceOf(modelType))
 
 	if err := f(modelObjs.Interface()).Error; err != nil {
@@ -183,11 +184,11 @@ func NewSliceFromDBByType(modelType reflect.Type, f func(interface{}, ...interfa
 
 	modelObjs = modelObjs.Elem()
 
-	y := make([]models.IModel, modelObjs.Len())
+	y := make([]mdl.IModel, modelObjs.Len())
 	for i := 0; i < modelObjs.Len(); i++ {
 		ptr2 := reflect.New(modelType)
 		ptr2.Elem().Set(modelObjs.Index(i))
-		y[i] = ptr2.Interface().(models.IModel)
+		y[i] = ptr2.Interface().(mdl.IModel)
 	}
 
 	return y, nil

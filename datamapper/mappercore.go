@@ -9,34 +9,35 @@ import (
 	"github.com/t2wu/betterrest/datamapper/service"
 	"github.com/t2wu/betterrest/hook"
 	"github.com/t2wu/betterrest/hook/rest"
-	"github.com/t2wu/betterrest/libs/datatypes"
 	"github.com/t2wu/betterrest/libs/webrender"
-	"github.com/t2wu/betterrest/models"
+	"github.com/t2wu/betterrest/mdlutil"
 	"github.com/t2wu/betterrest/registry"
+	"github.com/t2wu/qry/datatype"
+	"github.com/t2wu/qry/mdl"
 )
 
 func callOldBatch(
 	data *hook.Data,
 	ep *hook.EndPoint,
-	oldGeneric func(bhpData models.BatchHookPointData, op models.CRUPDOp) error, // before or after
-	oldSpecific func(bhpData models.BatchHookPointData) error, // before or after
+	oldGeneric func(bhpData mdlutil.BatchHookPointData, op mdlutil.CRUPDOp) error, // before or after
+	oldSpecific func(bhpData mdlutil.BatchHookPointData) error, // before or after
 ) error {
-	oldBatchCargo := models.BatchHookCargo{Payload: data.Cargo.Payload}
-	bhpData := models.BatchHookPointData{Ms: data.Ms, DB: data.DB, Who: ep.Who,
+	oldBatchCargo := mdlutil.BatchHookCargo{Payload: data.Cargo.Payload}
+	bhpData := mdlutil.BatchHookPointData{Ms: data.Ms, DB: data.DB, Who: ep.Who,
 		TypeString: ep.TypeString, Roles: data.Roles, URLParams: ep.URLParams, Cargo: &oldBatchCargo}
 
-	var op models.CRUPDOp
+	var op mdlutil.CRUPDOp
 	switch ep.Op {
 	case rest.OpRead:
-		op = models.CRUPDOpRead
+		op = mdlutil.CRUPDOpRead
 	case rest.OpCreate:
-		op = models.CRUPDOpCreate
+		op = mdlutil.CRUPDOpCreate
 	case rest.OpUpdate:
-		op = models.CRUPDOpUpdate
+		op = mdlutil.CRUPDOpUpdate
 	case rest.OpPatch:
-		op = models.CRUPDOpPatch
+		op = mdlutil.CRUPDOpPatch
 	case rest.OpDelete:
-		op = models.CRUPDOpDelete
+		op = mdlutil.CRUPDOpDelete
 	}
 
 	// After CUPD hook
@@ -63,25 +64,25 @@ func callOldBatch(
 func callOldSingle(
 	data *hook.Data,
 	ep *hook.EndPoint,
-	oldGeneric func(hpdata models.HookPointData, op models.CRUPDOp) error,
+	oldGeneric func(hpdata mdlutil.HookPointData, op mdlutil.CRUPDOp) error,
 	oldSpecific *string, // before or after
 ) error {
-	oldSingleCargo := models.ModelCargo{Payload: data.Cargo.Payload}
-	hpdata := models.HookPointData{DB: data.DB, Who: ep.Who, TypeString: ep.TypeString,
+	oldSingleCargo := mdlutil.ModelCargo{Payload: data.Cargo.Payload}
+	hpdata := mdlutil.HookPointData{DB: data.DB, Who: ep.Who, TypeString: ep.TypeString,
 		URLParams: ep.URLParams, Role: &data.Roles[0], Cargo: &oldSingleCargo}
 
-	var op models.CRUPDOp
+	var op mdlutil.CRUPDOp
 	switch ep.Op {
 	case rest.OpRead:
-		op = models.CRUPDOpRead
+		op = mdlutil.CRUPDOpRead
 	case rest.OpCreate:
-		op = models.CRUPDOpCreate
+		op = mdlutil.CRUPDOpCreate
 	case rest.OpUpdate:
-		op = models.CRUPDOpUpdate
+		op = mdlutil.CRUPDOpUpdate
 	case rest.OpPatch:
-		op = models.CRUPDOpPatch
+		op = mdlutil.CRUPDOpPatch
 	case rest.OpDelete:
-		op = models.CRUPDOpDelete
+		op = mdlutil.CRUPDOpDelete
 	}
 
 	// Before CRUPD hook
@@ -112,17 +113,17 @@ func callOldSingle(
 type batchOpJobV1 struct {
 	serv service.IServiceV1
 	// db           *gorm.DB
-	// who          models.UserIDFetchable
+	// who          mdlutil.UserIDFetchable
 	// typeString   string
-	oldmodelObjs []models.IModel // use for update (need to load and override for pegged fields)
-	modelObjs    []models.IModel // current field value from the user if update, or from the loaded field if delete
+	oldmodelObjs []mdl.IModel // use for update (need to load and override for pegged fields)
+	modelObjs    []mdl.IModel // current field value from the user if update, or from the loaded field if delete
 	// cargo        *hook.Cargo
 
-	// crupdOp      models.CRUPDOp
+	// crupdOp      mdlutil.CRUPDOp
 	// options      map[urlparam.Param]interface{}
 
-	oldBefore func(bhpData models.BatchHookPointData) error
-	oldAfter  func(bhpData models.BatchHookPointData) error
+	oldBefore func(bhpData mdlutil.BatchHookPointData) error
+	oldAfter  func(bhpData mdlutil.BatchHookPointData) error
 
 	fetcher *hfetcher.HandlerFetcher
 	data    *hook.Data
@@ -130,12 +131,12 @@ type batchOpJobV1 struct {
 }
 
 func batchOpCoreV1(job batchOpJobV1,
-	taskFunc func(db *gorm.DB, who models.UserIDFetchable, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObj models.IModel) (models.IModel, error),
+	taskFunc func(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, modelObj mdl.IModel, id *datatype.UUID, oldModelObj mdl.IModel) (mdl.IModel, error),
 ) (*MapperRet, *webrender.RetError) {
 	modelObjs, oldmodelObjs, oldBefore, oldAfter := job.modelObjs, job.oldmodelObjs, job.oldBefore, job.oldAfter
 	fetcher, data, ep := job.fetcher, job.data, job.ep
 
-	ms := make([]models.IModel, len(modelObjs))
+	ms := make([]mdl.IModel, len(modelObjs))
 
 	if data.Cargo == nil {
 		return nil, &webrender.RetError{Error: fmt.Errorf("cargo shouldn't be nil")}
@@ -160,7 +161,7 @@ func batchOpCoreV1(job batchOpJobV1,
 		id := modelObj.GetID()
 
 		// m, err := updateOneCore(serv, db, oid, scope, typeString, modelObj, id)
-		var m models.IModel
+		var m mdl.IModel
 		var err error
 		if oldmodelObjs == nil {
 			m, err = taskFunc(data.DB, ep.Who, ep.TypeString, modelObj, id, nil)
@@ -196,11 +197,11 @@ func batchOpCoreV1(job batchOpJobV1,
 type opJobV1 struct {
 	serv service.IServiceV1
 	// db          *gorm.DB
-	// who         models.UserIDFetchable
+	// who         mdlutil.UserIDFetchable
 	// typeString  string
-	// crupdOp     models.CRUPDOp
-	oldModelObj models.IModel // use for update (need to load and override for pegged fields)
-	modelObj    models.IModel // current field value from the user if update, or from the loaded field if delete
+	// crupdOp     mdlutil.CRUPDOp
+	oldModelObj mdl.IModel // use for update (need to load and override for pegged fields)
+	modelObj    mdl.IModel // current field value from the user if update, or from the loaded field if delete
 	// cargo       *hook.Cargo // This only is used because we may have an even earlier hookpoint for PatchApply
 	// options     map[urlparam.Param]interface{}
 
@@ -216,7 +217,7 @@ type opJobV1 struct {
 
 func opCoreV1(
 	job opJobV1,
-	taskFun func(db *gorm.DB, who models.UserIDFetchable, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObj models.IModel) (models.IModel, error),
+	taskFun func(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, modelObj mdl.IModel, id *datatype.UUID, oldModelObj mdl.IModel) (mdl.IModel, error),
 ) (*MapperRet, *webrender.RetError) {
 	oldModelObj, modelObj, beforeFuncName, afterFuncName := job.oldModelObj, job.modelObj, job.beforeFuncName, job.afterFuncName
 	fetcher, data, ep := job.fetcher, job.data, job.ep
@@ -227,7 +228,7 @@ func opCoreV1(
 
 	// Deprecated
 	if !fetcher.HasAttemptRegisteringHandler() { // deprecated, only try to call when no hook exists
-		if m, ok := data.Ms[0].(models.IBeforeCUPD); ok {
+		if m, ok := data.Ms[0].(mdlutil.IBeforeCUPD); ok {
 			if err := callOldSingle(data, ep, m.BeforeCUPDDB, beforeFuncName); err != nil {
 				return nil, &webrender.RetError{Error: err}
 			}
@@ -253,7 +254,7 @@ func opCoreV1(
 
 	// Deprecated
 	if !fetcher.HasAttemptRegisteringHandler() { // deprecated, only try to call when no controlelr exists
-		if m, ok := data.Ms[0].(models.IAfterCRUPD); ok {
+		if m, ok := data.Ms[0].(mdlutil.IAfterCRUPD); ok {
 			if err := callOldSingle(data, ep, m.AfterCRUPDDB, afterFuncName); err != nil {
 				return nil, &webrender.RetError{Error: err}
 			}
@@ -269,7 +270,7 @@ func opCoreV1(
 	}
 
 	return &MapperRet{
-		Ms:      []models.IModel{modelObjReloaded},
+		Ms:      []mdl.IModel{modelObjReloaded},
 		Fetcher: fetcher,
 	}, nil
 }
@@ -279,17 +280,17 @@ func opCoreV1(
 type batchOpJobV2 struct {
 	serv service.IServiceV2
 	// db           *gorm.DB
-	// who          models.UserIDFetchable
+	// who          mdlutil.UserIDFetchable
 	// typeString   string
-	oldmodelObjs []models.IModel // use for update (need to load and override for pegged fields)
-	modelObjs    []models.IModel // current field value from the user if update, or from the loaded field if delete
+	oldmodelObjs []mdl.IModel // use for update (need to load and override for pegged fields)
+	modelObjs    []mdl.IModel // current field value from the user if update, or from the loaded field if delete
 	// cargo        *hook.Cargo
 
-	// crupdOp      models.CRUPDOp
+	// crupdOp      mdlutil.CRUPDOp
 	// options      map[urlparam.Param]interface{}
 
-	oldBefore func(bhpData models.BatchHookPointData) error
-	oldAfter  func(bhpData models.BatchHookPointData) error
+	oldBefore func(bhpData mdlutil.BatchHookPointData) error
+	oldAfter  func(bhpData mdlutil.BatchHookPointData) error
 
 	fetcher *hfetcher.HandlerFetcher
 	data    *hook.Data
@@ -297,12 +298,12 @@ type batchOpJobV2 struct {
 }
 
 func batchOpCoreV2(job batchOpJobV2,
-	taskFunc func(db *gorm.DB, who models.UserIDFetchable, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObj models.IModel) (models.IModel, error),
+	taskFunc func(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, modelObj mdl.IModel, id *datatype.UUID, oldModelObj mdl.IModel) (mdl.IModel, error),
 ) (*MapperRet, *webrender.RetError) {
 	modelObjs, oldmodelObjs, oldBefore, oldAfter := job.modelObjs, job.oldmodelObjs, job.oldBefore, job.oldAfter
 	fetcher, data, ep := job.fetcher, job.data, job.ep
 
-	ms := make([]models.IModel, len(modelObjs))
+	ms := make([]mdl.IModel, len(modelObjs))
 
 	if data.Cargo == nil {
 		return nil, &webrender.RetError{Error: fmt.Errorf("cargo shouldn't be nil")}
@@ -327,7 +328,7 @@ func batchOpCoreV2(job batchOpJobV2,
 		id := modelObj.GetID()
 
 		// m, err := updateOneCore(serv, db, oid, scope, typeString, modelObj, id)
-		var m models.IModel
+		var m mdl.IModel
 		var err error
 		if oldmodelObjs == nil {
 			m, err = taskFunc(data.DB, ep.Who, ep.TypeString, modelObj, id, nil)
@@ -363,11 +364,11 @@ func batchOpCoreV2(job batchOpJobV2,
 type opJobV2 struct {
 	serv service.IServiceV2
 	// db          *gorm.DB
-	// who         models.UserIDFetchable
+	// who         mdlutil.UserIDFetchable
 	// typeString  string
-	// crupdOp     models.CRUPDOp
-	oldModelObj models.IModel // use for update (need to load and override for pegged fields)
-	modelObj    models.IModel // current field value from the user if update, or from the loaded field if delete
+	// crupdOp     mdlutil.CRUPDOp
+	oldModelObj mdl.IModel // use for update (need to load and override for pegged fields)
+	modelObj    mdl.IModel // current field value from the user if update, or from the loaded field if delete
 	// cargo       *hook.Cargo // This only is used because we may have an even earlier hookpoint for PatchApply
 	// options     map[urlparam.Param]interface{}
 
@@ -383,7 +384,7 @@ type opJobV2 struct {
 
 func opCoreV2(
 	job opJobV2,
-	taskFun func(db *gorm.DB, who models.UserIDFetchable, typeString string, modelObj models.IModel, id *datatypes.UUID, oldModelObj models.IModel) (models.IModel, error),
+	taskFun func(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, modelObj mdl.IModel, id *datatype.UUID, oldModelObj mdl.IModel) (mdl.IModel, error),
 ) (*MapperRet, *webrender.RetError) {
 	oldModelObj, modelObj, beforeFuncName, afterFuncName := job.oldModelObj, job.modelObj, job.beforeFuncName, job.afterFuncName
 	fetcher, data, ep := job.fetcher, job.data, job.ep
@@ -394,7 +395,7 @@ func opCoreV2(
 
 	// Deprecated
 	if !fetcher.HasAttemptRegisteringHandler() { // deprecated, only try to call when no hook exists
-		if m, ok := data.Ms[0].(models.IBeforeCUPD); ok {
+		if m, ok := data.Ms[0].(mdlutil.IBeforeCUPD); ok {
 			if err := callOldSingle(data, ep, m.BeforeCUPDDB, beforeFuncName); err != nil {
 				return nil, &webrender.RetError{Error: err}
 			}
@@ -420,7 +421,7 @@ func opCoreV2(
 
 	// Deprecated
 	if !fetcher.HasAttemptRegisteringHandler() { // deprecated, only try to call when no controlelr exists
-		if m, ok := data.Ms[0].(models.IAfterCRUPD); ok {
+		if m, ok := data.Ms[0].(mdlutil.IAfterCRUPD); ok {
 			if err := callOldSingle(data, ep, m.AfterCRUPDDB, afterFuncName); err != nil {
 				return nil, &webrender.RetError{Error: err}
 			}
@@ -436,7 +437,7 @@ func opCoreV2(
 	}
 
 	return &MapperRet{
-		Ms:      []models.IModel{modelObjReloaded},
+		Ms:      []mdl.IModel{modelObjReloaded},
 		Fetcher: fetcher,
 	}, nil
 }

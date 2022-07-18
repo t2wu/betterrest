@@ -4,12 +4,12 @@ import (
 	"net/http"
 
 	"github.com/t2wu/betterrest/libs/settings"
+	"github.com/t2wu/betterrest/mdlutil"
 	"github.com/t2wu/betterrest/registry"
 	"github.com/t2wu/betterrest/routes"
 
 	"github.com/jinzhu/gorm"
 	"github.com/t2wu/betterrest/db"
-	"github.com/t2wu/betterrest/models"
 )
 
 type Config struct {
@@ -35,7 +35,7 @@ func RegDB(dbi *gorm.DB) {
  * RegisterContextFunction
  */
 
-func RegisterContextFunction(f func(r *http.Request) models.UserIDFetchable) {
+func RegisterContextFunction(f func(r *http.Request) mdlutil.UserIDFetchable) {
 	routes.WhoFromContext = f
 }
 

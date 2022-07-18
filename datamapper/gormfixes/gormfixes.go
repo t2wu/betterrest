@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	"github.com/jinzhu/gorm"
-	"github.com/t2wu/betterrest/libs/datatypes"
-	"github.com/t2wu/betterrest/models"
+	"github.com/t2wu/qry/datatype"
+	"github.com/t2wu/qry/mdl"
 )
 
 // Remove strategy
@@ -18,8 +18,8 @@ import (
 // If no pegassoc and pegged under this struct, return.
 
 type modelAndIds struct {
-	modelObj models.IModel
-	ids      []interface{} // to send to Gorm need to be interface not *datatypes.UUID
+	modelObj mdl.IModel
+	ids      []interface{} // to send to Gorm need to be interface not *datatype.UUID
 }
 
 type cargo struct {
@@ -29,7 +29,7 @@ type cargo struct {
 // DeleteModelFixManyToManyAndPeg remove nested field if it has tag \"betterrest="peg"\"
 // Pegassoc is no problem, because we never tried to take care of it
 // If necessary, DB foreign key constraint will do the job
-func DeleteModelFixManyToManyAndPeg(db *gorm.DB, modelObj models.IModel) error {
+func DeleteModelFixManyToManyAndPeg(db *gorm.DB, modelObj mdl.IModel) error {
 	if err := removeManyToManyAssociationTableElem(db, modelObj); err != nil {
 		return err
 	}
@@ -63,9 +63,9 @@ func markForDelete(db *gorm.DB, v reflect.Value, car cargo) error {
 		if t == "peg" {
 			switch v.Field(i).Kind() {
 			case reflect.Struct:
-				m := v.Field(i).Addr().Interface().(models.IModel)
+				m := v.Field(i).Addr().Interface().(mdl.IModel)
 				if m.GetID() != nil { // could be embedded struct that never get initialiezd
-					fieldTableName := models.GetTableNameFromIModel(m)
+					fieldTableName := mdl.GetTableNameFromIModel(m)
 					if _, ok := car.peg[fieldTableName]; ok {
 						mids := car.peg[fieldTableName]
 						mids.ids = append(mids.ids, m.GetID())
@@ -83,16 +83,16 @@ func markForDelete(db *gorm.DB, v reflect.Value, car cargo) error {
 				}
 			case reflect.Slice:
 				typ := v.Type().Field(i).Type.Elem()
-				m, _ := reflect.New(typ).Interface().(models.IModel)
-				fieldTableName := models.GetTableNameFromIModel(m)
+				m, _ := reflect.New(typ).Interface().(mdl.IModel)
+				fieldTableName := mdl.GetTableNameFromIModel(m)
 				for j := 0; j < v.Field(i).Len(); j++ {
 					if _, ok := car.peg[fieldTableName]; ok {
 						mids := car.peg[fieldTableName]
-						mids.ids = append(mids.ids, v.Field(i).Index(j).Addr().Interface().(models.IModel).GetID())
+						mids.ids = append(mids.ids, v.Field(i).Index(j).Addr().Interface().(mdl.IModel).GetID())
 						car.peg[fieldTableName] = mids
 					} else {
 						arr := make([]interface{}, 1)
-						arr[0] = v.Field(i).Index(j).Addr().Interface().(models.IModel).GetID()
+						arr[0] = v.Field(i).Index(j).Addr().Interface().(mdl.IModel).GetID()
 						car.peg[fieldTableName] = modelAndIds{modelObj: m, ids: arr}
 					}
 
@@ -105,9 +105,9 @@ func markForDelete(db *gorm.DB, v reflect.Value, car cargo) error {
 				// Need to dereference and get the struct id before traversing in
 				if !isNil(v.Field(i)) && !isNil(v.Field(i).Elem()) &&
 					v.Field(i).IsValid() && v.Field(i).Elem().IsValid() {
-					imodel := v.Field(i).Interface().(models.IModel)
-					fieldTableName := models.GetTableNameFromIModel(imodel)
-					id := v.Field(i).Interface().(models.IModel).GetID()
+					imodel := v.Field(i).Interface().(mdl.IModel)
+					fieldTableName := mdl.GetTableNameFromIModel(imodel)
+					id := v.Field(i).Interface().(mdl.IModel).GetID()
 
 					if _, ok := car.peg[fieldTableName]; ok {
 						mids := car.peg[fieldTableName]
@@ -127,15 +127,15 @@ func markForDelete(db *gorm.DB, v reflect.Value, car cargo) error {
 		} else if strings.HasPrefix(t, "pegassoc-manytomany") {
 			// We're deleting. And now we have a many to many in here
 			// Remove the many to many
-			var m models.IModel
+			var m mdl.IModel
 			switch v.Field(i).Kind() {
 			case reflect.Struct:
-				m = v.Field(i).Addr().Interface().(models.IModel)
+				m = v.Field(i).Addr().Interface().(mdl.IModel)
 			case reflect.Slice:
 				typ := v.Type().Field(i).Type.Elem()
-				m = reflect.New(typ).Interface().(models.IModel)
+				m = reflect.New(typ).Interface().(mdl.IModel)
 			case reflect.Ptr:
-				m = v.Elem().Interface().(models.IModel)
+				m = v.Elem().Interface().(mdl.IModel)
 			}
 			if err := removeManyToManyAssociationTableElem(db, m); err != nil {
 				return err
@@ -150,7 +150,7 @@ func isNil(a interface{}) bool {
 	return a == nil || reflect.ValueOf(a).IsNil()
 }
 
-func removeManyToManyAssociationTableElem(db *gorm.DB, modelObj models.IModel) error {
+func removeManyToManyAssociationTableElem(db *gorm.DB, modelObj mdl.IModel) error {
 	// many to many, here we remove the entry in the actual immediate table
 	// because that's actually the link table. Thought we don't delete the
 	// Model table itself
@@ -168,9 +168,9 @@ func removeManyToManyAssociationTableElem(db *gorm.DB, modelObj models.IModel) e
 
 			linkTableName := strings.Split(tag, ":")[1]
 			typ := v.Type().Field(i).Type.Elem() // Get the type of the element of slice
-			m2, _ := reflect.New(typ).Interface().(models.IModel)
-			fieldTableName := models.GetTableNameFromIModel(m2)
-			selfTableName := models.GetTableNameFromIModel(modelObj)
+			m2, _ := reflect.New(typ).Interface().(mdl.IModel)
+			fieldTableName := mdl.GetTableNameFromIModel(m2)
+			selfTableName := mdl.GetTableNameFromIModel(modelObj)
 
 			fieldVal := v.Field(i)
 			if fieldVal.Len() >= 1 {
@@ -180,7 +180,7 @@ func removeManyToManyAssociationTableElem(db *gorm.DB, modelObj models.IModel) e
 				allIds := make([]interface{}, 0, 10)
 				allIds = append(allIds, modelObj.GetID().String())
 				for j := 0; j < fieldVal.Len(); j++ {
-					idToDel := fieldVal.Index(j).FieldByName("ID").Interface().(*datatypes.UUID)
+					idToDel := fieldVal.Index(j).FieldByName("ID").Interface().(*datatype.UUID)
 					allIds = append(allIds, idToDel.String())
 				}
 
@@ -206,7 +206,7 @@ func pegPegassocOrPegManyToMany(tag reflect.StructTag) string {
 }
 
 // CreatePeggedAssocFields :-
-func CreatePeggedAssocFields(db *gorm.DB, modelObj models.IModel) (err error) {
+func CreatePeggedAssocFields(db *gorm.DB, modelObj mdl.IModel) (err error) {
 	v := reflect.Indirect(reflect.ValueOf(modelObj))
 	for i := 0; i < v.NumField(); i++ {
 		tag := v.Type().Field(i).Tag.Get("betterrest")
@@ -217,7 +217,7 @@ func CreatePeggedAssocFields(db *gorm.DB, modelObj models.IModel) (err error) {
 			case reflect.Slice:
 				// Loop through the slice
 				for j := 0; j < fieldVal.Len(); j++ {
-					// nestedModelID := fieldVal.Index(j).FieldByName("ID").Interface().(*datatypes.UUID)
+					// nestedModelID := fieldVal.Index(j).FieldByName("ID").Interface().(*datatype.UUID)
 					nestedModel := fieldVal.Index(j).Addr().Interface()
 
 					// Load the full model
@@ -225,7 +225,7 @@ func CreatePeggedAssocFields(db *gorm.DB, modelObj models.IModel) (err error) {
 						return err
 					}
 
-					tableName := models.GetTableNameFromIModel(modelObj)
+					tableName := mdl.GetTableNameFromIModel(modelObj)
 					correspondingColumnName := tableName + "_id"
 
 					db.Model(nestedModel).Update(correspondingColumnName, modelObj.GetID())
@@ -246,7 +246,7 @@ func CreatePeggedAssocFields(db *gorm.DB, modelObj models.IModel) (err error) {
 
 // UpdatePeggedFields check if stuff in the pegged array
 // is actually
-func UpdatePeggedFields(db *gorm.DB, oldModelObj models.IModel, newModelObj models.IModel) (err error) {
+func UpdatePeggedFields(db *gorm.DB, oldModelObj mdl.IModel, newModelObj mdl.IModel) (err error) {
 	// Delete nested field
 	// Not yet support two-level of nested field
 
@@ -265,8 +265,8 @@ func UpdatePeggedFields(db *gorm.DB, oldModelObj models.IModel, newModelObj mode
 			fieldVal1 := v1.Field(i)
 			fieldVal2 := v2.Field(i)
 
-			set1 := datatypes.NewSetString()
-			set2 := datatypes.NewSetString()
+			set1 := datatype.NewSetString()
+			set2 := datatype.NewSetString()
 			m := make(map[string]interface{})
 
 			switch fieldVal1.Kind() {
@@ -274,14 +274,14 @@ func UpdatePeggedFields(db *gorm.DB, oldModelObj models.IModel, newModelObj mode
 				// Loop through the slice
 				for j := 0; j < fieldVal1.Len(); j++ {
 					// For example, each fieldVal1.Index(j) is a model object
-					id := fieldVal1.Index(j).FieldByName("ID").Interface().(*datatypes.UUID)
+					id := fieldVal1.Index(j).FieldByName("ID").Interface().(*datatype.UUID)
 					set1.Add(id.String())
 
 					m[id.String()] = fieldVal1.Index(j).Addr().Interface() // re-wrap a dock
 				}
 
 				for j := 0; j < fieldVal2.Len(); j++ {
-					id := fieldVal2.Index(j).FieldByName("ID").Interface().(*datatypes.UUID)
+					id := fieldVal2.Index(j).FieldByName("ID").Interface().(*datatype.UUID)
 					if id != nil {
 						// ID doesn't exist? ignore, it's a new entry without ID
 						set2.Add(id.String())
@@ -304,7 +304,7 @@ func UpdatePeggedFields(db *gorm.DB, oldModelObj models.IModel, newModelObj mode
 					}
 					// Similar to directly deleting the model,
 					// just deleting it won't work, need to traverse down the chain
-					if err := DeleteModelFixManyToManyAndPeg(db, modelToDel.(models.IModel)); err != nil {
+					if err := DeleteModelFixManyToManyAndPeg(db, modelToDel.(mdl.IModel)); err != nil {
 						return err
 					}
 				} else if tag == "pegassoc" {
@@ -325,12 +325,12 @@ func UpdatePeggedFields(db *gorm.DB, oldModelObj models.IModel, newModelObj mode
 
 					inter := v1.Field(i).Interface()
 					typ := reflect.TypeOf(inter).Elem() // Get the type of the element of slice
-					m2, _ := reflect.New(typ).Interface().(models.IModel)
+					m2, _ := reflect.New(typ).Interface().(mdl.IModel)
 
-					fieldTableName := models.GetTableNameFromIModel(m2)
+					fieldTableName := mdl.GetTableNameFromIModel(m2)
 					fieldIDName := fieldTableName + "_id"
 
-					selfTableName := models.GetTableNameFromIModel(oldModelObj)
+					selfTableName := mdl.GetTableNameFromIModel(oldModelObj)
 					selfID := selfTableName + "_id"
 
 					// The following line seems to puke on a many-to-many, I hope I don't need it anywhere
@@ -340,7 +340,7 @@ func UpdatePeggedFields(db *gorm.DB, oldModelObj models.IModel, newModelObj mode
 
 					stmt := fmt.Sprintf("DELETE FROM \"%s\" WHERE \"%s\" = ? AND \"%s\" = ?",
 						linkTableName, fieldIDName, selfID)
-					err := db.Exec(stmt, idToDel.(*datatypes.UUID).String(), oldModelObj.GetID().String()).Error
+					err := db.Exec(stmt, idToDel.(*datatype.UUID).String(), oldModelObj.GetID().String()).Error
 					if err != nil {
 						return err
 					}
@@ -361,7 +361,7 @@ func UpdatePeggedFields(db *gorm.DB, oldModelObj models.IModel, newModelObj mode
 					// }
 				} else if tag == "pegassoc" {
 					columnName := v1.Type().Field(i).Name
-					// id, _ := reflect.ValueOf(modelToAdd).Elem().FieldByName(("ID")).Interface().(*datatypes.UUID)
+					// id, _ := reflect.ValueOf(modelToAdd).Elem().FieldByName(("ID")).Interface().(*datatype.UUID)
 
 					// Load the full model
 					if err = db.First(modelToAdd).Error; err != nil {
@@ -383,7 +383,7 @@ func UpdatePeggedFields(db *gorm.DB, oldModelObj models.IModel, newModelObj mode
 }
 
 // FixManyToMany :-
-func FixManyToMany(correctModel models.IModel, incorrectModel models.IModel) (err error) {
+func FixManyToMany(correctModel mdl.IModel, incorrectModel mdl.IModel) (err error) {
 	// Copy many to many from the correct to the incorrect model
 
 	v1 := reflect.Indirect(reflect.ValueOf(correctModel))
@@ -401,14 +401,14 @@ func FixManyToMany(correctModel models.IModel, incorrectModel models.IModel) (er
 }
 
 // LoadManyToManyBecauseGormFailsWithID :-
-func LoadManyToManyBecauseGormFailsWithID(db *gorm.DB, modelObj models.IModel) error {
+func LoadManyToManyBecauseGormFailsWithID(db *gorm.DB, modelObj mdl.IModel) error {
 	v1 := reflect.Indirect(reflect.ValueOf(modelObj))
 
 	for i := 0; i < v1.NumField(); i++ {
 		tag := v1.Type().Field(i).Tag.Get("betterrest")
 
 		if strings.HasPrefix(tag, "pegassoc-manytomany") {
-			tableName := models.GetTableNameFromIModel(reflect.ValueOf(modelObj).Interface().(models.IModel))
+			tableName := mdl.GetTableNameFromIModel(reflect.ValueOf(modelObj).Interface().(mdl.IModel))
 
 			linkTableName := strings.Split(tag, ":")[1]
 
@@ -416,8 +416,8 @@ func LoadManyToManyBecauseGormFailsWithID(db *gorm.DB, modelObj models.IModel) e
 			inter := v1.Field(i).Interface()
 			typ := reflect.TypeOf(inter).Elem() // Get the type of the element of slice
 
-			m2, _ := reflect.New(typ).Interface().(models.IModel)
-			fieldTableName := models.GetTableNameFromIModel(m2)
+			m2, _ := reflect.New(typ).Interface().(mdl.IModel)
+			fieldTableName := mdl.GetTableNameFromIModel(m2)
 
 			sliceOfField := reflect.New(reflect.TypeOf(inter))
 

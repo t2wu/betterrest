@@ -1,4 +1,4 @@
-package models
+package mdlutil
 
 import (
 	"encoding/json"
@@ -7,130 +7,17 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/t2wu/betterrest/libs/datatypes"
+	"github.com/jinzhu/gorm"
+	"github.com/t2wu/betterrest/hook/userrole"
 	"github.com/t2wu/betterrest/libs/urlparam"
 	"github.com/t2wu/betterrest/libs/utils/jsontrans"
-
-	"github.com/asaskevich/govalidator"
-	"github.com/jinzhu/gorm"
+	"github.com/t2wu/qry/datatype"
+	"github.com/t2wu/qry/mdl"
 )
-
-// UserRole type with enum
-type UserRole int
-
-const (
-	// Negatives are not stored in DB
-
-	// UserRoleAny not for value in db, but for permission where any is fine (link table)
-	UserRoleAny UserRole = -2
-
-	// UserRoleInvalid is invalid for this resource
-	UserRoleInvalid UserRole = -1
-
-	// UserRoleAdmin is admin UserRole
-	UserRoleAdmin UserRole = 0
-
-	// UserRoleGuest is guest UserRole (screw go-lint man)
-	UserRoleGuest UserRole = 1
-
-	// UserRolePublic to all (global object)
-	UserRolePublic UserRole = 2
-
-	// UserRoleTableBased is like admin but permission is subject to table control
-	// Cannot delete site or alter permissions
-	UserRoleTableBased UserRole = 3
-)
-
-// BaseModel is the base class domain model which has standard ID
-type BaseModel struct {
-	// For MySQL
-	// ID        *datatypes.UUID `gorm:"type:binary(16);primary_key;" json:"id"`
-
-	// For Postgres
-	ID        *datatypes.UUID `gorm:"type:uuid;primary_key;" json:"id"`
-	CreatedAt time.Time       `sql:"index" json:"createdAt"`
-	UpdatedAt time.Time       `json:"updatedAt"`
-	DeletedAt *time.Time      `sql:"index" json:"deletedAt"`
-
-	// Ownership with the most previledged permission can delete the device and see every field.
-	// So there can be an ownership number, say 3, and that maps to a permission type
-	// (within the ownership table), say "admin ownership" (int 0), and whoever is a member of ownership
-	// 3 thus has the admin priviledge
-	// The "guest" of model "device" and "guest" of model of "scene" is vastly different, because
-	// the fields are different, and specific field permission is based on priviledge -> field mapping
-	// defined when getting permission()
-	// Ownership []int64
-}
-
-// GetID Get the ID field of the model (useful when using interface)
-func (b *BaseModel) GetID() *datatypes.UUID {
-	return b.ID
-}
-
-// SetID Set the ID field of the model (useful when using interface)
-func (b *BaseModel) SetID(id *datatypes.UUID) {
-	b.ID = id
-}
-
-// GetCreatedAt gets the time stamp the record is created
-func (b *BaseModel) GetCreatedAt() *time.Time {
-	return &b.CreatedAt
-}
-
-// GetUpdatedAt gets the time stamp the record is updated
-func (b *BaseModel) GetUpdatedAt() *time.Time {
-	return &b.UpdatedAt
-}
-
-// GetUpdatedAt gets the time stamp the record is deleted (which we don't use)
-func (b *BaseModel) GetDeletedAt() *time.Time {
-	return b.DeletedAt
-}
-
-// BeforeCreate sets a UUID if no ID is set
-// (this is Gorm's hookpoint)
-func (b *BaseModel) BeforeCreate(scope *gorm.Scope) error {
-	if b.ID == nil {
-		uuid := datatypes.NewUUID()
-		return scope.SetColumn("ID", uuid)
-	}
-
-	return nil
-}
-
-// Validate validates the model
-func (b *BaseModel) Validate() error {
-	if ok, err := govalidator.ValidateStruct(b); !ok && err != nil {
-		return err
-	}
-	return nil
-}
-
-// ModelHasOwnership is the standard domain model to embed when creating
-// an ownership type. If you need a customized linking table,
-// Embed a BaseModel instead, and define a gorm "PRELOAD:false", json "-",
-// and betterrest:"ownership"
-type ModelHasOwnership struct {
-	BaseModel
-
-	Ownerships []OwnershipModelWithIDBase `gorm:"PRELOAD:false" json:"-" betterrest:"ownership"`
-}
-
-// IModel is the interface for all domain models
-type IModel interface {
-	// Permissions(role UserRole, scope *string) jsontrans.JSONFields
-
-	// The following two avoids having to use reflection to access ID
-	GetID() *datatypes.UUID
-	SetID(id *datatypes.UUID)
-	GetCreatedAt() *time.Time
-	GetUpdatedAt() *time.Time
-	// GetDeletedAt() // we don't use this one
-}
 
 // JSONIDPatch is the stuff inside "content" for PatchMany operation
 type JSONIDPatch struct {
-	ID    *datatypes.UUID `json:"id"`
+	ID    *datatype.UUID  `json:"id"`
 	Patch json.RawMessage `json:"patch"` // json.RawMessage is actually just typedefed to []byte
 }
 
@@ -186,6 +73,8 @@ type IGuardAPIEntry interface {
 	GuardAPIEntry(who UserIDFetchable, http HTTP) bool
 }
 
+// ------------------------------------------------------------------------------------------
+
 // ModelCargo is payload between hookpoints
 type ModelCargo struct {
 	Payload interface{}
@@ -197,7 +86,7 @@ type BatchHookCargo struct {
 }
 
 type UserIDFetchable interface {
-	GetUserID() *datatypes.UUID
+	GetUserID() *datatype.UUID
 }
 
 // HookPointData is the data send to single model hookpoints (deprecated)
@@ -212,7 +101,7 @@ type HookPointData struct {
 	// Currently not supported in the AfterTransact hookpoint
 	Cargo *ModelCargo
 	// Role of this user in relation to this data, only available during read
-	Role *UserRole
+	Role *userrole.UserRole
 	// URL parameters
 	URLParams map[urlparam.Param]interface{}
 }
@@ -220,7 +109,7 @@ type HookPointData struct {
 // BatchHookPointData is the data send to batch model hookpoints  (deprecated)
 type BatchHookPointData struct {
 	// Ms is the slice of IModels
-	Ms []IModel
+	Ms []mdl.IModel
 	// DB is the DB handle
 	DB *gorm.DB
 	// Who is operating this CRUPD right now
@@ -230,7 +119,7 @@ type BatchHookPointData struct {
 	// Cargo between Before and After hookpoints (not used in AfterRead since there is before read hookpoint.)
 	Cargo *BatchHookCargo
 	// Role of this user in relation to this data, only available during read
-	Roles []UserRole
+	Roles []userrole.UserRole
 	// URL parameters
 	URLParams map[urlparam.Param]interface{}
 }
@@ -312,33 +201,35 @@ type IValidate interface {
 // IHasPermissions is for IModel with a custom permission field to cherry pick json fields
 // default is to return all but the dates
 type IHasPermissions interface {
-	Permissions(role UserRole, who UserIDFetchable) (jsontrans.Permission, jsontrans.JSONFields)
+	Permissions(role userrole.UserRole, who UserIDFetchable) (jsontrans.Permission, jsontrans.JSONFields)
 }
 
 // IHasRenderer is for formatting IModel with a custom function
 // basically do your own custom output
 // If return false, use the default JSON output
-// For batch renderer, register a Render(r UserRole, who models.UserIDFetchable, modelObjs []IModel) bool
+// For batch renderer, register a Render(r UserRole, who modelutil.UserIDFetchable, modelObjs []IModel) bool
 type IHasRenderer interface {
 	Render(c *gin.Context, hpdata *HookPointData, op CRUPDOp) bool
 }
+
+// ------------------------------------------------
 
 // ------------------------------------
 
 // IOwnership is what OwnershipModelBase tables should satisfy.
 // Except OwnershipType, that's for struct which embed OwnershipModelBase
 type IOwnership interface {
-	GetRole() UserRole
-	SetRole(UserRole)
+	GetRole() userrole.UserRole
+	SetRole(userrole.UserRole)
 
-	GetUserID() *datatypes.UUID
-	SetUserID(*datatypes.UUID)
+	GetUserID() *datatype.UUID
+	SetUserID(*datatype.UUID)
 
-	GetModelID() *datatypes.UUID
-	SetModelID(*datatypes.UUID)
+	GetModelID() *datatype.UUID
+	SetModelID(*datatype.UUID)
 
-	GetID() *datatypes.UUID
-	SetID(*datatypes.UUID)
+	GetID() *datatype.UUID
+	SetID(*datatype.UUID)
 
 	// OwnershipType() IOwnership
 }
@@ -346,20 +237,20 @@ type IOwnership interface {
 // OwnershipModelBase has a role. Intended to be embedded
 // by table serving as link from resource to user
 type OwnershipModelBase struct {
-	ID *datatypes.UUID `gorm:"type:uuid;primary_key;" json:"id"`
+	ID *datatype.UUID `gorm:"type:uuid;primary_key;" json:"id"`
 
 	CreatedAt time.Time  `json:"createdAt"`
 	UpdatedAt time.Time  `json:"updatedAt"`
 	DeletedAt *time.Time `sql:"index" json:"deletedAt"`
 
-	Role UserRole `json:"role"` // an int
+	Role userrole.UserRole `json:"role"` // an int
 }
 
 // BeforeCreate sets a UUID if no ID is set
 // (this is Gorm's hookpoint)
 func (o *OwnershipModelBase) BeforeCreate(scope *gorm.Scope) error {
 	if o.ID == nil {
-		uuid := datatypes.NewUUID()
+		uuid := datatype.NewUUID()
 		return scope.SetColumn("ID", uuid)
 	}
 
@@ -367,22 +258,22 @@ func (o *OwnershipModelBase) BeforeCreate(scope *gorm.Scope) error {
 }
 
 // GetRole gets the role field of the model, comforms to IOwnership
-func (o *OwnershipModelBase) GetRole() UserRole {
+func (o *OwnershipModelBase) GetRole() userrole.UserRole {
 	return o.Role
 }
 
 // SetRole sets the role field of the model, comforms to IOwnership
-func (o *OwnershipModelBase) SetRole(r UserRole) {
+func (o *OwnershipModelBase) SetRole(r userrole.UserRole) {
 	o.Role = r
 }
 
 // GetID Get the ID field of the model (useful when using interface)
-func (o *OwnershipModelBase) GetID() *datatypes.UUID {
+func (o *OwnershipModelBase) GetID() *datatype.UUID {
 	return o.ID
 }
 
 // SetID Set the ID field of the model (useful when using interface)
-func (o *OwnershipModelBase) SetID(id *datatypes.UUID) {
+func (o *OwnershipModelBase) SetID(id *datatype.UUID) {
 	o.ID = id
 }
 
@@ -392,41 +283,41 @@ func (o *OwnershipModelBase) SetID(id *datatypes.UUID) {
 type OwnershipModelWithIDBase struct {
 	OwnershipModelBase
 
-	UserID  *datatypes.UUID `gorm:"index" json:"userID"` // I guess the user's table has to be named "User" then.
-	ModelID *datatypes.UUID `gorm:"index" json:"modelID"`
+	UserID  *datatype.UUID `gorm:"index" json:"userID"` // I guess the user's table has to be named "User" then.
+	ModelID *datatype.UUID `gorm:"index" json:"modelID"`
 }
 
 // To comform to IModel, embedding functions don't work
 
 // GetID Get the ID field of the model (useful when using interface)
-func (o *OwnershipModelWithIDBase) GetID() *datatypes.UUID {
+func (o *OwnershipModelWithIDBase) GetID() *datatype.UUID {
 	return o.ID
 }
 
 // SetID Set the ID field of the model (useful when using interface)
-func (o *OwnershipModelWithIDBase) SetID(id *datatypes.UUID) {
+func (o *OwnershipModelWithIDBase) SetID(id *datatype.UUID) {
 	o.ID = id
 }
 
 // GetUserID gets the user id of the model, comforms to IOwnership
-func (o *OwnershipModelWithIDBase) GetUserID() *datatypes.UUID {
+func (o *OwnershipModelWithIDBase) GetUserID() *datatype.UUID {
 	return o.UserID
 	// v := reflect.ValueOf(o)
-	// return reflect.Indirect(v).FieldByName("ID").Interface().(*datatypes.UUID)
+	// return reflect.Indirect(v).FieldByName("ID").Interface().(*datatype.UUID)
 }
 
 // SetUserID sets the user id of the model, comforms to IOwnership
-func (o *OwnershipModelWithIDBase) SetUserID(id *datatypes.UUID) {
+func (o *OwnershipModelWithIDBase) SetUserID(id *datatype.UUID) {
 	o.UserID = id
 }
 
 // SetModelID sets the id of the model, comforms to IOwnership
-func (o *OwnershipModelWithIDBase) SetModelID(id *datatypes.UUID) {
+func (o *OwnershipModelWithIDBase) SetModelID(id *datatype.UUID) {
 	o.ModelID = id
 }
 
 // GetModelID gets the id of the model, comforms to IOwnership
-func (o *OwnershipModelWithIDBase) GetModelID() *datatypes.UUID {
+func (o *OwnershipModelWithIDBase) GetModelID() *datatype.UUID {
 	return o.ModelID
 }
 
@@ -438,13 +329,6 @@ func (b *OwnershipModelWithIDBase) GetCreatedAt() *time.Time {
 // GetUpdatedAt gets the time stamp the record is updated
 func (b *OwnershipModelWithIDBase) GetUpdatedAt() *time.Time {
 	return &b.UpdatedAt
-}
-
-// ---------------
-
-// IHasTableName we know if there is Gorm's defined custom TableName
-type IHasTableName interface {
-	TableName() string
 }
 
 // ----------------
@@ -486,7 +370,7 @@ func GetFieldNameFromModelByTagKey(modelObj interface{}, valueKey string) *strin
 }
 
 // GetFieldValueFromModelByTagKeyBetterRestAndValueKey fetches value of the variable tagged in tag
-func GetFieldValueFromModelByTagKeyBetterRestAndValueKey(modelObj IModel, valueKey string) interface{} {
+func GetFieldValueFromModelByTagKeyBetterRestAndValueKey(modelObj mdl.IModel, valueKey string) interface{} {
 	v := reflect.Indirect(reflect.ValueOf(modelObj))
 	for i := 0; i < v.NumField(); i++ {
 		if tagVal, ok := v.Type().Field(i).Tag.Lookup("betterrest"); ok {
@@ -502,7 +386,7 @@ func GetFieldValueFromModelByTagKeyBetterRestAndValueKey(modelObj IModel, valueK
 }
 
 // GetFieldTypeFromModelByTagKeyBetterRestAndValueKey fetches the datatype of the variable tagged in tag
-func GetFieldTypeFromModelByTagKeyBetterRestAndValueKey(modelObj IModel, valueKey string, recurseIntoEmbedded bool) reflect.Type {
+func GetFieldTypeFromModelByTagKeyBetterRestAndValueKey(modelObj mdl.IModel, valueKey string, recurseIntoEmbedded bool) reflect.Type {
 	v := reflect.Indirect(reflect.ValueOf(modelObj))
 	return getFieldTypeFromModelByTagKeyBetterRestAndValueKeyCore(v, valueKey, recurseIntoEmbedded)
 }

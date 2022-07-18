@@ -6,11 +6,13 @@ import (
 	"io/ioutil"
 	"net/http"
 
-	"github.com/t2wu/betterrest/libs/datatypes"
+	"github.com/t2wu/betterrest/hook/userrole"
 	"github.com/t2wu/betterrest/libs/utils/jsontrans"
 	"github.com/t2wu/betterrest/libs/webrender"
-	"github.com/t2wu/betterrest/models"
+	"github.com/t2wu/betterrest/mdlutil"
 	"github.com/t2wu/betterrest/registry"
+	"github.com/t2wu/qry/datatype"
+	"github.com/t2wu/qry/mdl"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-chi/render"
@@ -22,12 +24,12 @@ type JSONBodyWithContent struct {
 	Content []json.RawMessage
 }
 
-// ModelOrModelsFromJSONBody parses JSON body into array of models
+// ModelOrModelsFromJSONBody parses JSON body into array of mdl
 // It take care where the case when it is not even an array and there is a "content" in there
-func ModelOrModelsFromJSONBody(r *http.Request, typeString string, who models.UserIDFetchable) ([]models.IModel, *bool, render.Renderer) {
+func ModelOrModelsFromJSONBody(r *http.Request, typeString string, who mdlutil.UserIDFetchable) ([]mdl.IModel, *bool, render.Renderer) {
 	defer r.Body.Close()
 	var jsn []byte
-	var modelObjs []models.IModel
+	var modelObjs []mdl.IModel
 	var err error
 	if jsn, err = ioutil.ReadAll(r.Body); err != nil {
 		return nil, nil, webrender.NewErrReadingBody(err)
@@ -39,8 +41,8 @@ func ModelOrModelsFromJSONBody(r *http.Request, typeString string, who models.Us
 
 	needTransform := false
 	var fields jsontrans.JSONFields
-	if modelObjPerm, ok := modelObj.(models.IHasPermissions); ok {
-		_, fields = modelObjPerm.Permissions(models.UserRoleAdmin, who)
+	if modelObjPerm, ok := modelObj.(mdlutil.IHasPermissions); ok {
+		_, fields = modelObjPerm.Permissions(userrole.UserRoleAdmin, who)
 		needTransform = jsontrans.ContainsIFieldTransformModelToJSON(&fields)
 	}
 
@@ -72,13 +74,13 @@ func ModelOrModelsFromJSONBody(r *http.Request, typeString string, who models.Us
 			return nil, nil, webrender.NewErrParsingJSON(err)
 		}
 
-		if err := models.ValidateModel(modelObj); err != nil {
+		if err := mdl.ValidateModel(modelObj); err != nil {
 			return nil, nil, webrender.NewErrValidation(err)
 		}
 
-		if v, ok := modelObj.(models.IValidate); ok {
+		if v, ok := modelObj.(mdlutil.IValidate); ok {
 			who := WhoFromContext(r)
-			http := models.HTTP{Endpoint: r.URL.Path, Op: models.HTTPMethodToCRUDOp(r.Method)}
+			http := mdlutil.HTTP{Endpoint: r.URL.Path, Op: mdlutil.HTTPMethodToCRUDOp(r.Method)}
 			if err := v.Validate(who, http); err != nil {
 				return nil, nil, webrender.NewErrValidation(err)
 			}
@@ -112,12 +114,12 @@ func ModelOrModelsFromJSONBody(r *http.Request, typeString string, who models.Us
 			return nil, nil, webrender.NewErrParsingJSON(err)
 		}
 
-		if err := models.ValidateModel(modelObj); err != nil {
+		if err := mdl.ValidateModel(modelObj); err != nil {
 			return nil, nil, webrender.NewErrValidation(err)
 		}
 
-		if v, ok := modelObj.(models.IValidate); ok {
-			http := models.HTTP{Endpoint: r.URL.Path, Op: models.HTTPMethodToCRUDOp(r.Method)}
+		if v, ok := modelObj.(mdlutil.IValidate); ok {
+			http := mdlutil.HTTP{Endpoint: r.URL.Path, Op: mdlutil.HTTPMethodToCRUDOp(r.Method)}
 			if err := v.Validate(who, http); err != nil {
 				return nil, nil, webrender.NewErrValidation(err)
 			}
@@ -130,11 +132,11 @@ func ModelOrModelsFromJSONBody(r *http.Request, typeString string, who models.Us
 	return modelObjs, &isBatch, nil
 }
 
-// ModelsFromJSONBody parses JSON body into array of models
-func ModelsFromJSONBody(r *http.Request, typeString string, who models.UserIDFetchable) ([]models.IModel, render.Renderer) {
+// ModelsFromJSONBody parses JSON body into array of mdl
+func ModelsFromJSONBody(r *http.Request, typeString string, who mdlutil.UserIDFetchable) ([]mdl.IModel, render.Renderer) {
 	defer r.Body.Close()
 	var jsn []byte
-	var modelObjs []models.IModel
+	var modelObjs []mdl.IModel
 	var err error
 	if jsn, err = ioutil.ReadAll(r.Body); err != nil {
 		return nil, webrender.NewErrReadingBody(err)
@@ -154,8 +156,8 @@ func ModelsFromJSONBody(r *http.Request, typeString string, who models.UserIDFet
 	modelTest := registry.NewFromTypeString(typeString)
 	needTransform := false
 	var fields jsontrans.JSONFields
-	if modelObjPerm, ok := modelTest.(models.IHasPermissions); ok {
-		_, fields = modelObjPerm.Permissions(models.UserRoleAdmin, who)
+	if modelObjPerm, ok := modelTest.(mdlutil.IHasPermissions); ok {
+		_, fields = modelObjPerm.Permissions(userrole.UserRoleAdmin, who)
 		needTransform = jsontrans.ContainsIFieldTransformModelToJSON(&fields)
 	}
 
@@ -181,13 +183,13 @@ func ModelsFromJSONBody(r *http.Request, typeString string, who models.UserIDFet
 			return nil, webrender.NewErrParsingJSON(err)
 		}
 
-		if err := models.ValidateModel(modelObj); err != nil {
+		if err := mdl.ValidateModel(modelObj); err != nil {
 			return nil, webrender.NewErrValidation(err)
 		}
 
-		if v, ok := modelObj.(models.IValidate); ok {
+		if v, ok := modelObj.(mdlutil.IValidate); ok {
 			who := WhoFromContext(r)
-			http := models.HTTP{Endpoint: r.URL.Path, Op: models.HTTPMethodToCRUDOp(r.Method)}
+			http := mdlutil.HTTP{Endpoint: r.URL.Path, Op: mdlutil.HTTPMethodToCRUDOp(r.Method)}
 			if err := v.Validate(who, http); err != nil {
 				return nil, webrender.NewErrValidation(err)
 			}
@@ -203,7 +205,7 @@ func ModelsFromJSONBody(r *http.Request, typeString string, who models.UserIDFet
 // FIXME:
 // Validation should not be done here because empty field does not pass validation,
 // but sometimes we need empty fields such as patch
-func ModelFromJSONBody(r *http.Request, typeString string, who models.UserIDFetchable) (models.IModel, render.Renderer) {
+func ModelFromJSONBody(r *http.Request, typeString string, who mdlutil.UserIDFetchable) (mdl.IModel, render.Renderer) {
 	defer r.Body.Close()
 	var jsn []byte
 	var err error
@@ -214,9 +216,9 @@ func ModelFromJSONBody(r *http.Request, typeString string, who models.UserIDFetc
 
 	modelObj := registry.NewFromTypeString(typeString)
 
-	if modelObjPerm, ok := modelObj.(models.IHasPermissions); ok {
+	if modelObjPerm, ok := modelObj.(mdlutil.IHasPermissions); ok {
 		// removeCreated := false
-		_, fields := modelObjPerm.Permissions(models.UserRoleAdmin, who)
+		_, fields := modelObjPerm.Permissions(userrole.UserRoleAdmin, who)
 
 		// black list or white list all the same, transform is transform
 		if jsontrans.ContainsIFieldTransformModelToJSON(&fields) {
@@ -240,13 +242,13 @@ func ModelFromJSONBody(r *http.Request, typeString string, who models.UserIDFetc
 		return nil, webrender.NewErrParsingJSON(err)
 	}
 
-	if err := models.ValidateModel(modelObj); err != nil {
+	if err := mdl.ValidateModel(modelObj); err != nil {
 		return nil, webrender.NewErrValidation(err)
 	}
 
-	if v, ok := modelObj.(models.IValidate); ok {
+	if v, ok := modelObj.(mdlutil.IValidate); ok {
 		who := WhoFromContext(r)
-		http := models.HTTP{Endpoint: r.URL.Path, Op: models.HTTPMethodToCRUDOp(r.Method)}
+		http := mdlutil.HTTP{Endpoint: r.URL.Path, Op: mdlutil.HTTPMethodToCRUDOp(r.Method)}
 		if err := v.Validate(who, http); err != nil {
 			return nil, webrender.NewErrValidation(err)
 		}
@@ -256,7 +258,7 @@ func ModelFromJSONBody(r *http.Request, typeString string, who models.UserIDFetc
 }
 
 // JSONPatchesFromJSONBody pares an array of JSON patch from the HTTP body
-func JSONPatchesFromJSONBody(r *http.Request) ([]models.JSONIDPatch, render.Renderer) {
+func JSONPatchesFromJSONBody(r *http.Request) ([]mdlutil.JSONIDPatch, render.Renderer) {
 	defer r.Body.Close()
 	var jsn []byte
 	var err error
@@ -279,7 +281,7 @@ func JSONPatchesFromJSONBody(r *http.Request) ([]models.JSONIDPatch, render.Rend
 	// }
 
 	type jsonSlice struct {
-		Content []models.JSONIDPatch `json:"content"`
+		Content []mdlutil.JSONIDPatch `json:"content"`
 	}
 
 	jsObj := jsonSlice{}
@@ -288,7 +290,7 @@ func JSONPatchesFromJSONBody(r *http.Request) ([]models.JSONIDPatch, render.Rend
 		return nil, webrender.NewErrParsingJSON(err)
 	}
 
-	// if v, ok := modelObj.(models.IValidate); ok {
+	// if v, ok := modelObj.(mdlutil.IValidate); ok {
 	// 	who, path, method := WhoFromContext(r), r.URL.Path, r.Method
 	// 	if err := v.Validate(who, path, method); err != nil {
 	// 		return nil, NewErrValidation(err)
@@ -299,11 +301,11 @@ func JSONPatchesFromJSONBody(r *http.Request) ([]models.JSONIDPatch, render.Rend
 }
 
 // IDFromURLQueryString parses resource ID from the URL query string
-func IDFromURLQueryString(c *gin.Context) (*datatypes.UUID, render.Renderer) {
+func IDFromURLQueryString(c *gin.Context) (*datatype.UUID, render.Renderer) {
 	if idstr := c.Param("id"); idstr != "" {
 
 		var err error
-		id := datatypes.UUID{}
+		id := datatype.UUID{}
 		id.UUID, err = uuid.FromString(idstr)
 		if err != nil {
 			return nil, webrender.NewErrURLParameter(err)

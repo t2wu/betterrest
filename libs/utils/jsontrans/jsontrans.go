@@ -61,7 +61,7 @@ type IFieldTransformJSONToModel interface {
 // 1. Cherry pick only fields we want by the fields specifier
 // when given a json string,
 // I cannot cherry pick struct, because I can't make it generic enough
-// to fit all models
+// to fit all mdl
 // Then that means I have to loop the array to json marshal it
 // 2. Transform the value if necessary
 // (used to be called JSONCherryPickFields)
@@ -109,7 +109,7 @@ func cherryPickCore(data map[string]interface{}, f *JSONFields, dataPicked map[s
 			// since value is interface{}, if we never insert it, it comes out to be nil
 			// technically since run through TransFromByHidingDateFieldsFromIModel() now,
 			// we now should rely on json tag, but of course user might want to configure this
-			// if they don't want a customized output based on models.Who{}
+			// if they don't want a customized output based on mdl.Who{}
 			if v2, ok := v.(string); ok {
 				// if nil, change to this string
 				dataPicked[k] = v2

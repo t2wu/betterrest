@@ -7,20 +7,22 @@ import (
 	"net/url"
 
 	"github.com/t2wu/betterrest/datamapper/service"
-	"github.com/t2wu/betterrest/libs/datatypes"
+	"github.com/t2wu/betterrest/hook/userrole"
 	"github.com/t2wu/betterrest/libs/urlparam"
-	"github.com/t2wu/betterrest/models"
+	"github.com/t2wu/betterrest/mdlutil"
 	"github.com/t2wu/betterrest/registry"
+	"github.com/t2wu/qry/datatype"
+	"github.com/t2wu/qry/mdl"
 
 	jsonpatch "github.com/evanphx/json-patch"
 	"github.com/jinzhu/gorm"
 )
 
 // TODO: This method repeated twice, not sure where to put it
-func modelNeedsRealDelete(modelObj models.IModel) bool {
+func modelNeedsRealDelete(modelObj mdl.IModel) bool {
 	// real delete by default
 	realDelete := true
-	if modelObj2, ok := modelObj.(models.IDoRealDelete); ok {
+	if modelObj2, ok := modelObj.(mdlutil.IDoRealDelete); ok {
 		realDelete = modelObj2.DoRealDelete()
 	}
 	return realDelete
@@ -48,7 +50,7 @@ func constructInnerFieldParamQueries(db *gorm.DB, typeString string, options map
 	return db, nil
 }
 
-func verifyModelIDCorrectnessForOne(modelObj models.IModel, id *datatypes.UUID) error {
+func verifyModelIDCorrectnessForOne(modelObj mdl.IModel, id *datatype.UUID) error {
 	if id == nil || id.UUID.String() == "" {
 		// in case it's an empty string
 		return service.ErrIDEmpty
@@ -64,30 +66,30 @@ func verifyModelIDCorrectnessForOne(modelObj models.IModel, id *datatypes.UUID) 
 	return nil
 }
 
-func loadAndCheckErrorBeforeModifyV2(serv service.IServiceV2, db *gorm.DB, who models.UserIDFetchable, typeString string, modelObj models.IModel, id *datatypes.UUID, permittedRoles []models.UserRole, options map[urlparam.Param]interface{}) (models.IModel, models.UserRole, error) {
+func loadAndCheckErrorBeforeModifyV2(serv service.IServiceV2, db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, modelObj mdl.IModel, id *datatype.UUID, permittedRoles []userrole.UserRole, options map[urlparam.Param]interface{}) (mdl.IModel, userrole.UserRole, error) {
 	if id == nil || id.UUID.String() == "" {
 		// in case it's an empty string
-		return nil, models.UserRoleInvalid, service.ErrIDEmpty
+		return nil, userrole.UserRoleInvalid, service.ErrIDEmpty
 	}
 
 	// Check if ID from URL and ID in object are the same (meaningful when it's not batch edit)
 	// modelObj is nil if it's a patch operation. In that case just here to load and check permission.
 	// it's also nil when it's a get one op
 	if modelObj != nil && modelObj.GetID().String() != id.String() {
-		return nil, models.UserRoleInvalid, service.ErrIDNotMatch
+		return nil, userrole.UserRoleInvalid, service.ErrIDNotMatch
 	}
 
 	// TODO: Is there a more efficient way?
 	// For ownership: role is the role of the model to the user
-	// for models under organization, the role is the role of the organization to the user
+	// for mdl under organization, the role is the role of the organization to the user
 	modelObj2, role, err := serv.ReadOneCore(db, who, typeString, id, options)
 	if err != nil { // Error is "record not found" when not found
-		return nil, models.UserRoleInvalid, err
+		return nil, userrole.UserRoleInvalid, err
 	}
 
 	permitted := false
 	for _, permittedRole := range permittedRoles {
-		if permittedRole == models.UserRoleAny {
+		if permittedRole == userrole.UserRoleAny {
 			permitted = true
 			break
 		} else if role == permittedRole {
@@ -96,36 +98,36 @@ func loadAndCheckErrorBeforeModifyV2(serv service.IServiceV2, db *gorm.DB, who m
 		}
 	}
 	if !permitted {
-		return nil, models.UserRoleInvalid, service.ErrPermission
+		return nil, userrole.UserRoleInvalid, service.ErrPermission
 	}
 
 	return modelObj2, role, nil
 }
 
-func loadAndCheckErrorBeforeModifyV1(serv service.IServiceV1, db *gorm.DB, who models.UserIDFetchable, typeString string, modelObj models.IModel, id *datatypes.UUID, permittedRoles []models.UserRole) (models.IModel, models.UserRole, error) {
+func loadAndCheckErrorBeforeModifyV1(serv service.IServiceV1, db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, modelObj mdl.IModel, id *datatype.UUID, permittedRoles []userrole.UserRole) (mdl.IModel, userrole.UserRole, error) {
 	if id == nil || id.UUID.String() == "" {
 		// in case it's an empty string
-		return nil, models.UserRoleInvalid, service.ErrIDEmpty
+		return nil, userrole.UserRoleInvalid, service.ErrIDEmpty
 	}
 
 	// Check if ID from URL and ID in object are the same (meaningful when it's not batch edit)
 	// modelObj is nil if it's a patch operation. In that case just here to load and check permission.
 	// it's also nil when it's a get one op
 	if modelObj != nil && modelObj.GetID().String() != id.String() {
-		return nil, models.UserRoleInvalid, service.ErrIDNotMatch
+		return nil, userrole.UserRoleInvalid, service.ErrIDNotMatch
 	}
 
 	// TODO: Is there a more efficient way?
 	// For ownership: role is the role of the model to the user
-	// for models under organization, the role is the role of the organization to the user
+	// for mdl under organization, the role is the role of the organization to the user
 	modelObj2, role, err := serv.ReadOneCore(db, who, typeString, id)
 	if err != nil { // Error is "record not found" when not found
-		return nil, models.UserRoleInvalid, err
+		return nil, userrole.UserRoleInvalid, err
 	}
 
 	permitted := false
 	for _, permittedRole := range permittedRoles {
-		if permittedRole == models.UserRoleAny {
+		if permittedRole == userrole.UserRoleAny {
 			permitted = true
 			break
 		} else if role == permittedRole {
@@ -134,15 +136,15 @@ func loadAndCheckErrorBeforeModifyV1(serv service.IServiceV1, db *gorm.DB, who m
 		}
 	}
 	if !permitted {
-		return nil, models.UserRoleInvalid, service.ErrPermission
+		return nil, userrole.UserRoleInvalid, service.ErrPermission
 	}
 
 	return modelObj2, role, nil
 }
 
 // db should already be set up for all the joins needed, if any
-func loadManyAndCheckBeforeModifyV1(serv service.IServiceV1, db *gorm.DB, who models.UserIDFetchable, typeString string,
-	ids []*datatypes.UUID, permittedRoles []models.UserRole) ([]models.IModel, []models.UserRole, error) {
+func loadManyAndCheckBeforeModifyV1(serv service.IServiceV1, db *gorm.DB, who mdlutil.UserIDFetchable, typeString string,
+	ids []*datatype.UUID, permittedRoles []userrole.UserRole) ([]mdl.IModel, []userrole.UserRole, error) {
 	// log.Println("loadManyAndCheckBeforeModifyV1 run")
 	modelObjs, roles, err := serv.GetManyCore(db, who, typeString, ids)
 	if err != nil {
@@ -152,7 +154,7 @@ func loadManyAndCheckBeforeModifyV1(serv service.IServiceV1, db *gorm.DB, who mo
 
 	// for _, role := range roles {
 	// 	log.Printf("role: %v\n", role)
-	// 	if role != models.UserRoleAdmin {
+	// 	if role != userrole.UserRoleAdmin {
 	// 		return nil, nil, service.ErrPermission
 	// 	}
 	// }
@@ -160,7 +162,7 @@ func loadManyAndCheckBeforeModifyV1(serv service.IServiceV1, db *gorm.DB, who mo
 	for _, role := range roles {
 		permitted := false
 		for _, permittedRole := range permittedRoles {
-			if permittedRole == models.UserRoleAny {
+			if permittedRole == userrole.UserRoleAny {
 				permitted = true
 				break
 			} else if role == permittedRole {
@@ -177,8 +179,8 @@ func loadManyAndCheckBeforeModifyV1(serv service.IServiceV1, db *gorm.DB, who mo
 }
 
 // db should already be set up for all the joins needed, if any
-func loadManyAndCheckBeforeModifyV2(serv service.IServiceV2, db *gorm.DB, who models.UserIDFetchable, typeString string,
-	ids []*datatypes.UUID, permittedRoles []models.UserRole) ([]models.IModel, []models.UserRole, error) {
+func loadManyAndCheckBeforeModifyV2(serv service.IServiceV2, db *gorm.DB, who mdlutil.UserIDFetchable, typeString string,
+	ids []*datatype.UUID, permittedRoles []userrole.UserRole) ([]mdl.IModel, []userrole.UserRole, error) {
 	// log.Println("loadManyAndCheckBeforeModifyV2 run")
 	modelObjs, roles, err := serv.GetManyCore(db, who, typeString, ids)
 	if err != nil {
@@ -187,7 +189,7 @@ func loadManyAndCheckBeforeModifyV2(serv service.IServiceV2, db *gorm.DB, who mo
 	}
 
 	// for _, role := range roles {
-	// 	if role != models.UserRoleAdmin {
+	// 	if role != userrole.UserRoleAdmin {
 	// 		return nil, nil, service.ErrPermission
 	// 	}
 	// }
@@ -195,7 +197,7 @@ func loadManyAndCheckBeforeModifyV2(serv service.IServiceV2, db *gorm.DB, who mo
 	for _, role := range roles {
 		permitted := false
 		for _, permittedRole := range permittedRoles {
-			if permittedRole == models.UserRoleAny {
+			if permittedRole == userrole.UserRoleAny {
 				permitted = true
 				break
 			} else if role == permittedRole {
@@ -211,7 +213,7 @@ func loadManyAndCheckBeforeModifyV2(serv service.IServiceV2, db *gorm.DB, who mo
 	return modelObjs, roles, nil
 }
 
-func applyPatchCore(typeString string, modelObj models.IModel, jsonPatch []byte) (modelObj2 models.IModel, err error) {
+func applyPatchCore(typeString string, modelObj mdl.IModel, jsonPatch []byte) (modelObj2 mdl.IModel, err error) {
 	// Apply patch operations
 	// This library actually works in []byte
 

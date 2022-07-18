@@ -10,12 +10,14 @@ import (
 	"github.com/stretchr/testify/suite"
 	"github.com/t2wu/betterrest/hook"
 	"github.com/t2wu/betterrest/hook/rest"
-	"github.com/t2wu/betterrest/libs/datatypes"
+	"github.com/t2wu/betterrest/hook/userrole"
 	"github.com/t2wu/betterrest/libs/urlparam"
 	"github.com/t2wu/betterrest/libs/utils/transact"
 	"github.com/t2wu/betterrest/libs/webrender"
-	"github.com/t2wu/betterrest/models"
+	"github.com/t2wu/betterrest/mdlutil"
 	"github.com/t2wu/betterrest/registry"
+	"github.com/t2wu/qry/datatype"
+	"github.com/t2wu/qry/mdl"
 )
 
 // ----------------------------------------------------------------------------------------------
@@ -24,7 +26,7 @@ type TestBaseMapperUpdateSuite struct {
 	suite.Suite
 	db         *gorm.DB
 	mock       sqlmock.Sqlmock
-	who        models.UserIDFetchable
+	who        mdlutil.UserIDFetchable
 	typeString string
 }
 
@@ -34,7 +36,7 @@ func (suite *TestBaseMapperUpdateSuite) SetupTest() {
 	// suite.db.LogMode(true)
 	suite.db.SingularTable(true)
 	suite.mock = mock
-	suite.who = &WhoMock{Oid: datatypes.NewUUID()} // userid
+	suite.who = &WhoMock{Oid: datatype.NewUUID()} // userid
 	suite.typeString = "cars"
 
 	// clear registry
@@ -46,17 +48,17 @@ func (suite *TestBaseMapperUpdateSuite) SetupTest() {
 // All methods that begin with "Test" are run as tests within a
 // suite.
 func (suite *TestBaseMapperUpdateSuite) TestUpdateOne_WhenGiven_GotCar() {
-	carID := datatypes.NewUUID()
+	carID := datatype.NewUUID()
 	carName := "DSM"
 	carNameNew := "DSM New"
-	var modelObj models.IModel = &Car{BaseModel: models.BaseModel{ID: carID}, Name: carName}
+	var modelObj mdl.IModel = &Car{BaseModel: mdl.BaseModel{ID: carID}, Name: carName}
 
 	// The first three SQL probably could be made into one
 	suite.mock.ExpectBegin()
 	stmt := `SELECT "car".* FROM "car" INNER JOIN "user_owns_car" ON "car".id = "user_owns_car".model_id AND "car".id = $1 INNER JOIN "user" ON "user".id = "user_owns_car".user_id AND "user_owns_car".user_id = $2 WHERE "car"."deleted_at" IS NULL`
 	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt)).WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(carID, carName))
 	stmt2 := `SELECT * FROM "user_owns_car" WHERE (user_id = $1 AND model_id = $2)`
-	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt2)).WillReturnRows(sqlmock.NewRows([]string{"model_id", "user_id", "role"}).AddRow(carID, suite.who.GetUserID(), models.UserRoleAdmin))
+	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt2)).WillReturnRows(sqlmock.NewRows([]string{"model_id", "user_id", "role"}).AddRow(carID, suite.who.GetUserID(), userrole.UserRoleAdmin))
 	stmt3 := `UPDATE "car" SET "updated_at" = $1, "deleted_at" = $2, "name" = $3  WHERE "car"."id" = $4`
 	result := sqlmock.NewResult(0, 1)
 	suite.mock.ExpectExec(regexp.QuoteMeta(stmt3)).WillReturnResult(result)
@@ -64,7 +66,7 @@ func (suite *TestBaseMapperUpdateSuite) TestUpdateOne_WhenGiven_GotCar() {
 	stmt4 := `SELECT "car".* FROM "car" INNER JOIN "user_owns_car" ON "car".id = "user_owns_car".model_id AND "car".id = $1 INNER JOIN "user" ON "user".id = "user_owns_car".user_id AND "user_owns_car".user_id = $2`
 	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt4)).WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(carID, carNameNew))
 	stmt5 := `SELECT * FROM "user_owns_car"  WHERE (user_id = $1 AND model_id = $2)`
-	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt5)).WillReturnRows(sqlmock.NewRows([]string{"model_id", "user_id", "role"}).AddRow(carID, suite.who.GetUserID(), models.UserRoleAdmin))
+	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt5)).WillReturnRows(sqlmock.NewRows([]string{"model_id", "user_id", "role"}).AddRow(carID, suite.who.GetUserID(), userrole.UserRoleAdmin))
 	suite.mock.ExpectCommit()
 
 	options := make(map[urlparam.Param]interface{})
@@ -100,11 +102,11 @@ func (suite *TestBaseMapperUpdateSuite) TestUpdateOne_WhenGiven_GotCar() {
 }
 
 func (suite *TestBaseMapperUpdateSuite) TestUpdateOne_WhenNoController_CallRelevantOldCallbacks() {
-	carID := datatypes.NewUUID()
+	carID := datatype.NewUUID()
 	carName := "DSM"
 	carNameNew := "DSM New" // Difficult to fetch differentiate the old model and the new model
 	// without using some sort of smart mock though
-	var modelObj models.IModel = &CarWithCallbacks{BaseModel: models.BaseModel{ID: carID}, Name: carName}
+	var modelObj mdl.IModel = &CarWithCallbacks{BaseModel: mdl.BaseModel{ID: carID}, Name: carName}
 
 	// The first three SQL probably could be made into one (well no I can't, I need to pull the old one so
 	// I can call the callback...or when I can test for whether the call back exists before I optimize.)
@@ -112,7 +114,7 @@ func (suite *TestBaseMapperUpdateSuite) TestUpdateOne_WhenNoController_CallRelev
 	stmt := `SELECT "car".* FROM "car" INNER JOIN "user_owns_car" ON "car".id = "user_owns_car".model_id AND "car".id = $1 INNER JOIN "user" ON "user".id = "user_owns_car".user_id AND "user_owns_car".user_id = $2 WHERE "car"."deleted_at" IS NULL`
 	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt)).WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(carID, carName))
 	stmt2 := `SELECT * FROM "user_owns_car" WHERE (user_id = $1 AND model_id = $2)`
-	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt2)).WillReturnRows(sqlmock.NewRows([]string{"model_id", "user_id", "role"}).AddRow(carID, suite.who.GetUserID(), models.UserRoleAdmin))
+	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt2)).WillReturnRows(sqlmock.NewRows([]string{"model_id", "user_id", "role"}).AddRow(carID, suite.who.GetUserID(), userrole.UserRoleAdmin))
 	stmt3 := `UPDATE "car" SET "updated_at" = $1, "deleted_at" = $2, "name" = $3  WHERE "car"."id" = $4`
 	result := sqlmock.NewResult(0, 1)
 	suite.mock.ExpectExec(regexp.QuoteMeta(stmt3)).WillReturnResult(result)
@@ -120,7 +122,7 @@ func (suite *TestBaseMapperUpdateSuite) TestUpdateOne_WhenNoController_CallRelev
 	stmt4 := `SELECT "car".* FROM "car" INNER JOIN "user_owns_car" ON "car".id = "user_owns_car".model_id AND "car".id = $1 INNER JOIN "user" ON "user".id = "user_owns_car".user_id AND "user_owns_car".user_id = $2`
 	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt4)).WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(carID, carNameNew))
 	stmt5 := `SELECT * FROM "user_owns_car"  WHERE (user_id = $1 AND model_id = $2)`
-	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt5)).WillReturnRows(sqlmock.NewRows([]string{"model_id", "user_id", "role"}).AddRow(carID, suite.who.GetUserID(), models.UserRoleAdmin))
+	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt5)).WillReturnRows(sqlmock.NewRows([]string{"model_id", "user_id", "role"}).AddRow(carID, suite.who.GetUserID(), userrole.UserRoleAdmin))
 	suite.mock.ExpectCommit()
 
 	options := make(map[urlparam.Param]interface{})
@@ -150,9 +152,9 @@ func (suite *TestBaseMapperUpdateSuite) TestUpdateOne_WhenNoController_CallRelev
 		return
 	}
 
-	role := models.UserRoleAdmin
-	hpdata := models.HookPointData{DB: tx2, Who: suite.who, TypeString: suite.typeString,
-		Cargo: &models.ModelCargo{Payload: cargo.Payload}, Role: &role, URLParams: options}
+	role := userrole.UserRoleAdmin
+	hpdata := mdlutil.HookPointData{DB: tx2, Who: suite.who, TypeString: suite.typeString,
+		Cargo: &mdlutil.ModelCargo{Payload: cargo.Payload}, Role: &role, URLParams: options}
 
 	// No, update is not easy to test because I load the obj from the db first, and it's not the
 	// same as the car object I have now (all the more reason hook make more sense)
@@ -160,7 +162,7 @@ func (suite *TestBaseMapperUpdateSuite) TestUpdateOne_WhenNoController_CallRelev
 	if _, ok := retVal.Ms[0].(*CarWithCallbacks); assert.True(suite.T(), ok) {
 		assert.False(suite.T(), guardAPIEntryCalled) // not called when going through mapper
 		if assert.True(suite.T(), beforeCUPDDBCalled) {
-			assert.Equal(suite.T(), beforeCUPDDBOp, models.CRUPDOpUpdate)
+			assert.Equal(suite.T(), beforeCUPDDBOp, mdlutil.CRUPDOpUpdate)
 			assert.Condition(suite.T(), hpDataComparison(&hpdata, &beforeCUPDDBHpdata))
 		}
 
@@ -169,7 +171,7 @@ func (suite *TestBaseMapperUpdateSuite) TestUpdateOne_WhenNoController_CallRelev
 		}
 
 		if assert.True(suite.T(), afterCRUPDDBCalled) {
-			assert.Equal(suite.T(), afterCRUPDDBOp, models.CRUPDOpUpdate)
+			assert.Equal(suite.T(), afterCRUPDDBOp, mdlutil.CRUPDOpUpdate)
 			assert.Condition(suite.T(), hpDataComparison(&hpdata, &afterCRUPDDBHpdata))
 		}
 
@@ -180,9 +182,9 @@ func (suite *TestBaseMapperUpdateSuite) TestUpdateOne_WhenNoController_CallRelev
 }
 
 func (suite *TestBaseMapperUpdateSuite) TestUpdateOne_WhenHavingController_NotCallOldCallbacks() {
-	carID := datatypes.NewUUID()
+	carID := datatype.NewUUID()
 	carName := "DSM"
-	var modelObj models.IModel = &CarWithCallbacks{BaseModel: models.BaseModel{ID: carID}, Name: carName}
+	var modelObj mdl.IModel = &CarWithCallbacks{BaseModel: mdl.BaseModel{ID: carID}, Name: carName}
 
 	// The first three SQL probably could be made into one (well no I can't, I need to pull the old one so
 	// I can call the callback...or when I can test for whether the call back exists before I optimize.)
@@ -190,7 +192,7 @@ func (suite *TestBaseMapperUpdateSuite) TestUpdateOne_WhenHavingController_NotCa
 	stmt := `SELECT "car".* FROM "car" INNER JOIN "user_owns_car" ON "car".id = "user_owns_car".model_id AND "car".id = $1 INNER JOIN "user" ON "user".id = "user_owns_car".user_id AND "user_owns_car".user_id = $2 WHERE "car"."deleted_at" IS NULL`
 	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt)).WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(carID, carName))
 	stmt2 := `SELECT * FROM "user_owns_car" WHERE (user_id = $1 AND model_id = $2)`
-	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt2)).WillReturnRows(sqlmock.NewRows([]string{"model_id", "user_id", "role"}).AddRow(carID, suite.who.GetUserID(), models.UserRoleAdmin))
+	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt2)).WillReturnRows(sqlmock.NewRows([]string{"model_id", "user_id", "role"}).AddRow(carID, suite.who.GetUserID(), userrole.UserRoleAdmin))
 	stmt3 := `UPDATE "car" SET "updated_at" = $1, "deleted_at" = $2, "name" = $3  WHERE "car"."id" = $4`
 	result := sqlmock.NewResult(0, 1)
 	suite.mock.ExpectExec(regexp.QuoteMeta(stmt3)).WillReturnResult(result)
@@ -198,7 +200,7 @@ func (suite *TestBaseMapperUpdateSuite) TestUpdateOne_WhenHavingController_NotCa
 	stmt4 := `SELECT "car".* FROM "car" INNER JOIN "user_owns_car" ON "car".id = "user_owns_car".model_id AND "car".id = $1 INNER JOIN "user" ON "user".id = "user_owns_car".user_id AND "user_owns_car".user_id = $2`
 	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt4)).WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(carID, carName))
 	stmt5 := `SELECT * FROM "user_owns_car"  WHERE (user_id = $1 AND model_id = $2)`
-	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt5)).WillReturnRows(sqlmock.NewRows([]string{"model_id", "user_id", "role"}).AddRow(carID, suite.who.GetUserID(), models.UserRoleAdmin))
+	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt5)).WillReturnRows(sqlmock.NewRows([]string{"model_id", "user_id", "role"}).AddRow(carID, suite.who.GetUserID(), userrole.UserRoleAdmin))
 	suite.mock.ExpectCommit()
 
 	options := make(map[urlparam.Param]interface{})
@@ -239,9 +241,9 @@ func (suite *TestBaseMapperUpdateSuite) TestUpdateOne_WhenHavingController_NotCa
 }
 
 func (suite *TestBaseMapperUpdateSuite) TestUpdateOne_WhenHavingController_CallRelevantControllerCallbacks() {
-	carID := datatypes.NewUUID()
+	carID := datatype.NewUUID()
 	carName := "DSM"
-	var modelObj models.IModel = &CarWithCallbacks{BaseModel: models.BaseModel{ID: carID}, Name: carName}
+	var modelObj mdl.IModel = &CarWithCallbacks{BaseModel: mdl.BaseModel{ID: carID}, Name: carName}
 
 	// The first three SQL probably could be made into one (well no I can't, I need to pull the old one so
 	// I can call the callback...or when I can test for whether the call back exists before I optimize.)
@@ -249,7 +251,7 @@ func (suite *TestBaseMapperUpdateSuite) TestUpdateOne_WhenHavingController_CallR
 	stmt := `SELECT "car".* FROM "car" INNER JOIN "user_owns_car" ON "car".id = "user_owns_car".model_id AND "car".id = $1 INNER JOIN "user" ON "user".id = "user_owns_car".user_id AND "user_owns_car".user_id = $2 WHERE "car"."deleted_at" IS NULL`
 	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt)).WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(carID, carName))
 	stmt2 := `SELECT * FROM "user_owns_car" WHERE (user_id = $1 AND model_id = $2)`
-	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt2)).WillReturnRows(sqlmock.NewRows([]string{"model_id", "user_id", "role"}).AddRow(carID, suite.who.GetUserID(), models.UserRoleAdmin))
+	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt2)).WillReturnRows(sqlmock.NewRows([]string{"model_id", "user_id", "role"}).AddRow(carID, suite.who.GetUserID(), userrole.UserRoleAdmin))
 	stmt3 := `UPDATE "car" SET "updated_at" = $1, "deleted_at" = $2, "name" = $3  WHERE "car"."id" = $4`
 	result := sqlmock.NewResult(0, 1)
 	suite.mock.ExpectExec(regexp.QuoteMeta(stmt3)).WillReturnResult(result)
@@ -257,7 +259,7 @@ func (suite *TestBaseMapperUpdateSuite) TestUpdateOne_WhenHavingController_CallR
 	stmt4 := `SELECT "car".* FROM "car" INNER JOIN "user_owns_car" ON "car".id = "user_owns_car".model_id AND "car".id = $1 INNER JOIN "user" ON "user".id = "user_owns_car".user_id AND "user_owns_car".user_id = $2`
 	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt4)).WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(carID, carName))
 	stmt5 := `SELECT * FROM "user_owns_car"  WHERE (user_id = $1 AND model_id = $2)`
-	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt5)).WillReturnRows(sqlmock.NewRows([]string{"model_id", "user_id", "role"}).AddRow(carID, suite.who.GetUserID(), models.UserRoleAdmin))
+	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt5)).WillReturnRows(sqlmock.NewRows([]string{"model_id", "user_id", "role"}).AddRow(carID, suite.who.GetUserID(), userrole.UserRoleAdmin))
 	suite.mock.ExpectCommit()
 
 	options := make(map[urlparam.Param]interface{})
@@ -288,9 +290,9 @@ func (suite *TestBaseMapperUpdateSuite) TestUpdateOne_WhenHavingController_CallR
 		return
 	}
 
-	role := models.UserRoleAdmin
-	data := hook.Data{Ms: []models.IModel{&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID}, Name: carName}},
-		DB: tx2, Roles: []models.UserRole{role}, Cargo: &cargo}
+	role := userrole.UserRoleAdmin
+	data := hook.Data{Ms: []mdl.IModel{&CarWithCallbacks{BaseModel: mdl.BaseModel{ID: carID}, Name: carName}},
+		DB: tx2, Roles: []userrole.UserRole{role}, Cargo: &cargo}
 
 	ctrls := retVal.Fetcher.GetAllInstantiatedHanders()
 	if !assert.Len(suite.T(), ctrls, 1) {
@@ -316,18 +318,18 @@ func (suite *TestBaseMapperUpdateSuite) TestUpdateOne_WhenHavingController_CallR
 }
 
 func (suite *TestBaseMapperUpdateSuite) TestUpdateMany_WhenGiven_GotCars() {
-	carID1 := datatypes.NewUUID()
+	carID1 := datatype.NewUUID()
 	carName1 := "DSM"
-	carID2 := datatypes.NewUUID()
+	carID2 := datatype.NewUUID()
 	carName2 := "DSM4Life"
-	carID3 := datatypes.NewUUID()
+	carID3 := datatype.NewUUID()
 	carName3 := "Eclipse"
-	modelObjs := []models.IModel{
-		&Car{BaseModel: models.BaseModel{ID: carID1}, Name: carName1},
-		&Car{BaseModel: models.BaseModel{ID: carID2}, Name: carName2},
-		&Car{BaseModel: models.BaseModel{ID: carID3}, Name: carName3},
+	modelObjs := []mdl.IModel{
+		&Car{BaseModel: mdl.BaseModel{ID: carID1}, Name: carName1},
+		&Car{BaseModel: mdl.BaseModel{ID: carID2}, Name: carName2},
+		&Car{BaseModel: mdl.BaseModel{ID: carID3}, Name: carName3},
 	}
-	carIDs := []*datatypes.UUID{carID1, carID2, carID3}
+	carIDs := []*datatype.UUID{carID1, carID2, carID3}
 	carNames := []string{carName1, carName2, carName3}
 
 	// The first three SQL probably could be made into one (well no I can't, I need to pull the old one so
@@ -336,7 +338,7 @@ func (suite *TestBaseMapperUpdateSuite) TestUpdateMany_WhenGiven_GotCars() {
 	stmt1 := `SELECT "car".* FROM "car" INNER JOIN "user_owns_car" ON "car".id = "user_owns_car".model_id AND "car".id IN ($1,$2,$3) INNER JOIN "user" ON "user".id = "user_owns_car".user_id AND "user_owns_car".user_id = $4 WHERE "car"."deleted_at" IS NULL`
 	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt1)).WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(carID1, carName1).AddRow(carID2, carName2).AddRow(carID3, carName3))
 	stmt2 := `SELECT "user_owns_car"."role" FROM "car" INNER JOIN "user_owns_car" ON "car".id = "user_owns_car".model_id AND "car".id IN ($1,$2,$3) INNER JOIN "user" ON "user".id = "user_owns_car".user_id AND "user_owns_car".user_id = $4`
-	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt2)).WillReturnRows(sqlmock.NewRows([]string{"role"}).AddRow(models.UserRoleAdmin).AddRow(models.UserRoleAdmin).AddRow(models.UserRoleAdmin))
+	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt2)).WillReturnRows(sqlmock.NewRows([]string{"role"}).AddRow(userrole.UserRoleAdmin).AddRow(userrole.UserRoleAdmin).AddRow(userrole.UserRoleAdmin))
 
 	// Obviously not very efficient, update needs to run 3 times, but read can be done in 1 (for the update algorithm and Gorm)
 	// Hard to do if we're in updateOneCore, probably have to re-write it to updateManyCore
@@ -349,7 +351,7 @@ func (suite *TestBaseMapperUpdateSuite) TestUpdateMany_WhenGiven_GotCars() {
 		stmt4 := `SELECT "car".* FROM "car" INNER JOIN "user_owns_car" ON "car".id = "user_owns_car".model_id AND "car".id = $1 INNER JOIN "user" ON "user".id = "user_owns_car".user_id AND "user_owns_car".user_id = $2`
 		suite.mock.ExpectQuery(regexp.QuoteMeta(stmt4)).WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(carID, carName))
 		stmt5 := `SELECT * FROM "user_owns_car"  WHERE (user_id = $1 AND model_id = $2)`
-		suite.mock.ExpectQuery(regexp.QuoteMeta(stmt5)).WillReturnRows(sqlmock.NewRows([]string{"model_id", "user_id", "role"}).AddRow(carID, suite.who.GetUserID(), models.UserRoleAdmin))
+		suite.mock.ExpectQuery(regexp.QuoteMeta(stmt5)).WillReturnRows(sqlmock.NewRows([]string{"model_id", "user_id", "role"}).AddRow(carID, suite.who.GetUserID(), userrole.UserRoleAdmin))
 	}
 
 	suite.mock.ExpectCommit()
@@ -388,18 +390,18 @@ func (suite *TestBaseMapperUpdateSuite) TestUpdateMany_WhenGiven_GotCars() {
 }
 
 func (suite *TestBaseMapperUpdateSuite) TestUpdateMany_WhenNoController_CallRelevantOldCallbacks() {
-	carID1 := datatypes.NewUUID()
+	carID1 := datatype.NewUUID()
 	carName1 := "DSM"
-	carID2 := datatypes.NewUUID()
+	carID2 := datatype.NewUUID()
 	carName2 := "DSM4Life"
-	carID3 := datatypes.NewUUID()
+	carID3 := datatype.NewUUID()
 	carName3 := "Eclipse"
-	modelObjs := []models.IModel{
-		&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID1}, Name: carName1},
-		&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID2}, Name: carName2},
-		&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID3}, Name: carName3},
+	modelObjs := []mdl.IModel{
+		&CarWithCallbacks{BaseModel: mdl.BaseModel{ID: carID1}, Name: carName1},
+		&CarWithCallbacks{BaseModel: mdl.BaseModel{ID: carID2}, Name: carName2},
+		&CarWithCallbacks{BaseModel: mdl.BaseModel{ID: carID3}, Name: carName3},
 	}
-	carIDs := []*datatypes.UUID{carID1, carID2, carID3}
+	carIDs := []*datatype.UUID{carID1, carID2, carID3}
 	carNames := []string{carName1, carName2, carName3}
 
 	// The first three SQL probably could be made into one (well no I can't, I need to pull the old one so
@@ -408,7 +410,7 @@ func (suite *TestBaseMapperUpdateSuite) TestUpdateMany_WhenNoController_CallRele
 	stmt1 := `SELECT "car".* FROM "car" INNER JOIN "user_owns_car" ON "car".id = "user_owns_car".model_id AND "car".id IN ($1,$2,$3) INNER JOIN "user" ON "user".id = "user_owns_car".user_id AND "user_owns_car".user_id = $4 WHERE "car"."deleted_at" IS NULL`
 	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt1)).WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(carID1, carName1).AddRow(carID2, carName2).AddRow(carID3, carName3))
 	stmt2 := `SELECT "user_owns_car"."role" FROM "car" INNER JOIN "user_owns_car" ON "car".id = "user_owns_car".model_id AND "car".id IN ($1,$2,$3) INNER JOIN "user" ON "user".id = "user_owns_car".user_id AND "user_owns_car".user_id = $4`
-	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt2)).WillReturnRows(sqlmock.NewRows([]string{"role"}).AddRow(models.UserRoleAdmin).AddRow(models.UserRoleAdmin).AddRow(models.UserRoleAdmin))
+	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt2)).WillReturnRows(sqlmock.NewRows([]string{"role"}).AddRow(userrole.UserRoleAdmin).AddRow(userrole.UserRoleAdmin).AddRow(userrole.UserRoleAdmin))
 
 	// Obviously not very efficient, update needs to run 3 times, but read can be done in 1 (for the update algorithm and Gorm)
 	// Hard to do if we're in updateOneCore, probably have to re-write it to updateManyCore
@@ -421,26 +423,26 @@ func (suite *TestBaseMapperUpdateSuite) TestUpdateMany_WhenNoController_CallRele
 		stmt4 := `SELECT "car".* FROM "car" INNER JOIN "user_owns_car" ON "car".id = "user_owns_car".model_id AND "car".id = $1 INNER JOIN "user" ON "user".id = "user_owns_car".user_id AND "user_owns_car".user_id = $2`
 		suite.mock.ExpectQuery(regexp.QuoteMeta(stmt4)).WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(carID, carName))
 		stmt5 := `SELECT * FROM "user_owns_car"  WHERE (user_id = $1 AND model_id = $2)`
-		suite.mock.ExpectQuery(regexp.QuoteMeta(stmt5)).WillReturnRows(sqlmock.NewRows([]string{"model_id", "user_id", "role"}).AddRow(carID, suite.who.GetUserID(), models.UserRoleAdmin))
+		suite.mock.ExpectQuery(regexp.QuoteMeta(stmt5)).WillReturnRows(sqlmock.NewRows([]string{"model_id", "user_id", "role"}).AddRow(carID, suite.who.GetUserID(), userrole.UserRoleAdmin))
 	}
 	suite.mock.ExpectCommit()
 
 	var beforeCalled bool
-	var beforeData models.BatchHookPointData
-	var beforeOp models.CRUPDOp
+	var beforeData mdlutil.BatchHookPointData
+	var beforeOp mdlutil.CRUPDOp
 	before := createBatchHookPoint(&beforeCalled, &beforeData, &beforeOp)
 
 	var afterCalled bool
-	var afterData models.BatchHookPointData
-	var afterOp models.CRUPDOp
+	var afterData mdlutil.BatchHookPointData
+	var afterOp mdlutil.CRUPDOp
 	after := createBatchHookPoint(&afterCalled, &afterData, &afterOp)
 
 	var beforeUpdateCalled bool
-	var beforeUpdateData models.BatchHookPointData
+	var beforeUpdateData mdlutil.BatchHookPointData
 	beforeUpdate := createBatchSingleMethodHookPoint(&beforeUpdateCalled, &beforeUpdateData)
 
 	var afterUpdateCalled bool
-	var afterUpdateData models.BatchHookPointData
+	var afterUpdateData mdlutil.BatchHookPointData
 	afterUpdate := createBatchSingleMethodHookPoint(&afterUpdateCalled, &afterUpdateData)
 
 	options := make(map[urlparam.Param]interface{})
@@ -468,22 +470,22 @@ func (suite *TestBaseMapperUpdateSuite) TestUpdateMany_WhenNoController_CallRele
 		return
 	}
 
-	roles := []models.UserRole{models.UserRoleAdmin, models.UserRoleAdmin, models.UserRoleAdmin}
+	roles := []userrole.UserRole{userrole.UserRoleAdmin, userrole.UserRoleAdmin, userrole.UserRoleAdmin}
 
 	// Expected
-	expectedData := models.BatchHookPointData{
-		Ms: []models.IModel{
-			&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID1}, Name: carName1},
-			&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID2}, Name: carName2},
-			&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID3}, Name: carName3},
+	expectedData := mdlutil.BatchHookPointData{
+		Ms: []mdl.IModel{
+			&CarWithCallbacks{BaseModel: mdl.BaseModel{ID: carID1}, Name: carName1},
+			&CarWithCallbacks{BaseModel: mdl.BaseModel{ID: carID2}, Name: carName2},
+			&CarWithCallbacks{BaseModel: mdl.BaseModel{ID: carID3}, Name: carName3},
 		},
 		DB: tx2, Who: suite.who, TypeString: suite.typeString, Roles: roles, URLParams: options,
-		Cargo: &models.BatchHookCargo{Payload: cargo.Payload},
+		Cargo: &mdlutil.BatchHookCargo{Payload: cargo.Payload},
 	}
 
 	if assert.True(suite.T(), beforeCalled) {
 		assert.Condition(suite.T(), bhpDataComparison(&expectedData, &beforeData))
-		assert.Equal(suite.T(), beforeOp, models.CRUPDOpUpdate)
+		assert.Equal(suite.T(), beforeOp, mdlutil.CRUPDOpUpdate)
 	}
 
 	if assert.True(suite.T(), beforeUpdateCalled) {
@@ -492,7 +494,7 @@ func (suite *TestBaseMapperUpdateSuite) TestUpdateMany_WhenNoController_CallRele
 
 	if assert.True(suite.T(), afterCalled) {
 		assert.Condition(suite.T(), bhpDataComparison(&expectedData, &afterData))
-		assert.Equal(suite.T(), afterOp, models.CRUPDOpUpdate)
+		assert.Equal(suite.T(), afterOp, mdlutil.CRUPDOpUpdate)
 	}
 
 	if assert.True(suite.T(), afterUpdateCalled) {
@@ -501,18 +503,18 @@ func (suite *TestBaseMapperUpdateSuite) TestUpdateMany_WhenNoController_CallRele
 }
 
 func (suite *TestBaseMapperUpdateSuite) TestCreateMany_WhenHavingController_NotCallOldCallbacks() {
-	carID1 := datatypes.NewUUID()
+	carID1 := datatype.NewUUID()
 	carName1 := "DSM"
-	carID2 := datatypes.NewUUID()
+	carID2 := datatype.NewUUID()
 	carName2 := "DSM4Life"
-	carID3 := datatypes.NewUUID()
+	carID3 := datatype.NewUUID()
 	carName3 := "Eclipse"
-	modelObjs := []models.IModel{
-		&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID1}, Name: carName1},
-		&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID2}, Name: carName2},
-		&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID3}, Name: carName3},
+	modelObjs := []mdl.IModel{
+		&CarWithCallbacks{BaseModel: mdl.BaseModel{ID: carID1}, Name: carName1},
+		&CarWithCallbacks{BaseModel: mdl.BaseModel{ID: carID2}, Name: carName2},
+		&CarWithCallbacks{BaseModel: mdl.BaseModel{ID: carID3}, Name: carName3},
 	}
-	carIDs := []*datatypes.UUID{carID1, carID2, carID3}
+	carIDs := []*datatype.UUID{carID1, carID2, carID3}
 	carNames := []string{carName1, carName2, carName3}
 
 	// The first three SQL probably could be made into one (well no I can't, I need to pull the old one so
@@ -521,7 +523,7 @@ func (suite *TestBaseMapperUpdateSuite) TestCreateMany_WhenHavingController_NotC
 	stmt1 := `SELECT "car".* FROM "car" INNER JOIN "user_owns_car" ON "car".id = "user_owns_car".model_id AND "car".id IN ($1,$2,$3) INNER JOIN "user" ON "user".id = "user_owns_car".user_id AND "user_owns_car".user_id = $4 WHERE "car"."deleted_at" IS NULL`
 	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt1)).WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(carID1, carName1).AddRow(carID2, carName2).AddRow(carID3, carName3))
 	stmt2 := `SELECT "user_owns_car"."role" FROM "car" INNER JOIN "user_owns_car" ON "car".id = "user_owns_car".model_id AND "car".id IN ($1,$2,$3) INNER JOIN "user" ON "user".id = "user_owns_car".user_id AND "user_owns_car".user_id = $4`
-	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt2)).WillReturnRows(sqlmock.NewRows([]string{"role"}).AddRow(models.UserRoleAdmin).AddRow(models.UserRoleAdmin).AddRow(models.UserRoleAdmin))
+	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt2)).WillReturnRows(sqlmock.NewRows([]string{"role"}).AddRow(userrole.UserRoleAdmin).AddRow(userrole.UserRoleAdmin).AddRow(userrole.UserRoleAdmin))
 
 	// Obviously not very efficient, update needs to run 3 times, but read can be done in 1 (for the update algorithm and Gorm)
 	// Hard to do if we're in updateOneCore, probably have to re-write it to updateManyCore
@@ -534,26 +536,26 @@ func (suite *TestBaseMapperUpdateSuite) TestCreateMany_WhenHavingController_NotC
 		stmt4 := `SELECT "car".* FROM "car" INNER JOIN "user_owns_car" ON "car".id = "user_owns_car".model_id AND "car".id = $1 INNER JOIN "user" ON "user".id = "user_owns_car".user_id AND "user_owns_car".user_id = $2`
 		suite.mock.ExpectQuery(regexp.QuoteMeta(stmt4)).WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(carID, carName))
 		stmt5 := `SELECT * FROM "user_owns_car"  WHERE (user_id = $1 AND model_id = $2)`
-		suite.mock.ExpectQuery(regexp.QuoteMeta(stmt5)).WillReturnRows(sqlmock.NewRows([]string{"model_id", "user_id", "role"}).AddRow(carID, suite.who.GetUserID(), models.UserRoleAdmin))
+		suite.mock.ExpectQuery(regexp.QuoteMeta(stmt5)).WillReturnRows(sqlmock.NewRows([]string{"model_id", "user_id", "role"}).AddRow(carID, suite.who.GetUserID(), userrole.UserRoleAdmin))
 	}
 	suite.mock.ExpectCommit()
 
 	var beforeCalled bool
-	var beforeData models.BatchHookPointData
-	var beforeOp models.CRUPDOp
+	var beforeData mdlutil.BatchHookPointData
+	var beforeOp mdlutil.CRUPDOp
 	before := createBatchHookPoint(&beforeCalled, &beforeData, &beforeOp)
 
 	var afterCalled bool
-	var afterData models.BatchHookPointData
-	var afterOp models.CRUPDOp
+	var afterData mdlutil.BatchHookPointData
+	var afterOp mdlutil.CRUPDOp
 	after := createBatchHookPoint(&afterCalled, &afterData, &afterOp)
 
 	var beforeUpdateCalled bool
-	var beforeUpdateData models.BatchHookPointData
+	var beforeUpdateData mdlutil.BatchHookPointData
 	beforeUpdate := createBatchSingleMethodHookPoint(&beforeUpdateCalled, &beforeUpdateData)
 
 	var afterUpdateCalled bool
-	var afterUpdateData models.BatchHookPointData
+	var afterUpdateData mdlutil.BatchHookPointData
 	afterUpdate := createBatchSingleMethodHookPoint(&afterUpdateCalled, &afterUpdateData)
 
 	options := make(map[urlparam.Param]interface{})
@@ -589,18 +591,18 @@ func (suite *TestBaseMapperUpdateSuite) TestCreateMany_WhenHavingController_NotC
 }
 
 func (suite *TestBaseMapperUpdateSuite) TestCreateMany_WhenHavingController_CallRelevantControllerCallbacks() {
-	carID1 := datatypes.NewUUID()
+	carID1 := datatype.NewUUID()
 	carName1 := "DSM"
-	carID2 := datatypes.NewUUID()
+	carID2 := datatype.NewUUID()
 	carName2 := "DSM4Life"
-	carID3 := datatypes.NewUUID()
+	carID3 := datatype.NewUUID()
 	carName3 := "Eclipse"
-	modelObjs := []models.IModel{
-		&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID1}, Name: carName1},
-		&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID2}, Name: carName2},
-		&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID3}, Name: carName3},
+	modelObjs := []mdl.IModel{
+		&CarWithCallbacks{BaseModel: mdl.BaseModel{ID: carID1}, Name: carName1},
+		&CarWithCallbacks{BaseModel: mdl.BaseModel{ID: carID2}, Name: carName2},
+		&CarWithCallbacks{BaseModel: mdl.BaseModel{ID: carID3}, Name: carName3},
 	}
-	carIDs := []*datatypes.UUID{carID1, carID2, carID3}
+	carIDs := []*datatype.UUID{carID1, carID2, carID3}
 	carNames := []string{carName1, carName2, carName3}
 
 	// The first three SQL probably could be made into one (well no I can't, I need to pull the old one so
@@ -609,7 +611,7 @@ func (suite *TestBaseMapperUpdateSuite) TestCreateMany_WhenHavingController_Call
 	stmt1 := `SELECT "car".* FROM "car" INNER JOIN "user_owns_car" ON "car".id = "user_owns_car".model_id AND "car".id IN ($1,$2,$3) INNER JOIN "user" ON "user".id = "user_owns_car".user_id AND "user_owns_car".user_id = $4 WHERE "car"."deleted_at" IS NULL`
 	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt1)).WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(carID1, carName1).AddRow(carID2, carName2).AddRow(carID3, carName3))
 	stmt2 := `SELECT "user_owns_car"."role" FROM "car" INNER JOIN "user_owns_car" ON "car".id = "user_owns_car".model_id AND "car".id IN ($1,$2,$3) INNER JOIN "user" ON "user".id = "user_owns_car".user_id AND "user_owns_car".user_id = $4`
-	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt2)).WillReturnRows(sqlmock.NewRows([]string{"role"}).AddRow(models.UserRoleAdmin).AddRow(models.UserRoleAdmin).AddRow(models.UserRoleAdmin))
+	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt2)).WillReturnRows(sqlmock.NewRows([]string{"role"}).AddRow(userrole.UserRoleAdmin).AddRow(userrole.UserRoleAdmin).AddRow(userrole.UserRoleAdmin))
 
 	// Obviously not very efficient, update needs to run 3 times, but read can be done in 1 (for the update algorithm and Gorm)
 	// Hard to do if we're in updateOneCore, probably have to re-write it to updateManyCore
@@ -622,7 +624,7 @@ func (suite *TestBaseMapperUpdateSuite) TestCreateMany_WhenHavingController_Call
 		stmt4 := `SELECT "car".* FROM "car" INNER JOIN "user_owns_car" ON "car".id = "user_owns_car".model_id AND "car".id = $1 INNER JOIN "user" ON "user".id = "user_owns_car".user_id AND "user_owns_car".user_id = $2`
 		suite.mock.ExpectQuery(regexp.QuoteMeta(stmt4)).WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(carID, carName))
 		stmt5 := `SELECT * FROM "user_owns_car"  WHERE (user_id = $1 AND model_id = $2)`
-		suite.mock.ExpectQuery(regexp.QuoteMeta(stmt5)).WillReturnRows(sqlmock.NewRows([]string{"model_id", "user_id", "role"}).AddRow(carID, suite.who.GetUserID(), models.UserRoleAdmin))
+		suite.mock.ExpectQuery(regexp.QuoteMeta(stmt5)).WillReturnRows(sqlmock.NewRows([]string{"model_id", "user_id", "role"}).AddRow(carID, suite.who.GetUserID(), userrole.UserRoleAdmin))
 	}
 	suite.mock.ExpectCommit()
 
@@ -652,11 +654,11 @@ func (suite *TestBaseMapperUpdateSuite) TestCreateMany_WhenHavingController_Call
 	}
 
 	// Expected
-	roles := []models.UserRole{models.UserRoleAdmin, models.UserRoleAdmin, models.UserRoleAdmin}
-	data := hook.Data{Ms: []models.IModel{
-		&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID1}, Name: carName1},
-		&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID2}, Name: carName2},
-		&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID3}, Name: carName3},
+	roles := []userrole.UserRole{userrole.UserRoleAdmin, userrole.UserRoleAdmin, userrole.UserRoleAdmin}
+	data := hook.Data{Ms: []mdl.IModel{
+		&CarWithCallbacks{BaseModel: mdl.BaseModel{ID: carID1}, Name: carName1},
+		&CarWithCallbacks{BaseModel: mdl.BaseModel{ID: carID2}, Name: carName2},
+		&CarWithCallbacks{BaseModel: mdl.BaseModel{ID: carID3}, Name: carName3},
 	}, DB: tx2, Roles: roles, Cargo: &cargo}
 
 	ctrls := retVal.Fetcher.GetAllInstantiatedHanders()

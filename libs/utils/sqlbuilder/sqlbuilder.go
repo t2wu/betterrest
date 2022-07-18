@@ -8,11 +8,11 @@ import (
 
 	"github.com/jinzhu/gorm"
 	"github.com/stoewer/go-strcase"
-	"github.com/t2wu/betterrest/libs/datatypes"
 	"github.com/t2wu/betterrest/libs/utils/letters"
-	"github.com/t2wu/betterrest/models"
-	qry "github.com/t2wu/betterrest/query"
 	"github.com/t2wu/betterrest/registry"
+	"github.com/t2wu/qry"
+	"github.com/t2wu/qry/datatype"
+	"github.com/t2wu/qry/mdl"
 )
 
 // Something like this.
@@ -110,18 +110,18 @@ func AddNestedQueryJoinStmt(db *gorm.DB, typeString string, criteria TwoLevelFil
 
 		// Get inner field type
 		m := registry.NewFromTypeString(typeString) // THIS IS TO BE FIXED
-		fieldType, err := datatypes.GetModelFieldTypeElmIfValid(m, letters.CamelCaseToPascalCase(criteria.OuterFieldName))
+		fieldType, err := datatype.GetModelFieldTypeElmIfValid(m, letters.CamelCaseToPascalCase(criteria.OuterFieldName))
 		if err != nil {
 			return nil, err
 		}
 
 		m2 := reflect.New(fieldType).Interface()
-		fieldType2, err := datatypes.GetModelFieldTypeElmIfValid(m2, letters.CamelCaseToPascalCase(innerFieldName))
+		fieldType2, err := datatype.GetModelFieldTypeElmIfValid(m2, letters.CamelCaseToPascalCase(innerFieldName))
 		if err != nil {
 			return nil, err
 		}
 
-		transformedValues, err := datatypes.TransformFieldValues(fieldType2.String(), fieldValues)
+		transformedValues, err := datatype.TransformFieldValues(fieldType2.String(), fieldValues)
 		if err != nil {
 			return nil, err
 		}
@@ -196,7 +196,7 @@ func AddLatestNCTEJoin(db *gorm.DB, typeString string, tableName string, latestn
 		transformedFieldValues, err := getTransformedValueFromValidField(m,
 			letters.CamelCaseToPascalCase(filter.FieldName), urlFieldValues)
 
-		if _, ok := err.(*datatypes.FieldNotInModelError); ok {
+		if _, ok := err.(*datatype.FieldNotInModelError); ok {
 			continue
 		}
 		if err != nil {
@@ -208,11 +208,11 @@ func AddLatestNCTEJoin(db *gorm.DB, typeString string, tableName string, latestn
 
 		// fieldName := strcase.SnakeCase(filter.FieldName)
 
-		actualFieldName, err := models.JSONKeysToFieldName(m, filter.FieldName)
+		actualFieldName, err := mdl.JSONKeysToFieldName(m, filter.FieldName)
 		if err != nil {
 			return db, err
 		}
-		fieldName, err := models.FieldNameToColumn(m, actualFieldName)
+		fieldName, err := mdl.FieldNameToColumn(m, actualFieldName)
 		if err != nil {
 			return db, err
 		}
@@ -235,11 +235,11 @@ func AddLatestNCTEJoin(db *gorm.DB, typeString string, tableName string, latestn
 	// it's possible that there isn't any WHERE clause inside the CTE but we still have to paritition by
 
 	for _, latestnon := range latestnons {
-		actualFieldName, err := models.JSONKeysToFieldName(m, latestnon)
+		actualFieldName, err := mdl.JSONKeysToFieldName(m, latestnon)
 		if err != nil {
 			return db, err
 		}
-		fieldName, err := models.FieldNameToColumn(m, actualFieldName)
+		fieldName, err := mdl.FieldNameToColumn(m, actualFieldName)
 		if err != nil {
 			return db, err
 		}
@@ -341,7 +341,7 @@ func latestnGetPartitionWhereAndTransformedValues(typeString, tableName string, 
 		transformedFieldValues, err := getTransformedValueFromValidField(m,
 			letters.CamelCaseToPascalCase(filter.FieldName), urlFieldValues)
 
-		if _, ok := err.(*datatypes.FieldNotInModelError); ok {
+		if _, ok := err.(*datatype.FieldNotInModelError); ok {
 			continue
 		}
 		if err != nil {
@@ -430,7 +430,7 @@ func latestnGetPartitionWhereAndTransformedValues2(typeString, tableName string,
 		transformedFieldValues, err := getTransformedValueFromValidField(m,
 			letters.CamelCaseToPascalCase(filter.FieldName), urlFieldValues)
 
-		if _, ok := err.(*datatypes.FieldNotInModelError); ok {
+		if _, ok := err.(*datatype.FieldNotInModelError); ok {
 			continue
 		}
 		if err != nil {
@@ -493,7 +493,7 @@ func latestnGetPartitionWhereAndTransformedValues2(typeString, tableName string,
 		transformedFieldValues, err := getTransformedValueFromValidField(m,
 			letters.CamelCaseToPascalCase(filter.FieldName), urlFieldValues)
 
-		if _, ok := err.(*datatypes.FieldNotInModelError); ok {
+		if _, ok := err.(*datatype.FieldNotInModelError); ok {
 			continue
 		}
 		if err != nil {
@@ -595,13 +595,13 @@ func comparisonOpStmt(tableName string, fieldName string, predicatesArr [][]Pred
 func getTransformedValueFromValidField(modelObj interface{}, structFieldName string, urlFieldValues []string) ([]interface{}, error) {
 	// Important!! Check if fieldName is actually part of the schema, otherwise risk of sequal injection
 
-	fieldType, err := datatypes.GetModelFieldTypeElmIfValid(modelObj, letters.CamelCaseToPascalCase(structFieldName))
+	fieldType, err := datatype.GetModelFieldTypeElmIfValid(modelObj, letters.CamelCaseToPascalCase(structFieldName))
 	if err != nil {
 		log.Println("getTransformedValueFromValidField err:", err)
 		return nil, err
 	}
 
-	transURLFieldValues, err := datatypes.TransformFieldValues(fieldType.String(), urlFieldValues)
+	transURLFieldValues, err := datatype.TransformFieldValues(fieldType.String(), urlFieldValues)
 	if err != nil {
 		return nil, err
 	}

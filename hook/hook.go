@@ -4,9 +4,11 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
 	"github.com/t2wu/betterrest/hook/rest"
+	"github.com/t2wu/betterrest/hook/userrole"
 	"github.com/t2wu/betterrest/libs/urlparam"
 	"github.com/t2wu/betterrest/libs/webrender"
-	"github.com/t2wu/betterrest/models"
+	"github.com/t2wu/betterrest/mdlutil"
+	"github.com/t2wu/qry/mdl"
 )
 
 // Interface for handlers
@@ -18,7 +20,7 @@ import (
 
 type InitData struct {
 	// Role of this user in relation to this data, only available during read
-	Roles []models.UserRole
+	Roles []userrole.UserRole
 
 	// Info is endpoint information
 	Ep *EndPoint
@@ -32,13 +34,13 @@ type Cargo struct {
 // Data is the data send to batch model hookpoints
 type Data struct {
 	// Ms is the slice of IModels
-	Ms []models.IModel
+	Ms []mdl.IModel
 	// DB is the DB handle
 	DB *gorm.DB
 	// Cargo between Before and After hookpoints (not used in AfterRead since there is before read hookpoint.)
 	Cargo *Cargo
 	// Role of this user in relation to this data, only available during read
-	Roles []models.UserRole
+	Roles []userrole.UserRole
 }
 
 // Endpoint information
@@ -54,7 +56,7 @@ type EndPoint struct {
 	URLParams map[urlparam.Param]interface{}
 
 	// Who is operating this CRUPD right now
-	Who models.UserIDFetchable
+	Who mdlutil.UserIDFetchable
 }
 
 // End new REST Op

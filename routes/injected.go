@@ -3,9 +3,9 @@ package routes
 import (
 	"net/http"
 
-	"github.com/t2wu/betterrest/models"
+	"github.com/t2wu/betterrest/mdlutil"
 )
 
 // Register Who handler
-// func WhoFromContext(r *http.Request) models.Who
-var WhoFromContext func(r *http.Request) models.UserIDFetchable
+// func WhoFromContext(r *http.Request) mdl.Who
+var WhoFromContext func(r *http.Request) mdlutil.UserIDFetchable

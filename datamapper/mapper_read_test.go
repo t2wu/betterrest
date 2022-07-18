@@ -10,17 +10,19 @@ import (
 	"github.com/stretchr/testify/suite"
 	"github.com/t2wu/betterrest/hook"
 	"github.com/t2wu/betterrest/hook/rest"
-	"github.com/t2wu/betterrest/libs/datatypes"
+	"github.com/t2wu/betterrest/hook/userrole"
 	"github.com/t2wu/betterrest/libs/urlparam"
-	"github.com/t2wu/betterrest/models"
+	"github.com/t2wu/betterrest/mdlutil"
 	"github.com/t2wu/betterrest/registry"
+	"github.com/t2wu/qry/datatype"
+	"github.com/t2wu/qry/mdl"
 )
 
 type TestBaseMapperReadSuite struct {
 	suite.Suite
 	db         *gorm.DB
 	mock       sqlmock.Sqlmock
-	who        models.UserIDFetchable
+	who        mdlutil.UserIDFetchable
 	typeString string
 }
 
@@ -30,7 +32,7 @@ func (suite *TestBaseMapperReadSuite) SetupTest() {
 	// suite.db.LogMode(true)
 	suite.db.SingularTable(true)
 	suite.mock = mock
-	suite.who = &WhoMock{Oid: datatypes.NewUUID()} // userid
+	suite.who = &WhoMock{Oid: datatype.NewUUID()} // userid
 	suite.typeString = "cars"
 
 	// clear registry
@@ -42,14 +44,14 @@ func (suite *TestBaseMapperReadSuite) SetupTest() {
 // All methods that begin with "Test" are run as tests within a
 // suite.
 func (suite *TestBaseMapperReadSuite) TestReadOne_WhenGiven_GotCar() {
-	carID := datatypes.NewUUID()
+	carID := datatype.NewUUID()
 	carName := "DSM"
 	stmt := `SELECT "car".* FROM "car" INNER JOIN "user_owns_car" ON "car".id = "user_owns_car".model_id AND "car".id = $1 INNER JOIN "user" ON "user".id = "user_owns_car".user_id AND "user_owns_car".user_id = $2 WHERE "car"."deleted_at" IS NULL`
 	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt)).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(carID, carName))
 
 	suite.mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "user_owns_car"  WHERE (user_id = $1 AND model_id = $2)`)).
-		WillReturnRows(sqlmock.NewRows([]string{"user_id", "model_id", "role"}).AddRow(suite.who.GetUserID(), carID, models.UserRoleGuest))
+		WillReturnRows(sqlmock.NewRows([]string{"user_id", "model_id", "role"}).AddRow(suite.who.GetUserID(), carID, userrole.UserRoleGuest))
 
 	modelID := carID
 	options := make(map[urlparam.Param]interface{})
@@ -71,7 +73,7 @@ func (suite *TestBaseMapperReadSuite) TestReadOne_WhenGiven_GotCar() {
 		return
 	}
 
-	assert.Equal(suite.T(), models.UserRoleGuest, role)
+	assert.Equal(suite.T(), userrole.UserRoleGuest, role)
 
 	if car, ok := retVal.Ms[0].(*Car); assert.True(suite.T(), ok) {
 		assert.Equal(suite.T(), carName, car.Name)
@@ -80,9 +82,9 @@ func (suite *TestBaseMapperReadSuite) TestReadOne_WhenGiven_GotCar() {
 }
 
 func (suite *TestBaseMapperReadSuite) TestReadOne_WhenNoController_CallRelevantOldCallbacks() {
-	carID := datatypes.NewUUID()
+	carID := datatype.NewUUID()
 	carName := "DSM"
-	role := models.UserRoleAdmin
+	role := userrole.UserRoleAdmin
 	stmt := `SELECT "car".* FROM "car" INNER JOIN "user_owns_car" ON "car".id = "user_owns_car".model_id AND "car".id = $1 INNER JOIN "user" ON "user".id = "user_owns_car".user_id AND "user_owns_car".user_id = $2 WHERE "car"."deleted_at" IS NULL`
 	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt)).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(carID, carName))
@@ -90,7 +92,7 @@ func (suite *TestBaseMapperReadSuite) TestReadOne_WhenNoController_CallRelevantO
 	suite.mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "user_owns_car"  WHERE (user_id = $1 AND model_id = $2)`)).
 		WillReturnRows(sqlmock.NewRows([]string{"user_id", "model_id", "role"}).AddRow(suite.who.GetUserID(), carID, role))
 
-	modelID := datatypes.NewUUID()
+	modelID := datatype.NewUUID()
 	options := make(map[urlparam.Param]interface{})
 	cargo := hook.Cargo{}
 
@@ -112,8 +114,8 @@ func (suite *TestBaseMapperReadSuite) TestReadOne_WhenNoController_CallRelevantO
 		return
 	}
 
-	hpdata := models.HookPointData{DB: suite.db, Who: suite.who, TypeString: suite.typeString,
-		Cargo: &models.ModelCargo{Payload: cargo.Payload}, Role: &role, URLParams: options}
+	hpdata := mdlutil.HookPointData{DB: suite.db, Who: suite.who, TypeString: suite.typeString,
+		Cargo: &mdlutil.ModelCargo{Payload: cargo.Payload}, Role: &role, URLParams: options}
 
 	if _, ok := retVal.Ms[0].(*CarWithCallbacks); assert.True(suite.T(), ok) {
 		assert.False(suite.T(), guardAPIEntryCalled) // not called when going through mapper
@@ -121,31 +123,31 @@ func (suite *TestBaseMapperReadSuite) TestReadOne_WhenNoController_CallRelevantO
 		assert.False(suite.T(), beforeCUPDDBCalled)
 		assert.False(suite.T(), beforeReadDBCalled)
 		if assert.True(suite.T(), afterCRUPDDBCalled) {
-			afterCRUPDDBOp = models.CRUPDOpRead
+			afterCRUPDDBOp = mdlutil.CRUPDOpRead
 			assert.Condition(suite.T(), hpDataComparison(&hpdata, &afterCRUPDDBHpdata))
 		}
 		if assert.True(suite.T(), afterReadDBCalled) {
-			afterCRUPDDBOp = models.CRUPDOpRead
+			afterCRUPDDBOp = mdlutil.CRUPDOpRead
 			assert.Condition(suite.T(), hpDataComparison(&hpdata, &afterCRUPDDBHpdata))
 		}
 	}
 }
 
 func (suite *TestBaseMapperReadSuite) TestReadOne_WhenHavingController_NotCallOldCallbacks() {
-	carID := datatypes.NewUUID()
+	carID := datatype.NewUUID()
 	carName := "DSM"
 	stmt := `SELECT "car".* FROM "car" INNER JOIN "user_owns_car" ON "car".id = "user_owns_car".model_id AND "car".id = $1 INNER JOIN "user" ON "user".id = "user_owns_car".user_id AND "user_owns_car".user_id = $2 WHERE "car"."deleted_at" IS NULL`
 	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt)).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(carID, carName))
 
 	suite.mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "user_owns_car"  WHERE (user_id = $1 AND model_id = $2)`)).
-		WillReturnRows(sqlmock.NewRows([]string{"user_id", "model_id", "role"}).AddRow(suite.who.GetUserID(), carID, models.UserRoleAdmin))
+		WillReturnRows(sqlmock.NewRows([]string{"user_id", "model_id", "role"}).AddRow(suite.who.GetUserID(), carID, userrole.UserRoleAdmin))
 
 	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
 	hdlr := CarControllerWithoutCallbacks{}
 	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).Hook(&hdlr, "CRUPD")
 
-	modelID := datatypes.NewUUID()
+	modelID := datatype.NewUUID()
 	options := make(map[urlparam.Param]interface{})
 	cargo := hook.Cargo{}
 
@@ -173,17 +175,17 @@ func (suite *TestBaseMapperReadSuite) TestReadOne_WhenHavingController_NotCallOl
 }
 
 func (suite *TestBaseMapperReadSuite) TestReadOne_WhenHavingController_CallRelevantControllerCallbacks() {
-	carID := datatypes.NewUUID()
+	carID := datatype.NewUUID()
 	carName := "DSM"
 	stmt := `SELECT "car".* FROM "car" INNER JOIN "user_owns_car" ON "car".id = "user_owns_car".model_id AND "car".id = $1 INNER JOIN "user" ON "user".id = "user_owns_car".user_id AND "user_owns_car".user_id = $2 WHERE "car"."deleted_at" IS NULL`
 	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt)).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(carID, carName))
 
-	role := models.UserRoleAdmin
+	role := userrole.UserRoleAdmin
 	suite.mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "user_owns_car"  WHERE (user_id = $1 AND model_id = $2)`)).
 		WillReturnRows(sqlmock.NewRows([]string{"user_id", "model_id", "role"}).AddRow(suite.who.GetUserID(), carID, role))
 
-	modelID := datatypes.NewUUID()
+	modelID := datatype.NewUUID()
 	options := make(map[urlparam.Param]interface{})
 	cargo := hook.Cargo{}
 
@@ -204,8 +206,8 @@ func (suite *TestBaseMapperReadSuite) TestReadOne_WhenHavingController_CallRelev
 		return
 	}
 
-	data := hook.Data{Ms: []models.IModel{&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID}, Name: carName}},
-		DB: suite.db, Roles: []models.UserRole{role}, Cargo: &cargo}
+	data := hook.Data{Ms: []mdl.IModel{&CarWithCallbacks{BaseModel: mdl.BaseModel{ID: carID}, Name: carName}},
+		DB: suite.db, Roles: []userrole.UserRole{role}, Cargo: &cargo}
 
 	ctrls := retVal.Fetcher.GetAllInstantiatedHanders()
 	if !assert.Len(suite.T(), ctrls, 1) {
@@ -228,11 +230,11 @@ func (suite *TestBaseMapperReadSuite) TestReadOne_WhenHavingController_CallRelev
 }
 
 func (suite *TestBaseMapperReadSuite) TestReadMany_WhenGiven_GotCars() {
-	carID1 := datatypes.NewUUID()
+	carID1 := datatype.NewUUID()
 	carName1 := "DSM"
-	carID2 := datatypes.NewUUID()
+	carID2 := datatype.NewUUID()
 	carName2 := "DSM4Life"
-	carID3 := datatypes.NewUUID()
+	carID3 := datatype.NewUUID()
 	carName3 := "Eclipse"
 
 	stmt := `SELECT "car".* FROM "car" INNER JOIN "user_owns_car" ON "car".id = "user_owns_car".model_id INNER JOIN "user" ON "user".id = "user_owns_car".user_id AND "user_owns_car".user_id = $1 WHERE "car"."deleted_at" IS NULL ORDER BY "car".created_at DESC LIMIT 100 OFFSET 0`
@@ -241,7 +243,7 @@ func (suite *TestBaseMapperReadSuite) TestReadMany_WhenGiven_GotCars() {
 
 	stmt2 := `SELECT "user_owns_car"."role" FROM "car" INNER JOIN "user_owns_car" ON "car".id = "user_owns_car".model_id INNER JOIN "user" ON "user".id = "user_owns_car".user_id AND "user_owns_car".user_id = $1 WHERE ("car"."deleted_at" IS NULL) ORDER BY "car".created_at DESC LIMIT 100 OFFSET 0`
 	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt2)).
-		WillReturnRows(sqlmock.NewRows([]string{"role"}).AddRow(models.UserRoleAdmin).AddRow(models.UserRoleGuest).AddRow(models.UserRoleAdmin))
+		WillReturnRows(sqlmock.NewRows([]string{"role"}).AddRow(userrole.UserRoleAdmin).AddRow(userrole.UserRoleGuest).AddRow(userrole.UserRoleAdmin))
 
 	options := make(map[urlparam.Param]interface{})
 	cargo := hook.Cargo{}
@@ -264,7 +266,7 @@ func (suite *TestBaseMapperReadSuite) TestReadMany_WhenGiven_GotCars() {
 
 	assert.Nil(suite.T(), no) // since I didn't ask for total count
 
-	assert.ElementsMatch(suite.T(), []models.UserRole{models.UserRoleAdmin, models.UserRoleGuest, models.UserRoleAdmin}, roles)
+	assert.ElementsMatch(suite.T(), []userrole.UserRole{userrole.UserRoleAdmin, userrole.UserRoleGuest, userrole.UserRoleAdmin}, roles)
 	if assert.Len(suite.T(), retVal.Ms, 3) {
 		assert.Equal(suite.T(), carID1.String(), retVal.Ms[0].GetID().String())
 		assert.Equal(suite.T(), carID2.String(), retVal.Ms[1].GetID().String())
@@ -276,13 +278,13 @@ func (suite *TestBaseMapperReadSuite) TestReadMany_WhenGiven_GotCars() {
 }
 
 func (suite *TestBaseMapperReadSuite) TestReadMany_WhenNoController_CallRelevantOldCallbacks() {
-	carID1 := datatypes.NewUUID()
+	carID1 := datatype.NewUUID()
 	carName1 := "DSM"
-	carID2 := datatypes.NewUUID()
+	carID2 := datatype.NewUUID()
 	carName2 := "DSM4Life"
-	carID3 := datatypes.NewUUID()
+	carID3 := datatype.NewUUID()
 	carName3 := "Eclipse"
-	roles := []models.UserRole{models.UserRoleAdmin, models.UserRoleGuest, models.UserRoleAdmin}
+	roles := []userrole.UserRole{userrole.UserRoleAdmin, userrole.UserRoleGuest, userrole.UserRoleAdmin}
 
 	stmt := `SELECT "car".* FROM "car" INNER JOIN "user_owns_car" ON "car".id = "user_owns_car".model_id INNER JOIN "user" ON "user".id = "user_owns_car".user_id AND "user_owns_car".user_id = $1 WHERE "car"."deleted_at" IS NULL ORDER BY "car".created_at DESC LIMIT 100 OFFSET 0`
 	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt)).
@@ -296,17 +298,17 @@ func (suite *TestBaseMapperReadSuite) TestReadMany_WhenNoController_CallRelevant
 	cargo := hook.Cargo{}
 
 	var beforeCalled bool
-	var beforeData models.BatchHookPointData
-	var beforeOp models.CRUPDOp
+	var beforeData mdlutil.BatchHookPointData
+	var beforeOp mdlutil.CRUPDOp
 	before := createBatchHookPoint(&beforeCalled, &beforeData, &beforeOp)
 
 	var afterCalled bool
-	var afterData models.BatchHookPointData
-	var afterOp models.CRUPDOp
+	var afterData mdlutil.BatchHookPointData
+	var afterOp mdlutil.CRUPDOp
 	after := createBatchHookPoint(&afterCalled, &afterData, &afterOp)
 
 	var afterReadCalled bool
-	var afterReadData models.BatchHookPointData
+	var afterReadData mdlutil.BatchHookPointData
 	afterRead := createBatchSingleMethodHookPoint(&afterReadCalled, &afterReadData)
 
 	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
@@ -327,21 +329,21 @@ func (suite *TestBaseMapperReadSuite) TestReadMany_WhenNoController_CallRelevant
 	}
 
 	// Expected
-	expectedData := models.BatchHookPointData{
-		Ms: []models.IModel{
-			&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID1}, Name: carName1},
-			&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID2}, Name: carName2},
-			&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID3}, Name: carName3},
+	expectedData := mdlutil.BatchHookPointData{
+		Ms: []mdl.IModel{
+			&CarWithCallbacks{BaseModel: mdl.BaseModel{ID: carID1}, Name: carName1},
+			&CarWithCallbacks{BaseModel: mdl.BaseModel{ID: carID2}, Name: carName2},
+			&CarWithCallbacks{BaseModel: mdl.BaseModel{ID: carID3}, Name: carName3},
 		},
 		DB: suite.db, Who: suite.who, TypeString: suite.typeString, Roles: roles, URLParams: options,
-		Cargo: &models.BatchHookCargo{Payload: cargo.Payload},
+		Cargo: &mdlutil.BatchHookCargo{Payload: cargo.Payload},
 	}
 
 	assert.False(suite.T(), beforeCalled) // before is not called on read
 
 	if assert.True(suite.T(), afterCalled) {
 		assert.Condition(suite.T(), bhpDataComparison(&expectedData, &afterData))
-		assert.Equal(suite.T(), afterOp, models.CRUPDOpRead)
+		assert.Equal(suite.T(), afterOp, mdlutil.CRUPDOpRead)
 	}
 
 	if assert.True(suite.T(), afterReadCalled) {
@@ -350,13 +352,13 @@ func (suite *TestBaseMapperReadSuite) TestReadMany_WhenNoController_CallRelevant
 }
 
 func (suite *TestBaseMapperReadSuite) TestReadMany_WhenHavingController_NotCallOldCallbacks() {
-	carID1 := datatypes.NewUUID()
+	carID1 := datatype.NewUUID()
 	carName1 := "DSM"
-	carID2 := datatypes.NewUUID()
+	carID2 := datatype.NewUUID()
 	carName2 := "DSM4Life"
-	carID3 := datatypes.NewUUID()
+	carID3 := datatype.NewUUID()
 	carName3 := "Eclipse"
-	roles := []models.UserRole{models.UserRoleAdmin, models.UserRoleGuest, models.UserRoleAdmin}
+	roles := []userrole.UserRole{userrole.UserRoleAdmin, userrole.UserRoleGuest, userrole.UserRoleAdmin}
 
 	stmt := `SELECT "car".* FROM "car" INNER JOIN "user_owns_car" ON "car".id = "user_owns_car".model_id INNER JOIN "user" ON "user".id = "user_owns_car".user_id AND "user_owns_car".user_id = $1 WHERE "car"."deleted_at" IS NULL ORDER BY "car".created_at DESC LIMIT 100 OFFSET 0`
 	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt)).
@@ -370,17 +372,17 @@ func (suite *TestBaseMapperReadSuite) TestReadMany_WhenHavingController_NotCallO
 	cargo := hook.Cargo{}
 
 	var beforeCalled bool
-	var beforeData models.BatchHookPointData
-	var beforeOp models.CRUPDOp
+	var beforeData mdlutil.BatchHookPointData
+	var beforeOp mdlutil.CRUPDOp
 	before := createBatchHookPoint(&beforeCalled, &beforeData, &beforeOp)
 
 	var afterCalled bool
-	var afterData models.BatchHookPointData
-	var afterOp models.CRUPDOp
+	var afterData mdlutil.BatchHookPointData
+	var afterOp mdlutil.CRUPDOp
 	after := createBatchHookPoint(&afterCalled, &afterData, &afterOp)
 
 	var afterReadCalled bool
-	var afterReadData models.BatchHookPointData
+	var afterReadData mdlutil.BatchHookPointData
 	afterRead := createBatchSingleMethodHookPoint(&afterReadCalled, &afterReadData)
 
 	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
@@ -411,13 +413,13 @@ func (suite *TestBaseMapperReadSuite) TestReadMany_WhenHavingController_NotCallO
 }
 
 func (suite *TestBaseMapperReadSuite) TestReadMany_WhenHavingController_CallRelevantControllerCallbacks() {
-	carID1 := datatypes.NewUUID()
+	carID1 := datatype.NewUUID()
 	carName1 := "DSM"
-	carID2 := datatypes.NewUUID()
+	carID2 := datatype.NewUUID()
 	carName2 := "DSM4Life"
-	carID3 := datatypes.NewUUID()
+	carID3 := datatype.NewUUID()
 	carName3 := "Eclipse"
-	roles := []models.UserRole{models.UserRoleAdmin, models.UserRoleGuest, models.UserRoleAdmin}
+	roles := []userrole.UserRole{userrole.UserRoleAdmin, userrole.UserRoleGuest, userrole.UserRoleAdmin}
 
 	stmt := `SELECT "car".* FROM "car" INNER JOIN "user_owns_car" ON "car".id = "user_owns_car".model_id INNER JOIN "user" ON "user".id = "user_owns_car".user_id AND "user_owns_car".user_id = $1 WHERE "car"."deleted_at" IS NULL ORDER BY "car".created_at DESC LIMIT 100 OFFSET 0`
 	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt)).
@@ -450,10 +452,10 @@ func (suite *TestBaseMapperReadSuite) TestReadMany_WhenHavingController_CallRele
 	}
 
 	data := hook.Data{
-		Ms: []models.IModel{
-			&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID1}, Name: carName1},
-			&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID2}, Name: carName2},
-			&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID3}, Name: carName3},
+		Ms: []mdl.IModel{
+			&CarWithCallbacks{BaseModel: mdl.BaseModel{ID: carID1}, Name: carName1},
+			&CarWithCallbacks{BaseModel: mdl.BaseModel{ID: carID2}, Name: carName2},
+			&CarWithCallbacks{BaseModel: mdl.BaseModel{ID: carID3}, Name: carName3},
 		},
 		DB:    suite.db,
 		Roles: roles, Cargo: &cargo,

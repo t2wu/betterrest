@@ -6,15 +6,15 @@ import (
 	"time"
 
 	"github.com/t2wu/betterrest/db"
-	"github.com/t2wu/betterrest/libs/datatypes"
-	"github.com/t2wu/betterrest/models"
+	"github.com/t2wu/qry/datatype"
+	"github.com/t2wu/qry/mdl"
 )
 
-// BetterRESTTable store the information on all other models
+// BetterRESTTable store the information on all other mdl
 type BetterRESTTable struct {
-	ID        *datatypes.UUID `gorm:"type:uuid;primary_key;" json:"id"`
-	CreatedAt time.Time       `json:"createdAt" json:"createdAt"`
-	UpdatedAt time.Time       `json:"updatedAt"`
+	ID        *datatype.UUID `gorm:"type:uuid;primary_key;" json:"id"`
+	CreatedAt time.Time      `json:"createdAt" json:"createdAt"`
+	UpdatedAt time.Time      `json:"updatedAt"`
 
 	// Name is table name
 	Name string `gorm:"unique_index:name"`
@@ -22,17 +22,17 @@ type BetterRESTTable struct {
 	Version string
 }
 
-// CreateBetterRESTTable registers models
+// CreateBetterRESTTable registers mdl
 func CreateBetterRESTTable() {
 	// db.Shared().Exec("CREATE TABLE IF NOT EXISTS better_rest_table ")
 	modelRegistry := ModelRegistry
 	db.Shared().AutoMigrate(&BetterRESTTable{})
 
 	for _, reg := range modelRegistry {
-		id := datatypes.NewUUID()
+		id := datatype.NewUUID()
 		createdAt := time.Now()
 		updatedAt := time.Now()
-		tableName := models.GetTableNameFromType(reg.Typ)
+		tableName := mdl.GetTableNameFromType(reg.Typ)
 
 		if reg.TypVersion == "" {
 			reg.TypVersion = "1.0.0"

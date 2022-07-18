@@ -7,9 +7,9 @@ import (
 
 	"github.com/go-chi/render"
 	"github.com/jinzhu/gorm"
-	"github.com/t2wu/betterrest/libs/datatypes"
 	"github.com/t2wu/betterrest/libs/settings"
 	"github.com/t2wu/betterrest/libs/webrender"
+	"github.com/t2wu/qry/datatype"
 )
 
 var transactDebugCount = 0
@@ -31,7 +31,7 @@ func Transact(db *gorm.DB, txFunc func(*gorm.DB) error, labels ...string) (err e
 			label = labels[0]
 		}
 
-		transactID = datatypes.NewUUID().String()
+		transactID = datatype.NewUUID().String()
 		if len(labels) > 1 {
 			transactID = labels[1]
 		}
@@ -103,7 +103,7 @@ func TransactCustomError(db *gorm.DB, txFunc func(*gorm.DB) *webrender.RetError,
 			label = labels[0]
 		}
 
-		transactID = datatypes.NewUUID().String()
+		transactID = datatype.NewUUID().String()
 		if len(labels) > 1 {
 			transactID = labels[1]
 		}

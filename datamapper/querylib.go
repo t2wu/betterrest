@@ -7,11 +7,11 @@ import (
 
 	"github.com/jinzhu/gorm"
 	"github.com/stoewer/go-strcase"
-	"github.com/t2wu/betterrest/libs/datatypes"
 	"github.com/t2wu/betterrest/libs/utils/letters"
 	"github.com/t2wu/betterrest/libs/utils/sqlbuilder"
-	qry "github.com/t2wu/betterrest/query"
 	"github.com/t2wu/betterrest/registry"
+	"github.com/t2wu/qry"
+	"github.com/t2wu/qry/datatype"
 )
 
 func getPredicateAndValueFromFieldValue2(fieldVal string) (string, string) {
@@ -128,7 +128,7 @@ func constructDbFromURLFieldQuery(db *gorm.DB, typeString string, urlParams map[
 	for _, filter := range filters {
 		// We used the fact that repeatedly call AddWhereStmt genereates only ONE WHERE with multiple filters
 		db, err = sqlbuilder.AddWhereStmt(db, typeString, registry.GetTableNameFromTypeString(typeString), filter)
-		if _, ok := err.(*datatypes.FieldNotInModelError); ok {
+		if _, ok := err.(*datatype.FieldNotInModelError); ok {
 			// custom url parameter
 			continue
 		}
@@ -163,7 +163,7 @@ func constructDbFromURLFieldQuery(db *gorm.DB, typeString string, urlParams map[
 		for _, filter := range filters {
 			// We used the fact that repeatedly call AddWhereStmt genereates only ONE WHERE with multiple filters
 			db, err = sqlbuilder.AddWhereStmt(db, typeString, registry.GetTableNameFromTypeString(typeString), filter)
-			if _, ok := err.(*datatypes.FieldNotInModelError); ok {
+			if _, ok := err.(*datatype.FieldNotInModelError); ok {
 				// custom url parameter
 				continue
 			}
@@ -186,7 +186,7 @@ func constructDbFromURLInnerFieldQuery(db *gorm.DB, typeString string, urlParams
 
 	for outerFieldName, filters := range urlParamDic {
 		// Important!! Check if fieldName is actually part of the schema, otherwise risk of sequal injection
-		innerType, err := datatypes.GetModelFieldTypeElmIfValid(obj, letters.CamelCaseToPascalCase(outerFieldName))
+		innerType, err := datatype.GetModelFieldTypeElmIfValid(obj, letters.CamelCaseToPascalCase(outerFieldName))
 		if err != nil {
 			return nil, err
 		}

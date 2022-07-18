@@ -18,13 +18,15 @@ import (
 	"github.com/t2wu/betterrest/db"
 	"github.com/t2wu/betterrest/hook"
 	"github.com/t2wu/betterrest/hook/rest"
+	"github.com/t2wu/betterrest/hook/tools"
+	"github.com/t2wu/betterrest/hook/userrole"
 	"github.com/t2wu/betterrest/libs/settings"
 	"github.com/t2wu/betterrest/libs/urlparam"
 	"github.com/t2wu/betterrest/libs/webrender"
 	"github.com/t2wu/betterrest/lifecycle"
-	"github.com/t2wu/betterrest/models"
-	"github.com/t2wu/betterrest/models/tools"
+	"github.com/t2wu/betterrest/mdlutil"
 	"github.com/t2wu/betterrest/registry"
+	"github.com/t2wu/qry/mdl"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-chi/render"
@@ -160,7 +162,7 @@ func hasTotalCountFromQueryString(values *url.Values) bool {
 	return false
 }
 
-func modelObjsToJSON(modelObjs []models.IModel, roles []models.UserRole, who models.UserIDFetchable) (string, error) {
+func modelObjsToJSON(modelObjs []mdl.IModel, roles []userrole.UserRole, who mdlutil.UserIDFetchable) (string, error) {
 	arr := make([]string, len(modelObjs))
 	for i, v := range modelObjs {
 		if j, err := tools.ToJSON(v, roles[i], who); err != nil {
@@ -231,7 +233,7 @@ func RenderModel(c *gin.Context, data *hook.Data, ep *hook.EndPoint, total *int,
 	RenderJSONForModel(c, data.Ms[0], data, ep)
 }
 
-func RenderJSONForModel(c *gin.Context, modelObj models.IModel, data *hook.Data, ep *hook.EndPoint) {
+func RenderJSONForModel(c *gin.Context, modelObj mdl.IModel, data *hook.Data, ep *hook.EndPoint) {
 	// render.JSON(w, r, modelObj) // cannot use this since no picking the field we need
 	jsonBytes, err := tools.ToJSON(modelObj, data.Roles[0], ep.Who)
 	if err != nil {
@@ -247,7 +249,7 @@ func RenderJSONForModel(c *gin.Context, modelObj models.IModel, data *hook.Data,
 	c.Writer.Write([]byte(content))
 }
 
-func RenderModelSliceOri(c *gin.Context, modelObjs []models.IModel, total *int, bhpdata *models.BatchHookPointData, op models.CRUPDOp) {
+func RenderModelSliceOri(c *gin.Context, modelObjs []mdl.IModel, total *int, bhpdata *mdlutil.BatchHookPointData, op mdlutil.CRUPDOp) {
 	// BatchRenderer
 	if renderer := registry.ModelRegistry[bhpdata.TypeString].BatchRenderer; renderer != nil {
 		if renderer(c, modelObjs, bhpdata, op) {
@@ -276,8 +278,8 @@ func RenderModelSliceOri(c *gin.Context, modelObjs []models.IModel, total *int, 
 	c.Writer.Write(data)
 }
 
-func RenderModelOri(c *gin.Context, modelObj models.IModel, hpdata *models.HookPointData, op models.CRUPDOp) {
-	if mrender, ok := modelObj.(models.IHasRenderer); ok {
+func RenderModelOri(c *gin.Context, modelObj mdl.IModel, hpdata *mdlutil.HookPointData, op mdlutil.CRUPDOp) {
+	if mrender, ok := modelObj.(mdlutil.IHasRenderer); ok {
 		if mrender.Render(c, hpdata, op) {
 			return
 		}
@@ -286,7 +288,7 @@ func RenderModelOri(c *gin.Context, modelObj models.IModel, hpdata *models.HookP
 	RenderJSONForModelOri(c, modelObj, hpdata)
 }
 
-func RenderJSONForModelOri(c *gin.Context, modelObj models.IModel, hpdata *models.HookPointData) {
+func RenderJSONForModelOri(c *gin.Context, modelObj mdl.IModel, hpdata *mdlutil.HookPointData) {
 	// render.JSON(w, r, modelObj) // cannot use this since no picking the field we need
 	jsonBytes, err := tools.ToJSON(modelObj, *hpdata.Role, hpdata.Who)
 	if err != nil {
@@ -357,22 +359,22 @@ func batchRenderHelper(c *gin.Context, typeString string, data *hook.Data, ep *h
 	// Does old renderer exists?
 	if renderer := registry.ModelRegistry[typeString].BatchRenderer; renderer != nil {
 		// Re-create it again to remain backward compatible
-		oldBatchCargo := models.BatchHookCargo{Payload: data.Cargo.Payload}
-		bhpData := models.BatchHookPointData{Ms: data.Ms, DB: nil, Who: ep.Who,
+		oldBatchCargo := mdlutil.BatchHookCargo{Payload: data.Cargo.Payload}
+		bhpData := mdlutil.BatchHookPointData{Ms: data.Ms, DB: nil, Who: ep.Who,
 			TypeString: ep.TypeString, Roles: data.Roles, URLParams: ep.URLParams, Cargo: &oldBatchCargo}
 
-		var op models.CRUPDOp
+		var op mdlutil.CRUPDOp
 		switch ep.Op {
 		case rest.OpRead:
-			op = models.CRUPDOpRead
+			op = mdlutil.CRUPDOpRead
 		case rest.OpCreate:
-			op = models.CRUPDOpCreate
+			op = mdlutil.CRUPDOpCreate
 		case rest.OpUpdate:
-			op = models.CRUPDOpUpdate
+			op = mdlutil.CRUPDOpUpdate
 		case rest.OpPatch:
-			op = models.CRUPDOpPatch
+			op = mdlutil.CRUPDOpPatch
 		case rest.OpDelete:
-			op = models.CRUPDOpDelete
+			op = mdlutil.CRUPDOpDelete
 		}
 
 		RenderModelSliceOri(c, data.Ms, no, &bhpData, op)
@@ -387,22 +389,22 @@ func singleRenderHelper(c *gin.Context, typeString string, data *hook.Data, ep *
 	// Does old renderer exists?
 	if renderer := registry.ModelRegistry[typeString].BatchRenderer; renderer != nil {
 		// Re-create it again to remain backward compatible
-		oldBatchCargo := models.ModelCargo{Payload: data.Cargo.Payload}
-		hpdata := models.HookPointData{DB: nil, Who: ep.Who,
+		oldBatchCargo := mdlutil.ModelCargo{Payload: data.Cargo.Payload}
+		hpdata := mdlutil.HookPointData{DB: nil, Who: ep.Who,
 			TypeString: ep.TypeString, Role: &data.Roles[0], URLParams: ep.URLParams, Cargo: &oldBatchCargo}
 
-		var op models.CRUPDOp
+		var op mdlutil.CRUPDOp
 		switch ep.Op {
 		case rest.OpRead:
-			op = models.CRUPDOpRead
+			op = mdlutil.CRUPDOpRead
 		case rest.OpCreate:
-			op = models.CRUPDOpCreate
+			op = mdlutil.CRUPDOpCreate
 		case rest.OpUpdate:
-			op = models.CRUPDOpUpdate
+			op = mdlutil.CRUPDOpUpdate
 		case rest.OpPatch:
-			op = models.CRUPDOpPatch
+			op = mdlutil.CRUPDOpPatch
 		case rest.OpDelete:
-			op = models.CRUPDOpDelete
+			op = mdlutil.CRUPDOpDelete
 		}
 
 		RenderModelOri(c, data.Ms[0], &hpdata, op)

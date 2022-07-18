@@ -12,31 +12,33 @@ import (
 	"github.com/stretchr/testify/suite"
 	"github.com/t2wu/betterrest/hook"
 	"github.com/t2wu/betterrest/hook/rest"
-	"github.com/t2wu/betterrest/libs/datatypes"
+	"github.com/t2wu/betterrest/hook/userrole"
 	"github.com/t2wu/betterrest/libs/urlparam"
 	"github.com/t2wu/betterrest/libs/utils/transact"
 	"github.com/t2wu/betterrest/libs/webrender"
-	"github.com/t2wu/betterrest/models"
+	"github.com/t2wu/betterrest/mdlutil"
 	"github.com/t2wu/betterrest/registry"
+	"github.com/t2wu/qry/datatype"
+	"github.com/t2wu/qry/mdl"
 )
 
 // ----------------------------------------------------------------------------------------------
 
 // Who is the information about the client or the user
 type WhoMock struct {
-	Oid *datatypes.UUID // ownerid
+	Oid *datatype.UUID // ownerid
 }
 
-func (w *WhoMock) GetUserID() *datatypes.UUID {
+func (w *WhoMock) GetUserID() *datatype.UUID {
 	return w.Oid
 }
 
 type Car struct {
-	models.BaseModel
+	mdl.BaseModel
 
 	Name string `json:"name"`
 
-	Ownerships []models.OwnershipModelWithIDBase `gorm:"PRELOAD:false" json:"-" betterrest:"ownership"`
+	Ownerships []mdlutil.OwnershipModelWithIDBase `gorm:"PRELOAD:false" json:"-" betterrest:"ownership"`
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -45,98 +47,98 @@ type Car struct {
 // object, before and after can be different.
 
 var guardAPIEntryCalled bool
-var guardAPIEntryWho models.UserIDFetchable
-var guardAPIEntryHTTP models.HTTP
+var guardAPIEntryWho mdlutil.UserIDFetchable
+var guardAPIEntryHTTP mdlutil.HTTP
 
 var beforeCUPDDBCalled bool
-var beforeCUPDDBHpdata models.HookPointData
-var beforeCUPDDBOp models.CRUPDOp
+var beforeCUPDDBHpdata mdlutil.HookPointData
+var beforeCUPDDBOp mdlutil.CRUPDOp
 
 var beforeCreateDBCalled bool
-var beforeCreateDBHpdata models.HookPointData
+var beforeCreateDBHpdata mdlutil.HookPointData
 
 var beforeReadDBCalled bool
-var beforeReadDBHpdata models.HookPointData
+var beforeReadDBHpdata mdlutil.HookPointData
 
 var beforeUpdateDBCalled bool
-var beforeUpdateDBHpdata models.HookPointData
+var beforeUpdateDBHpdata mdlutil.HookPointData
 
 var beforePatchDBCalled bool
-var beforePatchDBHpdata models.HookPointData
+var beforePatchDBHpdata mdlutil.HookPointData
 
 var beforeDeleteDBCalled bool
-var beforeDeleteDBHpdata models.HookPointData
+var beforeDeleteDBHpdata mdlutil.HookPointData
 
 var afterCRUPDDBCalled bool
-var afterCRUPDDBHpdata models.HookPointData
-var afterCRUPDDBOp models.CRUPDOp
+var afterCRUPDDBHpdata mdlutil.HookPointData
+var afterCRUPDDBOp mdlutil.CRUPDOp
 
 var afterCreateDBCalled bool
-var afterCreateDBHpdata models.HookPointData
+var afterCreateDBHpdata mdlutil.HookPointData
 
 var afterReadDBCalled bool
-var afterReadDBHpdata models.HookPointData
+var afterReadDBHpdata mdlutil.HookPointData
 
 var afterUpdateDBCalled bool
-var afterUpdateDBHpdata models.HookPointData
+var afterUpdateDBHpdata mdlutil.HookPointData
 
 var afterPatchDBCalled bool
-var afterPatchDBHpdata models.HookPointData
+var afterPatchDBHpdata mdlutil.HookPointData
 
 var afterDeleteDBCalled bool
-var afterDeleteDBHpdata models.HookPointData
+var afterDeleteDBHpdata mdlutil.HookPointData
 
 func resetGlobals() {
 	guardAPIEntryCalled = false
 	guardAPIEntryWho = nil
-	guardAPIEntryHTTP = models.HTTP{}
+	guardAPIEntryHTTP = mdlutil.HTTP{}
 
 	beforeCUPDDBCalled = false
-	beforeCUPDDBHpdata = models.HookPointData{}
-	beforeCUPDDBOp = models.CRUPDOpOther
+	beforeCUPDDBHpdata = mdlutil.HookPointData{}
+	beforeCUPDDBOp = mdlutil.CRUPDOpOther
 
 	beforeCreateDBCalled = false
-	beforeCreateDBHpdata = models.HookPointData{}
+	beforeCreateDBHpdata = mdlutil.HookPointData{}
 
 	beforeReadDBCalled = false
-	beforeReadDBHpdata = models.HookPointData{}
+	beforeReadDBHpdata = mdlutil.HookPointData{}
 
 	beforeUpdateDBCalled = false
-	beforeUpdateDBHpdata = models.HookPointData{}
+	beforeUpdateDBHpdata = mdlutil.HookPointData{}
 
 	beforePatchDBCalled = false
-	beforePatchDBHpdata = models.HookPointData{}
+	beforePatchDBHpdata = mdlutil.HookPointData{}
 
 	beforeDeleteDBCalled = false
-	beforeDeleteDBHpdata = models.HookPointData{}
+	beforeDeleteDBHpdata = mdlutil.HookPointData{}
 
 	afterCRUPDDBCalled = false
-	afterCRUPDDBHpdata = models.HookPointData{}
-	afterCRUPDDBOp = models.CRUPDOpOther
+	afterCRUPDDBHpdata = mdlutil.HookPointData{}
+	afterCRUPDDBOp = mdlutil.CRUPDOpOther
 
 	afterCreateDBCalled = false
-	afterCreateDBHpdata = models.HookPointData{}
+	afterCreateDBHpdata = mdlutil.HookPointData{}
 
 	afterReadDBCalled = false
-	afterReadDBHpdata = models.HookPointData{}
+	afterReadDBHpdata = mdlutil.HookPointData{}
 
 	afterUpdateDBCalled = false
-	afterUpdateDBHpdata = models.HookPointData{}
+	afterUpdateDBHpdata = mdlutil.HookPointData{}
 
 	afterPatchDBCalled = false
-	afterPatchDBHpdata = models.HookPointData{}
+	afterPatchDBHpdata = mdlutil.HookPointData{}
 
 	afterDeleteDBCalled = false
-	afterDeleteDBHpdata = models.HookPointData{}
+	afterDeleteDBHpdata = mdlutil.HookPointData{}
 
 }
 
 type CarWithCallbacks struct {
-	models.BaseModel
+	mdl.BaseModel
 
 	Name string `json:"name"`
 
-	Ownerships []models.OwnershipModelWithIDBase `gorm:"PRELOAD:false" json:"-" betterrest:"ownership"`
+	Ownerships []mdlutil.OwnershipModelWithIDBase `gorm:"PRELOAD:false" json:"-" betterrest:"ownership"`
 }
 
 func (CarWithCallbacks) TableName() string {
@@ -144,51 +146,51 @@ func (CarWithCallbacks) TableName() string {
 }
 
 // GuardAPIEntry guards denies api call based on scope
-func (c *CarWithCallbacks) GuardAPIEntry(who models.UserIDFetchable, http models.HTTP) bool {
+func (c *CarWithCallbacks) GuardAPIEntry(who mdlutil.UserIDFetchable, http mdlutil.HTTP) bool {
 	guardAPIEntryCalled = true
 	guardAPIEntryWho = who
 	guardAPIEntryHTTP = http
 	return true // true to pass
 }
 
-func (c *CarWithCallbacks) BeforeCUPDDB(hpdata models.HookPointData, op models.CRUPDOp) error {
+func (c *CarWithCallbacks) BeforeCUPDDB(hpdata mdlutil.HookPointData, op mdlutil.CRUPDOp) error {
 	beforeCUPDDBCalled = true
 	beforeCUPDDBHpdata = hpdata
 	beforeCUPDDBOp = op
 	return nil
 }
 
-func (c *CarWithCallbacks) BeforeCreateDB(hpdata models.HookPointData) error {
+func (c *CarWithCallbacks) BeforeCreateDB(hpdata mdlutil.HookPointData) error {
 	beforeCreateDBCalled = true
 	beforeCreateDBHpdata = hpdata
 	return nil
 }
 
-func (c *CarWithCallbacks) BeforeReadDB(hpdata models.HookPointData) error {
+func (c *CarWithCallbacks) BeforeReadDB(hpdata mdlutil.HookPointData) error {
 	beforeReadDBCalled = true
 	beforeReadDBHpdata = hpdata
 	return nil
 }
 
-func (c *CarWithCallbacks) BeforeUpdateDB(hpdata models.HookPointData) error {
+func (c *CarWithCallbacks) BeforeUpdateDB(hpdata mdlutil.HookPointData) error {
 	beforeUpdateDBCalled = true
 	beforeUpdateDBHpdata = hpdata
 	return nil
 }
 
-func (c *CarWithCallbacks) BeforePatchDB(hpdata models.HookPointData) error {
+func (c *CarWithCallbacks) BeforePatchDB(hpdata mdlutil.HookPointData) error {
 	beforePatchDBCalled = true
 	beforePatchDBHpdata = hpdata
 	return nil
 }
 
-func (c *CarWithCallbacks) BeforeDeleteDB(hpdata models.HookPointData) error {
+func (c *CarWithCallbacks) BeforeDeleteDB(hpdata mdlutil.HookPointData) error {
 	beforeDeleteDBCalled = true
 	beforeDeleteDBHpdata = hpdata
 	return nil
 }
 
-func (c *CarWithCallbacks) AfterCRUPDDB(hpdata models.HookPointData, op models.CRUPDOp) error {
+func (c *CarWithCallbacks) AfterCRUPDDB(hpdata mdlutil.HookPointData, op mdlutil.CRUPDOp) error {
 	afterCRUPDDBCalled = true
 	afterCRUPDDBHpdata = hpdata
 	afterCRUPDDBOp = op
@@ -196,31 +198,31 @@ func (c *CarWithCallbacks) AfterCRUPDDB(hpdata models.HookPointData, op models.C
 	return nil
 }
 
-func (c *CarWithCallbacks) AfterCreateDB(hpdata models.HookPointData) error {
+func (c *CarWithCallbacks) AfterCreateDB(hpdata mdlutil.HookPointData) error {
 	afterCreateDBCalled = true
 	afterCreateDBHpdata = hpdata
 	return nil
 }
 
-func (c *CarWithCallbacks) AfterReadDB(hpdata models.HookPointData) error {
+func (c *CarWithCallbacks) AfterReadDB(hpdata mdlutil.HookPointData) error {
 	afterReadDBCalled = true
 	afterReadDBHpdata = hpdata
 	return nil
 }
 
-func (c *CarWithCallbacks) AfterUpdateDB(hpdata models.HookPointData) error {
+func (c *CarWithCallbacks) AfterUpdateDB(hpdata mdlutil.HookPointData) error {
 	afterUpdateDBCalled = true
 	afterUpdateDBHpdata = hpdata
 	return nil
 }
 
-func (c *CarWithCallbacks) AfterPatchDB(hpdata models.HookPointData) error {
+func (c *CarWithCallbacks) AfterPatchDB(hpdata mdlutil.HookPointData) error {
 	afterPatchDBCalled = true
 	afterPatchDBHpdata = hpdata
 	return nil
 }
 
-func (c *CarWithCallbacks) AfterDeleteDB(hpdata models.HookPointData) error {
+func (c *CarWithCallbacks) AfterDeleteDB(hpdata mdlutil.HookPointData) error {
 	afterDeleteDBCalled = true
 	afterDeleteDBHpdata = hpdata
 	return nil
@@ -228,8 +230,8 @@ func (c *CarWithCallbacks) AfterDeleteDB(hpdata models.HookPointData) error {
 
 // ----------------------------------------------------------------------------------------------
 
-func createBatchHookPoint(called *bool, bhpDataCalled *models.BatchHookPointData, opCalled *models.CRUPDOp) func(bhpData models.BatchHookPointData, op models.CRUPDOp) error {
-	return func(bhpData models.BatchHookPointData, op models.CRUPDOp) error {
+func createBatchHookPoint(called *bool, bhpDataCalled *mdlutil.BatchHookPointData, opCalled *mdlutil.CRUPDOp) func(bhpData mdlutil.BatchHookPointData, op mdlutil.CRUPDOp) error {
+	return func(bhpData mdlutil.BatchHookPointData, op mdlutil.CRUPDOp) error {
 		*called = true
 
 		deepCopyBHPData(&bhpData, bhpDataCalled)
@@ -239,8 +241,8 @@ func createBatchHookPoint(called *bool, bhpDataCalled *models.BatchHookPointData
 	}
 }
 
-func createBatchSingleMethodHookPoint(called *bool, bhpDataCalled *models.BatchHookPointData) func(bhpData models.BatchHookPointData) error {
-	return func(bhpData models.BatchHookPointData) error {
+func createBatchSingleMethodHookPoint(called *bool, bhpDataCalled *mdlutil.BatchHookPointData) func(bhpData mdlutil.BatchHookPointData) error {
+	return func(bhpData mdlutil.BatchHookPointData) error {
 		*called = true
 
 		deepCopyBHPData(&bhpData, bhpDataCalled)
@@ -258,9 +260,9 @@ func (c *CarControllerWithoutCallbacks) Init(data *hook.InitData, args ...interf
 
 type CarHandlerJBT struct {
 	// From init
-	who        models.UserIDFetchable
+	who        mdlutil.UserIDFetchable
 	typeString string
-	roles      []models.UserRole
+	roles      []userrole.UserRole
 	urlParams  map[urlparam.Param]interface{}
 	info       *hook.EndPoint
 
@@ -327,7 +329,7 @@ type TestBaseMapperCreateSuite struct {
 	suite.Suite
 	db         *gorm.DB
 	mock       sqlmock.Sqlmock
-	who        models.UserIDFetchable
+	who        mdlutil.UserIDFetchable
 	typeString string
 }
 
@@ -337,7 +339,7 @@ func (suite *TestBaseMapperCreateSuite) SetupTest() {
 	// suite.db.LogMode(true)
 	suite.db.SingularTable(true)
 	suite.mock = mock
-	suite.who = &WhoMock{Oid: datatypes.NewUUID()} // userid
+	suite.who = &WhoMock{Oid: datatype.NewUUID()} // userid
 	suite.typeString = "cars"
 
 	// clear registry
@@ -349,9 +351,9 @@ func (suite *TestBaseMapperCreateSuite) SetupTest() {
 // All methods that begin with "Test" are run as tests within a
 // suite.
 func (suite *TestBaseMapperCreateSuite) TestCreateOne_WhenGiven_GotCar() {
-	carID := datatypes.NewUUID()
+	carID := datatype.NewUUID()
 	carName := "DSM"
-	var modelObj models.IModel = &Car{BaseModel: models.BaseModel{ID: carID}, Name: carName}
+	var modelObj mdl.IModel = &Car{BaseModel: mdl.BaseModel{ID: carID}, Name: carName}
 
 	suite.mock.ExpectBegin()
 	stmt := `INSERT INTO "car" ("id","created_at","updated_at","deleted_at","name") VALUES ($1,$2,$3,$4,$5) RETURNING "car"."id"`
@@ -395,9 +397,9 @@ func (suite *TestBaseMapperCreateSuite) TestCreateOne_WhenGiven_GotCar() {
 }
 
 func (suite *TestBaseMapperCreateSuite) TestCreateOne_WhenNoController_CallRelevantOldCallbacks() {
-	carID := datatypes.NewUUID()
+	carID := datatype.NewUUID()
 	carName := "DSM"
-	var modelObj models.IModel = &CarWithCallbacks{BaseModel: models.BaseModel{ID: carID}, Name: carName}
+	var modelObj mdl.IModel = &CarWithCallbacks{BaseModel: mdl.BaseModel{ID: carID}, Name: carName}
 
 	suite.mock.ExpectBegin()
 	stmt := `INSERT INTO "car" ("id","created_at","updated_at","deleted_at","name") VALUES ($1,$2,$3,$4,$5) RETURNING "car"."id"`
@@ -436,15 +438,15 @@ func (suite *TestBaseMapperCreateSuite) TestCreateOne_WhenNoController_CallRelev
 		return
 	}
 
-	role := models.UserRoleAdmin
-	hpdata := models.HookPointData{DB: tx2, Who: suite.who, TypeString: suite.typeString,
-		Cargo: &models.ModelCargo{Payload: cargo.Payload}, Role: &role, URLParams: options}
+	role := userrole.UserRoleAdmin
+	hpdata := mdlutil.HookPointData{DB: tx2, Who: suite.who, TypeString: suite.typeString,
+		Cargo: &mdlutil.ModelCargo{Payload: cargo.Payload}, Role: &role, URLParams: options}
 
 	if _, ok := retVal.Ms[0].(*CarWithCallbacks); assert.True(suite.T(), ok) {
 		assert.False(suite.T(), guardAPIEntryCalled) // not called when going through mapper
 		// Create has no before callback since haven't been read
 		if assert.True(suite.T(), beforeCUPDDBCalled) {
-			assert.Equal(suite.T(), beforeCUPDDBOp, models.CRUPDOpCreate)
+			assert.Equal(suite.T(), beforeCUPDDBOp, mdlutil.CRUPDOpCreate)
 			assert.Condition(suite.T(), hpDataComparison(&hpdata, &beforeCUPDDBHpdata))
 		}
 
@@ -453,7 +455,7 @@ func (suite *TestBaseMapperCreateSuite) TestCreateOne_WhenNoController_CallRelev
 		}
 
 		if assert.True(suite.T(), afterCRUPDDBCalled) {
-			assert.Equal(suite.T(), afterCRUPDDBOp, models.CRUPDOpCreate)
+			assert.Equal(suite.T(), afterCRUPDDBOp, mdlutil.CRUPDOpCreate)
 			assert.Condition(suite.T(), hpDataComparison(&hpdata, &afterCRUPDDBHpdata))
 		}
 		if assert.True(suite.T(), afterCreateDBCalled) {
@@ -463,9 +465,9 @@ func (suite *TestBaseMapperCreateSuite) TestCreateOne_WhenNoController_CallRelev
 }
 
 func (suite *TestBaseMapperCreateSuite) TestCreateOne_WhenHavingController_NotCallOldCallbacks() {
-	carID := datatypes.NewUUID()
+	carID := datatype.NewUUID()
 	carName := "DSM"
-	var modelObj models.IModel = &CarWithCallbacks{BaseModel: models.BaseModel{ID: carID}, Name: carName}
+	var modelObj mdl.IModel = &CarWithCallbacks{BaseModel: mdl.BaseModel{ID: carID}, Name: carName}
 
 	suite.mock.ExpectBegin()
 	stmt := `INSERT INTO "car" ("id","created_at","updated_at","deleted_at","name") VALUES ($1,$2,$3,$4,$5) RETURNING "car"."id"`
@@ -523,9 +525,9 @@ func (suite *TestBaseMapperCreateSuite) TestCreateOne_WhenHavingController_NotCa
 }
 
 func (suite *TestBaseMapperCreateSuite) TestCreateOne_WhenHavingController_CallRelevantControllerCallbacks() {
-	carID := datatypes.NewUUID()
+	carID := datatype.NewUUID()
 	carName := "DSM"
-	var modelObj models.IModel = &CarWithCallbacks{BaseModel: models.BaseModel{ID: carID}, Name: carName}
+	var modelObj mdl.IModel = &CarWithCallbacks{BaseModel: mdl.BaseModel{ID: carID}, Name: carName}
 
 	suite.mock.ExpectBegin()
 	stmt := `INSERT INTO "car" ("id","created_at","updated_at","deleted_at","name") VALUES ($1,$2,$3,$4,$5) RETURNING "car"."id"`
@@ -544,7 +546,7 @@ func (suite *TestBaseMapperCreateSuite) TestCreateOne_WhenHavingController_CallR
 
 	mapper := SharedOwnershipMapper()
 
-	// var modelObj2 models.IModel
+	// var modelObj2 mdl.IModel
 	var tx2 *gorm.DB
 	var retVal *MapperRet
 	ep := hook.EndPoint{
@@ -565,9 +567,9 @@ func (suite *TestBaseMapperCreateSuite) TestCreateOne_WhenHavingController_CallR
 		return
 	}
 
-	role := models.UserRoleAdmin
-	data := hook.Data{Ms: []models.IModel{&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID}, Name: carName}}, DB: tx2,
-		Roles: []models.UserRole{role}, Cargo: &cargo}
+	role := userrole.UserRoleAdmin
+	data := hook.Data{Ms: []mdl.IModel{&CarWithCallbacks{BaseModel: mdl.BaseModel{ID: carID}, Name: carName}}, DB: tx2,
+		Roles: []userrole.UserRole{role}, Cargo: &cargo}
 
 	ctrls := retVal.Fetcher.GetAllInstantiatedHanders()
 	if !assert.Len(suite.T(), ctrls, 1) {
@@ -597,16 +599,16 @@ func (suite *TestBaseMapperCreateSuite) TestCreateOne_WhenHavingController_CallR
 }
 
 func (suite *TestBaseMapperCreateSuite) TestCreateMany_WhenGiven_GotCars() {
-	carID1 := datatypes.NewUUID()
+	carID1 := datatype.NewUUID()
 	carName1 := "DSM"
-	carID2 := datatypes.NewUUID()
+	carID2 := datatype.NewUUID()
 	carName2 := "DSM4Life"
-	carID3 := datatypes.NewUUID()
+	carID3 := datatype.NewUUID()
 	carName3 := "Eclipse"
-	modelObjs := []models.IModel{
-		&Car{BaseModel: models.BaseModel{ID: carID1}, Name: carName1},
-		&Car{BaseModel: models.BaseModel{ID: carID2}, Name: carName2},
-		&Car{BaseModel: models.BaseModel{ID: carID3}, Name: carName3},
+	modelObjs := []mdl.IModel{
+		&Car{BaseModel: mdl.BaseModel{ID: carID1}, Name: carName1},
+		&Car{BaseModel: mdl.BaseModel{ID: carID2}, Name: carName2},
+		&Car{BaseModel: mdl.BaseModel{ID: carID3}, Name: carName3},
 	}
 
 	suite.mock.ExpectBegin()
@@ -618,15 +620,15 @@ func (suite *TestBaseMapperCreateSuite) TestCreateMany_WhenGiven_GotCars() {
 
 	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt1)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(carID1))
 	// actually it might not be possible to fetch the id gorm gives
-	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt2)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(datatypes.NewUUID()))
+	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt2)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(datatype.NewUUID()))
 	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt3)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(carID1))
 
 	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt1)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(carID2))
-	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt2)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(datatypes.NewUUID()))
+	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt2)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(datatype.NewUUID()))
 	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt3)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(carID2))
 
 	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt1)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(carID3))
-	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt2)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(datatypes.NewUUID()))
+	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt2)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(datatype.NewUUID()))
 	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt3)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(carID3))
 	suite.mock.ExpectCommit()
 
@@ -664,16 +666,16 @@ func (suite *TestBaseMapperCreateSuite) TestCreateMany_WhenGiven_GotCars() {
 }
 
 func (suite *TestBaseMapperCreateSuite) TestCreateMany_WhenNoController_CallRelevantOldCallbacks() {
-	carID1 := datatypes.NewUUID()
+	carID1 := datatype.NewUUID()
 	carName1 := "DSM"
-	carID2 := datatypes.NewUUID()
+	carID2 := datatype.NewUUID()
 	carName2 := "DSM4Life"
-	carID3 := datatypes.NewUUID()
+	carID3 := datatype.NewUUID()
 	carName3 := "Eclipse"
-	modelObjs := []models.IModel{
-		&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID1}, Name: carName1},
-		&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID2}, Name: carName2},
-		&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID3}, Name: carName3},
+	modelObjs := []mdl.IModel{
+		&CarWithCallbacks{BaseModel: mdl.BaseModel{ID: carID1}, Name: carName1},
+		&CarWithCallbacks{BaseModel: mdl.BaseModel{ID: carID2}, Name: carName2},
+		&CarWithCallbacks{BaseModel: mdl.BaseModel{ID: carID3}, Name: carName3},
 	}
 
 	suite.mock.ExpectBegin()
@@ -685,15 +687,15 @@ func (suite *TestBaseMapperCreateSuite) TestCreateMany_WhenNoController_CallRele
 
 	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt1)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(carID1))
 	// actually it might not be possible to fetch the id gorm gives
-	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt2)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(datatypes.NewUUID()))
+	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt2)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(datatype.NewUUID()))
 	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt3)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(carID1))
 
 	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt1)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(carID2))
-	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt2)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(datatypes.NewUUID()))
+	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt2)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(datatype.NewUUID()))
 	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt3)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(carID2))
 
 	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt1)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(carID3))
-	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt2)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(datatypes.NewUUID()))
+	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt2)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(datatype.NewUUID()))
 	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt3)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(carID3))
 	suite.mock.ExpectCommit()
 
@@ -701,21 +703,21 @@ func (suite *TestBaseMapperCreateSuite) TestCreateMany_WhenNoController_CallRele
 	cargo := hook.Cargo{}
 
 	var beforeCalled bool
-	var beforeData models.BatchHookPointData
-	var beforeOp models.CRUPDOp
+	var beforeData mdlutil.BatchHookPointData
+	var beforeOp mdlutil.CRUPDOp
 	before := createBatchHookPoint(&beforeCalled, &beforeData, &beforeOp)
 
 	var afterCalled bool
-	var afterData models.BatchHookPointData
-	var afterOp models.CRUPDOp
+	var afterData mdlutil.BatchHookPointData
+	var afterOp mdlutil.CRUPDOp
 	after := createBatchHookPoint(&afterCalled, &afterData, &afterOp)
 
 	var beforeCreateCalled bool
-	var beforeCreateData models.BatchHookPointData
+	var beforeCreateData mdlutil.BatchHookPointData
 	beforeCreate := createBatchSingleMethodHookPoint(&beforeCreateCalled, &beforeCreateData)
 
 	var afterCreateCalled bool
-	var afterCreateData models.BatchHookPointData
+	var afterCreateData mdlutil.BatchHookPointData
 	afterCreate := createBatchSingleMethodHookPoint(&afterCreateCalled, &afterCreateData)
 
 	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
@@ -739,17 +741,17 @@ func (suite *TestBaseMapperCreateSuite) TestCreateMany_WhenNoController_CallRele
 	if !assert.Nil(suite.T(), retErr) {
 		return
 	}
-	roles := []models.UserRole{models.UserRoleAdmin, models.UserRoleAdmin, models.UserRoleAdmin}
+	roles := []userrole.UserRole{userrole.UserRoleAdmin, userrole.UserRoleAdmin, userrole.UserRoleAdmin}
 
 	// Expected
-	expectedData := models.BatchHookPointData{
-		Ms: []models.IModel{
-			&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID1}, Name: carName1},
-			&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID2}, Name: carName2},
-			&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID3}, Name: carName3},
+	expectedData := mdlutil.BatchHookPointData{
+		Ms: []mdl.IModel{
+			&CarWithCallbacks{BaseModel: mdl.BaseModel{ID: carID1}, Name: carName1},
+			&CarWithCallbacks{BaseModel: mdl.BaseModel{ID: carID2}, Name: carName2},
+			&CarWithCallbacks{BaseModel: mdl.BaseModel{ID: carID3}, Name: carName3},
 		},
 		DB: tx2, Who: suite.who, TypeString: suite.typeString, Roles: roles, URLParams: options,
-		Cargo: &models.BatchHookCargo{Payload: cargo.Payload},
+		Cargo: &mdlutil.BatchHookCargo{Payload: cargo.Payload},
 	}
 
 	if assert.True(suite.T(), beforeCalled) {
@@ -757,7 +759,7 @@ func (suite *TestBaseMapperCreateSuite) TestCreateMany_WhenNoController_CallRele
 		// It won't be null because it ain't pointers
 		// assert.Nil(suite.T(), beforeData.Ms[0].GetCreatedAt())
 		// assert.Nil(suite.T(), beforeData.Ms[0].GetUpdatedAt())
-		assert.Equal(suite.T(), beforeOp, models.CRUPDOpCreate)
+		assert.Equal(suite.T(), beforeOp, mdlutil.CRUPDOpCreate)
 	}
 
 	if assert.True(suite.T(), beforeCreateCalled) {
@@ -768,7 +770,7 @@ func (suite *TestBaseMapperCreateSuite) TestCreateMany_WhenNoController_CallRele
 
 	if assert.True(suite.T(), afterCalled) {
 		assert.Condition(suite.T(), bhpDataComparison(&expectedData, &afterData))
-		assert.Equal(suite.T(), afterOp, models.CRUPDOpCreate)
+		assert.Equal(suite.T(), afterOp, mdlutil.CRUPDOpCreate)
 		// assert.NotNil(suite.T(), afterData.Ms[0].GetCreatedAt())
 		// assert.NotNil(suite.T(), afterData.Ms[0].GetUpdatedAt())
 	}
@@ -781,16 +783,16 @@ func (suite *TestBaseMapperCreateSuite) TestCreateMany_WhenNoController_CallRele
 }
 
 func (suite *TestBaseMapperCreateSuite) TestCreateMany_WhenHavingController_NotCallOldCallbacks() {
-	carID1 := datatypes.NewUUID()
+	carID1 := datatype.NewUUID()
 	carName1 := "DSM"
-	carID2 := datatypes.NewUUID()
+	carID2 := datatype.NewUUID()
 	carName2 := "DSM4Life"
-	carID3 := datatypes.NewUUID()
+	carID3 := datatype.NewUUID()
 	carName3 := "Eclipse"
-	modelObjs := []models.IModel{
-		&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID1}, Name: carName1},
-		&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID2}, Name: carName2},
-		&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID3}, Name: carName3},
+	modelObjs := []mdl.IModel{
+		&CarWithCallbacks{BaseModel: mdl.BaseModel{ID: carID1}, Name: carName1},
+		&CarWithCallbacks{BaseModel: mdl.BaseModel{ID: carID2}, Name: carName2},
+		&CarWithCallbacks{BaseModel: mdl.BaseModel{ID: carID3}, Name: carName3},
 	}
 
 	suite.mock.ExpectBegin()
@@ -802,15 +804,15 @@ func (suite *TestBaseMapperCreateSuite) TestCreateMany_WhenHavingController_NotC
 
 	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt1)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(carID1))
 	// actually it might not be possible to fetch the id gorm gives
-	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt2)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(datatypes.NewUUID()))
+	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt2)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(datatype.NewUUID()))
 	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt3)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(carID1))
 
 	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt1)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(carID2))
-	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt2)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(datatypes.NewUUID()))
+	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt2)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(datatype.NewUUID()))
 	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt3)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(carID2))
 
 	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt1)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(carID3))
-	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt2)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(datatypes.NewUUID()))
+	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt2)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(datatype.NewUUID()))
 	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt3)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(carID3))
 	suite.mock.ExpectCommit()
 
@@ -818,21 +820,21 @@ func (suite *TestBaseMapperCreateSuite) TestCreateMany_WhenHavingController_NotC
 	cargo := hook.Cargo{}
 
 	var beforeCalled bool
-	var beforeData models.BatchHookPointData
-	var beforeOp models.CRUPDOp
+	var beforeData mdlutil.BatchHookPointData
+	var beforeOp mdlutil.CRUPDOp
 	before := createBatchHookPoint(&beforeCalled, &beforeData, &beforeOp)
 
 	var afterCalled bool
-	var afterData models.BatchHookPointData
-	var afterOp models.CRUPDOp
+	var afterData mdlutil.BatchHookPointData
+	var afterOp mdlutil.CRUPDOp
 	after := createBatchHookPoint(&afterCalled, &afterData, &afterOp)
 
 	var beforeCreateCalled bool
-	var beforeCreateData models.BatchHookPointData
+	var beforeCreateData mdlutil.BatchHookPointData
 	beforeCreate := createBatchSingleMethodHookPoint(&beforeCreateCalled, &beforeCreateData)
 
 	var afterCreateCalled bool
-	var afterCreateData models.BatchHookPointData
+	var afterCreateData mdlutil.BatchHookPointData
 	afterCreate := createBatchSingleMethodHookPoint(&afterCreateCalled, &afterCreateData)
 
 	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
@@ -862,16 +864,16 @@ func (suite *TestBaseMapperCreateSuite) TestCreateMany_WhenHavingController_NotC
 }
 
 func (suite *TestBaseMapperCreateSuite) TestCreateMany_WhenHavingController_CallRelevantControllerCallbacks() {
-	carID1 := datatypes.NewUUID()
+	carID1 := datatype.NewUUID()
 	carName1 := "DSM"
-	carID2 := datatypes.NewUUID()
+	carID2 := datatype.NewUUID()
 	carName2 := "DSM4Life"
-	carID3 := datatypes.NewUUID()
+	carID3 := datatype.NewUUID()
 	carName3 := "Eclipse"
-	modelObjs := []models.IModel{
-		&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID1}, Name: carName1},
-		&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID2}, Name: carName2},
-		&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID3}, Name: carName3},
+	modelObjs := []mdl.IModel{
+		&CarWithCallbacks{BaseModel: mdl.BaseModel{ID: carID1}, Name: carName1},
+		&CarWithCallbacks{BaseModel: mdl.BaseModel{ID: carID2}, Name: carName2},
+		&CarWithCallbacks{BaseModel: mdl.BaseModel{ID: carID3}, Name: carName3},
 	}
 
 	suite.mock.ExpectBegin()
@@ -883,15 +885,15 @@ func (suite *TestBaseMapperCreateSuite) TestCreateMany_WhenHavingController_Call
 
 	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt1)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(carID1))
 	// actually it might not be possible to fetch the id gorm gives
-	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt2)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(datatypes.NewUUID()))
+	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt2)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(datatype.NewUUID()))
 	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt3)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(carID1))
 
 	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt1)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(carID2))
-	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt2)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(datatypes.NewUUID()))
+	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt2)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(datatype.NewUUID()))
 	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt3)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(carID2))
 
 	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt1)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(carID3))
-	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt2)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(datatypes.NewUUID()))
+	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt2)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(datatype.NewUUID()))
 	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt3)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(carID3))
 	suite.mock.ExpectCommit()
 
@@ -920,11 +922,11 @@ func (suite *TestBaseMapperCreateSuite) TestCreateMany_WhenHavingController_Call
 		return
 	}
 
-	roles := []models.UserRole{models.UserRoleAdmin, models.UserRoleAdmin, models.UserRoleAdmin}
-	data := hook.Data{Ms: []models.IModel{
-		&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID1}, Name: carName1},
-		&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID2}, Name: carName2},
-		&CarWithCallbacks{BaseModel: models.BaseModel{ID: carID3}, Name: carName3},
+	roles := []userrole.UserRole{userrole.UserRoleAdmin, userrole.UserRoleAdmin, userrole.UserRoleAdmin}
+	data := hook.Data{Ms: []mdl.IModel{
+		&CarWithCallbacks{BaseModel: mdl.BaseModel{ID: carID1}, Name: carName1},
+		&CarWithCallbacks{BaseModel: mdl.BaseModel{ID: carID2}, Name: carName2},
+		&CarWithCallbacks{BaseModel: mdl.BaseModel{ID: carID3}, Name: carName3},
 	}, DB: tx2, Roles: roles, Cargo: &cargo}
 
 	ctrls := retVal.Fetcher.GetAllInstantiatedHanders()
@@ -1104,7 +1106,7 @@ func dataComparisonNoDB(expected *hook.Data, actual *hook.Data) func() (success 
 	}
 }
 
-func hpDataComparison(expected *models.HookPointData, actual *models.HookPointData) func() (success bool) {
+func hpDataComparison(expected *mdlutil.HookPointData, actual *mdlutil.HookPointData) func() (success bool) {
 	return func() (success bool) {
 		if expected.DB != actual.DB {
 			return false
@@ -1149,7 +1151,7 @@ func hpDataComparison(expected *models.HookPointData, actual *models.HookPointDa
 }
 
 // For delete calls, since unscope is called
-func hpDataComparisonNoDB(expected *models.HookPointData, actual *models.HookPointData) func() (success bool) {
+func hpDataComparisonNoDB(expected *mdlutil.HookPointData, actual *mdlutil.HookPointData) func() (success bool) {
 	return func() (success bool) {
 		if expected.Who != actual.Who {
 			log.Println("return false 2")
@@ -1189,7 +1191,7 @@ func hpDataComparisonNoDB(expected *models.HookPointData, actual *models.HookPoi
 	}
 }
 
-func bhpDataComparison(expected *models.BatchHookPointData, actual *models.BatchHookPointData) func() (success bool) {
+func bhpDataComparison(expected *mdlutil.BatchHookPointData, actual *mdlutil.BatchHookPointData) func() (success bool) {
 	return func() (success bool) {
 		if expected.DB != actual.DB {
 			log.Println(".............1", actual.DB)
@@ -1274,7 +1276,7 @@ func bhpDataComparison(expected *models.BatchHookPointData, actual *models.Batch
 	}
 }
 
-func bhpDataComparisonNoDB(expected *models.BatchHookPointData, actual *models.BatchHookPointData) func() (success bool) {
+func bhpDataComparisonNoDB(expected *mdlutil.BatchHookPointData, actual *mdlutil.BatchHookPointData) func() (success bool) {
 	return func() (success bool) {
 		if expected.Who != actual.Who {
 			log.Println(".............2")
@@ -1354,21 +1356,21 @@ func bhpDataComparisonNoDB(expected *models.BatchHookPointData, actual *models.B
 	}
 }
 
-func deepCopyBHPData(src *models.BatchHookPointData, dst *models.BatchHookPointData) {
+func deepCopyBHPData(src *mdlutil.BatchHookPointData, dst *mdlutil.BatchHookPointData) {
 	dst.DB = src.DB
 	dst.Who = src.Who
 	dst.TypeString = src.TypeString
-	dst.Cargo = &models.BatchHookCargo{Payload: src.Cargo.Payload}
+	dst.Cargo = &mdlutil.BatchHookCargo{Payload: src.Cargo.Payload}
 	dst.Roles = src.Roles
 	dst.URLParams = src.URLParams
 
 	// https://stackoverflow.com/questions/56355212/deep-copying-data-structures-in-golang
-	dst.Ms = make([]models.IModel, len(src.Ms))
+	dst.Ms = make([]mdl.IModel, len(src.Ms))
 	for i, model := range src.Ms {
 		v := reflect.ValueOf(model).Elem()
 		vp2 := reflect.New(v.Type())
 		vp2.Elem().Set(v)
-		dst.Ms[i] = vp2.Interface().(models.IModel)
+		dst.Ms[i] = vp2.Interface().(mdl.IModel)
 	}
 }
 
@@ -1380,12 +1382,12 @@ func deepCopyData(src *hook.Data, dst *hook.Data) {
 	// dst.URLParams = src.URLParams
 
 	// https://stackoverflow.com/questions/56355212/deep-copying-data-structures-in-golang
-	dst.Ms = make([]models.IModel, len(src.Ms))
+	dst.Ms = make([]mdl.IModel, len(src.Ms))
 	for i, model := range src.Ms {
 		v := reflect.ValueOf(model).Elem()
 		vp2 := reflect.New(v.Type())
 		vp2.Elem().Set(v)
-		dst.Ms[i] = vp2.Interface().(models.IModel)
+		dst.Ms[i] = vp2.Interface().(mdl.IModel)
 	}
 }
 
