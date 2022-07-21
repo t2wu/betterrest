@@ -10,12 +10,11 @@ import (
 )
 
 var once sync.Once
-var once2 sync.Once
 var db *gorm.DB
 
 // SetUpDB set the db instance
 func SetUpDB(_db *gorm.DB) {
-	once2.Do(func() {
+	once.Do(func() {
 		// if toLog == "true" {
 		// 	_db.LogMode(true)
 		// }
