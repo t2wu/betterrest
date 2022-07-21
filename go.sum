@@ -124,6 +124,8 @@ github.com/stretchr/testify v1.8.0 h1:pSgiaMZlXftHpm5L7V1+rVB+AZJydKsMxsQBIJw4PK
 github.com/stretchr/testify v1.8.0/go.mod h1:yNjHg4UonilssWZ8iaSj1OCr/vHnekPRkoO+kdMU+MU=
 github.com/t2wu/qry v0.0.1 h1:ySpD9tZZB9n62EWpGom2RTsSLO1mPhT8qgUR0MCiPec=
 github.com/t2wu/qry v0.0.1/go.mod h1:rLKQ1eFkPTv5cD++ALnpQc8+JHbFvJV9I5WgRK2SmOw=
+github.com/t2wu/qry v0.0.2 h1:Qhix6wewSITDRgmGwLfADagVCKptA7mu64Gy+xQeQjc=
+github.com/t2wu/qry v0.0.2/go.mod h1:rLKQ1eFkPTv5cD++ALnpQc8+JHbFvJV9I5WgRK2SmOw=
 github.com/twpayne/go-geom v1.4.1 h1:LeivFqaGBRfyg0XJJ9pkudcptwhSSrYN9KZUW6HcgdA=
 github.com/twpayne/go-geom v1.4.1/go.mod h1:k/zktXdL+qnA6OgKsdEGUTA17jbQ2ZPTUa3CCySuGpE=
 github.com/twpayne/go-kml v1.5.2/go.mod h1:kz8jAiIz6FIdU2Zjce9qGlVtgFYES9vt7BTPBHf5jl4=
