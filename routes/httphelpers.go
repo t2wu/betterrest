@@ -80,7 +80,7 @@ func ModelOrModelsFromJSONBody(r *http.Request, typeString string, who mdlutil.U
 
 		if v, ok := modelObj.(mdlutil.IValidate); ok {
 			who := WhoFromContext(r)
-			http := mdlutil.HTTP{Endpoint: r.URL.Path, Op: mdlutil.HTTPMethodToCRUDOp(r.Method)}
+			http := mdlutil.HTTP{Endpoint: r.URL.Path, Op: mdlutil.HTTPMethodToRESTOp(r.Method)}
 			if err := v.Validate(who, http); err != nil {
 				return nil, nil, webrender.NewErrValidation(err)
 			}
@@ -119,7 +119,7 @@ func ModelOrModelsFromJSONBody(r *http.Request, typeString string, who mdlutil.U
 		}
 
 		if v, ok := modelObj.(mdlutil.IValidate); ok {
-			http := mdlutil.HTTP{Endpoint: r.URL.Path, Op: mdlutil.HTTPMethodToCRUDOp(r.Method)}
+			http := mdlutil.HTTP{Endpoint: r.URL.Path, Op: mdlutil.HTTPMethodToRESTOp(r.Method)}
 			if err := v.Validate(who, http); err != nil {
 				return nil, nil, webrender.NewErrValidation(err)
 			}
@@ -189,7 +189,7 @@ func ModelsFromJSONBody(r *http.Request, typeString string, who mdlutil.UserIDFe
 
 		if v, ok := modelObj.(mdlutil.IValidate); ok {
 			who := WhoFromContext(r)
-			http := mdlutil.HTTP{Endpoint: r.URL.Path, Op: mdlutil.HTTPMethodToCRUDOp(r.Method)}
+			http := mdlutil.HTTP{Endpoint: r.URL.Path, Op: mdlutil.HTTPMethodToRESTOp(r.Method)}
 			if err := v.Validate(who, http); err != nil {
 				return nil, webrender.NewErrValidation(err)
 			}
@@ -248,7 +248,7 @@ func ModelFromJSONBody(r *http.Request, typeString string, who mdlutil.UserIDFet
 
 	if v, ok := modelObj.(mdlutil.IValidate); ok {
 		who := WhoFromContext(r)
-		http := mdlutil.HTTP{Endpoint: r.URL.Path, Op: mdlutil.HTTPMethodToCRUDOp(r.Method)}
+		http := mdlutil.HTTP{Endpoint: r.URL.Path, Op: mdlutil.HTTPMethodToRESTOp(r.Method)}
 		if err := v.Validate(who, http); err != nil {
 			return nil, webrender.NewErrValidation(err)
 		}

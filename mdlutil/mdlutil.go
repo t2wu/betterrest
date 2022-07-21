@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
+	"github.com/t2wu/betterrest/hook/rest"
 	"github.com/t2wu/betterrest/hook/userrole"
 	"github.com/t2wu/betterrest/libs/urlparam"
 	"github.com/t2wu/betterrest/libs/utils/jsontrans"
@@ -45,23 +46,23 @@ const (
 // HTTP stores HTTP request information
 type HTTP struct {
 	Endpoint string
-	Op       CRUPDOp
+	Op       rest.Op
 }
 
-func HTTPMethodToCRUDOp(method string) CRUPDOp {
+func HTTPMethodToRESTOp(method string) rest.Op {
 	switch method {
 	case "GET":
-		return CRUPDOpRead
+		return rest.OpRead
 	case "POST":
-		return CRUPDOpCreate
+		return rest.OpCreate
 	case "UPDATE":
-		return CRUPDOpUpdate
+		return rest.OpUpdate
 	case "PATCH":
-		return CRUPDOpPatch
+		return rest.OpPatch
 	case "DELETE":
-		return CRUPDOpDelete
+		return rest.OpDelete
 	default:
-		return CRUPDOpOther // shouldn't be here
+		return rest.OpOther // shouldn't be here
 	}
 }
 

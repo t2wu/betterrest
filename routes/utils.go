@@ -93,7 +93,7 @@ func GuardMiddleWare(typeString string) func(c *gin.Context) {
 		if !registry.ModelRegistry[typeString].HandlerMap.HasAttemptRegisteringAnyHandler() {
 			modelObj := registry.NewFromTypeString(typeString)
 			if m, ok := modelObj.(mdlutil.IGuardAPIEntry); ok {
-				http := mdlutil.HTTP{Endpoint: r.URL.Path, Op: mdlutil.HTTPMethodToCRUDOp(r.Method)}
+				http := mdlutil.HTTP{Endpoint: r.URL.Path, Op: mdlutil.HTTPMethodToRESTOp(r.Method)}
 				if !m.GuardAPIEntry(who, http) {
 					render.Render(w, r, webrender.NewErrPermissionDeniedForAPIEndpoint(nil))
 					c.Abort() // abort
