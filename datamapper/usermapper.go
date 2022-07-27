@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 
 	"github.com/go-playground/validator/v10"
@@ -88,6 +89,11 @@ func (mapper *UserMapper) CreateOne(db *gorm.DB, modelObj mdl.IModel, ep *hook.E
 
 	modelObj2, retval := opCoreV1(j, mapper.Service.CreateOneCore)
 	if retval != nil {
+		if strings.Contains(retval.Error.Error(), "duplicate key") {
+			err := fmt.Errorf("account already exists")
+			renderer := webrender.NewErrDuplicatedRecord(err)
+			return modelObj2, webrender.NewRetValWithRendererError(err, renderer)
+		}
 		return modelObj2, retval
 	}
 

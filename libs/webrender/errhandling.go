@@ -302,6 +302,22 @@ type ErrCustomRender struct {
 	ErrResponse
 }
 
+func NewErrDuplicatedRecord(err error) render.Renderer {
+	return &ErrDuplicatedRecordRender{
+		ErrResponse{
+			HTTPStatusCode: http.StatusBadRequest,
+			Code:           18,
+			StatusText:     "duplicated record",
+			ErrorText:      ErrorToSensibleString(err),
+		},
+	}
+}
+
+// ErrCustomRender some problem with output custom rendering
+type ErrDuplicatedRecordRender struct {
+	ErrResponse
+}
+
 // General CRUD errors
 
 // NewErrCreate creates a new ErrCreate
