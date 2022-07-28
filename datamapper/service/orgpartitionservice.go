@@ -84,7 +84,7 @@ func (serv *OrgPartition) ReadOneCore(db *gorm.DB, who mdlutil.UserIDFetchable, 
 	secondJoin := fmt.Sprintf(`INNER JOIN "%s" ON "%s".id = "%s".model_id AND "%s".user_id = ?`, joinTableName, orgTableName, joinTableName, joinTableName)
 
 	// For Org partition date is required
-	_, _, cstart, cstop, _, _, _, _ := urlparam.GetOptions(options)
+	_, _, cstart, cstop, _, _, _, _, _ := urlparam.GetOptions(options)
 	if cstart == nil || cstop == nil {
 		return nil, userrole.UserRoleInvalid, fmt.Errorf("GET /%s needs cstart and cstop parameters", strings.ToLower(typeString))
 	}

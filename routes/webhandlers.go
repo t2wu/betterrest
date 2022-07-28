@@ -105,6 +105,15 @@ func OrderFromQueryString(values *url.Values) *string {
 	return nil
 }
 
+func OrderByFromQueryString(values *url.Values) *string {
+	defer delete(*values, string(urlparam.ParamOrderBy))
+
+	if orderby := values.Get(string(urlparam.ParamOrderBy)); orderby != "" {
+		return &orderby
+	}
+	return nil
+}
+
 func LatestnFromQueryString(values *url.Values) *string {
 	defer delete(*values, string(urlparam.ParamLatestN))
 
@@ -318,6 +327,11 @@ func GetOptionByParsingURL(r *http.Request) (map[urlparam.Param]interface{}, err
 
 	if order := OrderFromQueryString(&values); order != nil {
 		options[urlparam.ParamOrder] = *order
+	}
+
+	if orderby := OrderByFromQueryString(&values); orderby != nil {
+		options[urlparam.ParamOrderBy] = *orderby
+		log.Println("orderby:", orderby)
 	}
 
 	if latestn := LatestnFromQueryString(&values); latestn != nil {

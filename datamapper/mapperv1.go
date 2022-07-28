@@ -15,6 +15,7 @@ import (
 	"github.com/t2wu/betterrest/hook"
 	"github.com/t2wu/betterrest/hook/userrole"
 	"github.com/t2wu/betterrest/libs/urlparam"
+	"github.com/t2wu/betterrest/libs/utils/letters"
 	"github.com/t2wu/betterrest/libs/webrender"
 	"github.com/t2wu/betterrest/mdlutil"
 	"github.com/t2wu/betterrest/registry"
@@ -109,7 +110,7 @@ func (mapper *DataMapper) ReadMany(db *gorm.DB, ep *hook.EndPoint, cargo *hook.C
 	dbClean := db
 	db = db.Set("gorm:auto_preload", true)
 
-	offset, limit, cstart, cstop, order, latestn, latestnons, totalcount := urlparam.GetOptions(ep.URLParams)
+	offset, limit, cstart, cstop, orderby, order, latestn, latestnons, totalcount := urlparam.GetOptions(ep.URLParams)
 	rtable := registry.GetTableNameFromTypeString(ep.TypeString)
 
 	if cstart != nil && cstop != nil {
@@ -132,7 +133,10 @@ func (mapper *DataMapper) ReadMany(db *gorm.DB, ep *hook.EndPoint, cargo *hook.C
 		}
 	}
 
-	db = constructOrderFieldQueries(db, rtable, order)
+	db, err = constructOrderFieldQueries(db, ep.TypeString, rtable, orderby, order)
+	if err != nil {
+		return nil, nil, nil, &webrender.RetError{Error: err}
+	}
 	db, err = mapper.Service.GetAllQueryContructCore(db, ep.Who, ep.TypeString)
 	if err != nil {
 		return nil, nil, nil, &webrender.RetError{Error: err}
@@ -654,13 +658,26 @@ func (mapper *DataMapper) sortOldModelAndRolesByIds(oldModelObjs []mdl.IModel, r
 	return oldModelObjSorted, rolesSorted
 }
 
-func constructOrderFieldQueries(db *gorm.DB, tableName string, order *string) *gorm.DB {
-	if order != nil && *order == "asc" {
-		db = db.Order(fmt.Sprintf("\"%s\".created_at ASC", tableName))
-	} else {
-		db = db.Order(fmt.Sprintf("\"%s\".created_at DESC", tableName)) // descending by default
+func constructOrderFieldQueries(db *gorm.DB, typeString string, tableName string, orderby *string, order *string) (*gorm.DB, error) {
+	if orderby != nil {
+		modelObj := registry.NewFromTypeString(typeString)
+		// Make sure orderby is within the field
+		if _, err := datatype.GetModelFieldTypeIfValid(modelObj, letters.CamelCaseToPascalCase(*orderby)); err != nil {
+			return nil, err
+		}
 	}
-	return db
+
+	if orderby == nil {
+		orderbyField := "created_at"
+		orderby = &orderbyField
+	}
+
+	if order != nil && *order == "asc" {
+		db = db.Order(fmt.Sprintf(`"%s"."%s" ASC`, tableName, *orderby))
+	} else {
+		db = db.Order(fmt.Sprintf(`"%s"."%s" DESC`, tableName, *orderby)) // descending by default
+	}
+	return db, nil
 }
 
 func createBuilderFromQueryParameters(urlParams url.Values, typeString string) (*qry.PredicateRelationBuilder, error) {

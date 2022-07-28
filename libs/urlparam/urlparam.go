@@ -9,6 +9,7 @@ const (
 	ParamOffset        Param = "offset"
 	ParamLimit         Param = "limit"
 	ParamOrder         Param = "order"
+	ParamOrderBy       Param = "orderby"
 	ParamLatestN       Param = "latestn"
 	ParamLatestNOn     Param = "latestnon"
 	ParamCstart        Param = "cstart"
@@ -17,7 +18,7 @@ const (
 	ParamOtherQueries  Param = "better_otherqueries"
 )
 
-func GetOptions(options map[Param]interface{}) (offset *int, limit *int, cstart *int, cstop *int, order *string, latestn *int, latestnons []string, count bool) {
+func GetOptions(options map[Param]interface{}) (offset *int, limit *int, cstart *int, cstop *int, orderby *string, order *string, latestn *int, latestnons []string, count bool) {
 	// If key is in it, even if value is nil, ok will be true
 
 	if _, ok := options[ParamOffset]; ok {
@@ -28,6 +29,11 @@ func GetOptions(options map[Param]interface{}) (offset *int, limit *int, cstart 
 	if _, ok := options[ParamLimit]; ok {
 		v := options[ParamLimit].(int)
 		limit = &v
+	}
+
+	if _, ok := options[ParamOrderBy]; ok {
+		v := options[ParamOrderBy].(string)
+		orderby = &v
 	}
 
 	if _, ok := options[ParamOrder]; ok {
@@ -62,5 +68,5 @@ func GetOptions(options map[Param]interface{}) (offset *int, limit *int, cstart 
 		hasTotalCount = options[ParamHasTotalCount].(bool)
 	}
 
-	return offset, limit, cstart, cstop, order, latestn, latestnons, hasTotalCount
+	return offset, limit, cstart, cstop, orderby, order, latestn, latestnons, hasTotalCount
 }
