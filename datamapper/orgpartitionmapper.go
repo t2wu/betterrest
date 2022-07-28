@@ -130,7 +130,7 @@ func (mapper *OrgPartition) ReadMany(db *gorm.DB, ep *hook.EndPoint,
 	db = db.Set("gorm:auto_preload", false)
 	db2 := db
 
-	offset, limit, cstart, cstop, orderby, order, latestn, latestnons, totalcount := urlparam.GetOptions(ep.URLParams)
+	offset, limit, cstart, cstop, _, _, latestn, latestnons, totalcount := urlparam.GetOptions(ep.URLParams)
 	if cstart == nil || cstop == nil {
 		err := fmt.Errorf("GET /%s needs cstart and cstop parameters", strings.ToLower(ep.TypeString))
 		return nil, nil, nil, webrender.NewRetValWithRendererError(err, webrender.NewErrQueryParameter(err))
@@ -158,7 +158,9 @@ func (mapper *OrgPartition) ReadMany(db *gorm.DB, ep *hook.EndPoint,
 		}
 	}
 
-	db, err = constructOrderFieldQueries(db, ep.TypeString, rtable, orderby, order)
+	var orderby *string
+	order := "desc"
+	db, err = constructOrderFieldQueries(db, ep.TypeString, rtable, orderby, &order)
 	if err != nil {
 		return nil, nil, nil, &webrender.RetError{Error: err}
 	}
