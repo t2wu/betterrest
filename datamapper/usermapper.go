@@ -236,6 +236,7 @@ func (mapper *UserMapper) PatchOne(db *gorm.DB, jsonPatch []byte,
 			log.Println("error translating validation message:", err)
 		}
 		err = errors.New(s)
+		return nil, webrender.NewRetValWithError(err)
 	}
 
 	data.Ms = []mdl.IModel{modelObj}

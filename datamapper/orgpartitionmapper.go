@@ -465,6 +465,7 @@ func (mapper *OrgPartition) PatchOne(db *gorm.DB, jsonPatch []byte,
 			log.Println("error translating validaiton message:", err)
 		}
 		err = errors.New(s)
+		return nil, webrender.NewRetValWithError(err)
 	}
 
 	// TODO: Huh? How do we do validation here?!
