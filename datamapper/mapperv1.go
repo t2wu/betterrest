@@ -596,6 +596,86 @@ func (mapper *DataMapper) DeleteMany(db *gorm.DB, modelObjs []mdl.IModel,
 	return batchOpCoreV1(j, mapper.Service.DeleteOneCore)
 }
 
+// func (mapper *DataMapper) DeleteManyByCondition(db *gorm.DB, ep *hook.EndPoint, cargo *hook.Cargo) (*MapperRet, *webrender.RetError) {
+// 	// 	DELETE FROM logtable
+// 	// WHERE id = any (array(SELECT id FROM logtable ORDER BY timestamp LIMIT 10));
+
+// 	dbClean := db
+// 	db = db.Set("gorm:auto_preload", true)
+
+// 	offset, limit, cstart, cstop, orderby, order, latestn, latestnons, totalcount := urlparam.GetOptions(ep.URLParams)
+// 	rtable := registry.GetTableNameFromTypeString(ep.TypeString)
+
+// 	if cstart != nil && cstop != nil {
+// 		db = db.Where(rtable+`.created_at BETWEEN ? AND ?`, time.Unix(int64(*cstart), 0), time.Unix(int64(*cstop), 0))
+// 	}
+
+// 	var err error
+// 	var builder *qry.PredicateRelationBuilder
+// 	if latestn != nil { // query module currently don't handle latestn, use old if so
+// 		db, err = constructInnerFieldParamQueries(db, ep.TypeString, ep.URLParams, latestn, latestnons)
+// 		if err != nil {
+// 			return nil, nil, nil, &webrender.RetError{Error: err}
+// 		}
+// 	} else {
+// 		if urlParams, ok := ep.URLParams[urlparam.ParamOtherQueries].(url.Values); ok && len(urlParams) != 0 {
+// 			builder, err = createBuilderFromQueryParameters(urlParams, ep.TypeString)
+// 			if err != nil {
+// 				return nil, nil, nil, &webrender.RetError{Error: err}
+// 			}
+// 		}
+// 	}
+
+// 	db, err = constructOrderFieldQueries(db, ep.TypeString, rtable, orderby, order)
+// 	if err != nil {
+// 		return nil, nil, nil, &webrender.RetError{Error: err}
+// 	}
+// 	db, err = mapper.Service.GetAllQueryContructCore(db, ep.Who, ep.TypeString)
+// 	if err != nil {
+// 		return nil, nil, nil, &webrender.RetError{Error: err}
+// 	}
+
+// 	var no *int
+// 	if totalcount {
+// 		no = new(int)
+// 		if builder == nil {
+// 			// Query for total count, without offset and limit (all)
+// 			if err := db.Count(no).Error; err != nil {
+// 				return nil, nil, nil, &webrender.RetError{Error: err}
+// 			}
+// 		} else {
+// 			q := qry.Q(db, builder)
+// 			if err := q.Count(registry.NewFromTypeString(ep.TypeString), no).Error(); err != nil {
+// 				return nil, nil, nil, &webrender.RetError{Error: err}
+// 			}
+
+// 			// Fetch it back, so the builder stuff is in there
+// 			// And resort back to Gorm.
+// 			// db = q.GetDB()
+// 		}
+// 	}
+
+// 	// chain offset and limit
+// 	if offset != nil && limit != nil {
+// 		db = db.Offset(*offset).Limit(*limit)
+// 	} else if cstart == nil && cstop == nil { // default to 100 maximum unless time is specified
+// 		db = db.Offset(0).Limit(100)
+// 	}
+
+// 	if builder != nil {
+// 		db, err = qry.Q(db, builder).BuildQuery(registry.NewFromTypeString(ep.TypeString))
+// 		if err != nil {
+// 			return nil, nil, nil, &webrender.RetError{Error: err}
+// 		}
+// 	}
+
+// 	// Actual query in the following line
+// 	outmodels, err := registry.NewSliceFromDBByTypeString(ep.TypeString, db.Find)
+// 	if err != nil {
+// 		return nil, nil, nil, &webrender.RetError{Error: err}
+// 	}
+// }
+
 // ----------------------------------------------------------------------------------------
 
 func (mapper *DataMapper) sortOldModelAndRolesByIds(oldModelObjs []mdl.IModel, roles []userrole.UserRole, ids []*datatype.UUID) ([]mdl.IModel, []userrole.UserRole) {
