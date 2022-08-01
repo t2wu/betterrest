@@ -93,13 +93,13 @@ func (h *HandlerFetcher) FetchHandlersForOpAndHook(op rest.Op, hookstr string) [
 	return comformedHandlers
 }
 
-func (h *HandlerFetcher) HasRegisteredValidHandler() bool {
-	return h.handlerMap.HasRegisteredAnyHandlerWithHooks()
-}
+// func (h *HandlerFetcher) HasRegisteredValidHandler() bool {
+// 	return h.handlerMap.HasRegisteredAnyHandlerWithHooks()
+// }
 
-func (h *HandlerFetcher) HasAttemptRegisteringHandler() bool {
-	return h.handlerMap.HasAttemptRegisteringAnyHandler()
-}
+// func (h *HandlerFetcher) HasAttemptRegisteringHandler() bool {
+// 	return h.handlerMap.HasAttemptRegisteringAnyHandler()
+// }
 
 func (h *HandlerFetcher) GetAllInstantiatedHanders() []hook.IHook {
 	return h.handlers

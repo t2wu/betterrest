@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"net/http"
 
+	"github.com/t2wu/betterrest/hook/rest"
 	"github.com/t2wu/betterrest/hook/userrole"
 	"github.com/t2wu/betterrest/libs/utils/jsontrans"
 	"github.com/t2wu/betterrest/libs/webrender"
@@ -80,7 +81,7 @@ func ModelOrModelsFromJSONBody(r *http.Request, typeString string, who mdlutil.U
 
 		if v, ok := modelObj.(mdlutil.IValidate); ok {
 			who := WhoFromContext(r)
-			http := mdlutil.HTTP{Endpoint: r.URL.Path, Op: mdlutil.HTTPMethodToRESTOp(r.Method)}
+			http := mdlutil.HTTP{Endpoint: r.URL.Path, Op: rest.HTTPMethodToRESTOp(r.Method)}
 			if err := v.Validate(who, http); err != nil {
 				return nil, nil, webrender.NewErrValidation(err)
 			}
@@ -119,7 +120,7 @@ func ModelOrModelsFromJSONBody(r *http.Request, typeString string, who mdlutil.U
 		}
 
 		if v, ok := modelObj.(mdlutil.IValidate); ok {
-			http := mdlutil.HTTP{Endpoint: r.URL.Path, Op: mdlutil.HTTPMethodToRESTOp(r.Method)}
+			http := mdlutil.HTTP{Endpoint: r.URL.Path, Op: rest.HTTPMethodToRESTOp(r.Method)}
 			if err := v.Validate(who, http); err != nil {
 				return nil, nil, webrender.NewErrValidation(err)
 			}
@@ -189,7 +190,7 @@ func ModelsFromJSONBody(r *http.Request, typeString string, who mdlutil.UserIDFe
 
 		if v, ok := modelObj.(mdlutil.IValidate); ok {
 			who := WhoFromContext(r)
-			http := mdlutil.HTTP{Endpoint: r.URL.Path, Op: mdlutil.HTTPMethodToRESTOp(r.Method)}
+			http := mdlutil.HTTP{Endpoint: r.URL.Path, Op: rest.HTTPMethodToRESTOp(r.Method)}
 			if err := v.Validate(who, http); err != nil {
 				return nil, webrender.NewErrValidation(err)
 			}
@@ -248,7 +249,7 @@ func ModelFromJSONBody(r *http.Request, typeString string, who mdlutil.UserIDFet
 
 	if v, ok := modelObj.(mdlutil.IValidate); ok {
 		who := WhoFromContext(r)
-		http := mdlutil.HTTP{Endpoint: r.URL.Path, Op: mdlutil.HTTPMethodToRESTOp(r.Method)}
+		http := mdlutil.HTTP{Endpoint: r.URL.Path, Op: rest.HTTPMethodToRESTOp(r.Method)}
 		if err := v.Validate(who, http); err != nil {
 			return nil, webrender.NewErrValidation(err)
 		}

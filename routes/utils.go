@@ -11,7 +11,6 @@ import (
 	"github.com/t2wu/betterrest/libs/urlparam"
 	"github.com/t2wu/betterrest/libs/utils/jsontrans"
 	"github.com/t2wu/betterrest/libs/webrender"
-	"github.com/t2wu/betterrest/mdlutil"
 	"github.com/t2wu/betterrest/registry"
 )
 
@@ -88,21 +87,6 @@ func GuardMiddleWare(typeString string) func(c *gin.Context) {
 		OptionToContext(c, options)
 
 		who := WhoFromContext(r)
-
-		// Old, deprecated
-		if !registry.ModelRegistry[typeString].HandlerMap.HasAttemptRegisteringAnyHandler() {
-			modelObj := registry.NewFromTypeString(typeString)
-			if m, ok := modelObj.(mdlutil.IGuardAPIEntry); ok {
-				http := mdlutil.HTTP{Endpoint: r.URL.Path, Op: mdlutil.HTTPMethodToRESTOp(r.Method)}
-				if !m.GuardAPIEntry(who, http) {
-					render.Render(w, r, webrender.NewErrPermissionDeniedForAPIEndpoint(nil))
-					c.Abort() // abort
-					return
-				}
-			}
-			// return // check for new guard anyway
-		}
-		// End Old, deprecated
 
 		ep := hook.EndPoint{
 			URL:         c.Request.URL.String(),

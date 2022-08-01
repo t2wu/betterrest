@@ -202,31 +202,31 @@ func TestHandlerFetcher_RunControllers_CheckHandledInstances(t *testing.T) {
 	assert.Len(t, f2.GetAllInstantiatedHanders(), 2) // only one is instantiated, and handled for U
 }
 
-func TestHandlerFetcher_HasController_ReportHavingController(t *testing.T) {
-	cm := handlermap.NewHandlerMap()
-	cm.RegisterHandler(&HandlerBA{}, "CRUPD")
-	initData := createInitData()
+// func TestHandlerFetcher_HasController_ReportHavingController(t *testing.T) {
+// 	cm := handlermap.NewHandlerMap()
+// 	cm.RegisterHandler(&HandlerBA{}, "CRUPD")
+// 	initData := createInitData()
 
-	f := NewHandlerFetcher(cm, initData)
-	assert.True(t, f.HasRegisteredValidHandler())
-}
+// 	f := NewHandlerFetcher(cm, initData)
+// 	assert.True(t, f.HasRegisteredValidHandler())
+// }
 
-func TestHandlerFetcher_HasNoControllerController_ReportHavingNoController(t *testing.T) {
-	cm := handlermap.NewHandlerMap()
-	initData := createInitData()
+// func TestHandlerFetcher_HasNoControllerController_ReportHavingNoController(t *testing.T) {
+// 	cm := handlermap.NewHandlerMap()
+// 	initData := createInitData()
 
-	f := NewHandlerFetcher(cm, initData)
-	assert.False(t, f.HasRegisteredValidHandler())
-}
+// 	f := NewHandlerFetcher(cm, initData)
+// 	assert.False(t, f.HasRegisteredValidHandler())
+// }
 
-func TestHandlerFetcher_HasControllerWithoutCallback_ReportHavingNoController(t *testing.T) {
-	cm := handlermap.NewHandlerMap()
-	cm.RegisterHandler(&HandlerNone{}, "CRUPD")
-	initData := createInitData()
+// func TestHandlerFetcher_HasControllerWithoutCallback_ReportHavingNoController(t *testing.T) {
+// 	cm := handlermap.NewHandlerMap()
+// 	cm.RegisterHandler(&HandlerNone{}, "CRUPD")
+// 	initData := createInitData()
 
-	f := NewHandlerFetcher(cm, initData)
-	assert.False(t, f.HasRegisteredValidHandler())
-}
+// 	f := NewHandlerFetcher(cm, initData)
+// 	assert.False(t, f.HasRegisteredValidHandler())
+// }
 
 func TestHandlerFetcher_ShouldCallInit(t *testing.T) {
 	cm := handlermap.NewHandlerMap()

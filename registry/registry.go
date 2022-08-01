@@ -3,11 +3,9 @@ package registry
 import (
 	"reflect"
 
-	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
 	"github.com/t2wu/betterrest/hook"
 	"github.com/t2wu/betterrest/libs/webrender"
-	"github.com/t2wu/betterrest/mdlutil"
 	"github.com/t2wu/betterrest/registry/handlermap"
 	"github.com/t2wu/qry/mdl"
 )
@@ -82,29 +80,29 @@ type Reg struct {
 	IdvMethods   string     //  ID end points, "RUD" for read one, update one, and delete one
 	Mapper       MapperType // Custmized mapper, default to datamapper.SharedOwnershipMapper
 
-	// Begin deprecated
-	BeforeCUPD func(bhpData mdlutil.BatchHookPointData, op mdlutil.CRUPDOp) error // no R since model doens't exist yet
-	AfterCRUPD func(bhpData mdlutil.BatchHookPointData, op mdlutil.CRUPDOp) error
+	// // Begin deprecated
+	// BeforeCUPD func(bhpData mdlutil.BatchHookPointData, op mdlutil.CRUPDOp) error // no R since model doens't exist yet
+	// AfterCRUPD func(bhpData mdlutil.BatchHookPointData, op mdlutil.CRUPDOp) error
 
-	AfterTransact func(bhpData mdlutil.BatchHookPointData, op mdlutil.CRUPDOp)
+	// AfterTransact func(bhpData mdlutil.BatchHookPointData, op mdlutil.CRUPDOp)
 
-	AfterRead func(bhpData mdlutil.BatchHookPointData) error
+	// AfterRead func(bhpData mdlutil.BatchHookPointData) error
 
-	BeforeCreate func(bhpData mdlutil.BatchHookPointData) error
-	AfterCreate  func(bhpData mdlutil.BatchHookPointData) error
+	// BeforeCreate func(bhpData mdlutil.BatchHookPointData) error
+	// AfterCreate  func(bhpData mdlutil.BatchHookPointData) error
 
-	BeforeUpdate func(bhpData mdlutil.BatchHookPointData) error
-	AfterUpdate  func(bhpData mdlutil.BatchHookPointData) error
+	// BeforeUpdate func(bhpData mdlutil.BatchHookPointData) error
+	// AfterUpdate  func(bhpData mdlutil.BatchHookPointData) error
 
-	BeforePatchApply func(bhpData mdlutil.BatchHookPointData) error // This comes before patch is applied. Before "BeforePatch"
-	BeforePatch      func(bhpData mdlutil.BatchHookPointData) error
-	AfterPatch       func(bhpData mdlutil.BatchHookPointData) error
+	// BeforePatchApply func(bhpData mdlutil.BatchHookPointData) error // This comes before patch is applied. Before "BeforePatch"
+	// BeforePatch      func(bhpData mdlutil.BatchHookPointData) error
+	// AfterPatch       func(bhpData mdlutil.BatchHookPointData) error
 
-	BeforeDelete func(bhpData mdlutil.BatchHookPointData) error
-	AfterDelete  func(bhpData mdlutil.BatchHookPointData) error
+	// BeforeDelete func(bhpData mdlutil.BatchHookPointData) error
+	// AfterDelete  func(bhpData mdlutil.BatchHookPointData) error
 
-	BatchRenderer func(c *gin.Context, ms []mdl.IModel, bhpdata *mdlutil.BatchHookPointData, op mdlutil.CRUPDOp) bool
-	// End deprecated
+	// BatchRenderer func(c *gin.Context, ms []mdl.IModel, bhpdata *mdlutil.BatchHookPointData, op mdlutil.CRUPDOp) bool
+	// // End deprecated
 
 	// HandlerMap is the new method where we keep handlers
 	// You can register any number of hook to handle the rest process.

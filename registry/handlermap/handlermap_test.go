@@ -95,19 +95,19 @@ func getType(obj interface{}) string {
 	return strings.Split(t, ".")[1]
 }
 
-func Test_ControllerMap_AddHookHandlerWhenNoHook_ShouldNotRegisterAnyHandler(t *testing.T) {
-	c := NewHandlerMap()
-	c.RegisterHandler(&Handler1NoHook{}, "C")
-	arr := c.GetHandlerTypeAndArgWithFirstHookAt("C", "J") // has this, but shouldn't response to this
-	assert.Len(t, arr, 0)
-	arr = c.GetHandlerTypeAndArgWithFirstHookAt("C", "B")
-	assert.Len(t, arr, 0)
-	arr = c.GetHandlerTypeAndArgWithFirstHookAt("C", "A")
-	assert.Len(t, arr, 0)
-	arr = c.GetHandlerTypeAndArgWithFirstHookAt("C", "T")
-	assert.Len(t, arr, 0)
-	assert.False(t, c.HasRegisteredAnyHandlerWithHooks())
-}
+// func Test_ControllerMap_AddHookHandlerWhenNoHook_ShouldNotRegisterAnyHandler(t *testing.T) {
+// 	c := NewHandlerMap()
+// 	c.RegisterHandler(&Handler1NoHook{}, "C")
+// 	arr := c.GetHandlerTypeAndArgWithFirstHookAt("C", "J") // has this, but shouldn't response to this
+// 	assert.Len(t, arr, 0)
+// 	arr = c.GetHandlerTypeAndArgWithFirstHookAt("C", "B")
+// 	assert.Len(t, arr, 0)
+// 	arr = c.GetHandlerTypeAndArgWithFirstHookAt("C", "A")
+// 	assert.Len(t, arr, 0)
+// 	arr = c.GetHandlerTypeAndArgWithFirstHookAt("C", "T")
+// 	assert.Len(t, arr, 0)
+// 	assert.False(t, c.HasRegisteredAnyHandlerWithHooks())
+// }
 
 func Test_ControllerMap_AddHookHandlerWhoseFirstHookIsBefore_ShouldReturnOnlyWhenBeforeQueried(t *testing.T) {
 	c := NewHandlerMap()
@@ -469,8 +469,8 @@ func Test_ControllerMap_AddMultipleControllerWithDifferentFirstHook(t *testing.T
 	}
 }
 
-func Test_ControllerMap_AddHookHandler_ShouldReturnHavingController(t *testing.T) {
-	c := NewHandlerMap()
-	c.RegisterHandler(&Handler1FirstHookAfter{}, "C")
-	assert.True(t, c.HasRegisteredAnyHandlerWithHooks())
-}
+// func Test_ControllerMap_AddHookHandler_ShouldReturnHavingController(t *testing.T) {
+// 	c := NewHandlerMap()
+// 	c.RegisterHandler(&Handler1FirstHookAfter{}, "C")
+// 	assert.True(t, c.HasRegisteredAnyHandlerWithHooks())
+// }

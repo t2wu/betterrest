@@ -50,207 +50,11 @@ var guardAPIEntryCalled bool
 var guardAPIEntryWho mdlutil.UserIDFetchable
 var guardAPIEntryHTTP mdlutil.HTTP
 
-var beforeCUPDDBCalled bool
-var beforeCUPDDBHpdata mdlutil.HookPointData
-var beforeCUPDDBOp mdlutil.CRUPDOp
-
-var beforeCreateDBCalled bool
-var beforeCreateDBHpdata mdlutil.HookPointData
-
-var beforeReadDBCalled bool
-var beforeReadDBHpdata mdlutil.HookPointData
-
-var beforeUpdateDBCalled bool
-var beforeUpdateDBHpdata mdlutil.HookPointData
-
-var beforePatchDBCalled bool
-var beforePatchDBHpdata mdlutil.HookPointData
-
-var beforeDeleteDBCalled bool
-var beforeDeleteDBHpdata mdlutil.HookPointData
-
-var afterCRUPDDBCalled bool
-var afterCRUPDDBHpdata mdlutil.HookPointData
-var afterCRUPDDBOp mdlutil.CRUPDOp
-
-var afterCreateDBCalled bool
-var afterCreateDBHpdata mdlutil.HookPointData
-
-var afterReadDBCalled bool
-var afterReadDBHpdata mdlutil.HookPointData
-
-var afterUpdateDBCalled bool
-var afterUpdateDBHpdata mdlutil.HookPointData
-
-var afterPatchDBCalled bool
-var afterPatchDBHpdata mdlutil.HookPointData
-
-var afterDeleteDBCalled bool
-var afterDeleteDBHpdata mdlutil.HookPointData
-
 func resetGlobals() {
 	guardAPIEntryCalled = false
 	guardAPIEntryWho = nil
 	guardAPIEntryHTTP = mdlutil.HTTP{}
-
-	beforeCUPDDBCalled = false
-	beforeCUPDDBHpdata = mdlutil.HookPointData{}
-	beforeCUPDDBOp = mdlutil.CRUPDOpOther
-
-	beforeCreateDBCalled = false
-	beforeCreateDBHpdata = mdlutil.HookPointData{}
-
-	beforeReadDBCalled = false
-	beforeReadDBHpdata = mdlutil.HookPointData{}
-
-	beforeUpdateDBCalled = false
-	beforeUpdateDBHpdata = mdlutil.HookPointData{}
-
-	beforePatchDBCalled = false
-	beforePatchDBHpdata = mdlutil.HookPointData{}
-
-	beforeDeleteDBCalled = false
-	beforeDeleteDBHpdata = mdlutil.HookPointData{}
-
-	afterCRUPDDBCalled = false
-	afterCRUPDDBHpdata = mdlutil.HookPointData{}
-	afterCRUPDDBOp = mdlutil.CRUPDOpOther
-
-	afterCreateDBCalled = false
-	afterCreateDBHpdata = mdlutil.HookPointData{}
-
-	afterReadDBCalled = false
-	afterReadDBHpdata = mdlutil.HookPointData{}
-
-	afterUpdateDBCalled = false
-	afterUpdateDBHpdata = mdlutil.HookPointData{}
-
-	afterPatchDBCalled = false
-	afterPatchDBHpdata = mdlutil.HookPointData{}
-
-	afterDeleteDBCalled = false
-	afterDeleteDBHpdata = mdlutil.HookPointData{}
-
 }
-
-type CarWithCallbacks struct {
-	mdl.BaseModel
-
-	Name string `json:"name"`
-
-	Ownerships []mdlutil.OwnershipModelWithIDBase `gorm:"PRELOAD:false" json:"-" betterrest:"ownership"`
-}
-
-func (CarWithCallbacks) TableName() string {
-	return "car"
-}
-
-// GuardAPIEntry guards denies api call based on scope
-func (c *CarWithCallbacks) GuardAPIEntry(who mdlutil.UserIDFetchable, http mdlutil.HTTP) bool {
-	guardAPIEntryCalled = true
-	guardAPIEntryWho = who
-	guardAPIEntryHTTP = http
-	return true // true to pass
-}
-
-func (c *CarWithCallbacks) BeforeCUPDDB(hpdata mdlutil.HookPointData, op mdlutil.CRUPDOp) error {
-	beforeCUPDDBCalled = true
-	beforeCUPDDBHpdata = hpdata
-	beforeCUPDDBOp = op
-	return nil
-}
-
-func (c *CarWithCallbacks) BeforeCreateDB(hpdata mdlutil.HookPointData) error {
-	beforeCreateDBCalled = true
-	beforeCreateDBHpdata = hpdata
-	return nil
-}
-
-func (c *CarWithCallbacks) BeforeReadDB(hpdata mdlutil.HookPointData) error {
-	beforeReadDBCalled = true
-	beforeReadDBHpdata = hpdata
-	return nil
-}
-
-func (c *CarWithCallbacks) BeforeUpdateDB(hpdata mdlutil.HookPointData) error {
-	beforeUpdateDBCalled = true
-	beforeUpdateDBHpdata = hpdata
-	return nil
-}
-
-func (c *CarWithCallbacks) BeforePatchDB(hpdata mdlutil.HookPointData) error {
-	beforePatchDBCalled = true
-	beforePatchDBHpdata = hpdata
-	return nil
-}
-
-func (c *CarWithCallbacks) BeforeDeleteDB(hpdata mdlutil.HookPointData) error {
-	beforeDeleteDBCalled = true
-	beforeDeleteDBHpdata = hpdata
-	return nil
-}
-
-func (c *CarWithCallbacks) AfterCRUPDDB(hpdata mdlutil.HookPointData, op mdlutil.CRUPDOp) error {
-	afterCRUPDDBCalled = true
-	afterCRUPDDBHpdata = hpdata
-	afterCRUPDDBOp = op
-
-	return nil
-}
-
-func (c *CarWithCallbacks) AfterCreateDB(hpdata mdlutil.HookPointData) error {
-	afterCreateDBCalled = true
-	afterCreateDBHpdata = hpdata
-	return nil
-}
-
-func (c *CarWithCallbacks) AfterReadDB(hpdata mdlutil.HookPointData) error {
-	afterReadDBCalled = true
-	afterReadDBHpdata = hpdata
-	return nil
-}
-
-func (c *CarWithCallbacks) AfterUpdateDB(hpdata mdlutil.HookPointData) error {
-	afterUpdateDBCalled = true
-	afterUpdateDBHpdata = hpdata
-	return nil
-}
-
-func (c *CarWithCallbacks) AfterPatchDB(hpdata mdlutil.HookPointData) error {
-	afterPatchDBCalled = true
-	afterPatchDBHpdata = hpdata
-	return nil
-}
-
-func (c *CarWithCallbacks) AfterDeleteDB(hpdata mdlutil.HookPointData) error {
-	afterDeleteDBCalled = true
-	afterDeleteDBHpdata = hpdata
-	return nil
-}
-
-// ----------------------------------------------------------------------------------------------
-
-func createBatchHookPoint(called *bool, bhpDataCalled *mdlutil.BatchHookPointData, opCalled *mdlutil.CRUPDOp) func(bhpData mdlutil.BatchHookPointData, op mdlutil.CRUPDOp) error {
-	return func(bhpData mdlutil.BatchHookPointData, op mdlutil.CRUPDOp) error {
-		*called = true
-
-		deepCopyBHPData(&bhpData, bhpDataCalled)
-
-		*opCalled = op
-		return nil
-	}
-}
-
-func createBatchSingleMethodHookPoint(called *bool, bhpDataCalled *mdlutil.BatchHookPointData) func(bhpData mdlutil.BatchHookPointData) error {
-	return func(bhpData mdlutil.BatchHookPointData) error {
-		*called = true
-
-		deepCopyBHPData(&bhpData, bhpDataCalled)
-		return nil
-	}
-}
-
-// ----------------------------------------------------------------------------------------------
 
 type CarControllerWithoutCallbacks struct {
 }
@@ -309,6 +113,8 @@ func (c *CarHandlerJBT) BeforeApply(data *hook.Data, info *hook.EndPoint) *webre
 
 func (c *CarHandlerJBT) Before(data *hook.Data, info *hook.EndPoint) *webrender.RetError {
 	c.beforeCalled = true
+	log.Println("len(data.Ms):", len(data.Ms))
+	log.Println("len(data.Roles):", len(data.Roles))
 	c.beforeData = &hook.Data{}
 	deepCopyData(data, c.beforeData)
 	c.beforeInfo = info
@@ -396,138 +202,10 @@ func (suite *TestBaseMapperCreateSuite) TestCreateOne_WhenGiven_GotCar() {
 	}
 }
 
-func (suite *TestBaseMapperCreateSuite) TestCreateOne_WhenNoController_CallRelevantOldCallbacks() {
-	carID := datatype.NewUUID()
-	carName := "DSM"
-	var modelObj mdl.IModel = &CarWithCallbacks{BaseModel: mdl.BaseModel{ID: carID}, Name: carName}
-
-	suite.mock.ExpectBegin()
-	stmt := `INSERT INTO "car" ("id","created_at","updated_at","deleted_at","name") VALUES ($1,$2,$3,$4,$5) RETURNING "car"."id"`
-	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(carID))
-	stmt2 := `INSERT INTO "user_owns_car" ("id","created_at","updated_at","deleted_at","role","user_id","model_id") VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING "user_owns_car"."id"`
-	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt2)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(carID))
-	stmt3 := `SELECT * FROM "car"  WHERE "car"."deleted_at" IS NULL AND "car"."id" = $1 LIMIT 1`
-	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt3)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(carID))
-	suite.mock.ExpectCommit()
-
-	options := make(map[urlparam.Param]interface{})
-	cargo := hook.Cargo{}
-
-	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
-	registry.For(suite.typeString).ModelWithOption(&Car{}, opt)
-
-	mapper := SharedOwnershipMapper()
-
-	var retVal *MapperRet
-	var tx2 *gorm.DB
-	retErr := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retErr *webrender.RetError) {
-		tx2 = tx
-		ep := hook.EndPoint{
-			Op:          rest.OpCreate,
-			Cardinality: rest.CardinalityOne,
-			TypeString:  suite.typeString,
-			URLParams:   options,
-			Who:         suite.who,
-		}
-		if retVal, retErr = mapper.CreateOne(tx, modelObj, &ep, &cargo); retErr != nil {
-			return retErr
-		}
-		return nil
-	}, "lifecycle.CreateOne")
-	if !assert.Nil(suite.T(), retErr) {
-		return
-	}
-
-	role := userrole.UserRoleAdmin
-	hpdata := mdlutil.HookPointData{DB: tx2, Who: suite.who, TypeString: suite.typeString,
-		Cargo: &mdlutil.ModelCargo{Payload: cargo.Payload}, Role: &role, URLParams: options}
-
-	if _, ok := retVal.Ms[0].(*CarWithCallbacks); assert.True(suite.T(), ok) {
-		assert.False(suite.T(), guardAPIEntryCalled) // not called when going through mapper
-		// Create has no before callback since haven't been read
-		if assert.True(suite.T(), beforeCUPDDBCalled) {
-			assert.Equal(suite.T(), beforeCUPDDBOp, mdlutil.CRUPDOpCreate)
-			assert.Condition(suite.T(), hpDataComparison(&hpdata, &beforeCUPDDBHpdata))
-		}
-
-		if assert.True(suite.T(), beforeCreateDBCalled) {
-			assert.Condition(suite.T(), hpDataComparison(&hpdata, &beforeCreateDBHpdata))
-		}
-
-		if assert.True(suite.T(), afterCRUPDDBCalled) {
-			assert.Equal(suite.T(), afterCRUPDDBOp, mdlutil.CRUPDOpCreate)
-			assert.Condition(suite.T(), hpDataComparison(&hpdata, &afterCRUPDDBHpdata))
-		}
-		if assert.True(suite.T(), afterCreateDBCalled) {
-			assert.Condition(suite.T(), hpDataComparison(&hpdata, &afterCRUPDDBHpdata))
-		}
-	}
-}
-
-func (suite *TestBaseMapperCreateSuite) TestCreateOne_WhenHavingController_NotCallOldCallbacks() {
-	carID := datatype.NewUUID()
-	carName := "DSM"
-	var modelObj mdl.IModel = &CarWithCallbacks{BaseModel: mdl.BaseModel{ID: carID}, Name: carName}
-
-	suite.mock.ExpectBegin()
-	stmt := `INSERT INTO "car" ("id","created_at","updated_at","deleted_at","name") VALUES ($1,$2,$3,$4,$5) RETURNING "car"."id"`
-	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(carID))
-	stmt2 := `INSERT INTO "user_owns_car" ("id","created_at","updated_at","deleted_at","role","user_id","model_id") VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING "user_owns_car"."id"`
-	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt2)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(carID))
-	stmt3 := `SELECT * FROM "car"  WHERE "car"."deleted_at" IS NULL AND "car"."id" = $1 LIMIT 1`
-	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt3)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(carID))
-	suite.mock.ExpectCommit()
-
-	options := make(map[urlparam.Param]interface{})
-	cargo := hook.Cargo{}
-
-	hdlr := CarControllerWithoutCallbacks{}
-	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
-	registry.For(suite.typeString).ModelWithOption(&Car{}, opt).Hook(&hdlr, "CRUPD")
-
-	mapper := SharedOwnershipMapper()
-
-	var retVal *MapperRet
-	retErr := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retErr *webrender.RetError) {
-		ep := hook.EndPoint{
-			Op:          rest.OpCreate,
-			Cardinality: rest.CardinalityOne,
-			TypeString:  suite.typeString,
-			URLParams:   options,
-			Who:         suite.who,
-		}
-		if retVal, retErr = mapper.CreateOne(tx, modelObj, &ep, &cargo); retErr != nil {
-			return retErr
-		}
-		return nil
-	}, "lifecycle.CreateOne")
-	if !assert.Nil(suite.T(), retErr) {
-		return
-	}
-
-	if _, ok := modelObj.(*CarWithCallbacks); assert.True(suite.T(), ok) {
-		// None of the model callback should be called when there is hook
-		assert.False(suite.T(), guardAPIEntryCalled) // not called when going through mapper
-		assert.False(suite.T(), beforeCUPDDBCalled)
-		assert.False(suite.T(), beforeReadDBCalled)
-		assert.False(suite.T(), afterCRUPDDBCalled)
-		assert.False(suite.T(), afterReadDBCalled)
-	}
-
-	if _, ok := retVal.Ms[0].(*CarWithCallbacks); assert.True(suite.T(), ok) {
-		// None of the model callback should be called when there is hook
-		assert.False(suite.T(), guardAPIEntryCalled) // not called when going through mapper
-		assert.False(suite.T(), beforeCUPDDBCalled)
-		assert.False(suite.T(), beforeReadDBCalled)
-		assert.False(suite.T(), afterCRUPDDBCalled)
-		assert.False(suite.T(), afterReadDBCalled)
-	}
-}
-
 func (suite *TestBaseMapperCreateSuite) TestCreateOne_WhenHavingController_CallRelevantControllerCallbacks() {
 	carID := datatype.NewUUID()
 	carName := "DSM"
-	var modelObj mdl.IModel = &CarWithCallbacks{BaseModel: mdl.BaseModel{ID: carID}, Name: carName}
+	var modelObj mdl.IModel = &Car{BaseModel: mdl.BaseModel{ID: carID}, Name: carName}
 
 	suite.mock.ExpectBegin()
 	stmt := `INSERT INTO "car" ("id","created_at","updated_at","deleted_at","name") VALUES ($1,$2,$3,$4,$5) RETURNING "car"."id"`
@@ -568,7 +246,7 @@ func (suite *TestBaseMapperCreateSuite) TestCreateOne_WhenHavingController_CallR
 	}
 
 	role := userrole.UserRoleAdmin
-	data := hook.Data{Ms: []mdl.IModel{&CarWithCallbacks{BaseModel: mdl.BaseModel{ID: carID}, Name: carName}}, DB: tx2,
+	data := hook.Data{Ms: []mdl.IModel{&Car{BaseModel: mdl.BaseModel{ID: carID}, Name: carName}}, DB: tx2,
 		Roles: []userrole.UserRole{role}, Cargo: &cargo}
 
 	ctrls := retVal.Fetcher.GetAllInstantiatedHanders()
@@ -665,204 +343,6 @@ func (suite *TestBaseMapperCreateSuite) TestCreateMany_WhenGiven_GotCars() {
 	}
 }
 
-func (suite *TestBaseMapperCreateSuite) TestCreateMany_WhenNoController_CallRelevantOldCallbacks() {
-	carID1 := datatype.NewUUID()
-	carName1 := "DSM"
-	carID2 := datatype.NewUUID()
-	carName2 := "DSM4Life"
-	carID3 := datatype.NewUUID()
-	carName3 := "Eclipse"
-	modelObjs := []mdl.IModel{
-		&CarWithCallbacks{BaseModel: mdl.BaseModel{ID: carID1}, Name: carName1},
-		&CarWithCallbacks{BaseModel: mdl.BaseModel{ID: carID2}, Name: carName2},
-		&CarWithCallbacks{BaseModel: mdl.BaseModel{ID: carID3}, Name: carName3},
-	}
-
-	suite.mock.ExpectBegin()
-	// Gorm v1 insert 3 times
-	// (Also Gorm v2 support modifying returning: https://gorm.io/docs/update.html#Returning-Data-From-Modified-Rows
-	stmt1 := `INSERT INTO "car" ("id","created_at","updated_at","deleted_at","name") VALUES ($1,$2,$3,$4,$5) RETURNING "car"."id"`
-	stmt2 := `INSERT INTO "user_owns_car" ("id","created_at","updated_at","deleted_at","role","user_id","model_id") VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING "user_owns_car"."id"`
-	stmt3 := `SELECT * FROM "car" WHERE "car"."deleted_at" IS NULL AND "car"."id" = $1 LIMIT 1`
-
-	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt1)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(carID1))
-	// actually it might not be possible to fetch the id gorm gives
-	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt2)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(datatype.NewUUID()))
-	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt3)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(carID1))
-
-	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt1)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(carID2))
-	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt2)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(datatype.NewUUID()))
-	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt3)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(carID2))
-
-	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt1)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(carID3))
-	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt2)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(datatype.NewUUID()))
-	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt3)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(carID3))
-	suite.mock.ExpectCommit()
-
-	options := make(map[urlparam.Param]interface{})
-	cargo := hook.Cargo{}
-
-	var beforeCalled bool
-	var beforeData mdlutil.BatchHookPointData
-	var beforeOp mdlutil.CRUPDOp
-	before := createBatchHookPoint(&beforeCalled, &beforeData, &beforeOp)
-
-	var afterCalled bool
-	var afterData mdlutil.BatchHookPointData
-	var afterOp mdlutil.CRUPDOp
-	after := createBatchHookPoint(&afterCalled, &afterData, &afterOp)
-
-	var beforeCreateCalled bool
-	var beforeCreateData mdlutil.BatchHookPointData
-	beforeCreate := createBatchSingleMethodHookPoint(&beforeCreateCalled, &beforeCreateData)
-
-	var afterCreateCalled bool
-	var afterCreateData mdlutil.BatchHookPointData
-	afterCreate := createBatchSingleMethodHookPoint(&afterCreateCalled, &afterCreateData)
-
-	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
-	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).
-		BatchCRUPDHooks(before, after).BatchCreateHooks(beforeCreate, afterCreate)
-
-	var tx2 *gorm.DB
-	ep := hook.EndPoint{
-		Op:          rest.OpCreate,
-		Cardinality: rest.CardinalityMany,
-		TypeString:  suite.typeString,
-		URLParams:   options,
-		Who:         suite.who,
-	}
-	retErr := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retErr *webrender.RetError) {
-		tx2 = tx
-		mapper := SharedOwnershipMapper()
-		_, retErr = mapper.CreateMany(tx2, modelObjs, &ep, &cargo)
-		return retErr
-	}, "lifecycle.CreateOne")
-	if !assert.Nil(suite.T(), retErr) {
-		return
-	}
-	roles := []userrole.UserRole{userrole.UserRoleAdmin, userrole.UserRoleAdmin, userrole.UserRoleAdmin}
-
-	// Expected
-	expectedData := mdlutil.BatchHookPointData{
-		Ms: []mdl.IModel{
-			&CarWithCallbacks{BaseModel: mdl.BaseModel{ID: carID1}, Name: carName1},
-			&CarWithCallbacks{BaseModel: mdl.BaseModel{ID: carID2}, Name: carName2},
-			&CarWithCallbacks{BaseModel: mdl.BaseModel{ID: carID3}, Name: carName3},
-		},
-		DB: tx2, Who: suite.who, TypeString: suite.typeString, Roles: roles, URLParams: options,
-		Cargo: &mdlutil.BatchHookCargo{Payload: cargo.Payload},
-	}
-
-	if assert.True(suite.T(), beforeCalled) {
-		assert.Condition(suite.T(), bhpDataComparison(&expectedData, &beforeData))
-		// It won't be null because it ain't pointers
-		// assert.Nil(suite.T(), beforeData.Ms[0].GetCreatedAt())
-		// assert.Nil(suite.T(), beforeData.Ms[0].GetUpdatedAt())
-		assert.Equal(suite.T(), beforeOp, mdlutil.CRUPDOpCreate)
-	}
-
-	if assert.True(suite.T(), beforeCreateCalled) {
-		assert.Condition(suite.T(), bhpDataComparison(&expectedData, &beforeCreateData))
-		// 	assert.Nil(suite.T(), beforeCreateData.Ms[0].GetCreatedAt())
-		// 	assert.Nil(suite.T(), beforeCreateData.Ms[0].GetUpdatedAt())
-	}
-
-	if assert.True(suite.T(), afterCalled) {
-		assert.Condition(suite.T(), bhpDataComparison(&expectedData, &afterData))
-		assert.Equal(suite.T(), afterOp, mdlutil.CRUPDOpCreate)
-		// assert.NotNil(suite.T(), afterData.Ms[0].GetCreatedAt())
-		// assert.NotNil(suite.T(), afterData.Ms[0].GetUpdatedAt())
-	}
-
-	if assert.True(suite.T(), afterCreateCalled) {
-		assert.Condition(suite.T(), bhpDataComparison(&expectedData, &afterCreateData))
-		// assert.NotNil(suite.T(), afterData.Ms[0].GetCreatedAt())
-		// assert.NotNil(suite.T(), afterData.Ms[0].GetUpdatedAt())
-	}
-}
-
-func (suite *TestBaseMapperCreateSuite) TestCreateMany_WhenHavingController_NotCallOldCallbacks() {
-	carID1 := datatype.NewUUID()
-	carName1 := "DSM"
-	carID2 := datatype.NewUUID()
-	carName2 := "DSM4Life"
-	carID3 := datatype.NewUUID()
-	carName3 := "Eclipse"
-	modelObjs := []mdl.IModel{
-		&CarWithCallbacks{BaseModel: mdl.BaseModel{ID: carID1}, Name: carName1},
-		&CarWithCallbacks{BaseModel: mdl.BaseModel{ID: carID2}, Name: carName2},
-		&CarWithCallbacks{BaseModel: mdl.BaseModel{ID: carID3}, Name: carName3},
-	}
-
-	suite.mock.ExpectBegin()
-	// Gorm v1 insert 3 times
-	// (Also Gorm v2 support modifying returning: https://gorm.io/docs/update.html#Returning-Data-From-Modified-Rows
-	stmt1 := `INSERT INTO "car" ("id","created_at","updated_at","deleted_at","name") VALUES ($1,$2,$3,$4,$5) RETURNING "car"."id"`
-	stmt2 := `INSERT INTO "user_owns_car" ("id","created_at","updated_at","deleted_at","role","user_id","model_id") VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING "user_owns_car"."id"`
-	stmt3 := `SELECT * FROM "car" WHERE "car"."deleted_at" IS NULL AND "car"."id" = $1 LIMIT 1`
-
-	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt1)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(carID1))
-	// actually it might not be possible to fetch the id gorm gives
-	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt2)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(datatype.NewUUID()))
-	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt3)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(carID1))
-
-	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt1)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(carID2))
-	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt2)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(datatype.NewUUID()))
-	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt3)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(carID2))
-
-	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt1)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(carID3))
-	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt2)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(datatype.NewUUID()))
-	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt3)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(carID3))
-	suite.mock.ExpectCommit()
-
-	options := make(map[urlparam.Param]interface{})
-	cargo := hook.Cargo{}
-
-	var beforeCalled bool
-	var beforeData mdlutil.BatchHookPointData
-	var beforeOp mdlutil.CRUPDOp
-	before := createBatchHookPoint(&beforeCalled, &beforeData, &beforeOp)
-
-	var afterCalled bool
-	var afterData mdlutil.BatchHookPointData
-	var afterOp mdlutil.CRUPDOp
-	after := createBatchHookPoint(&afterCalled, &afterData, &afterOp)
-
-	var beforeCreateCalled bool
-	var beforeCreateData mdlutil.BatchHookPointData
-	beforeCreate := createBatchSingleMethodHookPoint(&beforeCreateCalled, &beforeCreateData)
-
-	var afterCreateCalled bool
-	var afterCreateData mdlutil.BatchHookPointData
-	afterCreate := createBatchSingleMethodHookPoint(&afterCreateCalled, &afterCreateData)
-
-	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
-	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).
-		BatchCRUPDHooks(before, after).BatchCreateHooks(beforeCreate, afterCreate).Hook(&CarControllerWithoutCallbacks{}, "CRUPD")
-
-	ep := hook.EndPoint{
-		Op:          rest.OpCreate,
-		Cardinality: rest.CardinalityMany,
-		TypeString:  suite.typeString,
-		URLParams:   options,
-		Who:         suite.who,
-	}
-	retErr := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retErr *webrender.RetError) {
-		mapper := SharedOwnershipMapper()
-		_, retErr = mapper.CreateMany(tx, modelObjs, &ep, &cargo)
-		return retErr
-	}, "lifecycle.CreateOne")
-	if !assert.Nil(suite.T(), retErr) {
-		return
-	}
-
-	assert.False(suite.T(), beforeCalled)
-	assert.False(suite.T(), afterCalled)
-	assert.False(suite.T(), beforeCreateCalled)
-	assert.False(suite.T(), afterCreateCalled)
-}
-
 func (suite *TestBaseMapperCreateSuite) TestCreateMany_WhenHavingController_CallRelevantControllerCallbacks() {
 	carID1 := datatype.NewUUID()
 	carName1 := "DSM"
@@ -871,9 +351,9 @@ func (suite *TestBaseMapperCreateSuite) TestCreateMany_WhenHavingController_Call
 	carID3 := datatype.NewUUID()
 	carName3 := "Eclipse"
 	modelObjs := []mdl.IModel{
-		&CarWithCallbacks{BaseModel: mdl.BaseModel{ID: carID1}, Name: carName1},
-		&CarWithCallbacks{BaseModel: mdl.BaseModel{ID: carID2}, Name: carName2},
-		&CarWithCallbacks{BaseModel: mdl.BaseModel{ID: carID3}, Name: carName3},
+		&Car{BaseModel: mdl.BaseModel{ID: carID1}, Name: carName1},
+		&Car{BaseModel: mdl.BaseModel{ID: carID2}, Name: carName2},
+		&Car{BaseModel: mdl.BaseModel{ID: carID3}, Name: carName3},
 	}
 
 	suite.mock.ExpectBegin()
@@ -901,7 +381,7 @@ func (suite *TestBaseMapperCreateSuite) TestCreateMany_WhenHavingController_Call
 	cargo := hook.Cargo{}
 
 	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
-	registry.For(suite.typeString).ModelWithOption(&CarWithCallbacks{}, opt).Hook(&CarHandlerJBT{}, "CRUPD")
+	registry.For(suite.typeString).ModelWithOption(&Car{}, opt).Hook(&CarHandlerJBT{}, "CRUPD")
 
 	var tx2 *gorm.DB
 	var retVal *MapperRet
@@ -924,9 +404,9 @@ func (suite *TestBaseMapperCreateSuite) TestCreateMany_WhenHavingController_Call
 
 	roles := []userrole.UserRole{userrole.UserRoleAdmin, userrole.UserRoleAdmin, userrole.UserRoleAdmin}
 	data := hook.Data{Ms: []mdl.IModel{
-		&CarWithCallbacks{BaseModel: mdl.BaseModel{ID: carID1}, Name: carName1},
-		&CarWithCallbacks{BaseModel: mdl.BaseModel{ID: carID2}, Name: carName2},
-		&CarWithCallbacks{BaseModel: mdl.BaseModel{ID: carID3}, Name: carName3},
+		&Car{BaseModel: mdl.BaseModel{ID: carID1}, Name: carName1},
+		&Car{BaseModel: mdl.BaseModel{ID: carID2}, Name: carName2},
+		&Car{BaseModel: mdl.BaseModel{ID: carID3}, Name: carName3},
 	}, DB: tx2, Roles: roles, Cargo: &cargo}
 
 	ctrls := retVal.Fetcher.GetAllInstantiatedHanders()
@@ -998,18 +478,20 @@ func dataComparison(expected *hook.Data, actual *hook.Data) func() (success bool
 					return false
 				}
 			}
-			if c, ok := expected.Ms[i].(*CarWithCallbacks); ok {
-				if c.ID.String() != actual.Ms[i].(*CarWithCallbacks).ID.String() {
+			if c, ok := expected.Ms[i].(*Car); ok {
+				if c.ID.String() != actual.Ms[i].(*Car).ID.String() {
 					log.Println(".............5.3")
 					return false
 				}
-				if c.Name != actual.Ms[i].(*CarWithCallbacks).Name {
+				if c.Name != actual.Ms[i].(*Car).Name {
 					log.Println(".............5.4")
 					return false
 				}
 			}
 		}
 
+		log.Println("expected.Roles:", expected.Roles)
+		log.Println("actual.Roles:", actual.Roles)
 		if len(expected.Roles) != len(actual.Roles) {
 			log.Println("dataComparison 8")
 			return false
@@ -1066,16 +548,6 @@ func dataComparisonNoDB(expected *hook.Data, actual *hook.Data) func() (success 
 					return false
 				}
 			}
-			if c, ok := expected.Ms[i].(*CarWithCallbacks); ok {
-				if c.ID.String() != actual.Ms[i].(*CarWithCallbacks).ID.String() {
-					log.Println(".............5.3")
-					return false
-				}
-				if c.Name != actual.Ms[i].(*CarWithCallbacks).Name {
-					log.Println(".............5.4")
-					return false
-				}
-			}
 		}
 
 		// if expected.TypeString != actual.TypeString {
@@ -1103,274 +575,6 @@ func dataComparisonNoDB(expected *hook.Data, actual *hook.Data) func() (success 
 		// }
 
 		return true
-	}
-}
-
-func hpDataComparison(expected *mdlutil.HookPointData, actual *mdlutil.HookPointData) func() (success bool) {
-	return func() (success bool) {
-		if expected.DB != actual.DB {
-			return false
-		}
-
-		if expected.Who != actual.Who {
-			log.Println("return false 2")
-			return false
-		}
-
-		if (expected.Cargo.Payload != nil && actual.Cargo.Payload == nil) ||
-			(expected.Cargo.Payload == nil && actual.Cargo.Payload != nil) {
-			log.Println("return false 3")
-			return false
-		}
-
-		if expected.Cargo.Payload != nil && actual.Cargo.Payload != nil &&
-			expected.Cargo != actual.Cargo {
-			log.Println("return false 4")
-			return false
-		}
-
-		if expected.TypeString != actual.TypeString {
-			log.Println("return false 5")
-			return false
-		}
-
-		if *expected.Role != *actual.Role {
-			log.Println("return false 6")
-			return false
-		}
-
-		if len(expected.URLParams) != 0 && len(actual.URLParams) != 0 {
-			if !assert.ObjectsAreEqualValues(expected.URLParams, actual.URLParams) {
-				log.Println("return false 7")
-				return false
-			}
-		}
-
-		return true
-	}
-}
-
-// For delete calls, since unscope is called
-func hpDataComparisonNoDB(expected *mdlutil.HookPointData, actual *mdlutil.HookPointData) func() (success bool) {
-	return func() (success bool) {
-		if expected.Who != actual.Who {
-			log.Println("return false 2")
-			return false
-		}
-
-		if (expected.Cargo.Payload != nil && actual.Cargo.Payload == nil) ||
-			(expected.Cargo.Payload == nil && actual.Cargo.Payload != nil) {
-			log.Println("return false 3")
-			return false
-		}
-
-		if expected.Cargo.Payload != nil && actual.Cargo.Payload != nil &&
-			expected.Cargo != actual.Cargo {
-			log.Println("return false 4")
-			return false
-		}
-
-		if expected.TypeString != actual.TypeString {
-			log.Println("return false 5")
-			return false
-		}
-
-		if *expected.Role != *actual.Role {
-			log.Println("return false 6")
-			return false
-		}
-
-		if len(expected.URLParams) != 0 && len(actual.URLParams) != 0 {
-			if !assert.ObjectsAreEqualValues(expected.URLParams, actual.URLParams) {
-				log.Println("return false 7")
-				return false
-			}
-		}
-
-		return true
-	}
-}
-
-func bhpDataComparison(expected *mdlutil.BatchHookPointData, actual *mdlutil.BatchHookPointData) func() (success bool) {
-	return func() (success bool) {
-		if expected.DB != actual.DB {
-			log.Println(".............1", actual.DB)
-			return false
-		}
-
-		if expected.Who != actual.Who {
-			log.Println(".............2")
-			return false
-		}
-
-		if (expected.Cargo.Payload != nil && actual.Cargo.Payload == nil) ||
-			(expected.Cargo.Payload == nil && actual.Cargo.Payload != nil) {
-			log.Println(".............3")
-			return false
-		}
-
-		if expected.Cargo.Payload != nil && actual.Cargo.Payload != nil &&
-			expected.Cargo != actual.Cargo {
-			log.Println(".............4")
-			return false
-		}
-
-		if len(expected.Ms) != len(actual.Ms) {
-			log.Println(".............5")
-			return false
-		}
-
-		for i := 0; i < len(expected.Ms); i++ {
-			// I think it look the same and yet it failed
-			// if !assert.ObjectsAreEqual(expected.Ms[i], actual.Ms[i]) {
-			// 	return false
-			// }
-			if c, ok := expected.Ms[i].(*Car); ok {
-				if c.ID.String() != actual.Ms[i].(*Car).ID.String() {
-					log.Println(".............5.1")
-					return false
-				}
-				if c.Name != actual.Ms[i].(*Car).Name {
-					log.Println(".............5.2")
-					return false
-				}
-			}
-
-			if c, ok := expected.Ms[i].(*CarWithCallbacks); ok {
-				if c.ID.String() != actual.Ms[i].(*CarWithCallbacks).ID.String() {
-					log.Println(".............5.3")
-					return false
-				}
-				if c.Name != actual.Ms[i].(*CarWithCallbacks).Name {
-					log.Println(".............5.4")
-					return false
-				}
-			}
-		}
-
-		if expected.TypeString != actual.TypeString {
-			log.Println(".............7")
-			return false
-		}
-
-		if len(expected.Roles) != len(actual.Roles) {
-			log.Println(".............8")
-			return false
-		}
-
-		for i := 0; i < len(expected.Roles); i++ {
-			if expected.Roles[i] != actual.Roles[i] {
-				log.Println(".............9")
-				return false
-			}
-		}
-
-		if len(expected.URLParams) != 0 && len(actual.URLParams) != 0 {
-			if !assert.ObjectsAreEqualValues(expected.URLParams, actual.URLParams) {
-				log.Println(".............10")
-				return false
-			}
-		}
-
-		return true
-	}
-}
-
-func bhpDataComparisonNoDB(expected *mdlutil.BatchHookPointData, actual *mdlutil.BatchHookPointData) func() (success bool) {
-	return func() (success bool) {
-		if expected.Who != actual.Who {
-			log.Println(".............2")
-			return false
-		}
-
-		if (expected.Cargo.Payload != nil && actual.Cargo.Payload == nil) ||
-			(expected.Cargo.Payload == nil && actual.Cargo.Payload != nil) {
-			log.Println(".............3")
-			return false
-		}
-
-		if expected.Cargo.Payload != nil && actual.Cargo.Payload != nil &&
-			expected.Cargo != actual.Cargo {
-			log.Println(".............4")
-			return false
-		}
-
-		if len(expected.Ms) != len(actual.Ms) {
-			log.Println(".............5")
-			return false
-		}
-
-		for i := 0; i < len(expected.Ms); i++ {
-			// I think it look the same and yet it failed
-			// if !assert.ObjectsAreEqual(expected.Ms[i], actual.Ms[i]) {
-			// 	return false
-			// }
-			if c, ok := expected.Ms[i].(*Car); ok {
-				if c.ID.String() != actual.Ms[i].(*Car).ID.String() {
-					log.Println(".............5.1")
-					return false
-				}
-				if c.Name != actual.Ms[i].(*Car).Name {
-					log.Println(".............5.2")
-					return false
-				}
-			}
-
-			if c, ok := expected.Ms[i].(*CarWithCallbacks); ok {
-				if c.ID.String() != actual.Ms[i].(*CarWithCallbacks).ID.String() {
-					log.Println(".............5.3")
-					return false
-				}
-				if c.Name != actual.Ms[i].(*CarWithCallbacks).Name {
-					log.Println(".............5.4")
-					return false
-				}
-			}
-		}
-
-		if expected.TypeString != actual.TypeString {
-			log.Println(".............7")
-			return false
-		}
-
-		if len(expected.Roles) != len(actual.Roles) {
-			log.Println(".............8")
-			return false
-		}
-
-		for i := 0; i < len(expected.Roles); i++ {
-			if expected.Roles[i] != actual.Roles[i] {
-				log.Println(".............9")
-				return false
-			}
-		}
-
-		if len(expected.URLParams) != 0 && len(actual.URLParams) != 0 {
-			if !assert.ObjectsAreEqualValues(expected.URLParams, actual.URLParams) {
-				log.Println(".............10")
-				return false
-			}
-		}
-
-		return true
-	}
-}
-
-func deepCopyBHPData(src *mdlutil.BatchHookPointData, dst *mdlutil.BatchHookPointData) {
-	dst.DB = src.DB
-	dst.Who = src.Who
-	dst.TypeString = src.TypeString
-	dst.Cargo = &mdlutil.BatchHookCargo{Payload: src.Cargo.Payload}
-	dst.Roles = src.Roles
-	dst.URLParams = src.URLParams
-
-	// https://stackoverflow.com/questions/56355212/deep-copying-data-structures-in-golang
-	dst.Ms = make([]mdl.IModel, len(src.Ms))
-	for i, model := range src.Ms {
-		v := reflect.ValueOf(model).Elem()
-		vp2 := reflect.New(v.Type())
-		vp2.Elem().Set(v)
-		dst.Ms[i] = vp2.Interface().(mdl.IModel)
 	}
 }
 

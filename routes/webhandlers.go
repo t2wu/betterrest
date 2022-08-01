@@ -25,7 +25,6 @@ import (
 	"github.com/t2wu/betterrest/libs/webrender"
 	"github.com/t2wu/betterrest/lifecycle"
 	"github.com/t2wu/betterrest/mdlutil"
-	"github.com/t2wu/betterrest/registry"
 	"github.com/t2wu/qry/mdl"
 
 	"github.com/gin-gonic/gin"
@@ -258,60 +257,20 @@ func RenderJSONForModel(c *gin.Context, modelObj mdl.IModel, data *hook.Data, ep
 	c.Writer.Write([]byte(content))
 }
 
-func RenderModelSliceOri(c *gin.Context, modelObjs []mdl.IModel, total *int, bhpdata *mdlutil.BatchHookPointData, op mdlutil.CRUPDOp) {
-	// BatchRenderer
-	if renderer := registry.ModelRegistry[bhpdata.TypeString].BatchRenderer; renderer != nil {
-		if renderer(c, modelObjs, bhpdata, op) {
-			return
-		}
-	}
+// func renderCode(c *gin.Context, code int, msg string) {
+// 	var content string
+// 	if total != nil {
+// 		content = fmt.Sprintf("{\"code\": 0, \"total\": %d, \"content\": %s}", *total, jsonString)
+// 	} else {
+// 		content = fmt.Sprintf("{\"code\": 0, \"content\": %s}", jsonString)
+// 	}
 
-	jsonString, err := modelObjsToJSON(modelObjs, bhpdata.Roles, bhpdata.Who)
-	if err != nil {
-		log.Println("Error in RenderModelSlice:", err)
-		render.Render(c.Writer, c.Request, webrender.NewErrGenJSON(err))
-		return
-	}
-
-	var content string
-	if total != nil {
-		content = fmt.Sprintf("{\"code\": 0, \"total\": %d, \"content\": %s}", *total, jsonString)
-	} else {
-		content = fmt.Sprintf("{\"code\": 0, \"content\": %s}", jsonString)
-	}
-
-	data := []byte(content)
-	c.Writer.Header().Set("Content-Type", "application/json; charset=utf-8")
-	c.Writer.Header().Set("Cache-Control", "no-store")
-	c.Writer.Header().Set("Content-Length", strconv.Itoa(len(data)))
-	c.Writer.Write(data)
-}
-
-func RenderModelOri(c *gin.Context, modelObj mdl.IModel, hpdata *mdlutil.HookPointData, op mdlutil.CRUPDOp) {
-	if mrender, ok := modelObj.(mdlutil.IHasRenderer); ok {
-		if mrender.Render(c, hpdata, op) {
-			return
-		}
-	}
-
-	RenderJSONForModelOri(c, modelObj, hpdata)
-}
-
-func RenderJSONForModelOri(c *gin.Context, modelObj mdl.IModel, hpdata *mdlutil.HookPointData) {
-	// render.JSON(w, r, modelObj) // cannot use this since no picking the field we need
-	jsonBytes, err := tools.ToJSON(modelObj, *hpdata.Role, hpdata.Who)
-	if err != nil {
-		log.Println("Error in RenderModel:", err)
-		render.Render(c.Writer, c.Request, webrender.NewErrGenJSON(err))
-		return
-	}
-
-	content := fmt.Sprintf("{ \"code\": 0, \"content\": %s }", string(jsonBytes))
-
-	c.Writer.Header().Set("Content-Type", "application/json; charset=utf-8")
-	c.Writer.Header().Set("Cache-Control", "no-store")
-	c.Writer.Write([]byte(content))
-}
+// 	data := []byte(content)
+// 	c.Writer.Header().Set("Content-Type", "application/json; charset=utf-8")
+// 	c.Writer.Header().Set("Cache-Control", "no-store")
+// 	c.Writer.Header().Set("Content-Length", strconv.Itoa(len(data)))
+// 	c.Writer.Write(data)
+// }
 
 // ---------------------------------------------
 
@@ -369,66 +328,6 @@ func w(handler func(c *gin.Context)) func(c *gin.Context) {
 	}
 }
 
-func batchRenderHelper(c *gin.Context, typeString string, data *hook.Data, ep *hook.EndPoint, no *int, hf *hfetcher.HandlerFetcher) {
-	// Does old renderer exists?
-	if renderer := registry.ModelRegistry[typeString].BatchRenderer; renderer != nil {
-		// Re-create it again to remain backward compatible
-		oldBatchCargo := mdlutil.BatchHookCargo{Payload: data.Cargo.Payload}
-		bhpData := mdlutil.BatchHookPointData{Ms: data.Ms, DB: nil, Who: ep.Who,
-			TypeString: ep.TypeString, Roles: data.Roles, URLParams: ep.URLParams, Cargo: &oldBatchCargo}
-
-		var op mdlutil.CRUPDOp
-		switch ep.Op {
-		case rest.OpRead:
-			op = mdlutil.CRUPDOpRead
-		case rest.OpCreate:
-			op = mdlutil.CRUPDOpCreate
-		case rest.OpUpdate:
-			op = mdlutil.CRUPDOpUpdate
-		case rest.OpPatch:
-			op = mdlutil.CRUPDOpPatch
-		case rest.OpDelete:
-			op = mdlutil.CRUPDOpDelete
-		}
-
-		RenderModelSliceOri(c, data.Ms, no, &bhpData, op)
-		return
-	}
-
-	// Use the new renderer (renderer doesn't have to exist, but call using the new RenderModelSlice)
-	RenderModelSlice(c, data, ep, no, hf)
-}
-
-func singleRenderHelper(c *gin.Context, typeString string, data *hook.Data, ep *hook.EndPoint, hf *hfetcher.HandlerFetcher) {
-	// Does old renderer exists?
-	if renderer := registry.ModelRegistry[typeString].BatchRenderer; renderer != nil {
-		// Re-create it again to remain backward compatible
-		oldBatchCargo := mdlutil.ModelCargo{Payload: data.Cargo.Payload}
-		hpdata := mdlutil.HookPointData{DB: nil, Who: ep.Who,
-			TypeString: ep.TypeString, Role: &data.Roles[0], URLParams: ep.URLParams, Cargo: &oldBatchCargo}
-
-		var op mdlutil.CRUPDOp
-		switch ep.Op {
-		case rest.OpRead:
-			op = mdlutil.CRUPDOpRead
-		case rest.OpCreate:
-			op = mdlutil.CRUPDOpCreate
-		case rest.OpUpdate:
-			op = mdlutil.CRUPDOpUpdate
-		case rest.OpPatch:
-			op = mdlutil.CRUPDOpPatch
-		case rest.OpDelete:
-			op = mdlutil.CRUPDOpDelete
-		}
-
-		RenderModelOri(c, data.Ms[0], &hpdata, op)
-		return
-	}
-
-	// Use the new renderer (renderer doesn't have to exist, but call using the new RenderModelSlice)
-	RenderModel(c, data, ep, nil, hf)
-}
-
 // ---------------------------------------------
 // reflection stuff
 // https://stackoverflow.com/questions/7850140/how-do-you-create-a-new-instance-of-a-struct-from-its-type-at-run-time-in-go
@@ -463,7 +362,8 @@ func CreateHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin
 			}
 
 			// Render
-			batchRenderHelper(c, typeString, data, &ep, nil, handlerFetcher)
+			// batchRenderHelper(c, typeString, data, &ep, nil, handlerFetcher)
+			RenderModelSlice(c, data, &ep, nil, handlerFetcher)
 		} else {
 			ep.Cardinality = rest.CardinalityOne
 			data, handlerFetcher, renderer := lifecycle.CreateOne(db.Shared(), mapper, modelObjs[0], &ep, &TransIDLogger{})
@@ -472,7 +372,8 @@ func CreateHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin
 				return
 			}
 
-			singleRenderHelper(c, typeString, data, &ep, handlerFetcher)
+			// singleRenderHelper(c, typeString, data, &ep, handlerFetcher)
+			RenderModel(c, data, &ep, nil, handlerFetcher)
 		}
 	}
 }
@@ -501,7 +402,8 @@ func ReadManyHandler(typeString string, mapper datamapper.IDataMapper) func(c *g
 			return
 		}
 
-		batchRenderHelper(c, typeString, data, &ep, no, handlerFetcher)
+		// batchRenderHelper(c, typeString, data, &ep, no, handlerFetcher)
+		RenderModelSlice(c, data, &ep, no, handlerFetcher)
 	}
 }
 
@@ -535,7 +437,8 @@ func ReadOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *gi
 			return
 		}
 
-		singleRenderHelper(c, typeString, data, &ep, handlerFetcher)
+		// singleRenderHelper(c, typeString, data, &ep, handlerFetcher)
+		RenderModel(c, data, &ep, nil, handlerFetcher)
 	}
 }
 
@@ -566,7 +469,8 @@ func UpdateManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 			return
 		}
 
-		batchRenderHelper(c, typeString, data, &ep, nil, handlerFetcher)
+		// batchRenderHelper(c, typeString, data, &ep, nil, handlerFetcher)
+		RenderModelSlice(c, data, &ep, nil, handlerFetcher)
 	}
 }
 
@@ -609,7 +513,8 @@ func UpdateOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 			return
 		}
 
-		singleRenderHelper(c, typeString, data, &ep, handlerFetcher)
+		// singleRenderHelper(c, typeString, data, &ep, handlerFetcher)
+		RenderModel(c, data, &ep, nil, handlerFetcher)
 	}
 }
 
@@ -639,7 +544,8 @@ func PatchManyHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 			render.Render(w, r, renderer)
 			return
 		}
-		batchRenderHelper(c, typeString, data, &ep, nil, handlerFetcher)
+		// batchRenderHelper(c, typeString, data, &ep, nil, handlerFetcher)
+		RenderModelSlice(c, data, &ep, nil, handlerFetcher)
 	}
 }
 
@@ -676,7 +582,8 @@ func PatchOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *g
 			return
 		}
 
-		singleRenderHelper(c, typeString, data, &ep, handlerFetcher)
+		// singleRenderHelper(c, typeString, data, &ep, handlerFetcher)
+		RenderModel(c, data, &ep, nil, handlerFetcher)
 	}
 }
 
@@ -701,12 +608,23 @@ func DeleteManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 			return
 		}
 
+		// if len(modelObjs) != 0 {
 		data, handlerFetcher, renderer := lifecycle.DeleteMany(db.Shared(), mapper, modelObjs, &ep, &TransIDLogger{})
 		if renderer != nil {
 			render.Render(w, r, renderer)
 			return
 		}
-		batchRenderHelper(c, typeString, data, &ep, nil, handlerFetcher)
+		// batchRenderHelper(c, typeString, data, &ep, nil, handlerFetcher)
+		RenderModelSlice(c, data, &ep, nil, handlerFetcher)
+		// } else {
+		// 	// DELETE WHERE
+		// }
+		// data, handlerFetcher, renderer := lifecycle.DeleteMany(db.Shared(), mapper, modelObjs, &ep, &TransIDLogger{})
+		// if renderer != nil {
+		// 	render.Render(w, r, renderer)
+		// 	return
+		// }
+		// batchRenderHelper(c, typeString, data, &ep, nil, handlerFetcher)
 	}
 }
 
@@ -735,6 +653,7 @@ func DeleteOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 			render.Render(w, r, renderer)
 			return
 		}
-		singleRenderHelper(c, typeString, data, &ep, handlerFetcher)
+		// singleRenderHelper(c, typeString, data, &ep, handlerFetcher)
+		RenderModel(c, data, &ep, nil, handlerFetcher)
 	}
 }

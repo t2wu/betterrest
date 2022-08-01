@@ -83,13 +83,13 @@ func (h *HandlerMap) GetHandlerTypeAndArgWithFirstHookAt(method string, firstHoo
 	return append(arr, h.controllerMap[method][firstHook]...)
 }
 
-func (h *HandlerMap) HasRegisteredAnyHandlerWithHooks() bool {
-	return h.hasAtLeastOneControllerWithHooksRegistered
-}
+// func (h *HandlerMap) HasRegisteredAnyHandlerWithHooks() bool {
+// 	return h.hasAtLeastOneControllerWithHooksRegistered
+// }
 
-func (h *HandlerMap) HasAttemptRegisteringAnyHandler() bool {
-	return h.hasAtLeastOneControllerAttemptRegistered
-}
+// func (h *HandlerMap) HasAttemptRegisteringAnyHandler() bool {
+// 	return h.hasAtLeastOneControllerAttemptRegistered
+// }
 
 // --- private ---
 // func (h *HandlerMap) getFirstHookType(op rest.Op, hdlr hook.IHook) string {

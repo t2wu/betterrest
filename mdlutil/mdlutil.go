@@ -6,11 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
 	"github.com/t2wu/betterrest/hook/rest"
 	"github.com/t2wu/betterrest/hook/userrole"
-	"github.com/t2wu/betterrest/libs/urlparam"
 	"github.com/t2wu/betterrest/libs/utils/jsontrans"
 	"github.com/t2wu/qry/datatype"
 	"github.com/t2wu/qry/mdl"
@@ -29,169 +27,16 @@ type IDoRealDelete interface {
 	DoRealDelete() bool
 }
 
-// ------------------------------------------------------------------------------------
-// Old Rest Op
-// CRUPDOp designates the type of operations for BeforeCRUPD and AfterCRUPD hookpoints
-type CRUPDOp int
-
-const (
-	CRUPDOpOther CRUPDOp = iota // should not be used
-	CRUPDOpRead
-	CRUPDOpCreate
-	CRUPDOpUpdate
-	CRUPDOpPatch
-	CRUPDOpDelete
-)
-
 // HTTP stores HTTP request information
 type HTTP struct {
 	Endpoint string
 	Op       rest.Op
 }
 
-func HTTPMethodToRESTOp(method string) rest.Op {
-	switch method {
-	case "GET":
-		return rest.OpRead
-	case "POST":
-		return rest.OpCreate
-	case "UPDATE":
-		return rest.OpUpdate
-	case "PATCH":
-		return rest.OpPatch
-	case "DELETE":
-		return rest.OpDelete
-	default:
-		return rest.OpOther // shouldn't be here
-	}
-}
-
-// End old Rest Op
-// ------------------------------------------------------------------------------------
-
-// IGuardAPIEntry supports method which guard access to API based on scope
-type IGuardAPIEntry interface {
-	GuardAPIEntry(who UserIDFetchable, http HTTP) bool
-}
-
 // ------------------------------------------------------------------------------------------
-
-// ModelCargo is payload between hookpoints
-type ModelCargo struct {
-	Payload interface{}
-}
-
-// BatchHookCargo is payload between batch update and batch delete hookpoints
-type BatchHookCargo struct {
-	Payload interface{}
-}
 
 type UserIDFetchable interface {
 	GetUserID() *datatype.UUID
-}
-
-// HookPointData is the data send to single model hookpoints (deprecated)
-type HookPointData struct {
-	// DB handle (not available for AfterTransact)
-	DB *gorm.DB
-	// Who is the user information, who is operating this CRUPD right now
-	Who UserIDFetchable
-	// TypeString is the typeString (model string) of this model
-	TypeString string
-	// Cargo between Before and After hookpoints (not used in IAfterRead since there is no IBeforeRead.)
-	// Currently not supported in the AfterTransact hookpoint
-	Cargo *ModelCargo
-	// Role of this user in relation to this data, only available during read
-	Role *userrole.UserRole
-	// URL parameters
-	URLParams map[urlparam.Param]interface{}
-}
-
-// BatchHookPointData is the data send to batch model hookpoints  (deprecated)
-type BatchHookPointData struct {
-	// Ms is the slice of IModels
-	Ms []mdl.IModel
-	// DB is the DB handle
-	DB *gorm.DB
-	// Who is operating this CRUPD right now
-	Who UserIDFetchable
-	// TypeString
-	TypeString string
-	// Cargo between Before and After hookpoints (not used in AfterRead since there is before read hookpoint.)
-	Cargo *BatchHookCargo
-	// Role of this user in relation to this data, only available during read
-	Roles []userrole.UserRole
-	// URL parameters
-	URLParams map[urlparam.Param]interface{}
-}
-
-// IBeforeCreate supports method to be called before data is inserted (created) into the database
-type IBeforeCreate interface {
-	BeforeCreateDB(hpdata HookPointData) error
-}
-
-// IBeforeUpdate supports method to be called before data is updated in the database
-type IBeforeUpdate interface {
-	BeforeUpdateDB(hpdata HookPointData) error
-}
-
-// IBeforePatchApply supports method to be called before data is patched in the database
-// And also before the patch is applied. This comes before BeforePatchDB
-type IBeforePatchApply interface {
-	BeforePatchApplyDB(hpdata HookPointData) error
-}
-
-// IBeforePatch supports method to be called before data is patched in the database
-type IBeforePatch interface {
-	BeforePatchDB(hpdata HookPointData) error
-}
-
-// IBeforeDelete supports method to be called before data is deleted from the database
-type IBeforeDelete interface {
-	BeforeDeleteDB(hpdata HookPointData) error
-}
-
-// IAfterRead supports method to be called after data is read from the database
-type IAfterRead interface {
-	AfterReadDB(hpdata HookPointData) error
-}
-
-// IAfterCreate supports method to be called after data is inserted (created) into the database
-type IAfterCreate interface {
-	AfterCreateDB(hpdata HookPointData) error
-}
-
-// IAfterUpdate supports method to be called after data is updated in the database
-type IAfterUpdate interface {
-	AfterUpdateDB(hpdata HookPointData) error
-}
-
-// IAfterPatch supports method to be called before data is patched in the database
-type IAfterPatch interface {
-	AfterPatchDB(hpdata HookPointData) error
-}
-
-// IAfterDelete supports method to be called after data is deleted from the database
-type IAfterDelete interface {
-	AfterDeleteDB(hpdata HookPointData) error
-}
-
-// IBeforeCUPD supprots method to be called before data is after all CRUPD operations
-// This is called before the individual ops
-type IBeforeCUPD interface {
-	BeforeCUPDDB(hpdata HookPointData, op CRUPDOp) error
-}
-
-// IAfterCRUPD supprots method to be called after data is after all CRUPD operations
-// This is called before the individual ops
-type IAfterCRUPD interface {
-	AfterCRUPDDB(hpdata HookPointData, op CRUPDOp) error
-}
-
-// IAfterTransact is the method to be called after data is after the entire CRUPD
-// transaction is done.
-type IAfterTransact interface {
-	AfterTransact(hpdata HookPointData, op CRUPDOp)
 }
 
 // IValidate supports validation with govalidator
@@ -205,17 +50,7 @@ type IHasPermissions interface {
 	Permissions(role userrole.UserRole, who UserIDFetchable) (jsontrans.Permission, jsontrans.JSONFields)
 }
 
-// IHasRenderer is for formatting IModel with a custom function
-// basically do your own custom output
-// If return false, use the default JSON output
-// For batch renderer, register a Render(r UserRole, who modelutil.UserIDFetchable, modelObjs []IModel) bool
-type IHasRenderer interface {
-	Render(c *gin.Context, hpdata *HookPointData, op CRUPDOp) bool
-}
-
 // ------------------------------------------------
-
-// ------------------------------------
 
 // IOwnership is what OwnershipModelBase tables should satisfy.
 // Except OwnershipType, that's for struct which embed OwnershipModelBase

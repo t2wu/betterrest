@@ -67,9 +67,6 @@ func (mapper *OrgPartition) CreateMany(db *gorm.DB, modelObjs []mdl.IModel, ep *
 		roles[i] = userrole.UserRoleAdmin // has to be admin to create
 	}
 
-	oldBefore := registry.ModelRegistry[ep.TypeString].BeforeCreate
-	oldAfter := registry.ModelRegistry[ep.TypeString].AfterCreate
-
 	data := hook.Data{Ms: modelObjs, DB: db, Roles: roles, Cargo: cargo}
 	initData := hook.InitData{Roles: roles, Ep: ep}
 
@@ -77,13 +74,9 @@ func (mapper *OrgPartition) CreateMany(db *gorm.DB, modelObjs []mdl.IModel, ep *
 		serv:         mapper.Service,
 		oldmodelObjs: nil,
 		modelObjs:    modelObjs,
-
-		oldBefore: oldBefore,
-		oldAfter:  oldAfter,
-
-		fetcher: hfetcher.NewHandlerFetcher(registry.ModelRegistry[ep.TypeString].HandlerMap, &initData),
-		data:    &data,
-		ep:      ep,
+		fetcher:      hfetcher.NewHandlerFetcher(registry.ModelRegistry[ep.TypeString].HandlerMap, &initData),
+		data:         &data,
+		ep:           ep,
 	}
 	return batchOpCoreV2(j, mapper.Service.CreateOneCore)
 }
@@ -96,16 +89,6 @@ func (mapper *OrgPartition) CreateOne(db *gorm.DB, modelObj mdl.IModel,
 		return nil, &webrender.RetError{Error: err}
 	}
 
-	var beforeFuncName, afterFuncName *string
-	if _, ok := modelObj.(mdlutil.IBeforeCreate); ok {
-		b := "BeforeCreateDB"
-		beforeFuncName = &b
-	}
-	if _, ok := modelObj.(mdlutil.IAfterCreate); ok {
-		a := "AfterCreateDB"
-		afterFuncName = &a
-	}
-
 	data := hook.Data{Ms: []mdl.IModel{modelObj}, DB: db, Roles: []userrole.UserRole{userrole.UserRoleAdmin}, Cargo: cargo}
 	initData := hook.InitData{Roles: []userrole.UserRole{userrole.UserRoleAdmin}, Ep: ep}
 
@@ -113,13 +96,9 @@ func (mapper *OrgPartition) CreateOne(db *gorm.DB, modelObj mdl.IModel,
 		serv: mapper.Service,
 		// oldModelObj: oldModelObj,
 		modelObj: modelObj,
-
-		beforeFuncName: beforeFuncName,
-		afterFuncName:  afterFuncName,
-
-		fetcher: hfetcher.NewHandlerFetcher(registry.ModelRegistry[ep.TypeString].HandlerMap, &initData),
-		data:    &data,
-		ep:      ep,
+		fetcher:  hfetcher.NewHandlerFetcher(registry.ModelRegistry[ep.TypeString].HandlerMap, &initData),
+		data:     &data,
+		ep:       ep,
 	}
 	return opCoreV2(j, mapper.Service.CreateOneCore)
 }
@@ -239,17 +218,6 @@ func (mapper *OrgPartition) ReadMany(db *gorm.DB, ep *hook.EndPoint,
 
 	fetcher := hfetcher.NewHandlerFetcher(registry.ModelRegistry[ep.TypeString].HandlerMap, &initData)
 
-	// Begin deprecated
-	if !fetcher.HasAttemptRegisteringHandler() {
-		oldGeneric := registry.ModelRegistry[ep.TypeString].AfterCRUPD
-		oldSpecific := registry.ModelRegistry[ep.TypeString].AfterRead
-
-		if err := callOldBatch(&data, ep, oldGeneric, oldSpecific); err != nil {
-			return nil, nil, nil, &webrender.RetError{Error: err}
-		}
-	}
-	// End deprecated
-
 	// New after hooks
 	// fetch all handlers with before hooks
 	for _, hdlr := range fetcher.FetchHandlersForOpAndHook(ep.Op, "A") {
@@ -292,35 +260,6 @@ func (mapper *OrgPartition) ReadOne(db *gorm.DB, id *datatype.UUID, ep *hook.End
 	initData := hook.InitData{Roles: []userrole.UserRole{role}, Ep: ep}
 	fetcher := hfetcher.NewHandlerFetcher(registry.ModelRegistry[ep.TypeString].HandlerMap, &initData)
 
-	// Deprecated
-	if !fetcher.HasAttemptRegisteringHandler() {
-		// old one
-		modelCargo := mdlutil.ModelCargo{Payload: cargo.Payload}
-		// After CRUPD hook
-		if m, ok := modelObj.(mdlutil.IAfterCRUPD); ok {
-			hpdata := mdlutil.HookPointData{DB: db, Who: ep.Who, TypeString: ep.TypeString, Cargo: &modelCargo, Role: &role, URLParams: ep.URLParams}
-			if err := m.AfterCRUPDDB(hpdata, mdlutil.CRUPDOpRead); err != nil {
-				return nil, 0, &webrender.RetError{Error: err}
-			}
-		}
-
-		// AfterRead hook
-		if m, ok := modelObj.(mdlutil.IAfterRead); ok {
-			hpdata := mdlutil.HookPointData{DB: db, Who: ep.Who, TypeString: ep.TypeString, Cargo: &modelCargo, Role: &role, URLParams: ep.URLParams}
-			if err := m.AfterReadDB(hpdata); err != nil {
-				return nil, 0, &webrender.RetError{Error: err}
-			}
-		}
-		cargo.Payload = modelCargo.Payload
-		ret := MapperRet{
-			Ms:      []mdl.IModel{modelObj},
-			Fetcher: fetcher,
-		}
-
-		return &ret, role, nil
-	}
-	// End deprecated
-
 	data := hook.Data{Ms: []mdl.IModel{modelObj}, DB: db, Roles: []userrole.UserRole{role}, Cargo: cargo}
 
 	// fetch all handlers with before hooks
@@ -347,17 +286,6 @@ func (mapper *OrgPartition) UpdateOne(db *gorm.DB, modelObj mdl.IModel, id *data
 		return nil, &webrender.RetError{Error: err}
 	}
 
-	// TODO: Huh? How do we do validation here?!
-	var beforeFuncName, afterFuncName *string
-	if _, ok := modelObj.(mdlutil.IBeforeUpdate); ok {
-		b := "BeforeUpdateDB"
-		beforeFuncName = &b
-	}
-	if _, ok := modelObj.(mdlutil.IAfterUpdate); ok {
-		a := "AfterUpdateDB"
-		afterFuncName = &a
-	}
-
 	data := hook.Data{Ms: []mdl.IModel{modelObj}, DB: db, Roles: []userrole.UserRole{userrole.UserRoleAdmin}, Cargo: cargo}
 	initData := hook.InitData{Roles: []userrole.UserRole{userrole.UserRoleAdmin}, Ep: ep}
 
@@ -365,13 +293,9 @@ func (mapper *OrgPartition) UpdateOne(db *gorm.DB, modelObj mdl.IModel, id *data
 		serv:        mapper.Service,
 		oldModelObj: oldModelObj,
 		modelObj:    modelObj,
-
-		beforeFuncName: beforeFuncName,
-		afterFuncName:  afterFuncName,
-
-		fetcher: hfetcher.NewHandlerFetcher(registry.ModelRegistry[ep.TypeString].HandlerMap, &initData),
-		data:    &data,
-		ep:      ep,
+		fetcher:     hfetcher.NewHandlerFetcher(registry.ModelRegistry[ep.TypeString].HandlerMap, &initData),
+		data:        &data,
+		ep:          ep,
 	}
 	return opCoreV2(j, mapper.Service.UpdateOneCore)
 }
@@ -401,19 +325,13 @@ func (mapper *OrgPartition) UpdateMany(db *gorm.DB, modelObjs []mdl.IModel,
 	data := hook.Data{Ms: modelObjs, DB: db, Roles: roles, Cargo: cargo}
 	initData := hook.InitData{Roles: roles, Ep: ep}
 
-	oldBefore := registry.ModelRegistry[ep.TypeString].BeforeUpdate
-	oldAfter := registry.ModelRegistry[ep.TypeString].AfterUpdate
 	j := batchOpJobV2{
 		serv:         mapper.Service,
 		oldmodelObjs: oldModelObjs,
 		modelObjs:    modelObjs,
-
-		oldBefore: oldBefore,
-		oldAfter:  oldAfter,
-
-		fetcher: hfetcher.NewHandlerFetcher(registry.ModelRegistry[ep.TypeString].HandlerMap, &initData),
-		data:    &data,
-		ep:      ep,
+		fetcher:      hfetcher.NewHandlerFetcher(registry.ModelRegistry[ep.TypeString].HandlerMap, &initData),
+		data:         &data,
+		ep:           ep,
 	}
 	return batchOpCoreV2(j, mapper.Service.UpdateOneCore)
 }
@@ -429,19 +347,6 @@ func (mapper *OrgPartition) PatchOne(db *gorm.DB, jsonPatch []byte,
 
 	initData := hook.InitData{Roles: []userrole.UserRole{role}, Ep: ep}
 	fetcher := hfetcher.NewHandlerFetcher(registry.ModelRegistry[ep.TypeString].HandlerMap, &initData)
-
-	// Begin deprecated
-	if !fetcher.HasAttemptRegisteringHandler() {
-		if m, ok := oldModelObj.(mdlutil.IBeforePatchApply); ok {
-			modelCargo := mdlutil.ModelCargo{Payload: cargo.Payload}
-			hpdata := mdlutil.HookPointData{DB: db, Who: ep.Who, TypeString: ep.TypeString, Cargo: &modelCargo}
-			if err := m.BeforePatchApplyDB(hpdata); err != nil {
-				return nil, &webrender.RetError{Error: err}
-			}
-			cargo.Payload = modelCargo.Payload
-		}
-	}
-	// End deprecated
 
 	data := hook.Data{Ms: []mdl.IModel{oldModelObj}, DB: db, Roles: []userrole.UserRole{role}, Cargo: cargo}
 
@@ -468,31 +373,15 @@ func (mapper *OrgPartition) PatchOne(db *gorm.DB, jsonPatch []byte,
 		return nil, webrender.NewRetValWithError(err)
 	}
 
-	// TODO: Huh? How do we do validation here?!
-	var beforeFuncName, afterFuncName *string
-	if _, ok := modelObj.(mdlutil.IBeforePatch); ok {
-		b := "BeforePatchDB"
-		beforeFuncName = &b
-	}
-
-	if _, ok := modelObj.(mdlutil.IAfterPatch); ok {
-		a := "AfterPatchDB"
-		afterFuncName = &a
-	}
-
 	data.Ms = []mdl.IModel{modelObj} // modify the one already in hook
 
 	j := opJobV2{
 		serv:        mapper.Service,
 		oldModelObj: oldModelObj,
 		modelObj:    modelObj,
-
-		beforeFuncName: beforeFuncName,
-		afterFuncName:  afterFuncName,
-
-		fetcher: fetcher,
-		data:    &data,
-		ep:      ep,
+		fetcher:     fetcher,
+		data:        &data,
+		ep:          ep,
 	}
 	return opCoreV2(j, mapper.Service.UpdateOneCore)
 }
@@ -529,22 +418,6 @@ func (mapper *OrgPartition) PatchMany(db *gorm.DB, jsonIDPatches []mdlutil.JSONI
 	// Begin Deprecated
 	fetcher := hfetcher.NewHandlerFetcher(registry.ModelRegistry[ep.TypeString].HandlerMap, &initData)
 
-	if !fetcher.HasAttemptRegisteringHandler() {
-		batchCargo := mdlutil.BatchHookCargo{Payload: cargo.Payload}
-		// Hookpoint BEFORE BeforeCRUD and BeforePatch
-		// This is called BEFORE the actual patch
-		beforeApply := registry.ModelRegistry[ep.TypeString].BeforePatchApply
-		if beforeApply != nil {
-			bhpData := mdlutil.BatchHookPointData{Ms: oldModelObjs, DB: db, Who: ep.Who, TypeString: ep.TypeString,
-				Cargo: &batchCargo, Roles: roles}
-			if err := beforeApply(bhpData); err != nil {
-				return nil, &webrender.RetError{Error: err}
-			}
-		}
-		cargo.Payload = batchCargo.Payload
-	}
-	// End Deprecated
-
 	// here we put the oldModelObjs, not patched yet
 	data := hook.Data{Ms: oldModelObjs, DB: db, Roles: roles, Cargo: cargo}
 
@@ -569,19 +442,13 @@ func (mapper *OrgPartition) PatchMany(db *gorm.DB, jsonIDPatches []mdlutil.JSONI
 	data.Ms = modelObjs
 
 	// Finally update them
-	oldBefore := registry.ModelRegistry[ep.TypeString].BeforePatch
-	oldAfter := registry.ModelRegistry[ep.TypeString].AfterPatch
 	j := batchOpJobV2{
 		serv:         mapper.Service,
 		oldmodelObjs: oldModelObjs,
 		modelObjs:    modelObjs,
-
-		oldBefore: oldBefore,
-		oldAfter:  oldAfter,
-
-		fetcher: fetcher,
-		data:    &data,
-		ep:      ep,
+		fetcher:      fetcher,
+		data:         &data,
+		ep:           ep,
 	}
 	return batchOpCoreV2(j, mapper.Service.UpdateOneCore)
 }
@@ -607,16 +474,6 @@ func (mapper *OrgPartition) DeleteOne(db *gorm.DB, id *datatype.UUID, ep *hook.E
 		return nil, &webrender.RetError{Error: err}
 	}
 
-	var beforeFuncName, afterFuncName *string
-	if _, ok := modelObj.(mdlutil.IBeforeDelete); ok {
-		b := "BeforeDeleteDB"
-		beforeFuncName = &b
-	}
-	if _, ok := modelObj.(mdlutil.IAfterDelete); ok {
-		a := "AfterDeleteDB"
-		afterFuncName = &a
-	}
-
 	data := hook.Data{Ms: []mdl.IModel{modelObj}, DB: db, Roles: []userrole.UserRole{role}, Cargo: cargo}
 	initData := hook.InitData{Roles: []userrole.UserRole{role}, Ep: ep}
 
@@ -624,13 +481,9 @@ func (mapper *OrgPartition) DeleteOne(db *gorm.DB, id *datatype.UUID, ep *hook.E
 		serv: mapper.Service,
 		// oldModelObj: oldModelObj,
 		modelObj: modelObj,
-
-		beforeFuncName: beforeFuncName,
-		afterFuncName:  afterFuncName,
-
-		fetcher: hfetcher.NewHandlerFetcher(registry.ModelRegistry[ep.TypeString].HandlerMap, &initData),
-		data:    &data,
-		ep:      ep,
+		fetcher:  hfetcher.NewHandlerFetcher(registry.ModelRegistry[ep.TypeString].HandlerMap, &initData),
+		data:     &data,
+		ep:       ep,
 	}
 	return opCoreV2(j, mapper.Service.DeleteOneCore)
 }
@@ -669,19 +522,12 @@ func (mapper *OrgPartition) DeleteMany(db *gorm.DB, modelObjs []mdl.IModel,
 	data := hook.Data{Ms: modelObjs, DB: db, Roles: roles, Cargo: cargo}
 	initData := hook.InitData{Roles: roles, Ep: ep}
 
-	oldBefore := registry.ModelRegistry[ep.TypeString].BeforeDelete
-	oldAfter := registry.ModelRegistry[ep.TypeString].AfterDelete
-
 	j := batchOpJobV2{
 		serv:      mapper.Service,
 		modelObjs: modelObjs,
-
-		oldBefore: oldBefore,
-		oldAfter:  oldAfter,
-
-		fetcher: hfetcher.NewHandlerFetcher(registry.ModelRegistry[ep.TypeString].HandlerMap, &initData),
-		data:    &data,
-		ep:      ep,
+		fetcher:   hfetcher.NewHandlerFetcher(registry.ModelRegistry[ep.TypeString].HandlerMap, &initData),
+		data:      &data,
+		ep:        ep,
 	}
 	return batchOpCoreV2(j, mapper.Service.DeleteOneCore)
 }
