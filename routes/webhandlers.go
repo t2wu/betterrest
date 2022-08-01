@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -257,20 +258,38 @@ func RenderJSONForModel(c *gin.Context, modelObj mdl.IModel, data *hook.Data, ep
 	c.Writer.Write([]byte(content))
 }
 
-// func renderCode(c *gin.Context, code int, msg string) {
-// 	var content string
-// 	if total != nil {
-// 		content = fmt.Sprintf("{\"code\": 0, \"total\": %d, \"content\": %s}", *total, jsonString)
-// 	} else {
-// 		content = fmt.Sprintf("{\"code\": 0, \"content\": %s}", jsonString)
-// 	}
+func CustomRender(c *gin.Context, data *hook.Data, ep *hook.EndPoint, total *int, hf *hfetcher.HandlerFetcher) bool {
+	// Custom rendering if any
+	handlers := hf.FetchHandlersForOpAndHook(ep.Op, "R")
+	for _, handler := range handlers {
+		if renderHook, ok := handler.(hook.IRender); ok {
+			if renderHook.Render(c, data, ep, total) {
+				return true // maximum of one handler at a time, the hook writer has to make sure they are mutally exclusive
+			}
+		}
+	}
+	return false
+}
 
-// 	data := []byte(content)
-// 	c.Writer.Header().Set("Content-Type", "application/json; charset=utf-8")
-// 	c.Writer.Header().Set("Cache-Control", "no-store")
-// 	c.Writer.Header().Set("Content-Length", strconv.Itoa(len(data)))
-// 	c.Writer.Write(data)
-// }
+func RenderCodeAndMsg(c *gin.Context, code int, msg *string, err *string) {
+	output := make(map[string]interface{})
+	output["code"] = code
+	if msg != nil {
+		output["msg"] = msg
+	}
+	if err != nil {
+		output["err"] = err
+	}
+
+	data, _ := json.Marshal(output)
+	// content = fmt.Sprintf(`{"code": %d,  "msg": %s}`, code, msg)
+
+	// data := []byte(content)
+	c.Writer.Header().Set("Content-Type", "application/json; charset=utf-8")
+	c.Writer.Header().Set("Cache-Control", "no-store")
+	c.Writer.Header().Set("Content-Length", strconv.Itoa(len(data)))
+	c.Writer.Write(data)
+}
 
 // ---------------------------------------------
 
@@ -355,9 +374,9 @@ func CreateHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin
 
 		if *isBatch {
 			ep.Cardinality = rest.CardinalityMany
-			data, handlerFetcher, renderer := lifecycle.CreateMany(db.Shared(), mapper, modelObjs, &ep, &TransIDLogger{})
-			if renderer != nil {
-				render.Render(w, c.Request, renderer)
+			data, handlerFetcher, errRenderer := lifecycle.CreateMany(db.Shared(), mapper, modelObjs, &ep, &TransIDLogger{})
+			if errRenderer != nil {
+				render.Render(w, c.Request, errRenderer)
 				return
 			}
 
@@ -366,9 +385,9 @@ func CreateHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin
 			RenderModelSlice(c, data, &ep, nil, handlerFetcher)
 		} else {
 			ep.Cardinality = rest.CardinalityOne
-			data, handlerFetcher, renderer := lifecycle.CreateOne(db.Shared(), mapper, modelObjs[0], &ep, &TransIDLogger{})
-			if renderer != nil {
-				render.Render(w, c.Request, renderer)
+			data, handlerFetcher, errRenderer := lifecycle.CreateOne(db.Shared(), mapper, modelObjs[0], &ep, &TransIDLogger{})
+			if errRenderer != nil {
+				render.Render(w, c.Request, errRenderer)
 				return
 			}
 
@@ -396,9 +415,9 @@ func ReadManyHandler(typeString string, mapper datamapper.IDataMapper) func(c *g
 			Who:         WhoFromContext(r),
 		}
 
-		data, no, handlerFetcher, renderer := lifecycle.ReadMany(db.Shared(), mapper, &ep, &TransIDLogger{})
-		if renderer != nil {
-			render.Render(w, r, renderer)
+		data, no, handlerFetcher, errRenderer := lifecycle.ReadMany(db.Shared(), mapper, &ep, &TransIDLogger{})
+		if errRenderer != nil {
+			render.Render(w, r, errRenderer)
 			return
 		}
 
@@ -420,7 +439,7 @@ func ReadOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *gi
 		}
 
 		if settings.Log {
-			log.Println(fmt.Sprintf("[BetterREST]: %s %s (1), transact: n/a", c.Request.Method, c.Request.URL.String()))
+			log.Printf("[BetterREST]: %s %s (1), transact: n/a\n", c.Request.Method, c.Request.URL.String())
 		}
 
 		ep := hook.EndPoint{
@@ -431,9 +450,9 @@ func ReadOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *gi
 			URLParams:   OptionFromContext(r),
 			Who:         WhoFromContext(r),
 		}
-		data, handlerFetcher, renderer := lifecycle.ReadOne(db.Shared(), mapper, id, &ep, &TransIDLogger{})
-		if renderer != nil {
-			render.Render(w, c.Request, renderer)
+		data, handlerFetcher, errRenderer := lifecycle.ReadOne(db.Shared(), mapper, id, &ep, &TransIDLogger{})
+		if errRenderer != nil {
+			render.Render(w, c.Request, errRenderer)
 			return
 		}
 
@@ -463,9 +482,9 @@ func UpdateManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 			return
 		}
 
-		data, handlerFetcher, renderer := lifecycle.UpdateMany(db.Shared(), mapper, modelObjs, &ep, &TransIDLogger{})
-		if renderer != nil {
-			render.Render(w, r, renderer)
+		data, handlerFetcher, errRenderer := lifecycle.UpdateMany(db.Shared(), mapper, modelObjs, &ep, &TransIDLogger{})
+		if errRenderer != nil {
+			render.Render(w, r, errRenderer)
 			return
 		}
 
@@ -507,9 +526,9 @@ func UpdateOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 			return
 		}
 
-		data, handlerFetcher, renderer := lifecycle.UpdateOne(db.Shared(), mapper, modelObj, id, &ep, &TransIDLogger{})
-		if renderer != nil {
-			render.Render(w, r, renderer)
+		data, handlerFetcher, errRenderer := lifecycle.UpdateOne(db.Shared(), mapper, modelObj, id, &ep, &TransIDLogger{})
+		if errRenderer != nil {
+			render.Render(w, r, errRenderer)
 			return
 		}
 
@@ -539,9 +558,9 @@ func PatchManyHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 			Who:         WhoFromContext(r),
 		}
 
-		data, handlerFetcher, renderer := lifecycle.PatchMany(db.Shared(), mapper, jsonIDPatches, &ep, &TransIDLogger{})
-		if renderer != nil {
-			render.Render(w, r, renderer)
+		data, handlerFetcher, errRenderer := lifecycle.PatchMany(db.Shared(), mapper, jsonIDPatches, &ep, &TransIDLogger{})
+		if errRenderer != nil {
+			render.Render(w, r, errRenderer)
 			return
 		}
 		// batchRenderHelper(c, typeString, data, &ep, nil, handlerFetcher)
@@ -576,13 +595,12 @@ func PatchOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *g
 			Who:         WhoFromContext(r),
 		}
 
-		data, handlerFetcher, renderer := lifecycle.PatchOne(db.Shared(), mapper, jsonPatch, id, &ep, &TransIDLogger{})
-		if renderer != nil {
-			render.Render(w, r, renderer)
+		data, handlerFetcher, errRenderer := lifecycle.PatchOne(db.Shared(), mapper, jsonPatch, id, &ep, &TransIDLogger{})
+		if errRenderer != nil {
+			render.Render(w, r, errRenderer)
 			return
 		}
 
-		// singleRenderHelper(c, typeString, data, &ep, handlerFetcher)
 		RenderModel(c, data, &ep, nil, handlerFetcher)
 	}
 }
@@ -618,22 +636,15 @@ func DeleteManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 		}
 
 		// if len(modelObjs) != 0 {
-		data, handlerFetcher, renderer := lifecycle.DeleteMany(db.Shared(), mapper, modelObjs, &ep, &TransIDLogger{})
-		if renderer != nil {
-			render.Render(w, r, renderer)
+		data, handlerFetcher, errRenderer := lifecycle.DeleteMany(db.Shared(), mapper, modelObjs, &ep, &TransIDLogger{})
+		if errRenderer != nil {
+			render.Render(w, r, errRenderer)
 			return
 		}
-		// batchRenderHelper(c, typeString, data, &ep, nil, handlerFetcher)
-		RenderModelSlice(c, data, &ep, nil, handlerFetcher)
-		// } else {
-		// 	// DELETE WHERE
-		// }
-		// data, handlerFetcher, renderer := lifecycle.DeleteMany(db.Shared(), mapper, modelObjs, &ep, &TransIDLogger{})
-		// if renderer != nil {
-		// 	render.Render(w, r, renderer)
-		// 	return
-		// }
-		// batchRenderHelper(c, typeString, data, &ep, nil, handlerFetcher)
+
+		if !CustomRender(c, data, &ep, nil, handlerFetcher) {
+			RenderCodeAndMsg(c, 0, nil, nil)
+		}
 	}
 }
 
@@ -657,12 +668,14 @@ func DeleteOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 			Who:         WhoFromContext(r),
 		}
 
-		data, handlerFetcher, renderer := lifecycle.DeleteOne(db.Shared(), mapper, id, &ep, &TransIDLogger{})
-		if renderer != nil {
-			render.Render(w, r, renderer)
+		data, handlerFetcher, errRenderer := lifecycle.DeleteOne(db.Shared(), mapper, id, &ep, &TransIDLogger{})
+		if errRenderer != nil {
+			render.Render(w, r, errRenderer)
 			return
 		}
-		// singleRenderHelper(c, typeString, data, &ep, handlerFetcher)
-		RenderModel(c, data, &ep, nil, handlerFetcher)
+
+		if !CustomRender(c, data, &ep, nil, handlerFetcher) {
+			RenderCodeAndMsg(c, 0, nil, nil)
+		}
 	}
 }
