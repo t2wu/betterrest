@@ -31,6 +31,7 @@ func (suite *TestBaseMapperReadSuite) SetupTest() {
 	suite.db, _ = gorm.Open("postgres", sqldb)
 	// suite.db.LogMode(true)
 	suite.db.SingularTable(true)
+	suite.db.LogMode(true)
 	suite.mock = mock
 	suite.who = &WhoMock{Oid: datatype.NewUUID()} // userid
 	suite.typeString = "cars"
@@ -237,11 +238,11 @@ func (suite *TestBaseMapperReadSuite) TestReadMany_WhenGiven_GotCars() {
 	carID3 := datatype.NewUUID()
 	carName3 := "Eclipse"
 
-	stmt := `SELECT "car".* FROM "car" INNER JOIN "user_owns_car" ON "car".id = "user_owns_car".model_id INNER JOIN "user" ON "user".id = "user_owns_car".user_id AND "user_owns_car".user_id = $1 WHERE "car"."deleted_at" IS NULL ORDER BY "car".created_at DESC LIMIT 100 OFFSET 0`
+	stmt := `SELECT "car".* FROM "car" INNER JOIN "user_owns_car" ON "car".id = "user_owns_car".model_id INNER JOIN "user" ON "user".id = "user_owns_car".user_id AND "user_owns_car".user_id = $1 WHERE "car"."deleted_at" IS NULL ORDER BY "car"."created_at" DESC LIMIT 100 OFFSET 0`
 	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt)).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(carID1, carName1).AddRow(carID2, carName2).AddRow(carID3, carName3))
 
-	stmt2 := `SELECT "user_owns_car"."role" FROM "car" INNER JOIN "user_owns_car" ON "car".id = "user_owns_car".model_id INNER JOIN "user" ON "user".id = "user_owns_car".user_id AND "user_owns_car".user_id = $1 WHERE ("car"."deleted_at" IS NULL) ORDER BY "car".created_at DESC LIMIT 100 OFFSET 0`
+	stmt2 := `SELECT "user_owns_car"."role" FROM "car" INNER JOIN "user_owns_car" ON "car".id = "user_owns_car".model_id INNER JOIN "user" ON "user".id = "user_owns_car".user_id AND "user_owns_car".user_id = $1 WHERE ("car"."deleted_at" IS NULL) ORDER BY "car"."created_at" DESC LIMIT 100 OFFSET 0`
 	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt2)).
 		WillReturnRows(sqlmock.NewRows([]string{"role"}).AddRow(userrole.UserRoleAdmin).AddRow(userrole.UserRoleGuest).AddRow(userrole.UserRoleAdmin))
 
@@ -286,11 +287,11 @@ func (suite *TestBaseMapperReadSuite) TestReadMany_WhenNoController_CallRelevant
 	carName3 := "Eclipse"
 	roles := []userrole.UserRole{userrole.UserRoleAdmin, userrole.UserRoleGuest, userrole.UserRoleAdmin}
 
-	stmt := `SELECT "car".* FROM "car" INNER JOIN "user_owns_car" ON "car".id = "user_owns_car".model_id INNER JOIN "user" ON "user".id = "user_owns_car".user_id AND "user_owns_car".user_id = $1 WHERE "car"."deleted_at" IS NULL ORDER BY "car".created_at DESC LIMIT 100 OFFSET 0`
+	stmt := `SELECT "car".* FROM "car" INNER JOIN "user_owns_car" ON "car".id = "user_owns_car".model_id INNER JOIN "user" ON "user".id = "user_owns_car".user_id AND "user_owns_car".user_id = $1 WHERE "car"."deleted_at" IS NULL ORDER BY "car"."created_at" DESC LIMIT 100 OFFSET 0`
 	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt)).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(carID1, carName1).AddRow(carID2, carName2).AddRow(carID3, carName3))
 
-	stmt2 := `SELECT "user_owns_car"."role" FROM "car" INNER JOIN "user_owns_car" ON "car".id = "user_owns_car".model_id INNER JOIN "user" ON "user".id = "user_owns_car".user_id AND "user_owns_car".user_id = $1 WHERE ("car"."deleted_at" IS NULL) ORDER BY "car".created_at DESC LIMIT 100 OFFSET 0`
+	stmt2 := `SELECT "user_owns_car"."role" FROM "car" INNER JOIN "user_owns_car" ON "car".id = "user_owns_car".model_id INNER JOIN "user" ON "user".id = "user_owns_car".user_id AND "user_owns_car".user_id = $1 WHERE ("car"."deleted_at" IS NULL) ORDER BY "car"."created_at" DESC LIMIT 100 OFFSET 0`
 	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt2)).
 		WillReturnRows(sqlmock.NewRows([]string{"role"}).AddRow(roles[0]).AddRow(roles[1]).AddRow(roles[2]))
 
@@ -360,11 +361,11 @@ func (suite *TestBaseMapperReadSuite) TestReadMany_WhenHavingController_NotCallO
 	carName3 := "Eclipse"
 	roles := []userrole.UserRole{userrole.UserRoleAdmin, userrole.UserRoleGuest, userrole.UserRoleAdmin}
 
-	stmt := `SELECT "car".* FROM "car" INNER JOIN "user_owns_car" ON "car".id = "user_owns_car".model_id INNER JOIN "user" ON "user".id = "user_owns_car".user_id AND "user_owns_car".user_id = $1 WHERE "car"."deleted_at" IS NULL ORDER BY "car".created_at DESC LIMIT 100 OFFSET 0`
+	stmt := `SELECT "car".* FROM "car" INNER JOIN "user_owns_car" ON "car".id = "user_owns_car".model_id INNER JOIN "user" ON "user".id = "user_owns_car".user_id AND "user_owns_car".user_id = $1 WHERE "car"."deleted_at" IS NULL ORDER BY "car"."created_at" DESC LIMIT 100 OFFSET 0`
 	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt)).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(carID1, carName1).AddRow(carID2, carName2).AddRow(carID3, carName3))
 
-	stmt2 := `SELECT "user_owns_car"."role" FROM "car" INNER JOIN "user_owns_car" ON "car".id = "user_owns_car".model_id INNER JOIN "user" ON "user".id = "user_owns_car".user_id AND "user_owns_car".user_id = $1 WHERE ("car"."deleted_at" IS NULL) ORDER BY "car".created_at DESC LIMIT 100 OFFSET 0`
+	stmt2 := `SELECT "user_owns_car"."role" FROM "car" INNER JOIN "user_owns_car" ON "car".id = "user_owns_car".model_id INNER JOIN "user" ON "user".id = "user_owns_car".user_id AND "user_owns_car".user_id = $1 WHERE ("car"."deleted_at" IS NULL) ORDER BY "car"."created_at" DESC LIMIT 100 OFFSET 0`
 	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt2)).
 		WillReturnRows(sqlmock.NewRows([]string{"role"}).AddRow(roles[0]).AddRow(roles[1]).AddRow(roles[2]))
 
@@ -421,11 +422,11 @@ func (suite *TestBaseMapperReadSuite) TestReadMany_WhenHavingController_CallRele
 	carName3 := "Eclipse"
 	roles := []userrole.UserRole{userrole.UserRoleAdmin, userrole.UserRoleGuest, userrole.UserRoleAdmin}
 
-	stmt := `SELECT "car".* FROM "car" INNER JOIN "user_owns_car" ON "car".id = "user_owns_car".model_id INNER JOIN "user" ON "user".id = "user_owns_car".user_id AND "user_owns_car".user_id = $1 WHERE "car"."deleted_at" IS NULL ORDER BY "car".created_at DESC LIMIT 100 OFFSET 0`
+	stmt := `SELECT "car".* FROM "car" INNER JOIN "user_owns_car" ON "car".id = "user_owns_car".model_id INNER JOIN "user" ON "user".id = "user_owns_car".user_id AND "user_owns_car".user_id = $1 WHERE "car"."deleted_at" IS NULL ORDER BY "car"."created_at" DESC LIMIT 100 OFFSET 0`
 	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt)).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(carID1, carName1).AddRow(carID2, carName2).AddRow(carID3, carName3))
 
-	stmt2 := `SELECT "user_owns_car"."role" FROM "car" INNER JOIN "user_owns_car" ON "car".id = "user_owns_car".model_id INNER JOIN "user" ON "user".id = "user_owns_car".user_id AND "user_owns_car".user_id = $1 WHERE ("car"."deleted_at" IS NULL) ORDER BY "car".created_at DESC LIMIT 100 OFFSET 0`
+	stmt2 := `SELECT "user_owns_car"."role" FROM "car" INNER JOIN "user_owns_car" ON "car".id = "user_owns_car".model_id INNER JOIN "user" ON "user".id = "user_owns_car".user_id AND "user_owns_car".user_id = $1 WHERE ("car"."deleted_at" IS NULL) ORDER BY "car"."created_at" DESC LIMIT 100 OFFSET 0`
 	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt2)).
 		WillReturnRows(sqlmock.NewRows([]string{"role"}).AddRow(roles[0]).AddRow(roles[1]).AddRow(roles[2]))
 

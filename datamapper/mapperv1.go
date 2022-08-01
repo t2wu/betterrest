@@ -88,7 +88,7 @@ func (mapper *DataMapper) CreateOne(db *gorm.DB, modelObj mdl.IModel,
 		afterFuncName = &a
 	}
 
-	data := hook.Data{Ms: []mdl.IModel{modelObj}, DB: db, Roles: []userrole.UserRole{userrole.UserRoleAdmin, userrole.UserRolePublic}, Cargo: cargo}
+	data := hook.Data{Ms: []mdl.IModel{modelObj}, DB: db, Roles: []userrole.UserRole{userrole.UserRoleAdmin}, Cargo: cargo}
 	initData := hook.InitData{Roles: []userrole.UserRole{userrole.UserRoleAdmin}, Ep: ep}
 
 	j := opJobV1{
@@ -114,7 +114,7 @@ func (mapper *DataMapper) ReadMany(db *gorm.DB, ep *hook.EndPoint, cargo *hook.C
 	rtable := registry.GetTableNameFromTypeString(ep.TypeString)
 
 	if cstart != nil && cstop != nil {
-		db = db.Where(rtable+".created_at BETWEEN ? AND ?", time.Unix(int64(*cstart), 0), time.Unix(int64(*cstop), 0))
+		db = db.Where(rtable+`.created_at BETWEEN ? AND ?`, time.Unix(int64(*cstart), 0), time.Unix(int64(*cstop), 0))
 	}
 
 	var err error
@@ -176,7 +176,7 @@ func (mapper *DataMapper) ReadMany(db *gorm.DB, ep *hook.EndPoint, cargo *hook.C
 		}
 	}
 
-	// Actual quer in the following line
+	// Actual query in the following line
 	outmodels, err := registry.NewSliceFromDBByTypeString(ep.TypeString, db.Find)
 	if err != nil {
 		return nil, nil, nil, &webrender.RetError{Error: err}
@@ -311,7 +311,7 @@ func (mapper *DataMapper) UpdateOne(db *gorm.DB, modelObj mdl.IModel, id *dataty
 		afterFuncName = &a
 	}
 
-	data := hook.Data{Ms: []mdl.IModel{modelObj}, DB: db, Roles: []userrole.UserRole{userrole.UserRoleAdmin, userrole.UserRolePublic}, Cargo: cargo}
+	data := hook.Data{Ms: []mdl.IModel{modelObj}, DB: db, Roles: []userrole.UserRole{userrole.UserRoleAdmin}, Cargo: cargo}
 	initData := hook.InitData{Roles: []userrole.UserRole{userrole.UserRoleAdmin}, Ep: ep}
 
 	j := opJobV1{
@@ -600,12 +600,12 @@ func (mapper *DataMapper) DeleteMany(db *gorm.DB, modelObjs []mdl.IModel,
 		ids[i] = id
 	}
 
-	log.Println("load and check before modify v1 1")
+	// log.Println("load and check before modify v1 1")
 	modelObjs, roles, err := loadManyAndCheckBeforeModifyV1(mapper.Service, db, ep.Who, ep.TypeString, ids, []userrole.UserRole{userrole.UserRoleAdmin, userrole.UserRolePublic})
 	if err != nil {
 		return nil, &webrender.RetError{Error: err}
 	}
-	log.Println("load and check before modify v1 2")
+	// log.Println("load and check before modify v1 2")
 
 	// Unscoped() for REAL delete!
 	// Foreign key constraint works only on real delete
@@ -668,7 +668,7 @@ func constructOrderFieldQueries(db *gorm.DB, typeString string, tableName string
 	}
 
 	if orderby == nil {
-		orderbyField := "created_at"
+		orderbyField := `created_at`
 		orderby = &orderbyField
 	}
 
