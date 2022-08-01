@@ -271,9 +271,10 @@ func CustomRender(c *gin.Context, data *hook.Data, ep *hook.EndPoint, total *int
 	return false
 }
 
-func RenderCodeAndMsg(c *gin.Context, code int, msg *string, err *string) {
+func RenderCodeAndMsg(c *gin.Context, code int, total int, msg *string, err *string) {
 	output := make(map[string]interface{})
 	output["code"] = code
+	output["total"] = total
 	if msg != nil {
 		output["msg"] = msg
 	}
@@ -643,7 +644,7 @@ func DeleteManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 		}
 
 		if !CustomRender(c, data, &ep, nil, handlerFetcher) {
-			RenderCodeAndMsg(c, 0, nil, nil)
+			RenderCodeAndMsg(c, 0, len(data.Ms), nil, nil)
 		}
 	}
 }
@@ -675,7 +676,7 @@ func DeleteOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 		}
 
 		if !CustomRender(c, data, &ep, nil, handlerFetcher) {
-			RenderCodeAndMsg(c, 0, nil, nil)
+			RenderCodeAndMsg(c, 0, 1, nil, nil)
 		}
 	}
 }
