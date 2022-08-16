@@ -36,7 +36,7 @@ type HandlerFetcher struct {
 // FetchHandlersForOpAndHook fetches the releveant hook for this method and hookstr.
 // If there is any hook whose first hookstr is this one, instantiate it.
 // If there are already instantiated hook which handles this hookstr, fetch it as well.
-// hookstr can be JBATR
+// hookstr can be JBCATR (C is cache)
 func (h *HandlerFetcher) FetchHandlersForOpAndHook(op rest.Op, hookstr string) []hook.IHook {
 	// Make sure it's only used for one hookstr
 	if h.op != rest.OpOther && h.op != op {
@@ -74,6 +74,9 @@ func (h *HandlerFetcher) FetchHandlersForOpAndHook(op rest.Op, hookstr string) [
 	// Any old handlers which handles this hookpoint?
 	for _, handler := range h.handlers {
 		if _, ok := handler.(hook.IBeforeApply); ok && hookstr == "J" {
+			comformedHandlers = append(comformedHandlers, handler)
+		}
+		if _, ok := handler.(hook.ICache); ok && hookstr == "C" {
 			comformedHandlers = append(comformedHandlers, handler)
 		}
 		if _, ok := handler.(hook.IBefore); ok && hookstr == "B" {

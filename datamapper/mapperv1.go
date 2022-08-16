@@ -89,6 +89,30 @@ func (mapper *DataMapper) ReadMany(db *gorm.DB, ep *hook.EndPoint, cargo *hook.C
 	dbClean := db
 	db = db.Set("gorm:auto_preload", true)
 
+	initData := hook.InitData{Roles: nil, Ep: ep}
+	fetcher := hfetcher.NewHandlerFetcher(registry.ModelRegistry[ep.TypeString].HandlerMap, &initData)
+
+	// New after hooks
+	// fetch all handlers with before hooks
+	var outmodels []mdl.IModel
+	var roles []userrole.UserRole
+	var no *int
+
+	cacheMiss := true
+	for _, hdlr := range fetcher.FetchHandlersForOpAndHook(ep.Op, "C") { // C for cache
+		var retErr *webrender.RetError
+		var handled bool
+		handled, _, outmodels, roles, no, retErr = hdlr.(hook.ICache).GetFromCache(ep)
+		if retErr != nil {
+			return nil, nil, nil, retErr
+		}
+
+		if handled {
+			cacheMiss = false
+			break
+		}
+	}
+
 	offset, limit, cstart, cstop, orderby, order, latestn, latestnons, totalcount := urlparam.GetOptions(ep.URLParams)
 	rtable := registry.GetTableNameFromTypeString(ep.TypeString)
 
@@ -96,94 +120,109 @@ func (mapper *DataMapper) ReadMany(db *gorm.DB, ep *hook.EndPoint, cargo *hook.C
 		db = db.Where(rtable+`.created_at BETWEEN ? AND ?`, time.Unix(int64(*cstart), 0), time.Unix(int64(*cstop), 0))
 	}
 
-	var err error
-	var builder *qry.PredicateRelationBuilder
-	if latestn != nil { // query module currently don't handle latestn, use old if so
-		db, err = constructInnerFieldParamQueries(db, ep.TypeString, ep.URLParams, latestn, latestnons)
+	if cacheMiss {
+		var err error
+		var builder *qry.PredicateRelationBuilder
+		if latestn != nil { // query module currently don't handle latestn, use old if so
+			db, err = constructInnerFieldParamQueries(db, ep.TypeString, ep.URLParams, latestn, latestnons)
+			if err != nil {
+				return nil, nil, nil, &webrender.RetError{Error: err}
+			}
+		} else {
+			if urlParams, ok := ep.URLParams[urlparam.ParamOtherQueries].(url.Values); ok && len(urlParams) != 0 {
+				builder, err = createBuilderFromQueryParameters(urlParams, ep.TypeString)
+				if err != nil {
+					return nil, nil, nil, &webrender.RetError{Error: err}
+				}
+			}
+		}
+
+		db, err = constructOrderFieldQueries(db, ep.TypeString, rtable, orderby, order)
 		if err != nil {
 			return nil, nil, nil, &webrender.RetError{Error: err}
 		}
-	} else {
-		if urlParams, ok := ep.URLParams[urlparam.ParamOtherQueries].(url.Values); ok && len(urlParams) != 0 {
-			builder, err = createBuilderFromQueryParameters(urlParams, ep.TypeString)
+		db, err = mapper.Service.GetAllQueryContructCore(db, ep.Who, ep.TypeString)
+		if err != nil {
+			return nil, nil, nil, &webrender.RetError{Error: err}
+		}
+
+		if totalcount {
+			no = new(int)
+			if builder == nil {
+				// Query for total count, without offset and limit (all)
+				if err := db.Count(no).Error; err != nil {
+					return nil, nil, nil, &webrender.RetError{Error: err}
+				}
+			} else {
+				q := qry.Q(db, builder)
+				if err := q.Count(registry.NewFromTypeString(ep.TypeString), no).Error(); err != nil {
+					return nil, nil, nil, &webrender.RetError{Error: err}
+				}
+
+				// Fetch it back, so the builder stuff is in there
+				// And resort back to Gorm.
+				// db = q.GetDB()
+			}
+		}
+
+		// chain offset and limit
+		if offset != nil && limit != nil {
+			db = db.Offset(*offset).Limit(*limit)
+		} else if cstart == nil && cstop == nil { // default to 100 maximum unless time is specified
+			db = db.Offset(0).Limit(100)
+		}
+
+		if builder != nil {
+			db, err = qry.Q(db, builder).BuildQuery(registry.NewFromTypeString(ep.TypeString))
 			if err != nil {
 				return nil, nil, nil, &webrender.RetError{Error: err}
 			}
 		}
-	}
 
-	db, err = constructOrderFieldQueries(db, ep.TypeString, rtable, orderby, order)
-	if err != nil {
-		return nil, nil, nil, &webrender.RetError{Error: err}
-	}
-	db, err = mapper.Service.GetAllQueryContructCore(db, ep.Who, ep.TypeString)
-	if err != nil {
-		return nil, nil, nil, &webrender.RetError{Error: err}
-	}
-
-	var no *int
-	if totalcount {
-		no = new(int)
-		if builder == nil {
-			// Query for total count, without offset and limit (all)
-			if err := db.Count(no).Error; err != nil {
-				return nil, nil, nil, &webrender.RetError{Error: err}
-			}
-		} else {
-			q := qry.Q(db, builder)
-			if err := q.Count(registry.NewFromTypeString(ep.TypeString), no).Error(); err != nil {
-				return nil, nil, nil, &webrender.RetError{Error: err}
-			}
-
-			// Fetch it back, so the builder stuff is in there
-			// And resort back to Gorm.
-			// db = q.GetDB()
-		}
-	}
-
-	// chain offset and limit
-	if offset != nil && limit != nil {
-		db = db.Offset(*offset).Limit(*limit)
-	} else if cstart == nil && cstop == nil { // default to 100 maximum unless time is specified
-		db = db.Offset(0).Limit(100)
-	}
-
-	if builder != nil {
-		db, err = qry.Q(db, builder).BuildQuery(registry.NewFromTypeString(ep.TypeString))
+		// Actual query in the following line
+		outmodels, err = registry.NewSliceFromDBByTypeString(ep.TypeString, db.Find)
 		if err != nil {
 			return nil, nil, nil, &webrender.RetError{Error: err}
 		}
-	}
 
-	// Actual query in the following line
-	outmodels, err := registry.NewSliceFromDBByTypeString(ep.TypeString, db.Find)
-	if err != nil {
-		return nil, nil, nil, &webrender.RetError{Error: err}
-	}
-
-	roles, err := mapper.Service.GetAllRolesCore(db, dbClean, ep.Who, ep.TypeString, outmodels)
-	if err != nil {
-		return nil, nil, nil, &webrender.RetError{Error: err}
-	}
-
-	// safeguard, Must be coded wrongly
-	if len(outmodels) != len(roles) {
-		return nil, nil, nil, &webrender.RetError{Error: errors.New("unknown query error")}
-	}
-
-	// make many to many tag works
-	for _, m := range outmodels {
-		err = gormfixes.LoadManyToManyBecauseGormFailsWithID(dbClean, m)
+		roles, err = mapper.Service.GetAllRolesCore(db, dbClean, ep.Who, ep.TypeString, outmodels)
 		if err != nil {
 			return nil, nil, nil, &webrender.RetError{Error: err}
+		}
+
+		// safeguard, Must be coded wrongly
+		if len(outmodels) != len(roles) {
+			return nil, nil, nil, &webrender.RetError{Error: errors.New("unknown query error")}
+		}
+
+		// make many to many tag works
+		for _, m := range outmodels {
+			err = gormfixes.LoadManyToManyBecauseGormFailsWithID(dbClean, m)
+			if err != nil {
+				return nil, nil, nil, &webrender.RetError{Error: err}
+			}
+		}
+
+		// Add to cache if any defined
+		for _, hdlr := range fetcher.FetchHandlersForOpAndHook(ep.Op, "C") { // C for cache
+			var retErr *webrender.RetError
+			var handled bool
+			found := false // for ReadMany this isn't used
+			handled, retErr = hdlr.(hook.ICache).AddToCache(ep, found, outmodels, roles, no)
+			if retErr != nil {
+				return nil, nil, nil, retErr
+			}
+
+			if handled {
+				break
+			}
 		}
 	}
 
 	// use dbClean cuz it's not chained
 	data := hook.Data{Ms: outmodels, DB: dbClean, Roles: roles, Cargo: cargo}
-	initData := hook.InitData{Roles: roles, Ep: ep}
-
-	fetcher := hfetcher.NewHandlerFetcher(registry.ModelRegistry[ep.TypeString].HandlerMap, &initData)
+	// initData := hook.InitData{Roles: roles, Ep: ep}
+	// fetcher := hfetcher.NewHandlerFetcher(registry.ModelRegistry[ep.TypeString].HandlerMap, &initData)
 
 	// New after hooks
 	// fetch all handlers with before hooks
@@ -204,16 +243,74 @@ func (mapper *DataMapper) ReadMany(db *gorm.DB, ep *hook.EndPoint, cargo *hook.C
 // ReadOne get one model object based on its type and its id string
 func (mapper *DataMapper) ReadOne(db *gorm.DB, id *datatype.UUID, ep *hook.EndPoint,
 	cargo *hook.Cargo) (*MapperRet, userrole.UserRole, *webrender.RetError) {
+	var modelObj mdl.IModel
+	var role userrole.UserRole
+	var err error
 
-	// anyone permission can read as long as you are linked on db
-	modelObj, role, err := loadAndCheckErrorBeforeModifyV1(mapper.Service, db, ep.Who, ep.TypeString, nil, id, []userrole.UserRole{userrole.UserRoleAny})
-	if err != nil {
-		return nil, userrole.UserRoleInvalid, &webrender.RetError{Error: err}
-	}
-
-	initData := hook.InitData{Roles: []userrole.UserRole{role}, Ep: ep}
+	// cache time needs to be small, otherwise if permission removed it's not as immediate
+	cacheMiss := true
+	initData := hook.InitData{Roles: nil, Ep: ep}
 	fetcher := hfetcher.NewHandlerFetcher(registry.ModelRegistry[ep.TypeString].HandlerMap, &initData)
 
+	for _, hdlr := range fetcher.FetchHandlersForOpAndHook(ep.Op, "C") { // C for cache
+		// var retErr *webrender.RetError
+		// var handled bool
+		// var outmodels []mdl.IModel
+		// var roles []userrole.UserRole
+		// var found bool
+		handled, found, outmodels, roles, _, retErr := hdlr.(hook.ICache).GetFromCache(ep)
+		if retErr != nil {
+			return nil, userrole.UserRoleInvalid, retErr
+		}
+
+		if handled {
+			cacheMiss = false
+
+			if !found { // cache result is found, but the result is "not found"
+				return nil, userrole.UserRoleInvalid, webrender.NewRetValWithRendererError(err, webrender.NewErrNotFound(err))
+			}
+
+			modelObj = outmodels[0]
+			role = roles[0]
+			break
+		}
+	}
+
+	if cacheMiss {
+		// anyone permission can read as long as you are linked on db
+		modelObj, role, err = loadAndCheckErrorBeforeModifyV1(mapper.Service, db, ep.Who, ep.TypeString, nil, id, []userrole.UserRole{userrole.UserRoleAny})
+		var found bool = true
+		if err != nil {
+			if err.Error() != "record not found" { // real error
+				return nil, userrole.UserRoleInvalid, &webrender.RetError{Error: err}
+			}
+			found = false
+		}
+
+		// Add to cache if hook defined
+		for _, hdlr := range fetcher.FetchHandlersForOpAndHook(ep.Op, "C") { // C for cache
+			var retErr *webrender.RetError
+			var handled bool
+			if found {
+				handled, retErr = hdlr.(hook.ICache).AddToCache(ep, found, []mdl.IModel{modelObj}, []userrole.UserRole{role}, nil)
+			} else { // not found
+				handled, retErr = hdlr.(hook.ICache).AddToCache(ep, found, nil, nil, nil)
+			}
+
+			if retErr != nil {
+				return nil, userrole.UserRoleInvalid, &webrender.RetError{Error: err}
+			}
+
+			if handled {
+				break
+			}
+		}
+
+		if !found {
+			// not found
+			return nil, userrole.UserRoleInvalid, webrender.NewRetValWithRendererError(err, webrender.NewErrNotFound(err))
+		}
+	}
 	data := hook.Data{Ms: []mdl.IModel{modelObj}, DB: db, Roles: []userrole.UserRole{role}, Cargo: cargo}
 
 	// fetch all handlers with before hooks
@@ -222,7 +319,6 @@ func (mapper *DataMapper) ReadOne(db *gorm.DB, id *datatype.UUID, ep *hook.EndPo
 			return nil, role, retErr
 		}
 	}
-
 	ret := MapperRet{
 		Ms:      []mdl.IModel{modelObj},
 		Fetcher: fetcher,
@@ -236,6 +332,10 @@ func (mapper *DataMapper) UpdateOne(db *gorm.DB, modelObj mdl.IModel, id *dataty
 	ep *hook.EndPoint, cargo *hook.Cargo) (*MapperRet, *webrender.RetError) {
 	oldModelObj, _, err := loadAndCheckErrorBeforeModifyV1(mapper.Service, db, ep.Who, ep.TypeString, modelObj, id, []userrole.UserRole{userrole.UserRoleAdmin, userrole.UserRolePublic})
 	if err != nil {
+		if err.Error() == "record not found" {
+			return nil, webrender.NewRetValWithRendererError(err, webrender.NewErrNotFound(err))
+		}
+
 		return nil, &webrender.RetError{Error: err}
 	}
 
@@ -295,6 +395,10 @@ func (mapper *DataMapper) PatchOne(db *gorm.DB, jsonPatch []byte,
 	id *datatype.UUID, ep *hook.EndPoint, cargo *hook.Cargo) (*MapperRet, *webrender.RetError) {
 	oldModelObj, role, err := loadAndCheckErrorBeforeModifyV1(mapper.Service, db, ep.Who, ep.TypeString, nil, id, []userrole.UserRole{userrole.UserRoleAdmin})
 	if err != nil {
+		if err.Error() == "record not found" {
+			return nil, webrender.NewRetValWithRendererError(err, webrender.NewErrNotFound(err))
+		}
+
 		return nil, &webrender.RetError{Error: err}
 	}
 
@@ -410,6 +514,9 @@ func (mapper *DataMapper) DeleteOne(db *gorm.DB, id *datatype.UUID, ep *hook.End
 	cargo *hook.Cargo) (*MapperRet, *webrender.RetError) {
 	modelObj, role, err := loadAndCheckErrorBeforeModifyV1(mapper.Service, db, ep.Who, ep.TypeString, nil, id, []userrole.UserRole{userrole.UserRoleAdmin})
 	if err != nil {
+		if err.Error() == "record not found" {
+			return nil, webrender.NewRetValWithRendererError(err, webrender.NewErrNotFound(err))
+		}
 		return nil, &webrender.RetError{Error: err}
 	}
 

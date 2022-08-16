@@ -127,6 +127,10 @@ func (mapper *UserMapper) UpdateOne(db *gorm.DB, modelObj mdl.IModel, id *dataty
 
 	oldModelObj, _, err := loadAndCheckErrorBeforeModifyV1(mapper.Service, db, ep.Who, ep.TypeString, modelObj, id, []userrole.UserRole{userrole.UserRoleAdmin})
 	if err != nil {
+		if err.Error() == "record not found" {
+			return nil, webrender.NewRetValWithRendererError(err, webrender.NewErrNotFound(err))
+		}
+
 		return nil, &webrender.RetError{Error: err}
 	}
 
@@ -149,6 +153,10 @@ func (mapper *UserMapper) PatchOne(db *gorm.DB, jsonPatch []byte,
 	id *datatype.UUID, ep *hook.EndPoint, cargo *hook.Cargo) (*MapperRet, *webrender.RetError) {
 	oldModelObj, role, err := loadAndCheckErrorBeforeModifyV1(mapper.Service, db, ep.Who, ep.TypeString, nil, id, []userrole.UserRole{userrole.UserRoleAdmin})
 	if err != nil {
+		if err.Error() == "record not found" {
+			return nil, webrender.NewRetValWithRendererError(err, webrender.NewErrNotFound(err))
+		}
+
 		return nil, &webrender.RetError{Error: err}
 	}
 
@@ -199,6 +207,9 @@ func (mapper *UserMapper) DeleteOne(db *gorm.DB, id *datatype.UUID,
 	ep *hook.EndPoint, cargo *hook.Cargo) (*MapperRet, *webrender.RetError) {
 	modelObj, role, err := loadAndCheckErrorBeforeModifyV1(mapper.Service, db, ep.Who, ep.TypeString, nil, id, []userrole.UserRole{userrole.UserRoleAdmin})
 	if err != nil {
+		if err.Error() == "record not found" {
+			return nil, webrender.NewRetValWithRendererError(err, webrender.NewErrNotFound(err))
+		}
 		return nil, &webrender.RetError{Error: err}
 	}
 

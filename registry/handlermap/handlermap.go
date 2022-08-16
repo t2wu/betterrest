@@ -108,7 +108,9 @@ func (h *HandlerMap) getFirstHookType(op rest.Op, handlerType reflect.Type) stri
 			return "R"
 		}
 	} else if op == rest.OpRead {
-		if _, ok := hdlr.(hook.IAfter); ok {
+		if _, ok := hdlr.(hook.ICache); ok {
+			return "C"
+		} else if _, ok := hdlr.(hook.IAfter); ok {
 			return "A"
 		} else if _, ok := hdlr.(hook.IAfterTransact); ok {
 			return "T"
