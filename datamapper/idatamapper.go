@@ -36,7 +36,7 @@ type IDataMapper interface {
 
 	DeleteMany(db *gorm.DB, modelObjs []mdl.IModel, ep *hook.EndPoint, cargo *hook.Cargo) (*MapperRet, *webrender.RetError)
 
-	// DeleteManyByCondition(db *gorm.DB, ep *hook.EndPoint, cargo *hook.Cargo) (*MapperRet, *webrender.RetError)
+	DeleteManyByCondition(db *gorm.DB, ep *hook.EndPoint, cargo *hook.Cargo) (*MapperRet, *webrender.RetError)
 
 	DeleteOne(db *gorm.DB, id *datatype.UUID, ep *hook.EndPoint, cargo *hook.Cargo) (*MapperRet, *webrender.RetError)
 }
