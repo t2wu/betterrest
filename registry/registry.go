@@ -6,6 +6,7 @@ import (
 	"github.com/jinzhu/gorm"
 	"github.com/t2wu/betterrest/hook"
 	"github.com/t2wu/betterrest/libs/webrender"
+	"github.com/t2wu/betterrest/model/mappertype"
 	"github.com/t2wu/betterrest/registry/handlermap"
 	"github.com/t2wu/qry/mdl"
 )
@@ -22,34 +23,11 @@ var ModelRegistry = make(map[string]*Reg)
 // UserTyp is the model of the User table
 var UserTyp reflect.Type
 
-// MapperType is the mapper type
-type MapperType int
-
-const (
-	// MapperTypeViaOwnership is for type which user owns something
-	MapperTypeViaOwnership MapperType = iota
-
-	// MapperTypeUser is user itself
-	MapperTypeUser
-
-	// MapperTypeViaOrganization is for type where an organization owns something
-	MapperTypeViaOrganization
-
-	// MapperTypeViaOrgPartition is for type where an organization owns something and it's in partitioned table
-	MapperTypeViaOrgPartition
-
-	// MapperTypeGlobal is for type where data is public to all
-	MapperTypeGlobal
-
-	// MapperTypeLinkTable is for table linking user and regular mdl
-	MapperTypeLinkTable
-)
-
 // RegOptions is options when you want to add a model to registry
 type RegOptions struct {
 	BatchMethods string // Batch endpoints, "CRUD" for create, batch read, batch update, batch delete
 	IdvMethods   string //  ID end points, "RUD" for read one, update one, and delete one
-	Mapper       MapperType
+	Mapper       mappertype.MapperType
 }
 
 // Reg is a registry item
@@ -76,9 +54,9 @@ type Reg struct {
 
 	GuardMethods []func(ep *hook.EndPoint) *webrender.RetError
 
-	BatchMethods string     // Batch endpoints, "CRUD" for create, batch read, batch update, batch delete
-	IdvMethods   string     //  ID end points, "RUD" for read one, update one, and delete one
-	Mapper       MapperType // Custmized mapper, default to datamapper.SharedOwnershipMapper
+	BatchMethods string                // Batch endpoints, "CRUD" for create, batch read, batch update, batch delete
+	IdvMethods   string                //  ID end points, "RUD" for read one, update one, and delete one
+	Mapper       mappertype.MapperType // Custmized mapper, default to datamapper.SharedOwnershipMapper
 
 	// // Begin deprecated
 	// BeforeCUPD func(bhpData mdlutil.BatchHookPointData, op mdlutil.CRUPDOp) error // no R since model doens't exist yet

@@ -16,6 +16,7 @@ import (
 	"github.com/t2wu/betterrest/libs/utils/transact"
 	"github.com/t2wu/betterrest/libs/webrender"
 	"github.com/t2wu/betterrest/mdlutil"
+	"github.com/t2wu/betterrest/model/mappertype"
 	"github.com/t2wu/betterrest/registry"
 	"github.com/t2wu/qry/datatype"
 	"github.com/t2wu/qry/mdl"
@@ -52,157 +53,157 @@ func (suite *TestBaseMapperPatchSuite) SetupTest() {
 
 // All methods that begin with "Test" are run as tests within a
 // suite.
-func (suite *TestBaseMapperPatchSuite) TestPatchOne_WhenGiven_GotCar() {
-	carID := datatype.NewUUID()
-	carName := "DSM"
-	carNameNew := "DSM New"
-	var modelObj mdl.IModel = &Car{BaseModel: mdl.BaseModel{ID: carID}, Name: carName}
+// func (suite *TestBaseMapperPatchSuite) TestPatchOne_WhenGiven_GotCar() {
+// 	carID := datatype.NewUUID()
+// 	carName := "DSM"
+// 	carNameNew := "DSM New"
+// 	var modelObj mdl.IModel = &Car{BaseModel: mdl.BaseModel{ID: carID}, Name: carName}
 
-	// The first three SQL probably could be made into one
-	suite.mock.ExpectBegin()
-	stmt := `SELECT "car".* FROM "car" INNER JOIN "user_owns_car" ON "car".id = "user_owns_car".model_id AND "car".id = $1 INNER JOIN "user" ON "user".id = "user_owns_car".user_id AND "user_owns_car".user_id = $2 WHERE "car"."deleted_at" IS NULL`
-	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt)).WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(carID, carName))
-	stmt2 := `SELECT * FROM "user_owns_car" WHERE (user_id = $1 AND model_id = $2)`
-	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt2)).WillReturnRows(sqlmock.NewRows([]string{"model_id", "user_id", "role"}).AddRow(carID, suite.who.GetUserID(), userrole.UserRoleAdmin))
-	stmt3 := `UPDATE "car" SET "updated_at" = $1, "deleted_at" = $2, "name" = $3  WHERE "car"."id" = $4`
-	result := sqlmock.NewResult(0, 1)
-	// WithArgs (how do I test what gorm insert when date can be arbitrary? Use hooks?)
-	suite.mock.ExpectExec(regexp.QuoteMeta(stmt3)).WillReturnResult(result)
-	// suite.mock.ExpectExec(regexp.QuoteMeta(stmt3)).WithArgs(carID, carNameNew).WillReturnResult(result)
-	// These two queries can be made into one as well (or with returning, all 5 can be in 1?)
-	stmt4 := `SELECT "car".* FROM "car" INNER JOIN "user_owns_car" ON "car".id = "user_owns_car".model_id AND "car".id = $1 INNER JOIN "user" ON "user".id = "user_owns_car".user_id AND "user_owns_car".user_id = $2`
-	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt4)).WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(carID, carNameNew))
-	stmt5 := `SELECT * FROM "user_owns_car"  WHERE (user_id = $1 AND model_id = $2)`
-	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt5)).WillReturnRows(sqlmock.NewRows([]string{"model_id", "user_id", "role"}).AddRow(carID, suite.who.GetUserID(), userrole.UserRoleAdmin))
-	suite.mock.ExpectCommit()
+// 	// The first three SQL probably could be made into one
+// 	suite.mock.ExpectBegin()
+// 	stmt := `SELECT "car".* FROM "car" INNER JOIN "user_owns_car" ON "car".id = "user_owns_car".model_id AND "car".id = $1 INNER JOIN "user" ON "user".id = "user_owns_car".user_id AND "user_owns_car".user_id = $2 WHERE "car"."deleted_at" IS NULL`
+// 	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt)).WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(carID, carName))
+// 	stmt2 := `SELECT * FROM "user_owns_car" WHERE (user_id = $1 AND model_id = $2)`
+// 	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt2)).WillReturnRows(sqlmock.NewRows([]string{"model_id", "user_id", "role"}).AddRow(carID, suite.who.GetUserID(), userrole.UserRoleAdmin))
+// 	stmt3 := `UPDATE "car" SET "updated_at" = $1, "deleted_at" = $2, "name" = $3  WHERE "car"."id" = $4`
+// 	result := sqlmock.NewResult(0, 1)
+// 	// WithArgs (how do I test what gorm insert when date can be arbitrary? Use hooks?)
+// 	suite.mock.ExpectExec(regexp.QuoteMeta(stmt3)).WillReturnResult(result)
+// 	// suite.mock.ExpectExec(regexp.QuoteMeta(stmt3)).WithArgs(carID, carNameNew).WillReturnResult(result)
+// 	// These two queries can be made into one as well (or with returning, all 5 can be in 1?)
+// 	stmt4 := `SELECT "car".* FROM "car" INNER JOIN "user_owns_car" ON "car".id = "user_owns_car".model_id AND "car".id = $1 INNER JOIN "user" ON "user".id = "user_owns_car".user_id AND "user_owns_car".user_id = $2`
+// 	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt4)).WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(carID, carNameNew))
+// 	stmt5 := `SELECT * FROM "user_owns_car"  WHERE (user_id = $1 AND model_id = $2)`
+// 	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt5)).WillReturnRows(sqlmock.NewRows([]string{"model_id", "user_id", "role"}).AddRow(carID, suite.who.GetUserID(), userrole.UserRoleAdmin))
+// 	suite.mock.ExpectCommit()
 
-	options := make(map[urlparam.Param]interface{})
-	cargo := hook.Cargo{}
+// 	options := make(map[urlparam.Param]interface{})
+// 	cargo := hook.Cargo{}
 
-	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
-	registry.For(suite.typeString).ModelWithOption(&Car{}, opt)
+// 	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: mappertype.DirectOwnership}
+// 	registry.For(suite.typeString).ModelWithOption(&Car{}, opt)
 
-	mapper := SharedOwnershipMapper()
+// 	mapper := SharedOwnershipMapper()
 
-	var jsonPatch = []byte(fmt.Sprintf(`[{
-		"op": "replace", "path": "/name", "value": "%s"
-	}]`, carNameNew))
+// 	var jsonPatch = []byte(fmt.Sprintf(`[{
+// 		"op": "replace", "path": "/name", "value": "%s"
+// 	}]`, carNameNew))
 
-	var retVal *MapperRet
-	retErr := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retErr *webrender.RetError) {
-		ep := hook.EndPoint{
-			Op:          rest.OpPatch,
-			Cardinality: rest.CardinalityOne,
-			TypeString:  suite.typeString,
-			URLParams:   options,
-			Who:         suite.who,
-		}
-		if retVal, retErr = mapper.PatchOne(tx, jsonPatch, modelObj.GetID(), &ep, &cargo); retErr != nil {
-			return retErr
-		}
-		return nil
-	}, "lifecycle.PatchOne")
-	if !assert.Nil(suite.T(), retErr) {
-		return
-	}
+// 	var retVal *MapperRet
+// 	retErr := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retErr *webrender.RetError) {
+// 		ep := hook.EndPoint{
+// 			Op:          rest.OpPatch,
+// 			Cardinality: rest.CardinalityOne,
+// 			TypeString:  suite.typeString,
+// 			URLParams:   options,
+// 			Who:         suite.who,
+// 		}
+// 		if retVal, retErr = mapper.PatchOne(tx, jsonPatch, modelObj.GetID(), &ep, &cargo); retErr != nil {
+// 			return retErr
+// 		}
+// 		return nil
+// 	}, "lifecycle.PatchOne")
+// 	if !assert.Nil(suite.T(), retErr) {
+// 		return
+// 	}
 
-	if car, ok := retVal.Ms[0].(*Car); assert.True(suite.T(), ok) {
-		assert.Equal(suite.T(), carNameNew, car.Name)
-		assert.Equal(suite.T(), carID, car.ID)
-	}
-}
+// 	if car, ok := retVal.Ms[0].(*Car); assert.True(suite.T(), ok) {
+// 		assert.Equal(suite.T(), carNameNew, car.Name)
+// 		assert.Equal(suite.T(), carID, car.ID)
+// 	}
+// }
 
-func (suite *TestBaseMapperPatchSuite) TestPatchOne_WhenHavingController_CallRelevantControllerCallbacks() {
-	carID := datatype.NewUUID()
-	carName := "DSM"
-	carNameNew := "DSM New"
-	var modelObj mdl.IModel = &Car{BaseModel: mdl.BaseModel{ID: carID}, Name: carName}
+// func (suite *TestBaseMapperPatchSuite) TestPatchOne_WhenHavingController_CallRelevantControllerCallbacks() {
+// 	carID := datatype.NewUUID()
+// 	carName := "DSM"
+// 	carNameNew := "DSM New"
+// 	var modelObj mdl.IModel = &Car{BaseModel: mdl.BaseModel{ID: carID}, Name: carName}
 
-	// The first three SQL probably could be made into one
-	suite.mock.ExpectBegin()
-	stmt := `SELECT "car".* FROM "car" INNER JOIN "user_owns_car" ON "car".id = "user_owns_car".model_id AND "car".id = $1 INNER JOIN "user" ON "user".id = "user_owns_car".user_id AND "user_owns_car".user_id = $2 WHERE "car"."deleted_at" IS NULL`
-	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt)).WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(carID, carName))
-	stmt2 := `SELECT * FROM "user_owns_car" WHERE (user_id = $1 AND model_id = $2)`
-	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt2)).WillReturnRows(sqlmock.NewRows([]string{"model_id", "user_id", "role"}).AddRow(carID, suite.who.GetUserID(), userrole.UserRoleAdmin))
-	stmt3 := `UPDATE "car" SET "updated_at" = $1, "deleted_at" = $2, "name" = $3  WHERE "car"."id" = $4`
-	result := sqlmock.NewResult(0, 1)
-	// WithArgs (how do I test what gorm insert when date can be arbitrary? Use hooks?)
-	suite.mock.ExpectExec(regexp.QuoteMeta(stmt3)).WillReturnResult(result)
-	// suite.mock.ExpectExec(regexp.QuoteMeta(stmt3)).WithArgs(carID, carNameNew).WillReturnResult(result)
-	// These two queries can be made into one as well (or with returning, all 5 can be in 1?)
-	stmt4 := `SELECT "car".* FROM "car" INNER JOIN "user_owns_car" ON "car".id = "user_owns_car".model_id AND "car".id = $1 INNER JOIN "user" ON "user".id = "user_owns_car".user_id AND "user_owns_car".user_id = $2`
-	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt4)).WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(carID, carNameNew))
-	stmt5 := `SELECT * FROM "user_owns_car"  WHERE (user_id = $1 AND model_id = $2)`
-	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt5)).WillReturnRows(sqlmock.NewRows([]string{"model_id", "user_id", "role"}).AddRow(carID, suite.who.GetUserID(), userrole.UserRoleAdmin))
-	suite.mock.ExpectCommit()
+// 	// The first three SQL probably could be made into one
+// 	suite.mock.ExpectBegin()
+// 	stmt := `SELECT "car".* FROM "car" INNER JOIN "user_owns_car" ON "car".id = "user_owns_car".model_id AND "car".id = $1 INNER JOIN "user" ON "user".id = "user_owns_car".user_id AND "user_owns_car".user_id = $2 WHERE "car"."deleted_at" IS NULL`
+// 	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt)).WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(carID, carName))
+// 	stmt2 := `SELECT * FROM "user_owns_car" WHERE (user_id = $1 AND model_id = $2)`
+// 	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt2)).WillReturnRows(sqlmock.NewRows([]string{"model_id", "user_id", "role"}).AddRow(carID, suite.who.GetUserID(), userrole.UserRoleAdmin))
+// 	stmt3 := `UPDATE "car" SET "updated_at" = $1, "deleted_at" = $2, "name" = $3  WHERE "car"."id" = $4`
+// 	result := sqlmock.NewResult(0, 1)
+// 	// WithArgs (how do I test what gorm insert when date can be arbitrary? Use hooks?)
+// 	suite.mock.ExpectExec(regexp.QuoteMeta(stmt3)).WillReturnResult(result)
+// 	// suite.mock.ExpectExec(regexp.QuoteMeta(stmt3)).WithArgs(carID, carNameNew).WillReturnResult(result)
+// 	// These two queries can be made into one as well (or with returning, all 5 can be in 1?)
+// 	stmt4 := `SELECT "car".* FROM "car" INNER JOIN "user_owns_car" ON "car".id = "user_owns_car".model_id AND "car".id = $1 INNER JOIN "user" ON "user".id = "user_owns_car".user_id AND "user_owns_car".user_id = $2`
+// 	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt4)).WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(carID, carNameNew))
+// 	stmt5 := `SELECT * FROM "user_owns_car"  WHERE (user_id = $1 AND model_id = $2)`
+// 	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt5)).WillReturnRows(sqlmock.NewRows([]string{"model_id", "user_id", "role"}).AddRow(carID, suite.who.GetUserID(), userrole.UserRoleAdmin))
+// 	suite.mock.ExpectCommit()
 
-	options := make(map[urlparam.Param]interface{})
-	cargo := hook.Cargo{}
+// 	options := make(map[urlparam.Param]interface{})
+// 	cargo := hook.Cargo{}
 
-	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
-	registry.For(suite.typeString).ModelWithOption(&Car{}, opt).Hook(&CarHandlerJBT{}, "CRUPD")
+// 	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: mappertype.DirectOwnership}
+// 	registry.For(suite.typeString).ModelWithOption(&Car{}, opt).Hook(&CarHandlerJBT{}, "CRUPD")
 
-	jsonPatch := []byte(fmt.Sprintf(`[{
-		"op": "replace", "path": "/name", "value": "%s"
-	}]`, carNameNew))
+// 	jsonPatch := []byte(fmt.Sprintf(`[{
+// 		"op": "replace", "path": "/name", "value": "%s"
+// 	}]`, carNameNew))
 
-	var tx2 *gorm.DB
-	var retVal *MapperRet
-	ep := hook.EndPoint{
-		Op:          rest.OpPatch,
-		Cardinality: rest.CardinalityOne,
-		TypeString:  suite.typeString,
-		URLParams:   options,
-		Who:         suite.who,
-	}
-	retErr := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retErr *webrender.RetError) {
-		tx2 = tx
-		mapper := SharedOwnershipMapper()
-		if retVal, retErr = mapper.PatchOne(tx2, jsonPatch, modelObj.GetID(), &ep, &cargo); retErr != nil {
-			return retErr
-		}
-		return nil
-	}, "lifecycle.PatchOne")
-	if !assert.Nil(suite.T(), retErr) {
-		return
-	}
+// 	var tx2 *gorm.DB
+// 	var retVal *MapperRet
+// 	ep := hook.EndPoint{
+// 		Op:          rest.OpPatch,
+// 		Cardinality: rest.CardinalityOne,
+// 		TypeString:  suite.typeString,
+// 		URLParams:   options,
+// 		Who:         suite.who,
+// 	}
+// 	retErr := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retErr *webrender.RetError) {
+// 		tx2 = tx
+// 		mapper := SharedOwnershipMapper()
+// 		if retVal, retErr = mapper.PatchOne(tx2, jsonPatch, modelObj.GetID(), &ep, &cargo); retErr != nil {
+// 			return retErr
+// 		}
+// 		return nil
+// 	}, "lifecycle.PatchOne")
+// 	if !assert.Nil(suite.T(), retErr) {
+// 		return
+// 	}
 
-	role := userrole.UserRoleAdmin
-	dataBeforeApply := hook.Data{Ms: []mdl.IModel{&Car{BaseModel: mdl.BaseModel{ID: carID},
-		Name: carName}}, DB: tx2, Roles: []userrole.UserRole{role}, Cargo: &cargo}
+// 	role := userrole.UserRoleAdmin
+// 	dataBeforeApply := hook.Data{Ms: []mdl.IModel{&Car{BaseModel: mdl.BaseModel{ID: carID},
+// 		Name: carName}}, DB: tx2, Roles: []userrole.UserRole{role}, Cargo: &cargo}
 
-	data := hook.Data{Ms: []mdl.IModel{&Car{BaseModel: mdl.BaseModel{ID: carID},
-		Name: carNameNew}}, DB: tx2, Roles: []userrole.UserRole{role}, Cargo: &cargo}
+// 	data := hook.Data{Ms: []mdl.IModel{&Car{BaseModel: mdl.BaseModel{ID: carID},
+// 		Name: carNameNew}}, DB: tx2, Roles: []userrole.UserRole{role}, Cargo: &cargo}
 
-	ctrls := retVal.Fetcher.GetAllInstantiatedHanders()
-	if !assert.Len(suite.T(), ctrls, 1) {
-		return
-	}
+// 	ctrls := retVal.Fetcher.GetAllInstantiatedHanders()
+// 	if !assert.Len(suite.T(), ctrls, 1) {
+// 		return
+// 	}
 
-	hdlr, ok := ctrls[0].(*CarHandlerJBT)
-	if !assert.True(suite.T(), ok) {
-		return
-	}
+// 	hdlr, ok := ctrls[0].(*CarHandlerJBT)
+// 	if !assert.True(suite.T(), ok) {
+// 		return
+// 	}
 
-	assert.False(suite.T(), hdlr.guardAPIEntryCalled) // Not called when going through mapper (or lifecycle for that matter)
+// 	assert.False(suite.T(), hdlr.guardAPIEntryCalled) // Not called when going through mapper (or lifecycle for that matter)
 
-	if assert.True(suite.T(), hdlr.beforeApplyCalled) {
-		assert.Equal(suite.T(), ep, *hdlr.beforeApplyInfo)
-		assert.Condition(suite.T(), dataComparison(&dataBeforeApply, hdlr.beforeApplyData))
-	}
+// 	if assert.True(suite.T(), hdlr.beforeApplyCalled) {
+// 		assert.Equal(suite.T(), ep, *hdlr.beforeApplyInfo)
+// 		assert.Condition(suite.T(), dataComparison(&dataBeforeApply, hdlr.beforeApplyData))
+// 	}
 
-	if assert.True(suite.T(), hdlr.beforeCalled) {
-		assert.Equal(suite.T(), ep, *hdlr.beforeInfo)
-		assert.Condition(suite.T(), dataComparison(&data, hdlr.beforeData))
-		// assert.Equal(suite.T(), ep.Op, hdlr.beforeInfo.Op)
-		// assert.Equal(suite.T(), ep, *hdlr.beforeInfo)
-	}
+// 	if assert.True(suite.T(), hdlr.beforeCalled) {
+// 		assert.Equal(suite.T(), ep, *hdlr.beforeInfo)
+// 		assert.Condition(suite.T(), dataComparison(&data, hdlr.beforeData))
+// 		// assert.Equal(suite.T(), ep.Op, hdlr.beforeInfo.Op)
+// 		// assert.Equal(suite.T(), ep, *hdlr.beforeInfo)
+// 	}
 
-	if assert.True(suite.T(), hdlr.afterCalled) {
-		assert.Condition(suite.T(), dataComparison(&data, hdlr.afterData))
-		assert.Equal(suite.T(), ep, *hdlr.afterInfo)
-	}
-}
+// 	if assert.True(suite.T(), hdlr.afterCalled) {
+// 		assert.Condition(suite.T(), dataComparison(&data, hdlr.afterData))
+// 		assert.Equal(suite.T(), ep, *hdlr.afterInfo)
+// 	}
+// }
 
 func (suite *TestBaseMapperPatchSuite) TestPatchMany_WhenGiven_GotCars() {
 	carID1 := datatype.NewUUID()
@@ -243,7 +244,7 @@ func (suite *TestBaseMapperPatchSuite) TestPatchMany_WhenGiven_GotCars() {
 	options := make(map[urlparam.Param]interface{})
 	cargo := hook.Cargo{}
 
-	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
+	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: mappertype.DirectOwnership}
 	registry.For(suite.typeString).ModelWithOption(&Car{}, opt)
 
 	jsonPatches := []mdlutil.JSONIDPatch{
@@ -277,7 +278,7 @@ func (suite *TestBaseMapperPatchSuite) TestPatchMany_WhenGiven_GotCars() {
 			URLParams:   options,
 			Who:         suite.who,
 		}
-		retVal, retErr = mapper.PatchMany(tx, jsonPatches, &ep, &cargo)
+		retVal, retErr = mapper.Patch(tx, jsonPatches, &ep, &cargo)
 		return retErr
 	}, "lifecycle.PatchMany")
 	if !assert.Nil(suite.T(), retErr) {
@@ -333,7 +334,7 @@ func (suite *TestBaseMapperPatchSuite) TestCreateMany_WhenHavingController_CallR
 	options := make(map[urlparam.Param]interface{})
 	cargo := hook.Cargo{}
 
-	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
+	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: mappertype.DirectOwnership}
 	registry.For(suite.typeString).ModelWithOption(&Car{}, opt).Hook(&CarHandlerJBT{}, "CRUPD")
 
 	jsonPatches := []mdlutil.JSONIDPatch{
@@ -369,7 +370,7 @@ func (suite *TestBaseMapperPatchSuite) TestCreateMany_WhenHavingController_CallR
 			URLParams:   options,
 			Who:         suite.who,
 		}
-		retVal, retErr = mapper.PatchMany(tx2, jsonPatches, &ep, &cargo)
+		retVal, retErr = mapper.Patch(tx2, jsonPatches, &ep, &cargo)
 		return retErr
 	}, "lifecycle.PatchMany")
 	if !assert.Nil(suite.T(), retErr) {

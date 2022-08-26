@@ -32,7 +32,7 @@ func CreateMany(db *gorm.DB, mapper datamapper.IDataMapper, modelObjs []mdl.IMod
 			logger.Log(tx, "POST", strings.ToLower(ep.TypeString), "n")
 		}
 
-		if retVal, retErr = mapper.CreateMany(tx, modelObjs, ep, cargo); retErr != nil {
+		if retVal, retErr = mapper.Create(tx, modelObjs, ep, cargo); retErr != nil {
 			return retErr
 		}
 		return nil
@@ -74,9 +74,10 @@ func CreateOne(db *gorm.DB, mapper datamapper.IDataMapper, modelObj mdl.IModel,
 			logger.Log(tx, "POST", strings.ToLower(ep.TypeString), "1")
 		}
 
-		if retVal, retErr = mapper.CreateOne(tx, modelObj, ep, cargo); retErr != nil {
+		if retVal, retErr = mapper.Create(tx, []mdl.IModel{modelObj}, ep, cargo); retErr != nil {
 			return retErr
 		}
+
 		return nil
 	}, "lifecycle.CreateOne")
 
@@ -176,7 +177,7 @@ func UpdateMany(db *gorm.DB, mapper datamapper.IDataMapper, modelObjs []mdl.IMod
 			logger.Log(tx, "PUT", strings.ToLower(ep.TypeString), "n")
 		}
 
-		if retVal, retErr = mapper.UpdateMany(tx, modelObjs, ep, cargo); retErr != nil {
+		if retVal, retErr = mapper.Update(tx, modelObjs, ep, cargo); retErr != nil {
 			return retErr
 		}
 
@@ -218,7 +219,7 @@ func UpdateOne(db *gorm.DB, mapper datamapper.IDataMapper, modelObj mdl.IModel, 
 			logger.Log(tx, "PUT", strings.ToLower(ep.TypeString), "1")
 		}
 
-		if retVal, retErr = mapper.UpdateOne(tx, modelObj, id, ep, cargo); retErr != nil {
+		if retVal, retErr = mapper.Update(tx, []mdl.IModel{modelObj}, ep, cargo); retErr != nil {
 			return retErr
 		}
 		return nil
@@ -256,7 +257,7 @@ func PatchMany(db *gorm.DB, mapper datamapper.IDataMapper, jsonIDPatches []mdlut
 			logger.Log(tx, "PATCH", strings.ToLower(ep.TypeString), "n")
 		}
 
-		if retVal, retErr = mapper.PatchMany(tx, jsonIDPatches, ep, cargo); retErr != nil {
+		if retVal, retErr = mapper.Patch(tx, jsonIDPatches, ep, cargo); retErr != nil {
 			return retErr
 		}
 		return nil
@@ -298,7 +299,14 @@ func PatchOne(db *gorm.DB, mapper datamapper.IDataMapper, jsonPatch []byte,
 			logger.Log(tx, "PATCH", strings.ToLower(ep.TypeString), "1")
 		}
 
-		if retVal, retErr = mapper.PatchOne(tx, jsonPatch, id, ep, cargo); retErr != nil {
+		jsonIDPatches := []mdlutil.JSONIDPatch{
+			{
+				ID:    id,
+				Patch: jsonPatch,
+			},
+		}
+
+		if retVal, retErr = mapper.Patch(tx, jsonIDPatches, ep, cargo); retErr != nil {
 			return retErr
 		}
 

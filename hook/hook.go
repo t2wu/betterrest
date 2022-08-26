@@ -74,17 +74,17 @@ type IHook interface {
 // IBeforeApply before patching operation occurred. Only called for Patch.
 // This comes before patch is applied. Before "Before"
 type IBeforeApply interface {
-	BeforeApply(data *Data, info *EndPoint) *webrender.RetError
+	BeforeApply(data *Data, ep *EndPoint) *webrender.RetError
 }
 
 // IBefore supports method to be called before data is fetched for all operations except Read
 type IBefore interface {
-	Before(data *Data, info *EndPoint) *webrender.RetError
+	Before(data *Data, ep *EndPoint) *webrender.RetError
 }
 
 // IAfter supports method to be called after data is after all operations except delete
 type IAfter interface {
-	After(data *Data, info *EndPoint) *webrender.RetError
+	After(data *Data, ep *EndPoint) *webrender.RetError
 }
 
 // ICache supports cache.
@@ -94,17 +94,17 @@ type ICache interface {
 	// unless another hook which implemented this takes over.
 	// A maximum of one handler is used at a time, the hook writer has to make sure they are mutally exclusive
 	// if found is false, it means it was not found in the database (only used for query with cardinality of 1)
-	GetFromCache(info *EndPoint) (handled bool, found bool, ms []mdl.IModel, roles []userrole.UserRole, no *int, retErr *webrender.RetError)
+	GetFromCache(ep *EndPoint) (handled bool, found bool, ms []mdl.IModel, roles []userrole.UserRole, no *int, retErr *webrender.RetError)
 
 	// A maximum of one handler is used at a time, the hook writer has to make sure they are mutally exclusive
 	// if found is false, it means it was not found in the database and the negative result is to be cached.
-	AddToCache(info *EndPoint, found bool, ms []mdl.IModel, roles []userrole.UserRole, no *int) (handled bool, retErr *webrender.RetError)
+	AddToCache(ep *EndPoint, found bool, ms []mdl.IModel, roles []userrole.UserRole, no *int) (handled bool, retErr *webrender.RetError)
 }
 
 // IAfterTransact is the method to be called after data is after the entire database
 // transaction is done. No error is returned because database transaction is already committed.
 type IAfterTransact interface {
-	AfterTransact(data *Data, info *EndPoint)
+	AfterTransact(data *Data, ep *EndPoint)
 }
 
 // IRender is for formatting IModel with a custom function

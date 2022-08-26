@@ -4,6 +4,7 @@ import (
 	"sync"
 
 	"github.com/t2wu/betterrest/datamapper/service"
+	"github.com/t2wu/betterrest/model/mappertype"
 )
 
 // ---------------------------------------
@@ -23,7 +24,10 @@ func SetSharedGlobalMapper(mapper IDataMapper) {
 // SharedGlobalMapper creats a singleton of Crud object
 func SharedGlobalMapper() IDataMapper {
 	onceGlobal.Do(func() {
-		crudGlobal = &DataMapper{Service: &service.GlobalService{BaseServiceV1: service.BaseServiceV1{}}}
+		crudGlobal = &DataMapper{
+			Service:    &service.GlobalService{BaseService: service.BaseService{}},
+			MapperType: mappertype.Global,
+		}
 	})
 
 	return crudGlobal

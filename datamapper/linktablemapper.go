@@ -4,6 +4,7 @@ import (
 	"sync"
 
 	"github.com/t2wu/betterrest/datamapper/service"
+	"github.com/t2wu/betterrest/model/mappertype"
 )
 
 // ---------------------------------------
@@ -23,7 +24,10 @@ func SetLinkTableMapper(mapper IDataMapper) {
 // SharedLinkTableMapper creats a singleton of Crud object
 func SharedLinkTableMapper() IDataMapper {
 	onceLinkTableMapper.Do(func() {
-		linkeTableMapper = &DataMapper{Service: &service.LinkTableService{BaseServiceV1: service.BaseServiceV1{}}}
+		linkeTableMapper = &DataMapper{
+			Service:    &service.LinkTableService{BaseService: service.BaseService{}},
+			MapperType: mappertype.LinkTable,
+		}
 	})
 
 	return linkeTableMapper

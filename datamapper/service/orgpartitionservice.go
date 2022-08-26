@@ -1,7 +1,6 @@
 package service
 
 import (
-	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -11,9 +10,12 @@ import (
 	"github.com/stoewer/go-strcase"
 	"github.com/t2wu/betterrest/datamapper/gormfixes"
 	"github.com/t2wu/betterrest/db"
+	"github.com/t2wu/betterrest/hook"
 	"github.com/t2wu/betterrest/hook/userrole"
 	"github.com/t2wu/betterrest/libs/urlparam"
+	"github.com/t2wu/betterrest/libs/webrender"
 	"github.com/t2wu/betterrest/mdlutil"
+	"github.com/t2wu/betterrest/model/mappertype"
 	"github.com/t2wu/betterrest/registry"
 	"github.com/t2wu/qry/datatype"
 	"github.com/t2wu/qry/mdl"
@@ -21,37 +23,68 @@ import (
 
 // OrgPartition handles all the ownership specific db calls
 type OrgPartition struct {
-	BaseServiceV2
+	BaseService
 }
 
-func (serv *OrgPartition) HookBeforeCreateOne(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, modelObj mdl.IModel) (mdl.IModel, error) {
-	if modelObj.GetID() == nil {
-		modelObj.SetID(datatype.NewUUID())
-	}
+// func (serv *OrgPartition) HookBeforeCreateOne(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, modelObj mdl.IModel) (mdl.IModel, error) {
+// 	if modelObj.GetID() == nil {
+// 		modelObj.SetID(datatype.NewUUID())
+// 	}
 
-	// Make sure oid has admin access to this organization
-	hasAdminAccess, err := userHasRolesAccessToModelOrg(db, who, typeString, modelObj, []userrole.UserRole{userrole.UserRoleAdmin})
+// 	// Make sure oid has admin access to this organization
+// 	hasAdminAccess, err := userHasRolesAccessToModelOrg(db, who, typeString, modelObj, []userrole.UserRole{userrole.UserRoleAdmin})
+// 	if err != nil {
+// 		return nil, err
+// 	} else if !hasAdminAccess {
+// 		return nil, errors.New("user does not have admin access to the organization")
+// 	}
+
+// 	return modelObj, nil
+// }
+
+// func (serv *OrgPartition) HookBeforeCreateMany(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, modelObjs []mdl.IModel) ([]mdl.IModel, error) {
+// 	// Check ownership permission
+// 	for _, modelObj := range modelObjs {
+// 		// Make sure oid has admin access to this organization
+// 		hasAdminAccess, err := userHasRolesAccessToModelOrg(db, who, typeString, modelObj, []userrole.UserRole{userrole.UserRoleAdmin})
+// 		if err != nil {
+// 			return nil, err
+// 		} else if !hasAdminAccess {
+// 			return nil, errors.New("user does not have admin access to the organization")
+// 		}
+// 	}
+// 	return modelObjs, nil
+// }
+
+func (serv *OrgPartition) PermissionAndRole(data *hook.Data, ep *hook.EndPoint) (*hook.Data, *webrender.RetError) {
+	roles := make([]userrole.UserRole, 0)
+
+	userRoleMap, err := obtainRoleFromLinkTable(data.DB, ep.Who, ep.TypeString, data.Ms)
 	if err != nil {
-		return nil, err
-	} else if !hasAdminAccess {
-		return nil, errors.New("user does not have admin access to the organization")
+		return nil, webrender.NewRetValWithError(ErrPermission) //TODO shouldn't it be webrender some error?
 	}
 
-	return modelObj, nil
-}
+	for i, modelObj := range data.Ms {
+		orgID := mdlutil.GetFieldValueFromModelByTagKeyBetterRestAndValueKey(modelObj, "org").(*datatype.UUID)
+		role, ok := userRoleMap[*orgID]
+		if !ok {
+			// The user doesn't have any link to this organization
+			// orgTableName := registry.OrgModelNameFromOrgResourceTypeString(ep.TypeString)
+			return nil, webrender.NewRetValWithError(ErrPermission) //TODO shouldn't it be webrender some error?
+		}
+		data.Roles[i] = role
+	}
 
-func (serv *OrgPartition) HookBeforeCreateMany(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, modelObjs []mdl.IModel) ([]mdl.IModel, error) {
-	// Check ownership permission
-	for _, modelObj := range modelObjs {
-		// Make sure oid has admin access to this organization
-		hasAdminAccess, err := userHasRolesAccessToModelOrg(db, who, typeString, modelObj, []userrole.UserRole{userrole.UserRoleAdmin})
-		if err != nil {
+	// It's possible that hook want us to reject this endpoint
+	if registry.RoleSorter != nil {
+		if err := registry.RoleSorter.PermitOnCreate(mappertype.UnderOrgPartition, data, ep); err != nil {
 			return nil, err
-		} else if !hasAdminAccess {
-			return nil, errors.New("user does not have admin access to the organization")
 		}
 	}
-	return modelObjs, nil
+
+	data.Roles = roles
+
+	return data, nil
 }
 
 func (serv *OrgPartition) HookBeforeDeleteOne(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, modelObj mdl.IModel) (mdl.IModel, error) {
@@ -177,14 +210,14 @@ func (serv *OrgPartition) getOrgRole(db *gorm.DB, who mdlutil.UserIDFetchable, t
 		return role, err2
 	}
 
-	if m, ok := joinTable.(mdlutil.IOwnership); ok {
+	if m, ok := joinTable.(mdlutil.ILinker); ok {
 		role = m.GetRole()
 	}
 
 	return role, nil
 }
 
-func (serv *OrgPartition) GetManyCore(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, ids []*datatype.UUID) ([]mdl.IModel, []userrole.UserRole, error) {
+func (serv *OrgPartition) GetManyCore(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, ids []*datatype.UUID, options map[urlparam.Param]interface{}) ([]mdl.IModel, []userrole.UserRole, error) {
 	// var ok bool
 	// var modelObjHavingOrganization mdl.IHasOrganizationLink
 	// if modelObjHavingOrganization, ok = registry.NewFromTypeString(typeString).(mdl.IHasOrganizationLink); !ok {

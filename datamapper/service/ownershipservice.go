@@ -7,8 +7,12 @@ import (
 
 	"github.com/jinzhu/gorm"
 	"github.com/t2wu/betterrest/datamapper/gormfixes"
+	"github.com/t2wu/betterrest/hook"
 	"github.com/t2wu/betterrest/hook/userrole"
+	"github.com/t2wu/betterrest/libs/urlparam"
+	"github.com/t2wu/betterrest/libs/webrender"
 	"github.com/t2wu/betterrest/mdlutil"
+	"github.com/t2wu/betterrest/model/mappertype"
 	"github.com/t2wu/betterrest/registry"
 	"github.com/t2wu/qry"
 	"github.com/t2wu/qry/datatype"
@@ -25,46 +29,73 @@ import (
 
 // OwnershipService handles all the ownership specific db calls
 type OwnershipService struct {
-	BaseServiceV1
+	BaseService
 }
 
-func (serv *OwnershipService) HookBeforeCreateOne(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, modelObj mdl.IModel) (mdl.IModel, error) {
-	modelID := modelObj.GetID()
-	if modelID == nil {
-		modelID = datatype.NewUUID()
-		modelObj.SetID(modelID)
-	}
+// func (serv *OwnershipService) HookBeforeCreateOne(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, modelObj mdl.IModel) (mdl.IModel, error) {
+// 	modelID := modelObj.GetID()
+// 	if modelID == nil {
+// 		modelID = datatype.NewUUID()
+// 		modelObj.SetID(modelID)
+// 	}
 
-	g := registry.NewOwnershipModelFromOwnershipResourceTypeString(typeString).(mdlutil.IOwnership)
-	g.SetUserID(who.GetUserID())
-	g.SetModelID(modelID)
-	g.SetRole(userrole.UserRoleAdmin)
+// 	g := registry.NewOwnershipModelFromOwnershipResourceTypeString(typeString).(mdlutil.ILinker)
+// 	g.SetUserID(who.GetUserID())
+// 	g.SetModelID(modelID)
+// 	g.SetRole(userrole.UserRoleAdmin)
 
-	// ownerships := reflect.New(reflect.SliceOf(ownershipType))
-	// o.Set(reflect.Append(ownerships, reflect.ValueOf(g)))
+// 	// ownerships := reflect.New(reflect.SliceOf(ownershipType))
+// 	// o.Set(reflect.Append(ownerships, reflect.ValueOf(g)))
 
-	// Associate a ownership group with this model
-	// This is not strictly really necessary as actual SQL table has no such field. I could have
-	// just save the "g", But it's for hooks
-	o := reflect.ValueOf(modelObj).Elem().FieldByName("Ownerships")
-	o.Set(reflect.Append(o, reflect.ValueOf(g).Elem()))
-	return modelObj, nil
-}
+// 	// Associate a ownership group with this model
+// 	// This is not strictly really necessary as actual SQL table has no such field. I could have
+// 	// just save the "g", But it's for hooks
+// 	o := reflect.ValueOf(modelObj).Elem().FieldByName("Ownerships")
+// 	o.Set(reflect.Append(o, reflect.ValueOf(g).Elem()))
+// 	return modelObj, nil
+// }
 
-func (serv *OwnershipService) HookBeforeCreateMany(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, modelObjs []mdl.IModel) ([]mdl.IModel, error) {
-	for _, modelObj := range modelObjs {
+// func (serv *OwnershipService) HookBeforeCreateMany(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, modelObjs []mdl.IModel) ([]mdl.IModel, error) {
+// 	for _, modelObj := range modelObjs {
+// 		// reflect.SliceOf
+// 		// g := reflect.New(ownershipType).Interface().(mdlutil.ILinker)
+// 		g := registry.NewOwnershipModelFromOwnershipResourceTypeString(typeString).(mdlutil.ILinker)
+
+// 		// Since I need to create a user_owns join table, I need to create ID now
+// 		modelID := modelObj.GetID()
+// 		if modelID == nil {
+// 			modelID = datatype.NewUUID()
+// 			modelObj.SetID(modelID)
+// 		}
+
+// 		g.SetUserID(who.GetUserID())
+// 		g.SetModelID(modelID)
+// 		g.SetRole(userrole.UserRoleAdmin)
+
+// 		// ownerships := reflect.New(reflect.SliceOf(ownershipType))
+// 		// o.Set(reflect.Append(ownerships, reflect.ValueOf(g)))
+
+// 		// Associate a ownership group with this model
+// 		// This is not strictly really necessary as actual SQL table has no such field. I could have
+// 		// just save the "g", But it's for hooks
+// 		o := reflect.ValueOf(modelObj).Elem().FieldByName("Ownerships")
+// 		o.Set(reflect.Append(o, reflect.ValueOf(g).Elem()))
+// 	}
+// 	return modelObjs, nil
+// }
+
+func (serv *OwnershipService) PermissionAndRole(data *hook.Data, ep *hook.EndPoint) (*hook.Data, *webrender.RetError) {
+	roles := make([]userrole.UserRole, 0)
+
+	for i, modelObj := range data.Ms {
 		// reflect.SliceOf
-		// g := reflect.New(ownershipType).Interface().(mdlutil.IOwnership)
-		g := registry.NewOwnershipModelFromOwnershipResourceTypeString(typeString).(mdlutil.IOwnership)
+		// g := reflect.New(ownershipType).Interface().(mdlutil.ILinker)
+		g := registry.NewOwnershipModelFromOwnershipResourceTypeString(ep.TypeString).(mdlutil.ILinker)
 
 		// Since I need to create a user_owns join table, I need to create ID now
 		modelID := modelObj.GetID()
-		if modelID == nil {
-			modelID = datatype.NewUUID()
-			modelObj.SetID(modelID)
-		}
 
-		g.SetUserID(who.GetUserID())
+		g.SetUserID(ep.Who.GetUserID())
 		g.SetModelID(modelID)
 		g.SetRole(userrole.UserRoleAdmin)
 
@@ -76,8 +107,21 @@ func (serv *OwnershipService) HookBeforeCreateMany(db *gorm.DB, who mdlutil.User
 		// just save the "g", But it's for hooks
 		o := reflect.ValueOf(modelObj).Elem().FieldByName("Ownerships")
 		o.Set(reflect.Append(o, reflect.ValueOf(g).Elem()))
+
+		// If I am able to create, then I must be an admin to this object since this is an ownership object
+		roles[i] = userrole.UserRoleAdmin
 	}
-	return modelObjs, nil
+
+	// It's possible that hook want us to reject this endpoint
+	if registry.RoleSorter != nil {
+		if err := registry.RoleSorter.PermitOnCreate(mappertype.DirectOwnership, data, ep); err != nil {
+			return nil, err
+		}
+	}
+
+	data.Roles = roles
+
+	return data, nil
 }
 
 func (serv *OwnershipService) HookBeforeDeleteOne(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, modelObj mdl.IModel) (mdl.IModel, error) {
@@ -117,7 +161,7 @@ func (serv *OwnershipService) HookBeforeDeleteMany(db *gorm.DB, who mdlutil.User
 func (serv *OwnershipService) CreateOneCore(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, modelObj mdl.IModel, id *datatype.UUID, oldModelObj mdl.IModel) (mdl.IModel, error) {
 	// It looks like I need to explicitly call create here
 	o := reflect.ValueOf(modelObj).Elem().FieldByName("Ownerships")
-	g, _ := o.Index(0).Addr().Interface().(mdlutil.IOwnership)
+	g, _ := o.Index(0).Addr().Interface().(mdlutil.ILinker)
 
 	// No need to check if primary key is blank.
 	// If it is it'll be created by Gorm's BeforeCreate hook
@@ -148,7 +192,7 @@ func (serv *OwnershipService) CreateOneCore(db *gorm.DB, who mdlutil.UserIDFetch
 }
 
 // ReadOneCore get one model object based on its type and its id string
-func (serv *OwnershipService) ReadOneCore(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, id *datatype.UUID) (mdl.IModel, userrole.UserRole, error) {
+func (serv *OwnershipService) ReadOneCore(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, id *datatype.UUID, options map[urlparam.Param]interface{}) (mdl.IModel, userrole.UserRole, error) {
 	modelObj := registry.NewFromTypeString(typeString)
 
 	db = db.Set("gorm:auto_preload", true)
@@ -187,7 +231,7 @@ func (serv *OwnershipService) ReadOneCore(db *gorm.DB, who mdlutil.UserIDFetchab
 }
 
 // GetManyCore -
-func (serv *OwnershipService) GetManyCore(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, ids []*datatype.UUID) ([]mdl.IModel, []userrole.UserRole, error) {
+func (serv *OwnershipService) GetManyCore(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, ids []*datatype.UUID, options map[urlparam.Param]interface{}) ([]mdl.IModel, []userrole.UserRole, error) {
 	// If I can load it, I have permission to edit it. So no need to call loadAndCheckErrorBeforeModifyV1
 	// like when I do for update. Just get the role and check if it's admin
 	rtable, joinTableName, err := getModelTableNameAndJoinTableNameFromTypeString(typeString)
@@ -304,9 +348,13 @@ func (serv *OwnershipService) UpdateOneCore(db *gorm.DB, who mdlutil.UserIDFetch
 		return nil, err
 	}
 
+	// Kind of hack, but update don't have any parameter anyway
+	// This was for parittioned table where read has to have some date
+	options := make(map[urlparam.Param]interface{}, 0)
+
 	// This loads the IDs
 	// This so we have the preloading.
-	modelObj2, _, err = serv.ReadOneCore(db, who, typeString, id)
+	modelObj2, _, err = serv.ReadOneCore(db, who, typeString, id, options)
 	if err != nil { // Error is "record not found" when not found
 		return nil, err
 	}

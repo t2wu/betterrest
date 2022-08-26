@@ -9,59 +9,90 @@ import (
 	"github.com/stoewer/go-strcase"
 	"github.com/t2wu/betterrest/datamapper/gormfixes"
 	"github.com/t2wu/betterrest/db"
+	"github.com/t2wu/betterrest/hook"
 	"github.com/t2wu/betterrest/hook/userrole"
+	"github.com/t2wu/betterrest/libs/urlparam"
+	"github.com/t2wu/betterrest/libs/webrender"
 	"github.com/t2wu/betterrest/mdlutil"
+	"github.com/t2wu/betterrest/model/mappertype"
 	"github.com/t2wu/betterrest/registry"
 	"github.com/t2wu/qry/datatype"
 	"github.com/t2wu/qry/mdl"
 )
 
-// OrganizationService handles all the ownership specific db calls
-type OrganizationService struct {
-	BaseServiceV1
+// UnderOrgService handles all the ownership specific db calls
+type UnderOrgService struct {
+	BaseService
 }
 
-func (serv *OrganizationService) HookBeforeCreateOne(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, modelObj mdl.IModel) (mdl.IModel, error) {
-	if modelObj.GetID() == nil {
-		modelObj.SetID(datatype.NewUUID())
-	}
+// func (serv *UnderOrgService) HookBeforeCreateOne(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, modelObj mdl.IModel) (mdl.IModel, error) {
+// 	if modelObj.GetID() == nil {
+// 		modelObj.SetID(datatype.NewUUID())
+// 	}
 
-	// Make sure oid has admin access to this organization
-	hasAdminAccess, err := userHasRolesAccessToModelOrg(db, who, typeString, modelObj, []userrole.UserRole{userrole.UserRoleAdmin})
+// 	// Make sure oid has admin access to this organization
+// 	hasAdminAccess, err := userHasRolesAccessToModelOrg(db, who, typeString, modelObj, []userrole.UserRole{userrole.UserRoleAdmin})
+// 	if err != nil {
+// 		return nil, err
+// 	} else if !hasAdminAccess {
+// 		return nil, errors.New("user does not have admin access to the organization")
+// 	}
+
+// 	return modelObj, nil
+// }
+
+// func (serv *UnderOrgService) HookBeforeCreateMany(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, modelObjs []mdl.IModel) ([]mdl.IModel, error) {
+// 	// Check ownership permission
+// 	for _, modelObj := range modelObjs {
+// 		// Make sure oid has admin access to this organization
+// 		hasAdminAccess, err := userHasRolesAccessToModelOrg(db, who, typeString, modelObj, []userrole.UserRole{userrole.UserRoleAdmin})
+// 		if err != nil {
+// 			return nil, err
+// 		} else if !hasAdminAccess {
+// 			return nil, errors.New("user does not have admin access to the organization")
+// 		}
+// 	}
+// 	return modelObjs, nil
+// }
+
+func (serv *UnderOrgService) PermissionAndRole(data *hook.Data, ep *hook.EndPoint) (*hook.Data, *webrender.RetError) {
+	userRoleMap, err := obtainRoleFromLinkTable(data.DB, ep.Who, ep.TypeString, data.Ms)
 	if err != nil {
-		return nil, err
-	} else if !hasAdminAccess {
-		return nil, errors.New("user does not have admin access to the organization")
+		return nil, webrender.NewRetValWithError(ErrPermission) //TODO shouldn't it be webrender some error?
 	}
 
-	return modelObj, nil
-}
+	for i, modelObj := range data.Ms {
+		orgID := mdlutil.GetFieldValueFromModelByTagKeyBetterRestAndValueKey(modelObj, "org").(*datatype.UUID)
+		role, ok := userRoleMap[*orgID]
+		if !ok {
+			// The user doesn't have any link to this organization
+			// orgTableName := registry.OrgModelNameFromOrgResourceTypeString(ep.TypeString)
+			return nil, webrender.NewRetValWithError(ErrPermission) //TODO shouldn't it be webrender some error?
+		}
+		data.Roles[i] = role
+	}
 
-func (serv *OrganizationService) HookBeforeCreateMany(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, modelObjs []mdl.IModel) ([]mdl.IModel, error) {
-	// Check ownership permission
-	for _, modelObj := range modelObjs {
-		// Make sure oid has admin access to this organization
-		hasAdminAccess, err := userHasRolesAccessToModelOrg(db, who, typeString, modelObj, []userrole.UserRole{userrole.UserRoleAdmin})
-		if err != nil {
+	// It's possible that hook want us to reject this endpoint
+	if registry.RoleSorter != nil {
+		if err := registry.RoleSorter.PermitOnCreate(mappertype.UnderOrg, data, ep); err != nil {
 			return nil, err
-		} else if !hasAdminAccess {
-			return nil, errors.New("user does not have admin access to the organization")
 		}
 	}
-	return modelObjs, nil
+
+	return data, nil
 }
 
-func (serv *OrganizationService) HookBeforeDeleteOne(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, modelObj mdl.IModel) (mdl.IModel, error) {
+func (serv *UnderOrgService) HookBeforeDeleteOne(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, modelObj mdl.IModel) (mdl.IModel, error) {
 	return modelObj, nil
 }
 
-func (serv *OrganizationService) HookBeforeDeleteMany(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, modelObjs []mdl.IModel) ([]mdl.IModel, error) {
+func (serv *UnderOrgService) HookBeforeDeleteMany(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, modelObjs []mdl.IModel) ([]mdl.IModel, error) {
 	return modelObjs, nil
 }
 
 // getOneWithIDCore get one model object based on its type and its id string
 // since this is organizationMapper, need to make sure it's the same organization
-func (serv *OrganizationService) ReadOneCore(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, id *datatype.UUID) (mdl.IModel, userrole.UserRole, error) {
+func (serv *UnderOrgService) ReadOneCore(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, id *datatype.UUID, options map[urlparam.Param]interface{}) (mdl.IModel, userrole.UserRole, error) {
 	modelObj := registry.NewFromTypeString(typeString)
 
 	db = db.Set("gorm:auto_preload", true)
@@ -114,7 +145,7 @@ func (serv *OrganizationService) ReadOneCore(db *gorm.DB, who mdlutil.UserIDFetc
 		return nil, 0, err2
 	}
 
-	if m, ok := joinTable.(mdlutil.IOwnership); ok {
+	if m, ok := joinTable.(mdlutil.ILinker); ok {
 		role = m.GetRole()
 	}
 
@@ -126,7 +157,7 @@ func (serv *OrganizationService) ReadOneCore(db *gorm.DB, who mdlutil.UserIDFetc
 	return modelObj, role, err
 }
 
-func (serv *OrganizationService) GetManyCore(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, ids []*datatype.UUID) ([]mdl.IModel, []userrole.UserRole, error) {
+func (serv *UnderOrgService) GetManyCore(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, ids []*datatype.UUID, options map[urlparam.Param]interface{}) ([]mdl.IModel, []userrole.UserRole, error) {
 	// var ok bool
 	// var modelObjHavingOrganization mdl.IHasOrganizationLink
 	// if modelObjHavingOrganization, ok = registry.NewFromTypeString(typeString).(mdl.IHasOrganizationLink); !ok {
@@ -190,7 +221,7 @@ func (serv *OrganizationService) GetManyCore(db *gorm.DB, who mdlutil.UserIDFetc
 }
 
 // GetAllQueryContructCore construct query core
-func (serv *OrganizationService) GetAllQueryContructCore(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string) (*gorm.DB, error) {
+func (serv *UnderOrgService) GetAllQueryContructCore(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string) (*gorm.DB, error) {
 	// Graphically:
 	// Model -- Org -- Join Table -- User
 	// (Maybe organization should be defined in the library)
@@ -230,7 +261,7 @@ func (serv *OrganizationService) GetAllQueryContructCore(db *gorm.DB, who mdluti
 }
 
 // GetAllRolesCore gets all roles according to the criteria
-func (serv *OrganizationService) GetAllRolesCore(dbChained *gorm.DB, dbClean *gorm.DB, who mdlutil.UserIDFetchable, typeString string, modelObjs []mdl.IModel) ([]userrole.UserRole, error) {
+func (serv *UnderOrgService) GetAllRolesCore(dbChained *gorm.DB, dbClean *gorm.DB, who mdlutil.UserIDFetchable, typeString string, modelObjs []mdl.IModel) ([]userrole.UserRole, error) {
 	// modelObjHavingOrganization, _ := registry.NewFromTypeString(typeString).(mdl.IHasOrganizationLink)
 	// orgTable := reflect.New(modelObjHavingOrganization.OrganizationType()).Interface()
 	// orgTable := reflect.New(mdl.GetOrganizationTypeFromTypeString(typeString)).Interface().(mdl.IModel)
@@ -268,6 +299,47 @@ func (serv *OrganizationService) GetAllRolesCore(dbChained *gorm.DB, dbClean *go
 	return roles, nil
 }
 
+// returns orgID to userRole mapping
+func obtainRoleFromLinkTable(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, modelObjs []mdl.IModel) (map[datatype.UUID]userrole.UserRole, error) {
+	rolesMap := make(map[datatype.UUID]userrole.UserRole)
+	orgTableName := registry.OrgModelNameFromOrgResourceTypeString(typeString)
+	linkTableName := orgJoinTableName(typeString)
+
+	orgIDsMap := make(map[datatype.UUID]struct{})
+	for _, modelObj := range modelObjs {
+		orgID := mdlutil.GetFieldValueFromModelByTagKeyBetterRestAndValueKey(modelObj, "org").(*datatype.UUID)
+		if orgID == nil {
+			return nil, fmt.Errorf("missing %sID", orgTableName) // TODO table name is not necessarily endpoint name
+		}
+		orgIDsMap[*orgID] = struct{}{}
+	}
+
+	orgIDs := make([]*datatype.UUID, 0)
+	for orgID := range orgIDsMap {
+		orgID2 := &orgID
+		orgIDs = append(orgIDs, datatype.NewUUIDFromStringNoErr(orgID2.String())) // just in case that reference can get resetted...
+	}
+
+	whereStmt := fmt.Sprintf(`"%s".model_id IN (?) AND "%s".user_id = ?`, linkTableName, linkTableName)
+
+	// 1. Is it possible that the user has multiple ways to link to this organization?
+	// Let's say there is not.
+	// 2. If somehow you don't belong to this organization, then it won't be found.
+	results := make([]struct {
+		ModelID *datatype.UUID
+		Role    userrole.UserRole
+	}, 0)
+	if err := db.Table(linkTableName).Where(whereStmt, orgIDs, who.GetUserID().String()).
+		Select([]string{"DISTINCT model_id", "role"}).Scan(&results).Error; err != nil {
+		return nil, err
+	}
+	for _, res := range results {
+		rolesMap[*res.ModelID] = res.Role
+	}
+
+	return rolesMap, nil
+}
+
 // ---------------------------------------
 // The model object should have link to the ownership object which has a linking table to the user
 func userHasRolesAccessToModelOrg(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, modelObj mdl.IModel, roles []userrole.UserRole) (bool, error) {
@@ -275,6 +347,9 @@ func userHasRolesAccessToModelOrg(db *gorm.DB, who mdlutil.UserIDFetchable, type
 	organizationJoinTableName := orgJoinTableName(typeString)
 
 	organizationID := mdlutil.GetFieldValueFromModelByTagKeyBetterRestAndValueKey(modelObj, "org").(*datatype.UUID)
+	if organizationID == nil {
+		return false, errors.New("missing organization link ID")
+	}
 
 	firstJoin := fmt.Sprintf("INNER JOIN \"%s\" ON \"%s\".id = \"%s\".model_id AND \"%s\".role IN (?)", organizationJoinTableName, organizationTableName, organizationJoinTableName,
 		organizationJoinTableName)
@@ -294,10 +369,6 @@ func userHasRolesAccessToModelOrg(db *gorm.DB, who mdlutil.UserIDFetchable, type
 	// Check that organizations is not an empty array, and one of the organization has an ID that
 	// is specified in
 	org := organizations[0]
-	if organizationID == nil {
-		return false, errors.New("missing organization link ID")
-
-	}
 
 	if org.GetID().String() == organizationID.String() {
 		return true, nil
@@ -309,7 +380,7 @@ func userHasRolesAccessToModelOrg(db *gorm.DB, who mdlutil.UserIDFetchable, type
 // UpdateOneCore one, permission should already be checked
 // called for patch operation as well (after patch has already applied)
 // Fuck, repeat the following code for now (you can't call the overriding method from the non-overriding one)
-func (serv *OrganizationService) UpdateOneCore(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, modelObj mdl.IModel, id *datatype.UUID, oldModelObj mdl.IModel) (modelObj2 mdl.IModel, err error) {
+func (serv *UnderOrgService) UpdateOneCore(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, modelObj mdl.IModel, id *datatype.UUID, oldModelObj mdl.IModel) (modelObj2 mdl.IModel, err error) {
 	if modelNeedsRealDelete(oldModelObj) { // parent model
 		db = db.Unscoped()
 	}
@@ -323,9 +394,13 @@ func (serv *OrganizationService) UpdateOneCore(db *gorm.DB, who mdlutil.UserIDFe
 		return nil, err
 	}
 
+	// Kind of hack, but update don't have any parameter anyway
+	// This was for parittioned table where read has to have some date
+	options := make(map[urlparam.Param]interface{}, 0)
+
 	// This loads the IDs
 	// This so we have the preloading.
-	modelObj2, _, err = serv.ReadOneCore(db, who, typeString, id)
+	modelObj2, _, err = serv.ReadOneCore(db, who, typeString, id, options)
 	if err != nil { // Error is "record not found" when not found
 		return nil, err
 	}

@@ -17,6 +17,7 @@ import (
 	"github.com/t2wu/betterrest/libs/utils/transact"
 	"github.com/t2wu/betterrest/libs/webrender"
 	"github.com/t2wu/betterrest/mdlutil"
+	"github.com/t2wu/betterrest/model/mappertype"
 	"github.com/t2wu/betterrest/registry"
 	"github.com/t2wu/qry/datatype"
 	"github.com/t2wu/qry/mdl"
@@ -154,128 +155,6 @@ func (suite *TestBaseMapperCreateSuite) SetupTest() {
 	resetGlobals()
 }
 
-// All methods that begin with "Test" are run as tests within a
-// suite.
-func (suite *TestBaseMapperCreateSuite) TestCreateOne_WhenGiven_GotCar() {
-	carID := datatype.NewUUID()
-	carName := "DSM"
-	var modelObj mdl.IModel = &Car{BaseModel: mdl.BaseModel{ID: carID}, Name: carName}
-
-	suite.mock.ExpectBegin()
-	stmt := `INSERT INTO "car" ("id","created_at","updated_at","deleted_at","name") VALUES ($1,$2,$3,$4,$5) RETURNING "car"."id"`
-	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(carID))
-	stmt2 := `INSERT INTO "user_owns_car" ("id","created_at","updated_at","deleted_at","role","user_id","model_id") VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING "user_owns_car"."id"`
-	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt2)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(carID))
-	stmt3 := `SELECT * FROM "car"  WHERE "car"."deleted_at" IS NULL AND "car"."id" = $1 LIMIT 1`
-	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt3)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(carID))
-	suite.mock.ExpectCommit()
-
-	options := make(map[urlparam.Param]interface{})
-	cargo := hook.Cargo{}
-
-	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
-	registry.For(suite.typeString).ModelWithOption(&Car{}, opt)
-
-	mapper := SharedOwnershipMapper()
-
-	var retVal *MapperRet
-	ep := hook.EndPoint{
-		Op:          rest.OpCreate,
-		Cardinality: rest.CardinalityOne,
-		TypeString:  suite.typeString,
-		URLParams:   options,
-		Who:         suite.who,
-	}
-	retErr := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retErr *webrender.RetError) {
-		if retVal, retErr = mapper.CreateOne(tx, modelObj, &ep, &cargo); retErr != nil {
-			return retErr
-		}
-		return nil
-	}, "lifecycle.CreateOne")
-	if !assert.Nil(suite.T(), retErr) {
-		return
-	}
-
-	if car, ok := retVal.Ms[0].(*Car); assert.True(suite.T(), ok) {
-		assert.Equal(suite.T(), carName, car.Name)
-		assert.Equal(suite.T(), carID, car.ID)
-	}
-}
-
-func (suite *TestBaseMapperCreateSuite) TestCreateOne_WhenHavingController_CallRelevantControllerCallbacks() {
-	carID := datatype.NewUUID()
-	carName := "DSM"
-	var modelObj mdl.IModel = &Car{BaseModel: mdl.BaseModel{ID: carID}, Name: carName}
-
-	suite.mock.ExpectBegin()
-	stmt := `INSERT INTO "car" ("id","created_at","updated_at","deleted_at","name") VALUES ($1,$2,$3,$4,$5) RETURNING "car"."id"`
-	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(carID))
-	stmt2 := `INSERT INTO "user_owns_car" ("id","created_at","updated_at","deleted_at","role","user_id","model_id") VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING "user_owns_car"."id"`
-	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt2)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(carID))
-	stmt3 := `SELECT * FROM "car"  WHERE "car"."deleted_at" IS NULL AND "car"."id" = $1 LIMIT 1`
-	suite.mock.ExpectQuery(regexp.QuoteMeta(stmt3)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(carID))
-	suite.mock.ExpectCommit()
-
-	options := make(map[urlparam.Param]interface{})
-	cargo := hook.Cargo{}
-
-	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
-	registry.For(suite.typeString).ModelWithOption(&Car{}, opt).Hook(&CarHandlerJBT{}, "CRUPD")
-
-	mapper := SharedOwnershipMapper()
-
-	// var modelObj2 mdl.IModel
-	var tx2 *gorm.DB
-	var retVal *MapperRet
-	ep := hook.EndPoint{
-		Op:          rest.OpCreate,
-		Cardinality: rest.CardinalityOne,
-		TypeString:  suite.typeString,
-		URLParams:   options,
-		Who:         suite.who,
-	}
-	retErr := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retErr *webrender.RetError) {
-		tx2 = tx
-		if retVal, retErr = mapper.CreateOne(tx, modelObj, &ep, &cargo); retErr != nil {
-			return retErr
-		}
-		return nil
-	}, "lifecycle.CreateOne")
-	if !assert.Nil(suite.T(), retErr) {
-		return
-	}
-
-	role := userrole.UserRoleAdmin
-	data := hook.Data{Ms: []mdl.IModel{&Car{BaseModel: mdl.BaseModel{ID: carID}, Name: carName}}, DB: tx2,
-		Roles: []userrole.UserRole{role}, Cargo: &cargo}
-
-	ctrls := retVal.Fetcher.GetAllInstantiatedHanders()
-	if !assert.Len(suite.T(), ctrls, 1) {
-		return
-	}
-
-	hdlr, ok := ctrls[0].(*CarHandlerJBT)
-	if !assert.True(suite.T(), ok) {
-		return
-	}
-
-	assert.False(suite.T(), hdlr.guardAPIEntryCalled) // Not called when going through mapper (or lifecycle for that matter)
-	assert.False(suite.T(), hdlr.beforeApplyCalled)   // not patch, not called
-
-	if assert.True(suite.T(), hdlr.beforeCalled) {
-		assert.Condition(suite.T(), dataComparison(&data, hdlr.beforeData))
-		assert.Equal(suite.T(), ep, *hdlr.beforeInfo)
-	}
-
-	// After hook has made some modification to data (this is harder to test)
-	// data.Ms[0].(*Car).Name = data.Ms[0].(*Car).Name + "-after"
-
-	if assert.True(suite.T(), hdlr.afterCalled) {
-		assert.Condition(suite.T(), dataComparison(&data, hdlr.afterData))
-		assert.Equal(suite.T(), ep, *hdlr.afterInfo)
-	}
-}
-
 func (suite *TestBaseMapperCreateSuite) TestCreateMany_WhenGiven_GotCars() {
 	carID1 := datatype.NewUUID()
 	carName1 := "DSM"
@@ -313,7 +192,7 @@ func (suite *TestBaseMapperCreateSuite) TestCreateMany_WhenGiven_GotCars() {
 	options := make(map[urlparam.Param]interface{})
 	cargo := hook.Cargo{}
 
-	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
+	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: mappertype.DirectOwnership}
 	registry.For(suite.typeString).ModelWithOption(&Car{}, opt)
 
 	var retVal *MapperRet
@@ -326,7 +205,7 @@ func (suite *TestBaseMapperCreateSuite) TestCreateMany_WhenGiven_GotCars() {
 	}
 	retErr := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retErr *webrender.RetError) {
 		mapper := SharedOwnershipMapper()
-		retVal, retErr = mapper.CreateMany(tx, modelObjs, &ep, &cargo)
+		retVal, retErr = mapper.Create(tx, modelObjs, &ep, &cargo)
 		return retErr
 	}, "lifecycle.CreateMany")
 	if !assert.Nil(suite.T(), retErr) {
@@ -380,7 +259,7 @@ func (suite *TestBaseMapperCreateSuite) TestCreateMany_WhenHavingController_Call
 	options := make(map[urlparam.Param]interface{})
 	cargo := hook.Cargo{}
 
-	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
+	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: mappertype.DirectOwnership}
 	registry.For(suite.typeString).ModelWithOption(&Car{}, opt).Hook(&CarHandlerJBT{}, "CRUPD")
 
 	var tx2 *gorm.DB
@@ -395,7 +274,7 @@ func (suite *TestBaseMapperCreateSuite) TestCreateMany_WhenHavingController_Call
 	retErr := transact.TransactCustomError(suite.db, func(tx *gorm.DB) (retErr *webrender.RetError) {
 		mapper := SharedOwnershipMapper()
 		tx2 = tx
-		retVal, retErr = mapper.CreateMany(tx2, modelObjs, &ep, &cargo)
+		retVal, retErr = mapper.Create(tx2, modelObjs, &ep, &cargo)
 		return retErr
 	}, "lifecycle.CreateOne")
 	if !assert.Nil(suite.T(), retErr) {

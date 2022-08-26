@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/t2wu/betterrest/datamapper"
+	"github.com/t2wu/betterrest/model/mappertype"
 	"github.com/t2wu/betterrest/registry"
 
 	"github.com/gin-gonic/gin"
@@ -70,27 +71,27 @@ func AddRESTRoutes(r *gin.Engine) {
 	for typestring, reg := range registry.ModelRegistry {
 		var dm datamapper.IDataMapper
 		switch reg.Mapper {
-		case registry.MapperTypeGlobal:
+		case mappertype.Global:
 			dm = datamapper.SharedGlobalMapper()
 			addRoute(r, typestring, reg, dm)
 			break
-		case registry.MapperTypeViaOrganization:
+		case mappertype.UnderOrg:
 			dm = datamapper.SharedOrganizationMapper()
 			addRoute(r, typestring, reg, dm)
 			break
-		case registry.MapperTypeViaOrgPartition:
+		case mappertype.UnderOrgPartition:
 			dm = datamapper.SharedOrgPartition()
 			addRoute(r, typestring, reg, dm)
 			break
-		case registry.MapperTypeLinkTable:
+		case mappertype.LinkTable:
 			dm = datamapper.SharedLinkTableMapper()
 			addRoute(r, typestring, reg, dm)
 			break
-		case registry.MapperTypeViaOwnership:
+		case mappertype.DirectOwnership:
 			dm = datamapper.SharedOwnershipMapper()
 			addRoute(r, typestring, reg, dm)
 			break
-		case registry.MapperTypeUser:
+		case mappertype.User:
 			// don't add the user one
 			break
 		default:

@@ -5,28 +5,43 @@ import (
 
 	"github.com/jinzhu/gorm"
 	"github.com/t2wu/betterrest/datamapper/gormfixes"
+	"github.com/t2wu/betterrest/hook"
 	"github.com/t2wu/betterrest/hook/userrole"
+	"github.com/t2wu/betterrest/libs/urlparam"
+	"github.com/t2wu/betterrest/libs/webrender"
 	"github.com/t2wu/betterrest/mdlutil"
+	"github.com/t2wu/betterrest/model/mappertype"
 	"github.com/t2wu/betterrest/registry"
 	"github.com/t2wu/qry/datatype"
 	"github.com/t2wu/qry/mdl"
 )
 
 type GlobalService struct {
-	BaseServiceV1
+	BaseService
 }
 
-func (serv *GlobalService) HookBeforeCreateOne(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, modelObj mdl.IModel) (mdl.IModel, error) {
-	modelID := modelObj.GetID()
-	if modelID == nil {
-		modelID = datatype.NewUUID()
-		modelObj.SetID(modelID)
+// func (serv *GlobalService) HookBeforeCreateOne(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, modelObj mdl.IModel) (mdl.IModel, error) {
+// 	modelID := modelObj.GetID()
+// 	if modelID == nil {
+// 		modelID = datatype.NewUUID()
+// 		modelObj.SetID(modelID)
+// 	}
+// 	return modelObj, nil
+// }
+
+// func (serv *GlobalService) HookBeforeCreateMany(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, modelObjs []mdl.IModel) ([]mdl.IModel, error) {
+// 	return modelObjs, nil
+// }
+
+func (serv *GlobalService) PermissionAndRole(data *hook.Data, ep *hook.EndPoint) (*hook.Data, *webrender.RetError) {
+	// It's possible that hook want us to reject this endpoint
+	if registry.RoleSorter != nil {
+		if err := registry.RoleSorter.PermitOnCreate(mappertype.Global, data, ep); err != nil {
+			return nil, err
+		}
 	}
-	return modelObj, nil
-}
 
-func (serv *GlobalService) HookBeforeCreateMany(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, modelObjs []mdl.IModel) ([]mdl.IModel, error) {
-	return modelObjs, nil
+	return data, nil
 }
 
 func (serv *GlobalService) HookBeforeDeleteOne(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, modelObj mdl.IModel) (mdl.IModel, error) {
@@ -38,7 +53,7 @@ func (serv *GlobalService) HookBeforeDeleteMany(db *gorm.DB, who mdlutil.UserIDF
 }
 
 // ReadOneCore get one model object based on its type and its id string
-func (service *GlobalService) ReadOneCore(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, id *datatype.UUID) (mdl.IModel, userrole.UserRole, error) {
+func (service *GlobalService) ReadOneCore(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, id *datatype.UUID, options map[urlparam.Param]interface{}) (mdl.IModel, userrole.UserRole, error) {
 	modelObj := registry.NewFromTypeString(typeString)
 	modelObj.SetID(id)
 
@@ -62,7 +77,7 @@ func (service *GlobalService) ReadOneCore(db *gorm.DB, who mdlutil.UserIDFetchab
 	return modelObj, role, err
 }
 
-func (service *GlobalService) GetManyCore(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, ids []*datatype.UUID) ([]mdl.IModel, []userrole.UserRole, error) {
+func (service *GlobalService) GetManyCore(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, ids []*datatype.UUID, options map[urlparam.Param]interface{}) ([]mdl.IModel, []userrole.UserRole, error) {
 	rtable := registry.GetTableNameFromTypeString(typeString)
 	db = db.Table(rtable).Where(fmt.Sprintf("\"%s\".\"id\" IN (?)", rtable), ids).Set("gorm:auto_preload", true)
 
@@ -141,9 +156,13 @@ func (serv *GlobalService) UpdateOneCore(db *gorm.DB, who mdlutil.UserIDFetchabl
 		return nil, err
 	}
 
+	// Kind of hack, but update don't have any parameter anyway
+	// This was for parittioned table where read has to have some date
+	options := make(map[urlparam.Param]interface{}, 0)
+
 	// This loads the IDs
 	// This so we have the preloading.
-	modelObj2, _, err = serv.ReadOneCore(db, who, typeString, id)
+	modelObj2, _, err = serv.ReadOneCore(db, who, typeString, id, options)
 	if err != nil { // Error is "record not found" when not found
 		return nil, err
 	}

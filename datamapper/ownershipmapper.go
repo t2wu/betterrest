@@ -4,6 +4,7 @@ import (
 	"sync"
 
 	"github.com/t2wu/betterrest/datamapper/service"
+	"github.com/t2wu/betterrest/model/mappertype"
 )
 
 // ---------------------------------------
@@ -23,7 +24,10 @@ func SetMockOwnershipMapper(mapper IDataMapper) {
 // SharedOwnershipMapper creats a singleton of Crud object
 func SharedOwnershipMapper() IDataMapper {
 	onceOwnership.Do(func() {
-		crudOwnership = &DataMapper{Service: &service.OwnershipService{BaseServiceV1: service.BaseServiceV1{}}}
+		crudOwnership = &DataMapper{
+			Service:    &service.OwnershipService{BaseService: service.BaseService{}},
+			MapperType: mappertype.DirectOwnership,
+		}
 	})
 
 	return crudOwnership

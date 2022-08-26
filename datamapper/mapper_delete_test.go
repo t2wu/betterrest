@@ -15,6 +15,7 @@ import (
 	"github.com/t2wu/betterrest/libs/utils/transact"
 	"github.com/t2wu/betterrest/libs/webrender"
 	"github.com/t2wu/betterrest/mdlutil"
+	"github.com/t2wu/betterrest/model/mappertype"
 	"github.com/t2wu/betterrest/registry"
 	"github.com/t2wu/qry/datatype"
 	"github.com/t2wu/qry/mdl"
@@ -68,7 +69,7 @@ func (suite *TestBaseMapperDeleteSuite) TestDeleteOne_WhenGiven_GotCar() {
 	options := make(map[urlparam.Param]interface{})
 	cargo := hook.Cargo{}
 
-	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
+	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: mappertype.DirectOwnership}
 	registry.For(suite.typeString).ModelWithOption(&Car{}, opt)
 
 	mapper := SharedOwnershipMapper()
@@ -117,7 +118,7 @@ func (suite *TestBaseMapperDeleteSuite) TestDeleteOne_WhenHavingController_CallR
 	options := make(map[urlparam.Param]interface{})
 	cargo := hook.Cargo{}
 
-	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
+	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: mappertype.DirectOwnership}
 	registry.For(suite.typeString).ModelWithOption(&Car{}, opt).Hook(&CarHandlerJBT{}, "CRUPD")
 
 	mapper := SharedOwnershipMapper()
@@ -210,7 +211,7 @@ func (suite *TestBaseMapperDeleteSuite) TestDeleteMany_WhenGiven_GotCars() {
 	options := make(map[urlparam.Param]interface{})
 	cargo := hook.Cargo{}
 
-	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
+	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: mappertype.DirectOwnership}
 	registry.For(suite.typeString).ModelWithOption(&Car{}, opt)
 
 	var retVal *MapperRet
@@ -280,7 +281,7 @@ func (suite *TestBaseMapperDeleteSuite) TestDeleteMany_WhenHavingController_Call
 	options := make(map[urlparam.Param]interface{})
 	cargo := hook.Cargo{}
 
-	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
+	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: mappertype.DirectOwnership}
 	registry.For(suite.typeString).ModelWithOption(&Car{}, opt).Hook(&CarHandlerJBT{}, "CRUPD")
 
 	var tx2 *gorm.DB

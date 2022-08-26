@@ -13,6 +13,7 @@ import (
 	"github.com/t2wu/betterrest/hook/userrole"
 	"github.com/t2wu/betterrest/libs/urlparam"
 	"github.com/t2wu/betterrest/mdlutil"
+	"github.com/t2wu/betterrest/model/mappertype"
 	"github.com/t2wu/betterrest/registry"
 	"github.com/t2wu/qry/datatype"
 	"github.com/t2wu/qry/mdl"
@@ -58,7 +59,7 @@ func (suite *TestBaseMapperReadSuite) TestReadOne_WhenGiven_GotCar() {
 	options := make(map[urlparam.Param]interface{})
 	cargo := hook.Cargo{}
 
-	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
+	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: mappertype.DirectOwnership}
 	registry.For(suite.typeString).ModelWithOption(&Car{}, opt)
 
 	mapper := SharedOwnershipMapper()
@@ -97,7 +98,7 @@ func (suite *TestBaseMapperReadSuite) TestReadOne_WhenHavingController_CallRelev
 	options := make(map[urlparam.Param]interface{})
 	cargo := hook.Cargo{}
 
-	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
+	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: mappertype.DirectOwnership}
 	registry.For(suite.typeString).ModelWithOption(&Car{}, opt).Hook(&CarHandlerJBT{}, "CRUPD")
 
 	mapper := SharedOwnershipMapper()
@@ -156,7 +157,7 @@ func (suite *TestBaseMapperReadSuite) TestReadMany_WhenGiven_GotCars() {
 	options := make(map[urlparam.Param]interface{})
 	cargo := hook.Cargo{}
 
-	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
+	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: mappertype.DirectOwnership}
 	registry.For(suite.typeString).ModelWithOption(&Car{}, opt)
 
 	mapper := SharedOwnershipMapper()
@@ -205,7 +206,7 @@ func (suite *TestBaseMapperReadSuite) TestReadMany_WhenHavingController_CallRele
 	options := make(map[urlparam.Param]interface{})
 	cargo := hook.Cargo{}
 
-	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: registry.MapperTypeViaOwnership}
+	opt := registry.RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: mappertype.DirectOwnership}
 
 	// Both old and new are given
 	registry.For(suite.typeString).ModelWithOption(&Car{}, opt).Hook(&CarHandlerJBT{}, "CRUPD")

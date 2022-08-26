@@ -3,6 +3,7 @@ package betterrest
 import (
 	"net/http"
 
+	"github.com/t2wu/betterrest/hook"
 	"github.com/t2wu/betterrest/libs/settings"
 	"github.com/t2wu/betterrest/mdlutil"
 	"github.com/t2wu/betterrest/registry"
@@ -40,3 +41,5 @@ func RegisterContextFunction(f func(r *http.Request) mdlutil.UserIDFetchable) {
 }
 
 var For func(typeString string) *registry.Registrar = registry.For
+
+var Sorter func(sorter hook.IRoleSorter) = registry.RegRoleSorter

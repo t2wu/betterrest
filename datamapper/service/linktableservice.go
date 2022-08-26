@@ -8,65 +8,95 @@ import (
 
 	"github.com/jinzhu/gorm"
 	"github.com/t2wu/betterrest/datamapper/gormfixes"
+	"github.com/t2wu/betterrest/hook"
 	"github.com/t2wu/betterrest/hook/userrole"
+	"github.com/t2wu/betterrest/libs/urlparam"
+	"github.com/t2wu/betterrest/libs/webrender"
 	"github.com/t2wu/betterrest/mdlutil"
+	"github.com/t2wu/betterrest/model/mappertype"
 	"github.com/t2wu/betterrest/registry"
 	"github.com/t2wu/qry/datatype"
 	"github.com/t2wu/qry/mdl"
 )
 
 type LinkTableService struct {
-	BaseServiceV1
+	BaseService
 }
 
-func (serv *LinkTableService) HookBeforeCreateOne(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, modelObj mdl.IModel) (mdl.IModel, error) {
-	ownerModelObj, ok := modelObj.(mdlutil.IOwnership)
-	if !ok {
-		return nil, fmt.Errorf("model not an IOwnership object")
-	}
+// func (serv *LinkTableService) HookBeforeCreateOne(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, modelObj mdl.IModel) (mdl.IModel, error) {
+// 	linker, ok := modelObj.(mdlutil.ILinker)
+// 	if !ok {
+// 		return nil, fmt.Errorf("model not an ILinker object")
+// 	}
 
-	// Might not need this
-	if modelObj.GetID() == nil {
-		modelObj.SetID(datatype.NewUUID())
-	}
+// 	// Might not need this
+// 	if modelObj.GetID() == nil {
+// 		modelObj.SetID(datatype.NewUUID())
+// 	}
 
-	// You gotta have admin access to the model in order to create a relation
-	err := userHasAdminAccessToOriginalModel(db, who.GetUserID(), typeString, ownerModelObj.GetModelID())
-	if err != nil {
-		return nil, err
-	}
+// 	// You gotta have admin access to the model in order to create a relation
+// 	err := userHasAdminAccessToOriginalModel(db, who.GetUserID(), typeString, linker.GetModelID())
+// 	if err != nil {
+// 		return nil, err
+// 	}
 
-	// userID := ownerModelObj.GetUserID()
+// 	return modelObj, nil
+// }
 
-	// // This user actually has to exists!
-	// // Again the user table needs to be called "user" (limitation)
-	// // Unless I provide an interface to register it specifically
-	// type result struct {
-	// 	ID *datatype.UUID
-	// }
-	// res := result{}
-	// if err := db.Table("user").Select("id").Where("id = ?", userID).Scan(&res).Error; err != nil {
-	// 	if errors.Is(err, gorm.ErrRecordNotFound) {
-	// 		return nil, fmt.Errorf("user does not exists")
-	// 	}
-	// }
-	return modelObj, nil
-}
+// func (serv *LinkTableService) HookBeforeCreateMany(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, modelObjs []mdl.IModel) ([]mdl.IModel, error) {
+// 	for _, modelObj := range modelObjs {
+// 		linker, ok := modelObj.(mdlutil.ILinker)
+// 		if !ok {
+// 			return nil, fmt.Errorf("model not an ILinker object")
+// 		}
 
-func (serv *LinkTableService) HookBeforeCreateMany(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, modelObjs []mdl.IModel) ([]mdl.IModel, error) {
-	for _, modelObj := range modelObjs {
-		ownerModelObj, ok := modelObj.(mdlutil.IOwnership)
+// 		// You gotta have admin access to the model in order to create a relation
+// 		err := userHasAdminAccessToOriginalModel(db, who.GetUserID(), typeString, linker.GetModelID())
+// 		if err != nil {
+// 			return nil, err
+// 		}
+// 	}
+
+// 	return modelObjs, nil
+// }
+
+func (serv *LinkTableService) PermissionAndRole(data *hook.Data, ep *hook.EndPoint) (*hook.Data, *webrender.RetError) {
+	ids := make([]*datatype.UUID, 0)
+
+	for _, modelObj := range data.Ms {
+		linker, ok := modelObj.(mdlutil.ILinker)
 		if !ok {
-			return nil, fmt.Errorf("model not an IOwnership object")
+			return nil, webrender.NewRetValErrorWithMsg("model not an ILinker object")
 		}
 
-		// You gotta have admin access to the model in order to create a relation
-		err := userHasAdminAccessToOriginalModel(db, who.GetUserID(), typeString, ownerModelObj.GetModelID())
-		if err != nil {
+		ids = append(ids, linker.GetModelID())
+	}
+
+	rolesMap, err := getRolesFromLinkTableIDs(data.DB, ep.Who.GetUserID(), ep.TypeString, ids)
+	if err != nil {
+		return nil, webrender.NewRetValWithError(err)
+	}
+
+	roles := make([]userrole.UserRole, 0)
+	for _, modelObj := range data.Ms {
+		linker := modelObj.(mdlutil.ILinker)
+		mid := linker.GetModelID()
+		role, ok := rolesMap[*mid]
+		if !ok { // if not exist, the link isn't there, it's someone else's model
+			return nil, webrender.NewRetValWithError(ErrPermission)
+		}
+		roles = append(roles, role)
+	}
+	data.Roles = roles
+
+	// It's possible that hook want us to reject this endpoint
+	if registry.RoleSorter != nil {
+		if err := registry.RoleSorter.PermitOnCreate(mappertype.LinkTable, data, ep); err != nil {
 			return nil, err
 		}
 	}
-	return modelObjs, nil
+
+	return data, nil
 }
 
 func (serv *LinkTableService) HookBeforeDeleteOne(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, modelObj mdl.IModel) (mdl.IModel, error) {
@@ -78,13 +108,13 @@ func (serv *LinkTableService) HookBeforeDeleteMany(db *gorm.DB, who mdlutil.User
 }
 
 // ReadOneCore get one model object based on its type and its id string
-func (service *LinkTableService) ReadOneCore(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, id *datatype.UUID) (mdl.IModel, userrole.UserRole, error) {
+func (service *LinkTableService) ReadOneCore(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, id *datatype.UUID, options map[urlparam.Param]interface{}) (mdl.IModel, userrole.UserRole, error) {
 	modelObj := registry.NewFromTypeString(typeString)
 
 	// Check if link table
-	if _, ok := modelObj.(mdlutil.IOwnership); !ok {
-		log.Printf("%s not an IOwnership type\n", typeString)
-		return nil, userrole.UserRoleInvalid, fmt.Errorf("%s not an IOwnership type", typeString)
+	if _, ok := modelObj.(mdlutil.ILinker); !ok {
+		log.Printf("%s not an ILinker type\n", typeString)
+		return nil, userrole.UserRoleInvalid, fmt.Errorf("%s not an ILinker type", typeString)
 	}
 
 	rtable := mdl.GetTableNameFromIModel(modelObj)
@@ -120,7 +150,7 @@ func (service *LinkTableService) ReadOneCore(db *gorm.DB, who mdlutil.UserIDFetc
 	return modelObj, res.Role, err
 }
 
-func (serv *LinkTableService) GetManyCore(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, ids []*datatype.UUID) ([]mdl.IModel, []userrole.UserRole, error) {
+func (serv *LinkTableService) GetManyCore(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, ids []*datatype.UUID, options map[urlparam.Param]interface{}) ([]mdl.IModel, []userrole.UserRole, error) {
 	rtable := registry.GetTableNameFromTypeString(typeString)
 	subquery := fmt.Sprintf("model_id IN (select model_id from %s where user_id = ?)", rtable)
 	db2 := db.Table(rtable).Where(subquery, who.GetUserID()).Where("id IN (?)", ids)
@@ -162,10 +192,10 @@ func (serv *LinkTableService) GetAllQueryContructCore(db *gorm.DB, who mdlutil.U
 
 	// Check if link table
 	testModel := registry.NewFromTypeString(typeString)
-	// IOwnership means link table
-	if _, ok := testModel.(mdlutil.IOwnership); !ok {
-		log.Printf("%s not an IOwnership type\n", typeString)
-		return nil, fmt.Errorf("%s not an IOwnership type", typeString)
+	// ILinker means link table
+	if _, ok := testModel.(mdlutil.ILinker); !ok {
+		log.Printf("%s not an ILinker type\n", typeString)
+		return nil, fmt.Errorf("%s not an ILinker type", typeString)
 	}
 
 	// select * from rtable where model_id IN (select model_id from rtable where user_id = ?)
@@ -192,8 +222,12 @@ func (serv *LinkTableService) userHasPermissionToEdit(db *gorm.DB, who mdlutil.U
 		return nil, userrole.UserRoleInvalid, ErrIDEmpty
 	}
 
+	// Kind of hack, but update don't have any parameter anyway
+	// This was for parittioned table where read has to have some date
+	options := make(map[urlparam.Param]interface{}, 0)
+
 	// Pull out entire modelObj
-	modelObj, _, err := serv.ReadOneCore(db, who, typeString, id)
+	modelObj, _, err := serv.ReadOneCore(db, who, typeString, id, options)
 	if err != nil { // Error is "record not found" when not found
 		return nil, userrole.UserRoleInvalid, err
 	}
@@ -206,9 +240,9 @@ func (serv *LinkTableService) userHasPermissionToEdit(db *gorm.DB, who mdlutil.U
 		return nil, userrole.UserRoleInvalid, ErrIDNotMatch
 	}
 
-	ownerModelObj, ok := modelObj.(mdlutil.IOwnership)
+	linker, ok := modelObj.(mdlutil.ILinker)
 	if !ok {
-		return nil, userrole.UserRoleInvalid, fmt.Errorf("model not an IOwnership object")
+		return nil, userrole.UserRoleInvalid, fmt.Errorf("model not an ILinker object")
 	}
 
 	// If you're admin to this model, you can only update/delete link data to other
@@ -218,17 +252,17 @@ func (serv *LinkTableService) userHasPermissionToEdit(db *gorm.DB, who mdlutil.U
 		Role userrole.UserRole
 	}
 	res := result{}
-	if err := db.Table(rtable).Where("user_id = ? and model_id = ?", who.GetUserID(), ownerModelObj.GetModelID()).First(&res).Error; err != nil {
+	if err := db.Table(rtable).Where("user_id = ? and model_id = ?", who.GetUserID(), linker.GetModelID()).First(&res).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, userrole.UserRoleInvalid, ErrPermission
 		}
 		return nil, userrole.UserRoleInvalid, err
 	}
 
-	if res.Role == userrole.UserRoleAdmin && ownerModelObj.GetUserID().String() == who.GetUserID().String() {
+	if res.Role == userrole.UserRoleAdmin && linker.GetUserID().String() == who.GetUserID().String() {
 		// You can remove other's relation, but not yours
 		return nil, res.Role, ErrPermissionWrongEndPoint
-	} else if res.Role != userrole.UserRoleAdmin && ownerModelObj.GetUserID().String() != who.GetUserID().String() {
+	} else if res.Role != userrole.UserRoleAdmin && linker.GetUserID().String() != who.GetUserID().String() {
 		// not admin, only remove yourself
 		return nil, res.Role, ErrPermission
 	}
@@ -237,8 +271,8 @@ func (serv *LinkTableService) userHasPermissionToEdit(db *gorm.DB, who mdlutil.U
 }
 
 // ---------------------------------------
-
-func userHasAdminAccessToOriginalModel(db *gorm.DB, oid *datatype.UUID, typeString string, id *datatype.UUID) error {
+// returns orgID to userRole mapping
+func getRolesFromLinkTableIDs(db *gorm.DB, oid *datatype.UUID, typeString string, ids []*datatype.UUID) (map[datatype.UUID]userrole.UserRole, error) {
 	// We need to find at least one role with the same model id
 	// where we're admin for
 
@@ -246,20 +280,90 @@ func userHasAdminAccessToOriginalModel(db *gorm.DB, oid *datatype.UUID, typeStri
 	// but check link table which we have admin access for
 	rtable := registry.GetTableNameFromTypeString(typeString)
 
-	result := struct {
-		ID *datatype.UUID
+	results := []struct {
+		ModelID *datatype.UUID
+		Role    userrole.UserRole
 	}{}
 
-	if err := db.Table(rtable).Where("user_id = ? and role = ? and model_id = ?",
-		oid, userrole.UserRoleAdmin, id).Scan(&result).Error; err != nil {
+	rolesMap := make(map[datatype.UUID]userrole.UserRole)
+	if err := db.Table(rtable).Where("user_id = ? and model_id IN (?)",
+		oid, ids).Select([]string{"DISTINCT model_id", "role"}).Scan(&results).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return ErrPermission
+			return nil, ErrPermission
 		}
-		return err
+		return nil, err
 	}
 
-	return nil
+	for _, res := range results {
+		rolesMap[*res.ModelID] = res.Role
+	}
+
+	return rolesMap, nil
 }
+
+// returns orgID to userRole mapping
+// func obtainRoleFromLinkTable(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, modelObjs []mdl.IModel) (map[datatype.UUID]userrole.UserRole, error) {
+// 	rolesMap := make(map[datatype.UUID]userrole.UserRole)
+// 	orgTableName := registry.OrgModelNameFromOrgResourceTypeString(typeString)
+// 	linkTableName := orgJoinTableName(typeString)
+
+// 	orgIDsMap := make(map[datatype.UUID]struct{})
+// 	for _, modelObj := range modelObjs {
+// 		orgID := mdlutil.GetFieldValueFromModelByTagKeyBetterRestAndValueKey(modelObj, "org").(*datatype.UUID)
+// 		if orgID == nil {
+// 			return nil, fmt.Errorf("missing %sID", orgTableName) // TODO table name is not necessarily endpoint name
+// 		}
+// 		orgIDsMap[*orgID] = struct{}{}
+// 	}
+
+// 	orgIDs := make([]*datatype.UUID, 0)
+// 	for orgID := range orgIDsMap {
+// 		orgID2 := &orgID
+// 		orgIDs = append(orgIDs, datatype.NewUUIDFromStringNoErr(orgID2.String())) // just in case that reference can get resetted...
+// 	}
+
+// 	whereStmt := fmt.Sprintf(`"%s".model_id IN (?) AND "%s".user_id = ?`, linkTableName, linkTableName)
+
+// 	// 1. Is it possible that the user has multiple ways to link to this organization?
+// 	// Let's say there is not.
+// 	// 2. If somehow you don't belong to this organization, then it won't be found.
+// 	results := make([]struct {
+// 		ModelID *datatype.UUID
+// 		Role    userrole.UserRole
+// 	}, 0)
+// 	if err := db.Table(linkTableName).Where(whereStmt, orgIDs, who.GetUserID().String()).
+// 		Select([]string{"DISTINCT model_id", "role"}).Scan(&results).Error; err != nil {
+// 		return nil, err
+// 	}
+// 	for _, res := range results {
+// 		rolesMap[*res.ModelID] = res.Role
+// 	}
+
+// 	return rolesMap, nil
+// }
+
+// func userHasAdminAccessToOriginalModel(db *gorm.DB, oid *datatype.UUID, typeString string, id *datatype.UUID) error {
+// 	// We need to find at least one role with the same model id
+// 	// where we're admin for
+
+// 	// We make sure we NOT by checking the original model table
+// 	// but check link table which we have admin access for
+// 	rtable := registry.GetTableNameFromTypeString(typeString)
+
+// 	result := struct {
+// 		ID *datatype.UUID
+// 	}{}
+
+// 	if err := db.Table(rtable).Where("user_id = ? and role = ? and model_id = ?",
+// 		oid, userrole.UserRoleAdmin, id).Scan(&result).Error; err != nil {
+// 		if errors.Is(err, gorm.ErrRecordNotFound) {
+// 			return ErrPermission
+// 		}
+// 		return err
+// 	}
+
+// 	return nil
+// }
 
 // UpdateOneCore one, permissin should already be checked
 // called for patch operation as well (after patch has already applied)
@@ -278,9 +382,13 @@ func (serv *LinkTableService) UpdateOneCore(db *gorm.DB, who mdlutil.UserIDFetch
 		return nil, err
 	}
 
+	// Kind of hack, but update don't have any parameter anyway
+	// This was for parittioned table where read has to have some date
+	options := make(map[urlparam.Param]interface{}, 0)
+
 	// This loads the IDs
 	// This so we have the preloading.
-	modelObj2, _, err = serv.ReadOneCore(db, who, typeString, id)
+	modelObj2, _, err = serv.ReadOneCore(db, who, typeString, id, options)
 	if err != nil { // Error is "record not found" when not found
 		return nil, err
 	}

@@ -6,37 +6,56 @@ import (
 
 	"github.com/jinzhu/gorm"
 	"github.com/t2wu/betterrest/datamapper/gormfixes"
+	"github.com/t2wu/betterrest/hook"
 	"github.com/t2wu/betterrest/hook/userrole"
+	"github.com/t2wu/betterrest/libs/urlparam"
+	"github.com/t2wu/betterrest/libs/webrender"
 	"github.com/t2wu/betterrest/mdlutil"
 	"github.com/t2wu/qry"
 	"github.com/t2wu/qry/datatype"
 	"github.com/t2wu/qry/mdl"
 )
 
-// IServiceV1 provice basic data fetch for various type of table to user relationships
-type IServiceV1 interface {
-	HookBeforeCreateOne(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, modelObj mdl.IModel) (mdl.IModel, error)
-	HookBeforeCreateMany(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, modelObjs []mdl.IModel) ([]mdl.IModel, error)
+// IService provice basic data fetch for various type of table to user relationships
+type IService interface {
+	// ContructPermissionQuery adds permission query for query one
+	// ContructPermissionClauseForOne(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, modelObj mdl.IModel) (*gorm.DB, error)
+
+	// ContructPermissionQuery adds permission query for query many
+	// ContructPermissionClauseForMany(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, modelObjs []mdl.IModel) (*gorm.DB, error)
+
+	// HookBeforeCreateOne(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, modelObj mdl.IModel) (mdl.IModel, error)
+	// HookBeforeCreateMany(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, modelObjs []mdl.IModel) ([]mdl.IModel, error)
 	HookBeforeDeleteOne(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, modelObj mdl.IModel) (mdl.IModel, error)
 	HookBeforeDeleteMany(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, modelObjs []mdl.IModel) ([]mdl.IModel, error)
 
 	CreateOneCore(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, modelObj mdl.IModel, id *datatype.UUID, oldModelObj mdl.IModel) (mdl.IModel, error)
-	ReadOneCore(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, id *datatype.UUID) (mdl.IModel, userrole.UserRole, error)
+	ReadOneCore(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, id *datatype.UUID, options map[urlparam.Param]interface{}) (mdl.IModel, userrole.UserRole, error)
 	UpdateOneCore(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, modelObj mdl.IModel, id *datatype.UUID, oldModelObj mdl.IModel) (modelObj2 mdl.IModel, err error)
 	DeleteOneCore(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, modelObj mdl.IModel, id *datatype.UUID, oldModelObjs mdl.IModel) (mdl.IModel, error)
 
-	GetManyCore(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, ids []*datatype.UUID) ([]mdl.IModel, []userrole.UserRole, error)
+	GetManyCore(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, ids []*datatype.UUID, options map[urlparam.Param]interface{}) ([]mdl.IModel, []userrole.UserRole, error)
 
 	GetAllQueryContructCore(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string) (*gorm.DB, error)
 	GetAllRolesCore(dbChained *gorm.DB, dbClean *gorm.DB, who mdlutil.UserIDFetchable, typeString string, modelObjs []mdl.IModel) ([]userrole.UserRole, error)
+
+	// Permitted is asking if this user has permission to add to it
+	// 1. Ownership service: ask hook for permission, if the endpoint is allowed, then the role for the created item is admin
+	// 2. Link service: If you're an admin or someone with permission to edit it (if hook allows it), then the role you can set is also restricted by the hook.
+	// 3. Org/Org partition service(things under org): if you're admin or some permission which allows to write, determined by the hook, then the role
+	// then no new role is needed
+	// 4. User/Global: Either you have permission to edit or not, hook can determine that. No role needed.
+	// Some permission stuff or role linking stuff such as ownership's model has extra stuffs such as associated link table's info).
+	// So data.Ms itself can be modified, so a new set is returned
+	PermissionAndRole(data *hook.Data, ep *hook.EndPoint) (*hook.Data, *webrender.RetError)
 }
 
-// BaseServiceV1 is the superclass of all services
-type BaseServiceV1 struct {
+// BaseService is the superclass of all services
+type BaseService struct {
 }
 
 // CreateOneCore create the model
-func (serv *BaseServiceV1) CreateOneCore(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, modelObj mdl.IModel, id *datatype.UUID, oldModelObj mdl.IModel) (mdl.IModel, error) {
+func (serv *BaseService) CreateOneCore(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, modelObj mdl.IModel, id *datatype.UUID, oldModelObj mdl.IModel) (mdl.IModel, error) {
 	// No need to check if primary key is blank.
 	// If it is it'll be created by Gorm's BeforeCreate hook
 	// (defined in base model)
@@ -65,7 +84,7 @@ func (serv *BaseServiceV1) CreateOneCore(db *gorm.DB, who mdlutil.UserIDFetchabl
 // UpdateOneCore one, permissin should already be checked
 // called for patch operation as well (after patch has already applied)
 // Fuck, repeat the following code for now (you can't call the overriding method from the non-overriding one)
-func (serv *BaseServiceV1) UpdateOneCore(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, modelObj mdl.IModel, id *datatype.UUID, oldModelObj mdl.IModel) (modelObj2 mdl.IModel, err error) {
+func (serv *BaseService) UpdateOneCore(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, modelObj mdl.IModel, id *datatype.UUID, oldModelObj mdl.IModel) (modelObj2 mdl.IModel, err error) {
 	if modelNeedsRealDelete(oldModelObj) { // parent model
 		db = db.Unscoped()
 	}
@@ -92,9 +111,13 @@ func (serv *BaseServiceV1) UpdateOneCore(db *gorm.DB, who mdlutil.UserIDFetchabl
 		return nil, err
 	}
 
+	// Kind of hack, but update don't have any parameter anyway
+	// This was for parittioned table where read has to have some date
+	options := make(map[urlparam.Param]interface{}, 0)
+
 	// This loads the IDs
 	// This so we have the preloading.
-	modelObj2, _, err = serv.ReadOneCore(db, who, typeString, id)
+	modelObj2, _, err = serv.ReadOneCore(db, who, typeString, id, options)
 	if err != nil { // Error is "record not found" when not found
 		return nil, err
 	}
@@ -106,7 +129,7 @@ func (serv *BaseServiceV1) UpdateOneCore(db *gorm.DB, who mdlutil.UserIDFetchabl
 	return modelObj2, nil
 }
 
-func (serv *BaseServiceV1) DeleteOneCore(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, modelObj mdl.IModel, id *datatype.UUID, oldModelObjs mdl.IModel) (mdl.IModel, error) {
+func (serv *BaseService) DeleteOneCore(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, modelObj mdl.IModel, id *datatype.UUID, oldModelObjs mdl.IModel) (mdl.IModel, error) {
 	// Many field is not used, it's just used to conform the interface
 	if err := db.Delete(modelObj).Error; err != nil {
 		return nil, err
@@ -119,6 +142,6 @@ func (serv *BaseServiceV1) DeleteOneCore(db *gorm.DB, who mdlutil.UserIDFetchabl
 	return modelObj, nil
 }
 
-func (serv *BaseServiceV1) ReadOneCore(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, id *datatype.UUID) (mdl.IModel, userrole.UserRole, error) {
+func (serv *BaseService) ReadOneCore(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, id *datatype.UUID, options map[urlparam.Param]interface{}) (mdl.IModel, userrole.UserRole, error) {
 	return nil, userrole.UserRoleInvalid, fmt.Errorf("ReadOneCore to be overrridden shouldn't be called")
 }

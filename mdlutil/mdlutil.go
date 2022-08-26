@@ -52,9 +52,9 @@ type IHasPermissions interface {
 
 // ------------------------------------------------
 
-// IOwnership is what OwnershipModelBase tables should satisfy.
+// ILinker is what OwnershipModelBase tables should satisfy.
 // Except OwnershipType, that's for struct which embed OwnershipModelBase
-type IOwnership interface {
+type ILinker interface {
 	GetRole() userrole.UserRole
 	SetRole(userrole.UserRole)
 
@@ -67,7 +67,7 @@ type IOwnership interface {
 	GetID() *datatype.UUID
 	SetID(*datatype.UUID)
 
-	// OwnershipType() IOwnership
+	// OwnershipType() ILinker
 }
 
 // OwnershipModelBase has a role. Intended to be embedded
@@ -93,12 +93,12 @@ func (o *OwnershipModelBase) BeforeCreate(scope *gorm.Scope) error {
 	return nil
 }
 
-// GetRole gets the role field of the model, comforms to IOwnership
+// GetRole gets the role field of the model, comforms to ILinker
 func (o *OwnershipModelBase) GetRole() userrole.UserRole {
 	return o.Role
 }
 
-// SetRole sets the role field of the model, comforms to IOwnership
+// SetRole sets the role field of the model, comforms to ILinker
 func (o *OwnershipModelBase) SetRole(r userrole.UserRole) {
 	o.Role = r
 }
@@ -135,24 +135,24 @@ func (o *OwnershipModelWithIDBase) SetID(id *datatype.UUID) {
 	o.ID = id
 }
 
-// GetUserID gets the user id of the model, comforms to IOwnership
+// GetUserID gets the user id of the model, comforms to ILinker
 func (o *OwnershipModelWithIDBase) GetUserID() *datatype.UUID {
 	return o.UserID
 	// v := reflect.ValueOf(o)
 	// return reflect.Indirect(v).FieldByName("ID").Interface().(*datatype.UUID)
 }
 
-// SetUserID sets the user id of the model, comforms to IOwnership
+// SetUserID sets the user id of the model, comforms to ILinker
 func (o *OwnershipModelWithIDBase) SetUserID(id *datatype.UUID) {
 	o.UserID = id
 }
 
-// SetModelID sets the id of the model, comforms to IOwnership
+// SetModelID sets the id of the model, comforms to ILinker
 func (o *OwnershipModelWithIDBase) SetModelID(id *datatype.UUID) {
 	o.ModelID = id
 }
 
-// GetModelID gets the id of the model, comforms to IOwnership
+// GetModelID gets the id of the model, comforms to ILinker
 func (o *OwnershipModelWithIDBase) GetModelID() *datatype.UUID {
 	return o.ModelID
 }

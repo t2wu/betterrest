@@ -11,13 +11,20 @@ import (
 	"github.com/t2wu/betterrest/libs/utils/jsontrans"
 	"github.com/t2wu/betterrest/libs/webrender"
 	"github.com/t2wu/betterrest/mdlutil"
+	"github.com/t2wu/betterrest/model/mappertype"
 	"github.com/t2wu/betterrest/registry/handlermap"
 	"github.com/t2wu/qry/mdl"
 )
 
 /*
- * Registration
+ * Registration for hook points
  */
+
+var RoleSorter hook.IRoleSorter
+
+func RegRoleSorter(sorter hook.IRoleSorter) {
+	RoleSorter = sorter
+}
 
 // For set the current registering typeString
 func For(typeString string) *Registrar {
@@ -41,7 +48,7 @@ type Registrar struct {
 
 // Model adds a New function for an mdl.IModel (convenient function of RegModelWithOption)
 func (r *Registrar) Model(modelObj mdl.IModel) *Registrar {
-	options := RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: MapperTypeViaOwnership}
+	options := RegOptions{BatchMethods: "CRUPD", IdvMethods: "RUPD", Mapper: mappertype.DirectOwnership}
 	return r.ModelWithOption(modelObj, options)
 }
 
@@ -75,9 +82,9 @@ func (r *Registrar) ModelWithOption(modelObj mdl.IModel, options RegOptions) *Re
 	reg.Mapper = options.Mapper
 
 	switch options.Mapper {
-	case MapperTypeViaOrgPartition:
+	case mappertype.UnderOrgPartition:
 		fallthrough
-	case MapperTypeViaOrganization:
+	case mappertype.UnderOrg:
 		// We want the model type. So we get that by getting name first
 		// since the foreign key field name is always nameID
 		v := mdlutil.GetTagValueFromModelByTagKeyBetterRestAndValueKey(modelObj, "org")
@@ -91,13 +98,13 @@ func (r *Registrar) ModelWithOption(modelObj mdl.IModel, options RegOptions) *Re
 
 		toks := strings.Split(val, "org:")
 		reg.OrgTypeString = toks[1]
-	case MapperTypeGlobal:
+	case mappertype.Global:
 		// do nothing
-	case MapperTypeLinkTable:
+	case mappertype.LinkTable:
 		// do nothing
-	case MapperTypeUser:
+	case mappertype.User:
 		// do nothing
-	case MapperTypeViaOwnership:
+	case mappertype.DirectOwnership:
 		fallthrough
 	default:
 		recursiveIntoEmbedded := true
@@ -150,7 +157,7 @@ func (r *Registrar) CustomCreate(modelObj mdl.IModel, f func(db *gorm.DB) (*gorm
 // OrgModelTypeFromOrgResourceTypeString given org resource typeString
 // returns the reflect type of the organization
 func OrgModelTypeFromOrgResourceTypeString(typeString string) reflect.Type {
-	if ModelRegistry[typeString].Mapper != MapperTypeViaOrganization && ModelRegistry[typeString].Mapper != MapperTypeViaOrgPartition {
+	if ModelRegistry[typeString].Mapper != mappertype.UnderOrg && ModelRegistry[typeString].Mapper != mappertype.UnderOrgPartition {
 		// Programming error
 		panic(fmt.Sprintf("TypeString %s does not represents a resource under organization", typeString))
 	}
@@ -165,7 +172,7 @@ func OrgModelTypeFromOrgResourceTypeString(typeString string) reflect.Type {
 // NewOrgModelFromOrgResourceTypeString gets Organization object
 // If you're a resource under hooked up by Organization
 func NewOrgModelFromOrgResourceTypeString(typeString string) mdl.IModel {
-	if ModelRegistry[typeString].Mapper != MapperTypeViaOrganization && ModelRegistry[typeString].Mapper != MapperTypeViaOrgPartition {
+	if ModelRegistry[typeString].Mapper != mappertype.UnderOrg && ModelRegistry[typeString].Mapper != mappertype.UnderOrgPartition {
 		// Programming error
 		panic(fmt.Sprintf("TypeString %s does not represents a resource under organization", typeString))
 	}
@@ -177,7 +184,7 @@ func NewOrgModelFromOrgResourceTypeString(typeString string) mdl.IModel {
 // NewOrgOwnershipModelFromOrgResourceTypeString gets the joining table from the resource's
 // organization model to the user
 func NewOrgOwnershipModelFromOrgResourceTypeString(typeString string) mdl.IModel {
-	if ModelRegistry[typeString].Mapper != MapperTypeViaOrganization && ModelRegistry[typeString].Mapper != MapperTypeViaOrgPartition {
+	if ModelRegistry[typeString].Mapper != mappertype.UnderOrg && ModelRegistry[typeString].Mapper != mappertype.UnderOrgPartition {
 		// Programming error
 		panic(fmt.Sprintf("TypeString %s does not represents a resource under organization", typeString))
 	}
@@ -190,7 +197,7 @@ func NewOrgOwnershipModelFromOrgResourceTypeString(typeString string) mdl.IModel
 // of the ownership table (the table that links from this resource represented by the type string
 // to the user)
 func NewOwnershipModelFromOwnershipResourceTypeString(typeString string) mdl.IModel {
-	if ModelRegistry[typeString].Mapper != MapperTypeViaOwnership {
+	if ModelRegistry[typeString].Mapper != mappertype.DirectOwnership {
 		// Programming error
 		panic(fmt.Sprintf("TypeString %s does not represents a resource under organization", typeString))
 	}
