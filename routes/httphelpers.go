@@ -134,7 +134,7 @@ func ModelOrModelsFromJSONBody(r *http.Request, typeString string, who mdlutil.U
 }
 
 // ModelsFromJSONBody parses JSON body into array of mdl
-func ModelsFromJSONBody(r *http.Request, typeString string, who mdlutil.UserIDFetchable) ([]mdl.IModel, render.Renderer) {
+func ModelsFromJSONBody(r *http.Request, typeString string, who mdlutil.UserIDFetchable, toValidate bool) ([]mdl.IModel, render.Renderer) {
 	defer r.Body.Close()
 	var jsn []byte
 	var modelObjs []mdl.IModel
@@ -184,18 +184,20 @@ func ModelsFromJSONBody(r *http.Request, typeString string, who mdlutil.UserIDFe
 			return nil, webrender.NewErrParsingJSON(err)
 		}
 
-		if err := mdl.ValidateModel(modelObj); err != nil {
-			return nil, webrender.NewErrValidation(err)
-		}
-
-		if v, ok := modelObj.(mdlutil.IValidate); ok {
-			who := WhoFromContext(r)
-			http := mdlutil.HTTP{Endpoint: r.URL.Path, Op: rest.HTTPMethodToRESTOp(r.Method)}
-			if err := v.Validate(who, http); err != nil {
+		// TODO: there should be just one way to validate it
+		if toValidate {
+			if err := mdl.ValidateModel(modelObj); err != nil {
 				return nil, webrender.NewErrValidation(err)
 			}
-		}
 
+			if v, ok := modelObj.(mdlutil.IValidate); ok {
+				who := WhoFromContext(r)
+				http := mdlutil.HTTP{Endpoint: r.URL.Path, Op: rest.HTTPMethodToRESTOp(r.Method)}
+				if err := v.Validate(who, http); err != nil {
+					return nil, webrender.NewErrValidation(err)
+				}
+			}
+		}
 		modelObjs = append(modelObjs, modelObj)
 	}
 

@@ -456,7 +456,7 @@ func UpdateManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 			Who:         WhoFromContext(r),
 		}
 
-		modelObjs, httperr := ModelsFromJSONBody(r, typeString, ep.Who)
+		modelObjs, httperr := ModelsFromJSONBody(r, typeString, ep.Who, true)
 		if httperr != nil {
 			log.Println("Error in ModelsFromJSONBody:", typeString, httperr)
 			render.Render(w, r, httperr)
@@ -601,11 +601,20 @@ func DeleteManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 			Who:         WhoFromContext(r),
 		}
 
-		modelObjs, httperr := ModelsFromJSONBody(r, typeString, ep.Who)
+		// No validation on delete, all we have to do is to check the model ID.
+		modelObjs, httperr := ModelsFromJSONBody(r, typeString, ep.Who, false)
 		if httperr != nil {
 			log.Println("Error in ModelsFromJSONBody:", typeString, httperr)
 			render.Render(w, r, httperr)
 			return
+		}
+
+		// Chekc that ID exists
+		for _, modelObj := range modelObjs {
+			if modelObj.GetID() == nil {
+				render.Render(w, r, webrender.NewErrParsingJSON(fmt.Errorf("id cannot be empty")))
+				return
+			}
 		}
 
 		// if len(modelObjs) != 0 {
