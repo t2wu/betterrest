@@ -21,8 +21,10 @@ type Logger interface {
 }
 
 func CreateMany(db *gorm.DB, mapper datamapper.IDataMapper, modelObjs []mdl.IModel,
-	ep *hook.EndPoint, logger Logger) (*hook.Data, *hfetcher.HandlerFetcher, render.Renderer) {
-	cargo := hook.Cargo{}
+	ep *hook.EndPoint, cargo *hook.Cargo, logger Logger) (*hook.Data, *hfetcher.HandlerFetcher, render.Renderer) {
+	if cargo == nil {
+		cargo = &hook.Cargo{}
+	}
 
 	var retVal *datamapper.MapperRet
 	retErr := transact.TransactCustomError(db, func(tx *gorm.DB) (retErr *webrender.RetError) {
@@ -30,7 +32,7 @@ func CreateMany(db *gorm.DB, mapper datamapper.IDataMapper, modelObjs []mdl.IMod
 			logger.Log(tx, "POST", strings.ToLower(ep.TypeString), "n")
 		}
 
-		if retVal, retErr = mapper.CreateMany(tx, modelObjs, ep, &cargo); retErr != nil {
+		if retVal, retErr = mapper.CreateMany(tx, modelObjs, ep, cargo); retErr != nil {
 			return retErr
 		}
 		return nil
@@ -51,7 +53,7 @@ func CreateMany(db *gorm.DB, mapper datamapper.IDataMapper, modelObjs []mdl.IMod
 		roles[i] = userrole.UserRoleAdmin
 	}
 
-	data := hook.Data{Ms: modelObjs, DB: nil, Roles: roles, Cargo: &cargo}
+	data := hook.Data{Ms: modelObjs, DB: nil, Roles: roles, Cargo: cargo}
 
 	for _, hdlr := range retVal.Fetcher.FetchHandlersForOpAndHook(ep.Op, "T") {
 		hdlr.(hook.IAfterTransact).AfterTransact(&data, ep)
@@ -61,8 +63,10 @@ func CreateMany(db *gorm.DB, mapper datamapper.IDataMapper, modelObjs []mdl.IMod
 }
 
 func CreateOne(db *gorm.DB, mapper datamapper.IDataMapper, modelObj mdl.IModel,
-	ep *hook.EndPoint, logger Logger) (*hook.Data, *hfetcher.HandlerFetcher, render.Renderer) {
-	cargo := hook.Cargo{}
+	ep *hook.EndPoint, cargo *hook.Cargo, logger Logger) (*hook.Data, *hfetcher.HandlerFetcher, render.Renderer) {
+	if cargo == nil {
+		cargo = &hook.Cargo{}
+	}
 
 	var retVal *datamapper.MapperRet
 	retErr := transact.TransactCustomError(db, func(tx *gorm.DB) (retErr *webrender.RetError) {
@@ -70,7 +74,7 @@ func CreateOne(db *gorm.DB, mapper datamapper.IDataMapper, modelObj mdl.IModel,
 			logger.Log(tx, "POST", strings.ToLower(ep.TypeString), "1")
 		}
 
-		if retVal, retErr = mapper.CreateOne(tx, modelObj, ep, &cargo); retErr != nil {
+		if retVal, retErr = mapper.CreateOne(tx, modelObj, ep, cargo); retErr != nil {
 			return retErr
 		}
 		return nil
@@ -88,7 +92,7 @@ func CreateOne(db *gorm.DB, mapper datamapper.IDataMapper, modelObj mdl.IModel,
 	roles := []userrole.UserRole{userrole.UserRoleAdmin} // just one item
 	ms := []mdl.IModel{modelObj}
 
-	data := hook.Data{Ms: ms, DB: nil, Roles: roles, Cargo: &cargo}
+	data := hook.Data{Ms: ms, DB: nil, Roles: roles, Cargo: cargo}
 
 	for _, hdlr := range retVal.Fetcher.FetchHandlersForOpAndHook(ep.Op, "T") {
 		hdlr.(hook.IAfterTransact).AfterTransact(&data, ep)
@@ -98,14 +102,17 @@ func CreateOne(db *gorm.DB, mapper datamapper.IDataMapper, modelObj mdl.IModel,
 }
 
 // ReadMany
-func ReadMany(db *gorm.DB, mapper datamapper.IDataMapper, ep *hook.EndPoint, logger Logger) (*hook.Data, *int, *hfetcher.HandlerFetcher, render.Renderer) {
+func ReadMany(db *gorm.DB, mapper datamapper.IDataMapper, ep *hook.EndPoint, cargo *hook.Cargo, logger Logger) (*hook.Data, *int, *hfetcher.HandlerFetcher, render.Renderer) {
 	if logger != nil {
 		logger.Log(nil, "GET", strings.ToLower(ep.TypeString), "n")
 	}
 
-	cargo := hook.Cargo{}
+	if cargo == nil {
+		cargo = &hook.Cargo{}
+	}
+
 	var retVal *datamapper.MapperRet
-	retVal, roles, no, retErr := mapper.ReadMany(db, ep, &cargo)
+	retVal, roles, no, retErr := mapper.ReadMany(db, ep, cargo)
 	if retErr != nil {
 		if retErr.Renderer == nil {
 			return nil, no, nil, webrender.NewErrInternalServerError(retErr.Error) // TODO, probably should have a READ error
@@ -115,7 +122,7 @@ func ReadMany(db *gorm.DB, mapper datamapper.IDataMapper, ep *hook.EndPoint, log
 
 	modelObjs := retVal.Ms
 
-	data := hook.Data{Ms: modelObjs, DB: nil, Roles: roles, Cargo: &cargo}
+	data := hook.Data{Ms: modelObjs, DB: nil, Roles: roles, Cargo: cargo}
 
 	for _, hdlr := range retVal.Fetcher.FetchHandlersForOpAndHook(ep.Op, "T") {
 		hdlr.(hook.IAfterTransact).AfterTransact(&data, ep)
@@ -124,14 +131,17 @@ func ReadMany(db *gorm.DB, mapper datamapper.IDataMapper, ep *hook.EndPoint, log
 	return &data, no, retVal.Fetcher, nil
 }
 
-func ReadOne(db *gorm.DB, mapper datamapper.IDataMapper, id *datatype.UUID, ep *hook.EndPoint,
+func ReadOne(db *gorm.DB, mapper datamapper.IDataMapper, id *datatype.UUID, ep *hook.EndPoint, cargo *hook.Cargo,
 	logger Logger) (*hook.Data, *hfetcher.HandlerFetcher, render.Renderer) {
 	if logger != nil {
 		logger.Log(nil, "GET", strings.ToLower(ep.TypeString), "1")
 	}
 
-	cargo := hook.Cargo{}
-	retVal, role, retErr := mapper.ReadOne(db, id, ep, &cargo)
+	if cargo == nil {
+		cargo = &hook.Cargo{}
+	}
+
+	retVal, role, retErr := mapper.ReadOne(db, id, ep, cargo)
 	if retErr != nil {
 		if retErr.Renderer == nil {
 			return nil, nil, webrender.NewErrInternalServerError(retErr.Error) // TODO, probably should have a READ error
@@ -144,7 +154,7 @@ func ReadOne(db *gorm.DB, mapper datamapper.IDataMapper, id *datatype.UUID, ep *
 
 	modelObj := retVal.Ms[0]
 
-	data := hook.Data{Ms: []mdl.IModel{modelObj}, DB: nil, Roles: []userrole.UserRole{role}, Cargo: &cargo}
+	data := hook.Data{Ms: []mdl.IModel{modelObj}, DB: nil, Roles: []userrole.UserRole{role}, Cargo: cargo}
 
 	for _, hdlr := range retVal.Fetcher.FetchHandlersForOpAndHook(ep.Op, "T") {
 		hdlr.(hook.IAfterTransact).AfterTransact(&data, ep)
@@ -154,15 +164,19 @@ func ReadOne(db *gorm.DB, mapper datamapper.IDataMapper, id *datatype.UUID, ep *
 }
 
 func UpdateMany(db *gorm.DB, mapper datamapper.IDataMapper, modelObjs []mdl.IModel,
-	ep *hook.EndPoint, logger Logger) (*hook.Data, *hfetcher.HandlerFetcher, render.Renderer) {
-	cargo := hook.Cargo{}
+	ep *hook.EndPoint, cargo *hook.Cargo, logger Logger) (*hook.Data, *hfetcher.HandlerFetcher, render.Renderer) {
+
+	if cargo == nil {
+		cargo = &hook.Cargo{}
+	}
+
 	var retVal *datamapper.MapperRet
 	retErr := transact.TransactCustomError(db, func(tx *gorm.DB) (retErr *webrender.RetError) {
 		if logger != nil {
 			logger.Log(tx, "PUT", strings.ToLower(ep.TypeString), "n")
 		}
 
-		if retVal, retErr = mapper.UpdateMany(tx, modelObjs, ep, &cargo); retErr != nil {
+		if retVal, retErr = mapper.UpdateMany(tx, modelObjs, ep, cargo); retErr != nil {
 			return retErr
 		}
 
@@ -182,7 +196,7 @@ func UpdateMany(db *gorm.DB, mapper datamapper.IDataMapper, modelObjs []mdl.IMod
 		roles[i] = userrole.UserRoleAdmin
 	}
 
-	data := hook.Data{Ms: modelObjs, DB: nil, Roles: roles, Cargo: &cargo}
+	data := hook.Data{Ms: modelObjs, DB: nil, Roles: roles, Cargo: cargo}
 
 	for _, hdlr := range retVal.Fetcher.FetchHandlersForOpAndHook(ep.Op, "T") {
 		hdlr.(hook.IAfterTransact).AfterTransact(&data, ep)
@@ -192,15 +206,19 @@ func UpdateMany(db *gorm.DB, mapper datamapper.IDataMapper, modelObjs []mdl.IMod
 }
 
 func UpdateOne(db *gorm.DB, mapper datamapper.IDataMapper, modelObj mdl.IModel, id *datatype.UUID,
-	ep *hook.EndPoint, logger Logger) (*hook.Data, *hfetcher.HandlerFetcher, render.Renderer) {
-	cargo := hook.Cargo{}
+	ep *hook.EndPoint, cargo *hook.Cargo, logger Logger) (*hook.Data, *hfetcher.HandlerFetcher, render.Renderer) {
+
+	if cargo == nil {
+		cargo = &hook.Cargo{}
+	}
+
 	var retVal *datamapper.MapperRet
 	retErr := transact.TransactCustomError(db, func(tx *gorm.DB) (retErr *webrender.RetError) {
 		if logger != nil {
 			logger.Log(tx, "PUT", strings.ToLower(ep.TypeString), "1")
 		}
 
-		if retVal, retErr = mapper.UpdateOne(tx, modelObj, id, ep, &cargo); retErr != nil {
+		if retVal, retErr = mapper.UpdateOne(tx, modelObj, id, ep, cargo); retErr != nil {
 			return retErr
 		}
 		return nil
@@ -215,7 +233,7 @@ func UpdateOne(db *gorm.DB, mapper datamapper.IDataMapper, modelObj mdl.IModel, 
 	modelObj = retVal.Ms[0]
 
 	role := userrole.UserRoleAdmin
-	data := hook.Data{Ms: []mdl.IModel{modelObj}, DB: nil, Roles: []userrole.UserRole{role}, Cargo: &cargo}
+	data := hook.Data{Ms: []mdl.IModel{modelObj}, DB: nil, Roles: []userrole.UserRole{role}, Cargo: cargo}
 
 	for _, hdlr := range retVal.Fetcher.FetchHandlersForOpAndHook(ep.Op, "T") {
 		hdlr.(hook.IAfterTransact).AfterTransact(&data, ep)
@@ -225,16 +243,20 @@ func UpdateOne(db *gorm.DB, mapper datamapper.IDataMapper, modelObj mdl.IModel, 
 }
 
 func PatchMany(db *gorm.DB, mapper datamapper.IDataMapper, jsonIDPatches []mdlutil.JSONIDPatch,
-	ep *hook.EndPoint, logger Logger) (*hook.Data, *hfetcher.HandlerFetcher, render.Renderer) {
+	ep *hook.EndPoint, cargo *hook.Cargo, logger Logger) (*hook.Data, *hfetcher.HandlerFetcher, render.Renderer) {
 	var modelObjs []mdl.IModel
-	cargo := hook.Cargo{}
+
+	if cargo == nil {
+		cargo = &hook.Cargo{}
+	}
+
 	var retVal *datamapper.MapperRet
 	retErr := transact.TransactCustomError(db, func(tx *gorm.DB) (retErr *webrender.RetError) {
 		if logger != nil {
 			logger.Log(tx, "PATCH", strings.ToLower(ep.TypeString), "n")
 		}
 
-		if retVal, retErr = mapper.PatchMany(tx, jsonIDPatches, ep, &cargo); retErr != nil {
+		if retVal, retErr = mapper.PatchMany(tx, jsonIDPatches, ep, cargo); retErr != nil {
 			return retErr
 		}
 		return nil
@@ -254,7 +276,7 @@ func PatchMany(db *gorm.DB, mapper datamapper.IDataMapper, jsonIDPatches []mdlut
 		roles[i] = userrole.UserRoleAdmin
 	}
 
-	data := hook.Data{Ms: modelObjs, DB: nil, Roles: roles, Cargo: &cargo}
+	data := hook.Data{Ms: modelObjs, DB: nil, Roles: roles, Cargo: cargo}
 
 	for _, hdlr := range retVal.Fetcher.FetchHandlersForOpAndHook(ep.Op, "T") {
 		hdlr.(hook.IAfterTransact).AfterTransact(&data, ep)
@@ -264,8 +286,11 @@ func PatchMany(db *gorm.DB, mapper datamapper.IDataMapper, jsonIDPatches []mdlut
 }
 
 func PatchOne(db *gorm.DB, mapper datamapper.IDataMapper, jsonPatch []byte,
-	id *datatype.UUID, ep *hook.EndPoint, logger Logger) (*hook.Data, *hfetcher.HandlerFetcher, render.Renderer) {
-	cargo := hook.Cargo{}
+	id *datatype.UUID, ep *hook.EndPoint, cargo *hook.Cargo, logger Logger) (*hook.Data, *hfetcher.HandlerFetcher, render.Renderer) {
+	if cargo == nil {
+		cargo = &hook.Cargo{}
+	}
+
 	var modelObj mdl.IModel
 	var retVal *datamapper.MapperRet
 	retErr := transact.TransactCustomError(db, func(tx *gorm.DB) (retErr *webrender.RetError) {
@@ -273,7 +298,7 @@ func PatchOne(db *gorm.DB, mapper datamapper.IDataMapper, jsonPatch []byte,
 			logger.Log(tx, "PATCH", strings.ToLower(ep.TypeString), "1")
 		}
 
-		if retVal, retErr = mapper.PatchOne(tx, jsonPatch, id, ep, &cargo); retErr != nil {
+		if retVal, retErr = mapper.PatchOne(tx, jsonPatch, id, ep, cargo); retErr != nil {
 			return retErr
 		}
 
@@ -290,7 +315,7 @@ func PatchOne(db *gorm.DB, mapper datamapper.IDataMapper, jsonPatch []byte,
 	modelObj = retVal.Ms[0]
 
 	role := userrole.UserRoleAdmin
-	data := hook.Data{Ms: []mdl.IModel{modelObj}, DB: nil, Roles: []userrole.UserRole{role}, Cargo: &cargo}
+	data := hook.Data{Ms: []mdl.IModel{modelObj}, DB: nil, Roles: []userrole.UserRole{role}, Cargo: cargo}
 
 	for _, hdlr := range retVal.Fetcher.FetchHandlersForOpAndHook(ep.Op, "T") {
 		hdlr.(hook.IAfterTransact).AfterTransact(&data, ep)
@@ -300,15 +325,18 @@ func PatchOne(db *gorm.DB, mapper datamapper.IDataMapper, jsonPatch []byte,
 }
 
 func DeleteMany(db *gorm.DB, mapper datamapper.IDataMapper, modelObjs []mdl.IModel,
-	ep *hook.EndPoint, logger Logger) (*hook.Data, *hfetcher.HandlerFetcher, render.Renderer) {
-	cargo := hook.Cargo{}
+	ep *hook.EndPoint, cargo *hook.Cargo, logger Logger) (*hook.Data, *hfetcher.HandlerFetcher, render.Renderer) {
+	if cargo == nil {
+		cargo = &hook.Cargo{}
+	}
+
 	var retVal *datamapper.MapperRet
 	retErr := transact.TransactCustomError(db, func(tx *gorm.DB) (retErr *webrender.RetError) {
 		if logger != nil {
 			logger.Log(tx, "DELETE", strings.ToLower(ep.TypeString), "n")
 		}
 
-		if retVal, retErr = mapper.DeleteMany(tx, modelObjs, ep, &cargo); retErr != nil {
+		if retVal, retErr = mapper.DeleteMany(tx, modelObjs, ep, cargo); retErr != nil {
 			return retErr
 		}
 		return nil
@@ -328,7 +356,7 @@ func DeleteMany(db *gorm.DB, mapper datamapper.IDataMapper, modelObjs []mdl.IMod
 		roles[i] = userrole.UserRoleAdmin
 	}
 
-	data := hook.Data{Ms: modelObjs, DB: nil, Roles: roles, Cargo: &cargo}
+	data := hook.Data{Ms: modelObjs, DB: nil, Roles: roles, Cargo: cargo}
 
 	for _, hdlr := range retVal.Fetcher.FetchHandlersForOpAndHook(ep.Op, "T") {
 		hdlr.(hook.IAfterTransact).AfterTransact(&data, ep)
@@ -338,13 +366,15 @@ func DeleteMany(db *gorm.DB, mapper datamapper.IDataMapper, modelObjs []mdl.IMod
 }
 
 func DeleteOne(db *gorm.DB, mapper datamapper.IDataMapper, id *datatype.UUID,
-	ep *hook.EndPoint, logger Logger) (*hook.Data, *hfetcher.HandlerFetcher, render.Renderer) {
-	cargo := hook.Cargo{}
+	ep *hook.EndPoint, cargo *hook.Cargo, logger Logger) (*hook.Data, *hfetcher.HandlerFetcher, render.Renderer) {
+	if cargo == nil {
+		cargo = &hook.Cargo{}
+	}
 	var retVal *datamapper.MapperRet
 	retErr := transact.TransactCustomError(db, func(tx *gorm.DB) (retErr *webrender.RetError) {
 		logger.Log(tx, "DELETE", strings.ToLower(ep.TypeString), "1")
 
-		if retVal, retErr = mapper.DeleteOne(tx, id, ep, &cargo); retErr != nil {
+		if retVal, retErr = mapper.DeleteOne(tx, id, ep, cargo); retErr != nil {
 			return retErr
 		}
 		return
@@ -359,7 +389,7 @@ func DeleteOne(db *gorm.DB, mapper datamapper.IDataMapper, id *datatype.UUID,
 	modelObj := retVal.Ms[0]
 
 	role := userrole.UserRoleAdmin
-	data := hook.Data{Ms: []mdl.IModel{modelObj}, DB: nil, Roles: []userrole.UserRole{role}, Cargo: &cargo}
+	data := hook.Data{Ms: []mdl.IModel{modelObj}, DB: nil, Roles: []userrole.UserRole{role}, Cargo: cargo}
 
 	for _, hdlr := range retVal.Fetcher.FetchHandlersForOpAndHook(ep.Op, "T") {
 		hdlr.(hook.IAfterTransact).AfterTransact(&data, ep)

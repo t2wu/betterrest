@@ -375,7 +375,7 @@ func CreateHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin
 
 		if *isBatch {
 			ep.Cardinality = rest.CardinalityMany
-			data, handlerFetcher, errRenderer := lifecycle.CreateMany(db.Shared(), mapper, modelObjs, &ep, &TransIDLogger{})
+			data, handlerFetcher, errRenderer := lifecycle.CreateMany(db.Shared(), mapper, modelObjs, &ep, nil, &TransIDLogger{})
 			if errRenderer != nil {
 				render.Render(w, c.Request, errRenderer)
 				return
@@ -386,7 +386,7 @@ func CreateHandler(typeString string, mapper datamapper.IDataMapper) func(c *gin
 			RenderModelSlice(c, data, &ep, nil, handlerFetcher)
 		} else {
 			ep.Cardinality = rest.CardinalityOne
-			data, handlerFetcher, errRenderer := lifecycle.CreateOne(db.Shared(), mapper, modelObjs[0], &ep, &TransIDLogger{})
+			data, handlerFetcher, errRenderer := lifecycle.CreateOne(db.Shared(), mapper, modelObjs[0], &ep, nil, &TransIDLogger{})
 			if errRenderer != nil {
 				render.Render(w, c.Request, errRenderer)
 				return
@@ -416,7 +416,7 @@ func ReadManyHandler(typeString string, mapper datamapper.IDataMapper) func(c *g
 			Who:         WhoFromContext(r),
 		}
 
-		data, no, handlerFetcher, errRenderer := lifecycle.ReadMany(db.Shared(), mapper, &ep, &TransIDLogger{})
+		data, no, handlerFetcher, errRenderer := lifecycle.ReadMany(db.Shared(), mapper, &ep, nil, &TransIDLogger{})
 		if errRenderer != nil {
 			render.Render(w, r, errRenderer)
 			return
@@ -451,7 +451,7 @@ func ReadOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *gi
 			URLParams:   OptionFromContext(r),
 			Who:         WhoFromContext(r),
 		}
-		data, handlerFetcher, errRenderer := lifecycle.ReadOne(db.Shared(), mapper, id, &ep, &TransIDLogger{})
+		data, handlerFetcher, errRenderer := lifecycle.ReadOne(db.Shared(), mapper, id, &ep, nil, &TransIDLogger{})
 		if errRenderer != nil {
 			render.Render(w, c.Request, errRenderer)
 			return
@@ -483,7 +483,7 @@ func UpdateManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 			return
 		}
 
-		data, handlerFetcher, errRenderer := lifecycle.UpdateMany(db.Shared(), mapper, modelObjs, &ep, &TransIDLogger{})
+		data, handlerFetcher, errRenderer := lifecycle.UpdateMany(db.Shared(), mapper, modelObjs, &ep, nil, &TransIDLogger{})
 		if errRenderer != nil {
 			render.Render(w, r, errRenderer)
 			return
@@ -527,7 +527,7 @@ func UpdateOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 			return
 		}
 
-		data, handlerFetcher, errRenderer := lifecycle.UpdateOne(db.Shared(), mapper, modelObj, id, &ep, &TransIDLogger{})
+		data, handlerFetcher, errRenderer := lifecycle.UpdateOne(db.Shared(), mapper, modelObj, id, &ep, nil, &TransIDLogger{})
 		if errRenderer != nil {
 			render.Render(w, r, errRenderer)
 			return
@@ -559,7 +559,7 @@ func PatchManyHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 			Who:         WhoFromContext(r),
 		}
 
-		data, handlerFetcher, errRenderer := lifecycle.PatchMany(db.Shared(), mapper, jsonIDPatches, &ep, &TransIDLogger{})
+		data, handlerFetcher, errRenderer := lifecycle.PatchMany(db.Shared(), mapper, jsonIDPatches, &ep, nil, &TransIDLogger{})
 		if errRenderer != nil {
 			render.Render(w, r, errRenderer)
 			return
@@ -596,7 +596,7 @@ func PatchOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *g
 			Who:         WhoFromContext(r),
 		}
 
-		data, handlerFetcher, errRenderer := lifecycle.PatchOne(db.Shared(), mapper, jsonPatch, id, &ep, &TransIDLogger{})
+		data, handlerFetcher, errRenderer := lifecycle.PatchOne(db.Shared(), mapper, jsonPatch, id, &ep, nil, &TransIDLogger{})
 		if errRenderer != nil {
 			render.Render(w, r, errRenderer)
 			return
@@ -637,7 +637,7 @@ func DeleteManyHandler(typeString string, mapper datamapper.IDataMapper) func(c 
 		}
 
 		// if len(modelObjs) != 0 {
-		data, handlerFetcher, errRenderer := lifecycle.DeleteMany(db.Shared(), mapper, modelObjs, &ep, &TransIDLogger{})
+		data, handlerFetcher, errRenderer := lifecycle.DeleteMany(db.Shared(), mapper, modelObjs, &ep, nil, &TransIDLogger{})
 		if errRenderer != nil {
 			render.Render(w, r, errRenderer)
 			return
@@ -669,7 +669,7 @@ func DeleteOneHandler(typeString string, mapper datamapper.IDataMapper) func(c *
 			Who:         WhoFromContext(r),
 		}
 
-		data, handlerFetcher, errRenderer := lifecycle.DeleteOne(db.Shared(), mapper, id, &ep, &TransIDLogger{})
+		data, handlerFetcher, errRenderer := lifecycle.DeleteOne(db.Shared(), mapper, id, &ep, nil, &TransIDLogger{})
 		if errRenderer != nil {
 			render.Render(w, r, errRenderer)
 			return
