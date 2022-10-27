@@ -61,6 +61,7 @@ func (serv *UnderOrgService) PermissionAndRole(data *hook.Data, ep *hook.EndPoin
 		return nil, webrender.NewRetValWithError(ErrPermission) //TODO shouldn't it be webrender some error?
 	}
 
+	data.Roles = make([]userrole.UserRole, len(data.Ms))
 	for i, modelObj := range data.Ms {
 		orgID := mdlutil.GetFieldValueFromModelByTagKeyBetterRestAndValueKey(modelObj, "org").(*datatype.UUID)
 		role, ok := userRoleMap[*orgID]
