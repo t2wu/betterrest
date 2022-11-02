@@ -244,11 +244,13 @@ func CreatePeggedAssocFields(db *gorm.DB, modelObj mdl.IModel) (err error) {
 	return nil
 }
 
+// Should do depth first
+
 // UpdatePeggedFields check if stuff in the pegged array
 // is actually
 func UpdatePeggedFields(db *gorm.DB, oldModelObj mdl.IModel, newModelObj mdl.IModel) (err error) {
 	// Delete nested field
-	// Not yet support two-level of nested field
+	// Support more than two-level of nested field for peg and peg-assoc
 
 	// Indirect is dereference
 	// Interface() is extract content than re-wrap to interface
@@ -261,6 +263,7 @@ func UpdatePeggedFields(db *gorm.DB, oldModelObj mdl.IModel, newModelObj mdl.IMo
 	for i := 0; i < v1.NumField(); i++ {
 		tag := v1.Type().Field(i).Tag.Get("betterrest")
 
+		// typeStr := v1.Field(i).Type().String()
 		if tag == "peg" || tag == "pegassoc" || strings.HasPrefix(tag, "pegassoc-manytomany") {
 			fieldVal1 := v1.Field(i)
 			fieldVal2 := v2.Field(i)
@@ -287,6 +290,11 @@ func UpdatePeggedFields(db *gorm.DB, oldModelObj mdl.IModel, newModelObj mdl.IMo
 						set2.Add(id.String())
 						m[id.String()] = fieldVal2.Index(j).Addr().Interface()
 					}
+				}
+			case reflect.Struct:
+				// If it's peg or peg associate as long as it is here, it doesn't matter, we dig in.
+				if err := UpdatePeggedFields(db, fieldVal1.Addr().Interface().(mdl.IModel), fieldVal2.Addr().Interface().(mdl.IModel)); err != nil {
+					return err
 				}
 			default:
 				// embedded object is considered part of the structure, so no removal

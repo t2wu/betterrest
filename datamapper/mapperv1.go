@@ -357,6 +357,7 @@ func (mapper *DataMapper) UpdateOne(db *gorm.DB, modelObj mdl.IModel, id *dataty
 // UpdateMany updates multiple mdl
 func (mapper *DataMapper) UpdateMany(db *gorm.DB, modelObjs []mdl.IModel, ep *hook.EndPoint,
 	cargo *hook.Cargo) (*MapperRet, *webrender.RetError) {
+
 	// load old model data
 	ids := make([]*datatype.UUID, len(modelObjs))
 	for i, modelObj := range modelObjs {
