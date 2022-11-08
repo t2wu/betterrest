@@ -57,7 +57,8 @@ type OrgPartition struct {
 // }
 
 func (serv *OrgPartition) PermissionAndRole(data *hook.Data, ep *hook.EndPoint) (*hook.Data, *webrender.RetError) {
-	roles := make([]userrole.UserRole, 0)
+	// roles := make([]userrole.UserRole, 0)
+	data.Roles = make([]userrole.UserRole, len(data.Ms))
 
 	userRoleMap, err := obtainRoleFromLinkTable(data.DB, ep.Who, ep.TypeString, data.Ms)
 	if err != nil {
@@ -81,8 +82,6 @@ func (serv *OrgPartition) PermissionAndRole(data *hook.Data, ep *hook.EndPoint) 
 			return nil, err
 		}
 	}
-
-	data.Roles = roles
 
 	return data, nil
 }

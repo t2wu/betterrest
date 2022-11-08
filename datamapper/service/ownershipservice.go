@@ -85,7 +85,7 @@ type OwnershipService struct {
 // }
 
 func (serv *OwnershipService) PermissionAndRole(data *hook.Data, ep *hook.EndPoint) (*hook.Data, *webrender.RetError) {
-	roles := make([]userrole.UserRole, 0)
+	roles := make([]userrole.UserRole, len(data.Ms))
 
 	for i, modelObj := range data.Ms {
 		// reflect.SliceOf
