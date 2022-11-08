@@ -163,6 +163,9 @@ func (serv *OwnershipService) CreateOneCore(db *gorm.DB, who mdlutil.UserIDFetch
 	o := reflect.ValueOf(modelObj).Elem().FieldByName("Ownerships")
 	g, _ := o.Index(0).Addr().Interface().(mdlutil.ILinker)
 
+	// In case ID gets overridden in the "before" hookpoint, set it again
+	g.SetModelID(modelObj.GetID())
+
 	// No need to check if primary key is blank.
 	// If it is it'll be created by Gorm's BeforeCreate hook
 	// (defined in base model)
