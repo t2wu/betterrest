@@ -240,9 +240,14 @@ func (mapper *UserMapper) Patch(db *gorm.DB, jsonIDPatches []mdlutil.JSONIDPatch
 
 	// mapper.Service.PermissionAndRole()
 	// It's possible that hook want us to reject this endpoint
-	rolesToErrMap, err := registry.RoleSorter.Permitted(mapper.MapperType, ep)
-	if err != nil {
-		return nil, webrender.NewRetValWithError(err)
+	var rolesToErrMap = make(map[userrole.UserRole]*webrender.RetError)
+	rolesToErrMap[userrole.UserRoleAdmin] = nil // at least contain this
+	if registry.RoleSorter != nil {
+		var err error
+		rolesToErrMap, err = registry.RoleSorter.Permitted(mapper.MapperType, ep)
+		if err != nil {
+			return nil, webrender.NewRetValWithError(err)
+		}
 	}
 
 	oldModelObjs, roles, err2 := loadManyAndCheckBeforeModifyV3(mapper.Service, db, ep.Who, ep.TypeString, ids, ep.URLParams, rolesToErrMap)
@@ -276,6 +281,7 @@ func (mapper *UserMapper) Patch(db *gorm.DB, jsonIDPatches []mdlutil.JSONIDPatch
 	modelObjs := make([]mdl.IModel, len(oldModelObjs))
 	for i, jsonIDPatch := range jsonIDPatches {
 		// Apply patch operations
+		var err error
 		modelObjs[i], err = applyPatchCore(ep.TypeString, oldModelObjs[i], []byte(jsonIDPatch.Patch))
 		if err != nil {
 			return nil, &webrender.RetError{Error: err}
@@ -284,7 +290,7 @@ func (mapper *UserMapper) Patch(db *gorm.DB, jsonIDPatches []mdlutil.JSONIDPatch
 
 	// Validation is done here, maybe this should go into mapper as well
 	modelObj := modelObjs[0]
-	err = mdl.Validate.Struct(modelObj)
+	err := mdl.Validate.Struct(modelObj)
 	if errs, ok := err.(validator.ValidationErrors); ok {
 		s, err2 := mdl.TranslateValidationErrorMessage(errs, modelObj)
 		if err2 != nil {
