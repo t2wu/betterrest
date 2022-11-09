@@ -75,8 +75,15 @@ func (serv *UserService) ReadOneCore(db *gorm.DB, who mdlutil.UserIDFetchable, t
 	return modelObj, userrole.UserRoleAdmin, nil
 }
 
+// UserService only get one user at a tim
+// but since this is called indirectly from UserMapper.Update,
+// even though we block CardinaltiyMany, we still gets called here
 func (serv *UserService) GetManyCore(db *gorm.DB, who mdlutil.UserIDFetchable, typeString string, ids []*datatype.UUID, options map[urlparam.Param]interface{}) ([]mdl.IModel, []userrole.UserRole, error) {
-	return nil, nil, fmt.Errorf("Not implemented")
+	m, role, err := serv.ReadOneCore(db, who, typeString, ids[0], options)
+	if err != nil {
+		return nil, nil, err
+	}
+	return []mdl.IModel{m}, []userrole.UserRole{role}, err
 }
 
 // GetAllQueryContructCore :-
