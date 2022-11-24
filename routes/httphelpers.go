@@ -29,6 +29,7 @@ type JSONBodyWithContent struct {
 // It take care where the case when it is not even an array and there is a "content" in there
 func ModelOrModelsFromJSONBody(r *http.Request, typeString string, who mdlutil.UserIDFetchable) ([]mdl.IModel, *bool, render.Renderer) {
 	defer r.Body.Close()
+
 	var jsn []byte
 	var modelObjs []mdl.IModel
 	var err error
@@ -75,12 +76,9 @@ func ModelOrModelsFromJSONBody(r *http.Request, typeString string, who mdlutil.U
 			return nil, nil, webrender.NewErrParsingJSON(err)
 		}
 
-		if err := mdl.ValidateModel(modelObj); err != nil {
-			return nil, nil, webrender.NewErrValidation(err)
-		}
-
 		if v, ok := modelObj.(mdlutil.IValidate); ok {
 			who := WhoFromContext(r)
+
 			http := mdlutil.HTTP{Endpoint: r.URL.Path, Op: rest.HTTPMethodToRESTOp(r.Method)}
 			if err := v.Validate(who, http); err != nil {
 				return nil, nil, webrender.NewErrValidation(err)
@@ -113,10 +111,6 @@ func ModelOrModelsFromJSONBody(r *http.Request, typeString string, who mdlutil.U
 		err = json.Unmarshal(jsnModel, modelObj)
 		if err != nil {
 			return nil, nil, webrender.NewErrParsingJSON(err)
-		}
-
-		if err := mdl.ValidateModel(modelObj); err != nil {
-			return nil, nil, webrender.NewErrValidation(err)
 		}
 
 		if v, ok := modelObj.(mdlutil.IValidate); ok {
@@ -184,12 +178,7 @@ func ModelsFromJSONBody(r *http.Request, typeString string, who mdlutil.UserIDFe
 			return nil, webrender.NewErrParsingJSON(err)
 		}
 
-		// TODO: there should be just one way to validate it
 		if toValidate {
-			if err := mdl.ValidateModel(modelObj); err != nil {
-				return nil, webrender.NewErrValidation(err)
-			}
-
 			if v, ok := modelObj.(mdlutil.IValidate); ok {
 				who := WhoFromContext(r)
 				http := mdlutil.HTTP{Endpoint: r.URL.Path, Op: rest.HTTPMethodToRESTOp(r.Method)}
@@ -243,10 +232,6 @@ func ModelFromJSONBody(r *http.Request, typeString string, who mdlutil.UserIDFet
 
 	if err = json.Unmarshal(jsn, modelObj); err != nil {
 		return nil, webrender.NewErrParsingJSON(err)
-	}
-
-	if err := mdl.ValidateModel(modelObj); err != nil {
-		return nil, webrender.NewErrValidation(err)
 	}
 
 	if v, ok := modelObj.(mdlutil.IValidate); ok {

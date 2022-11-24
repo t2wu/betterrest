@@ -3,13 +3,11 @@ package datamapper
 import (
 	"errors"
 	"fmt"
-	"log"
 	"net/url"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/go-playground/validator/v10"
 	"github.com/jinzhu/gorm"
 	"github.com/t2wu/betterrest/datamapper/gormfixes"
 	"github.com/t2wu/betterrest/datamapper/hfetcher"
@@ -583,14 +581,12 @@ func (mapper *OrgPartition) Patch(db *gorm.DB, jsonIDPatches []mdlutil.JSONIDPat
 	}
 
 	for _, modelObj := range modelObjs {
-		err := mdl.Validate.Struct(modelObj)
-		if errs, ok := err.(validator.ValidationErrors); ok {
-			s, err2 := mdl.TranslateValidationErrorMessage(errs, modelObj)
-			if err2 != nil {
-				log.Println("error translating validation message:", err)
+		if v, ok := modelObj.(mdlutil.IValidate); ok {
+			// who := WhoFromContext(r)
+			http := mdlutil.HTTP{Endpoint: ep.URL, Op: ep.Op}
+			if err := v.Validate(ep.Who, http); err != nil {
+				return nil, webrender.NewRetValWithRendererError(err, webrender.NewErrValidation(err))
 			}
-			err = errors.New(s)
-			return nil, webrender.NewRetValWithError(err)
 		}
 	}
 

@@ -1,13 +1,10 @@
 package datamapper
 
 import (
-	"errors"
 	"fmt"
-	"log"
 	"strings"
 	"sync"
 
-	"github.com/go-playground/validator/v10"
 	"github.com/t2wu/betterrest/datamapper/hfetcher"
 	"github.com/t2wu/betterrest/datamapper/service"
 	"github.com/t2wu/betterrest/hook"
@@ -290,14 +287,12 @@ func (mapper *UserMapper) Patch(db *gorm.DB, jsonIDPatches []mdlutil.JSONIDPatch
 
 	// Validation is done here, maybe this should go into mapper as well
 	modelObj := modelObjs[0]
-	err := mdl.Validate.Struct(modelObj)
-	if errs, ok := err.(validator.ValidationErrors); ok {
-		s, err2 := mdl.TranslateValidationErrorMessage(errs, modelObj)
-		if err2 != nil {
-			log.Println("error translating validation message:", err)
+	if v, ok := modelObj.(mdlutil.IValidate); ok {
+		// who := WhoFromContext(r)
+		http := mdlutil.HTTP{Endpoint: ep.URL, Op: ep.Op}
+		if err := v.Validate(ep.Who, http); err != nil {
+			return nil, webrender.NewRetValWithRendererError(err, webrender.NewErrValidation(err))
 		}
-		err = errors.New(s)
-		return nil, webrender.NewRetValWithError(err)
 	}
 
 	// here we put the new model objs (this should modify the one already in hook)
