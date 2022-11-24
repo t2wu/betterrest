@@ -13,7 +13,7 @@ require (
 	github.com/satori/go.uuid v1.2.0
 	github.com/stoewer/go-strcase v1.2.0
 	github.com/stretchr/testify v1.8.0
-	github.com/t2wu/qry v0.0.3
+	github.com/t2wu/qry v0.0.4
 )
 
 require (
