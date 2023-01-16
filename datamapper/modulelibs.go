@@ -182,7 +182,7 @@ func loadAndCheckErrorBeforeModifyV2(serv service.IService, db *gorm.DB, who mdl
 // V3 uses the new permission, and return RetError
 func loadManyAndCheckBeforeModifyV3(serv service.IService, db *gorm.DB, who mdlutil.UserIDFetchable, typeString string,
 	ids []*datatype.UUID, options map[urlparam.Param]interface{}, permittedRoles map[userrole.UserRole]*webrender.RetError) ([]mdl.IModel, []userrole.UserRole, *webrender.RetError) {
-	// log.Println("loadManyAndCheckBeforeModifyV2 run")
+	// log.Println("loadManyAndCheckBeforeModifyV2 run, who userID?", who.GetUserID())
 	modelObjs, roles, err := serv.GetManyCore(db, who, typeString, ids, options)
 	if err != nil {
 		log.Println("calling getManyWithIDsCore err:", err)

@@ -262,10 +262,16 @@ func (serv *OwnershipService) GetManyCore(db *gorm.DB, who mdlutil.UserIDFetchab
 
 	// Check error
 	// Load the roles and check if they're admin
-	roles := make([]userrole.UserRole, 0)
-	if err := db2.Select(fmt.Sprintf("\"%s\".\"role\"", joinTableName)).Scan(&roles).Error; err != nil {
+	roleResults := []struct {
+		Role userrole.UserRole
+	}{}
+	if err := db2.Select(fmt.Sprintf("\"%s\".\"role\"", joinTableName)).Scan(&roleResults).Error; err != nil {
 		log.Printf("err getting roles")
 		return nil, nil, err
+	}
+	roles := make([]userrole.UserRole, len(roleResults))
+	for i, r := range roleResults {
+		roles[i] = r.Role
 	}
 
 	for _, modelObj := range modelObjs {
