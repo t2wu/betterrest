@@ -249,6 +249,7 @@ func CreatePeggedAssocFields(db *gorm.DB, modelObj mdl.IModel) (err error) {
 // UpdatePeggedFields check if stuff in the pegged array
 // is actually
 func UpdatePeggedFields(db *gorm.DB, oldModelObj mdl.IModel, newModelObj mdl.IModel) (err error) {
+	// fmt.Println("--------------------------------------------")
 	// Delete nested field
 	// Support more than two-level of nested field for peg and peg-assoc
 
@@ -263,14 +264,21 @@ func UpdatePeggedFields(db *gorm.DB, oldModelObj mdl.IModel, newModelObj mdl.IMo
 	for i := 0; i < v1.NumField(); i++ {
 		tag := v1.Type().Field(i).Tag.Get("betterrest")
 
+		// fmt.Println("v1.Type().Field(i):", v1.Type().Field(i))
+
 		// typeStr := v1.Field(i).Type().String()
 		if tag == "peg" || tag == "pegassoc" || strings.HasPrefix(tag, "pegassoc-manytomany") {
 			fieldVal1 := v1.Field(i)
 			fieldVal2 := v2.Field(i)
 
+			// fmt.Println("fieldVal1:", fieldVal1)
+			// fmt.Println("fieldVal2:", fieldVal2)
+
 			set1 := datatype.NewSetString()
 			set2 := datatype.NewSetString()
-			m := make(map[string]interface{})
+
+			oriM := make(map[string]interface{})
+			newM := make(map[string]interface{})
 
 			switch fieldVal1.Kind() {
 			case reflect.Slice:
@@ -280,7 +288,7 @@ func UpdatePeggedFields(db *gorm.DB, oldModelObj mdl.IModel, newModelObj mdl.IMo
 					id := fieldVal1.Index(j).FieldByName("ID").Interface().(*datatype.UUID)
 					set1.Add(id.String())
 
-					m[id.String()] = fieldVal1.Index(j).Addr().Interface() // re-wrap a dock
+					oriM[id.String()] = fieldVal1.Index(j).Addr().Interface() // re-wrap a dock
 				}
 
 				for j := 0; j < fieldVal2.Len(); j++ {
@@ -288,9 +296,107 @@ func UpdatePeggedFields(db *gorm.DB, oldModelObj mdl.IModel, newModelObj mdl.IMo
 					if id != nil {
 						// ID doesn't exist? ignore, it's a new entry without ID
 						set2.Add(id.String())
-						m[id.String()] = fieldVal2.Index(j).Addr().Interface()
+						newM[id.String()] = fieldVal2.Index(j).Addr().Interface()
 					}
 				}
+
+				// remove when stuff in the old set that's not in the new set
+				setIsGone := set1.Difference(set2)
+
+				for uuid := range setIsGone.List {
+					modelToDel := oriM[uuid]
+
+					if tag == "peg" {
+						if err := db.Delete(modelToDel).Error; err != nil {
+							return err
+						}
+						// Similar to directly deleting the model,
+						// just deleting it won't work, need to traverse down the chain
+						if err := DeleteModelFixManyToManyAndPeg(db, modelToDel.(mdl.IModel)); err != nil {
+							return err
+						}
+					} else if tag == "pegassoc" {
+						columnName := v1.Type().Field(i).Name
+						// assocModel := reflect.Indirect(reflect.ValueOf(modelToDel)).Type().Name()
+						// fieldName := v1.Type().Field(i).Name
+						// fieldName = fieldName[0 : len(fieldName)-1] // get rid of s
+						// tableName := letters.CamelCaseToPascalCase(fieldName)
+						if err = db.Model(oldModelObj).Association(columnName).Delete(modelToDel).Error; err != nil {
+							return err
+						}
+					} else if strings.HasPrefix(tag, "pegassoc-manytomany") {
+						// many to many, here we remove the entry in the actual immediate table
+						// because that's actually the link table. Thought we don't delete the
+						// Model table itself
+						linkTableName := strings.Split(tag, ":")[1]
+						// Get the base type of this field
+
+						inter := v1.Field(i).Interface()
+						typ := reflect.TypeOf(inter).Elem() // Get the type of the element of slice
+						m2, _ := reflect.New(typ).Interface().(mdl.IModel)
+
+						fieldTableName := mdl.GetTableNameFromIModel(m2)
+						fieldIDName := fieldTableName + "_id"
+
+						selfTableName := mdl.GetTableNameFromIModel(oldModelObj)
+						selfID := selfTableName + "_id"
+
+						// The following line seems to puke on a many-to-many, I hope I don't need it anywhere
+						// else in another many-to-many
+						// idToDel := reflect.Indirect(reflect.ValueOf(modelToDel)).Elem().FieldByName("ID").Interface()
+						idToDel := reflect.Indirect(reflect.ValueOf(modelToDel)).FieldByName("ID").Interface()
+
+						stmt := fmt.Sprintf("DELETE FROM \"%s\" WHERE \"%s\" = ? AND \"%s\" = ?",
+							linkTableName, fieldIDName, selfID)
+						err := db.Exec(stmt, idToDel.(*datatype.UUID).String(), oldModelObj.GetID().String()).Error
+						if err != nil {
+							return err
+						}
+
+					}
+				}
+
+				setIsNew := set2.Difference(set1)
+				for uuid := range setIsNew.List {
+					modelToAdd := newM[uuid]
+					if tag == "peg" {
+						// Don't need peg, because gorm already does auto-create by default
+						// for truly nested data without endpoint
+						// err = db.Save(modelToAdd).Error
+						// if err != nil {
+						// 	return err
+						// }
+					} else if tag == "pegassoc" {
+						columnName := v1.Type().Field(i).Name
+						// id, _ := reflect.ValueOf(modelToAdd).Elem().FieldByName(("ID")).Interface().(*datatype.UUID)
+
+						// Load the full model
+						if err = db.First(modelToAdd).Error; err != nil {
+							return err
+						}
+
+						if err = db.Set("gorm:association_autoupdate", true).Model(oldModelObj).Association(columnName).Append(modelToAdd).Error; err != nil {
+							return err
+						}
+					}
+					//else if strings.HasPrefix(tag, "pegassoc-manytomany") {
+					// No need either, Gorm already creates it
+					// It's the preloading that's the issue.
+					//}
+				}
+
+				// both exists
+				setMayBeEdited := set1.Intersect(set2)
+				for uuid := range setMayBeEdited.List {
+					oriModelToEdit := oriM[uuid]
+					newModelToEdit := newM[uuid]
+					if tag == "peg" {
+						if err := UpdatePeggedFields(db, oriModelToEdit.(mdl.IModel), newModelToEdit.(mdl.IModel)); err != nil {
+							return err
+						}
+					}
+				}
+
 			case reflect.Struct:
 				// If it's peg or peg associate as long as it is here, it doesn't matter, we dig in.
 				if err := UpdatePeggedFields(db, fieldVal1.Addr().Interface().(mdl.IModel), fieldVal2.Addr().Interface().(mdl.IModel)); err != nil {
@@ -298,91 +404,6 @@ func UpdatePeggedFields(db *gorm.DB, oldModelObj mdl.IModel, newModelObj mdl.IMo
 				}
 			default:
 				// embedded object is considered part of the structure, so no removal
-			}
-
-			// remove when stuff in the old set that's not in the new set
-			setIsGone := set1.Difference(set2)
-
-			for uuid := range setIsGone.List {
-				modelToDel := m[uuid]
-
-				if tag == "peg" {
-					if err := db.Delete(modelToDel).Error; err != nil {
-						return err
-					}
-					// Similar to directly deleting the model,
-					// just deleting it won't work, need to traverse down the chain
-					if err := DeleteModelFixManyToManyAndPeg(db, modelToDel.(mdl.IModel)); err != nil {
-						return err
-					}
-				} else if tag == "pegassoc" {
-					columnName := v1.Type().Field(i).Name
-					// assocModel := reflect.Indirect(reflect.ValueOf(modelToDel)).Type().Name()
-					// fieldName := v1.Type().Field(i).Name
-					// fieldName = fieldName[0 : len(fieldName)-1] // get rid of s
-					// tableName := letters.CamelCaseToPascalCase(fieldName)
-					if err = db.Model(oldModelObj).Association(columnName).Delete(modelToDel).Error; err != nil {
-						return err
-					}
-				} else if strings.HasPrefix(tag, "pegassoc-manytomany") {
-					// many to many, here we remove the entry in the actual immediate table
-					// because that's actually the link table. Thought we don't delete the
-					// Model table itself
-					linkTableName := strings.Split(tag, ":")[1]
-					// Get the base type of this field
-
-					inter := v1.Field(i).Interface()
-					typ := reflect.TypeOf(inter).Elem() // Get the type of the element of slice
-					m2, _ := reflect.New(typ).Interface().(mdl.IModel)
-
-					fieldTableName := mdl.GetTableNameFromIModel(m2)
-					fieldIDName := fieldTableName + "_id"
-
-					selfTableName := mdl.GetTableNameFromIModel(oldModelObj)
-					selfID := selfTableName + "_id"
-
-					// The following line seems to puke on a many-to-many, I hope I don't need it anywhere
-					// else in another many-to-many
-					// idToDel := reflect.Indirect(reflect.ValueOf(modelToDel)).Elem().FieldByName("ID").Interface()
-					idToDel := reflect.Indirect(reflect.ValueOf(modelToDel)).FieldByName("ID").Interface()
-
-					stmt := fmt.Sprintf("DELETE FROM \"%s\" WHERE \"%s\" = ? AND \"%s\" = ?",
-						linkTableName, fieldIDName, selfID)
-					err := db.Exec(stmt, idToDel.(*datatype.UUID).String(), oldModelObj.GetID().String()).Error
-					if err != nil {
-						return err
-					}
-
-				}
-			}
-
-			setIsNew := set2.Difference(set1)
-			for uuid := range setIsNew.List {
-				modelToAdd := m[uuid]
-
-				if tag == "peg" {
-					// Don't need peg, because gorm already does auto-create by default
-					// for truly nested data without endpoint
-					// err = db.Save(modelToAdd).Error
-					// if err != nil {
-					// 	return err
-					// }
-				} else if tag == "pegassoc" {
-					columnName := v1.Type().Field(i).Name
-					// id, _ := reflect.ValueOf(modelToAdd).Elem().FieldByName(("ID")).Interface().(*datatype.UUID)
-
-					// Load the full model
-					if err = db.First(modelToAdd).Error; err != nil {
-						return err
-					}
-
-					if err = db.Set("gorm:association_autoupdate", true).Model(oldModelObj).Association(columnName).Append(modelToAdd).Error; err != nil {
-						return err
-					}
-				} else if strings.HasPrefix(tag, "pegassoc-manytomany") {
-					// No need either, Gorm already creates it
-					// It's the preloading that's the issue.
-				}
 			}
 		}
 	}
