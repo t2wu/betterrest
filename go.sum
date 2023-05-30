@@ -122,14 +122,6 @@ github.com/stretchr/testify v1.7.0/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/
 github.com/stretchr/testify v1.7.1/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
 github.com/stretchr/testify v1.8.0 h1:pSgiaMZlXftHpm5L7V1+rVB+AZJydKsMxsQBIJw4PKk=
 github.com/stretchr/testify v1.8.0/go.mod h1:yNjHg4UonilssWZ8iaSj1OCr/vHnekPRkoO+kdMU+MU=
-github.com/t2wu/qry v0.0.1 h1:ySpD9tZZB9n62EWpGom2RTsSLO1mPhT8qgUR0MCiPec=
-github.com/t2wu/qry v0.0.1/go.mod h1:rLKQ1eFkPTv5cD++ALnpQc8+JHbFvJV9I5WgRK2SmOw=
-github.com/t2wu/qry v0.0.2 h1:Qhix6wewSITDRgmGwLfADagVCKptA7mu64Gy+xQeQjc=
-github.com/t2wu/qry v0.0.2/go.mod h1:rLKQ1eFkPTv5cD++ALnpQc8+JHbFvJV9I5WgRK2SmOw=
-github.com/t2wu/qry v0.0.3 h1:jMZ/ea5X5+NiAiE2dubuSOQUhUO1Cvet0n2NCZmfonc=
-github.com/t2wu/qry v0.0.3/go.mod h1:pYXvId186FXeR25rnlBwcFqKsb8RQump43wbNCAzgX8=
-github.com/t2wu/qry v0.0.4 h1:ezuVpQ54UUzZoOsfuAz+xyP34AXvScClc1ZKYj/a13c=
-github.com/t2wu/qry v0.0.4/go.mod h1:pYXvId186FXeR25rnlBwcFqKsb8RQump43wbNCAzgX8=
 github.com/t2wu/qry v0.0.5 h1:crZhZeII8hxtDo/wRVlBicktzPvz+lYuiwKsuB17Kzw=
 github.com/t2wu/qry v0.0.5/go.mod h1:pYXvId186FXeR25rnlBwcFqKsb8RQump43wbNCAzgX8=
 github.com/twpayne/go-geom v1.4.1 h1:LeivFqaGBRfyg0XJJ9pkudcptwhSSrYN9KZUW6HcgdA=

@@ -412,13 +412,15 @@ type ErrInternalServerError struct {
 	ErrResponse
 }
 
-/* Maybe take into consideration my original design
-{
-  "error": "101",
-  "developerMessage": "給開發者看的 message",
-  "userMessage": "給使用者看的簡易 message",
-  "moreInfo": "https://xyz.com/doc/errors/101"
-}
+/*
+Maybe take into consideration my original design
+
+	{
+	  "error": "101",
+	  "developerMessage": "給開發者看的 message",
+	  "userMessage": "給使用者看的簡易 message",
+	  "moreInfo": "https://xyz.com/doc/errors/101"
+	}
 */
 type ErrResponse struct {
 	Err            error `json:"-"` // low-level runtime error

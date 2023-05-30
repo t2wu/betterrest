@@ -249,10 +249,6 @@ func CreatePeggedAssocFields(db *gorm.DB, modelObj mdl.IModel) (err error) {
 // UpdatePeggedFields check if stuff in the pegged array
 // is actually
 func UpdatePeggedFields(db *gorm.DB, oldModelObj mdl.IModel, newModelObj mdl.IModel) (err error) {
-	// fmt.Println("--------------------------------------------")
-	// Delete nested field
-	// Support more than two-level of nested field for peg and peg-assoc
-
 	// Indirect is dereference
 	// Interface() is extract content than re-wrap to interface
 	// Since reflect.New() returns pointer to the object, after reflect.ValueOf

@@ -114,8 +114,6 @@ func (c *CarHandlerJBT) BeforeApply(data *hook.Data, info *hook.EndPoint) *webre
 
 func (c *CarHandlerJBT) Before(data *hook.Data, info *hook.EndPoint) *webrender.RetError {
 	c.beforeCalled = true
-	log.Println("len(data.Ms):", len(data.Ms))
-	log.Println("len(data.Roles):", len(data.Roles))
 	c.beforeData = &hook.Data{}
 	deepCopyData(data, c.beforeData)
 	c.beforeInfo = info
